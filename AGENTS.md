@@ -99,6 +99,9 @@ Machine-readable output for agents and CI:
 | `7dtd-assets unity-release --json` | official editor URL, changeset, and MD5 for a revision |
 | `7dtd-assets refs` | one `source: uri` line per discovered XML reference |
 | `7dtd-assets status --json` | whole-mod state; never raises for a mod-state problem |
+| `7dtd-assets capabilities --json` | optional capabilities, what they unlock, install commands |
+| `7dtd-assets inspect --deep --json` | every serialized object and per-prefab components |
+| `7dtd-assets check-mesh --json` | authored-mesh extents and glTF conformance |
 
 Every command exits non-zero with a single `ERROR: ...` line on stderr when a
 gate fails. Prefer the exit code over parsing prose. The full contract, the
@@ -133,6 +136,26 @@ open-source tools and which gate each one belongs to.
 audio, icon, texture, and mesh lanes, and the scaffolded Unity project ships
 `GeneratedAsset.cs` for asset-as-code prefabs and materials. Extend those
 rather than starting a new pattern.
+
+There are **two mesh lanes and both are first-class**: an authored mesh from
+Blender or OpenSCAD for organic, rigged, or sculpted geometry, and composed
+built-in primitives via `GeneratedAsset.Primitive(...)` for hard-surface props.
+Pick by what the shape needs, not by what is installed.
+
+Never guess whether an optional tool is present, and never catch `ImportError`
+to find out. Ask the registry:
+
+```bash
+7dtd-assets capabilities --json
+```
+
+```python
+from sevendtd_asset_pipeline import has_capability, require_capability
+```
+
+Adding an optional dependency means adding it to `capabilities.REGISTRY` with
+what it unlocks and its install command, so `doctor`, `status`, the CLI, and
+the raised errors all stay in agreement.
 
 Keep generator sources outside the Unity bundle-membership directory; copy only
 selected outputs in, so concepts and unused alternatives never ship.

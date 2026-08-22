@@ -8,10 +8,13 @@ import sys
 from pathlib import Path
 
 from .build import reject_disabled_modules, run_build
+from .capabilities import capabilities
 from .config import load_config
+from .deep_inspect import deep_inspect
 from .doctor import failed, run_doctor
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
+from .mesh_check import check_mesh
 from .references import discover_references
 from .scaffold import initialize
 from .status import collect_status
@@ -44,6 +47,11 @@ def _parser() -> argparse.ArgumentParser:
     inspect = commands.add_parser("inspect", help="print UnityFS metadata for one bundle")
     inspect.add_argument("bundle", type=Path)
     inspect.add_argument("--json", action="store_true")
+    inspect.add_argument(
+        "--deep",
+        action="store_true",
+        help="list every serialized object and per-prefab components (needs UnityPy)",
+    )
     release = commands.add_parser(
         "unity-release", help="resolve the official Unity editor download for a revision"
     )
@@ -57,6 +65,21 @@ def _parser() -> argparse.ArgumentParser:
         "status", help="report the mod's whole pipeline state without failing"
     )
     status.add_argument("--json", action="store_true")
+
+    mesh = commands.add_parser(
+        "check-mesh", help="check an authored mesh before Unity import (trimesh, glTF validator)"
+    )
+    mesh.add_argument("mesh", type=Path)
+    mesh.add_argument("--max-extent", type=float, default=16.0, help="largest allowed size in metres")
+    mesh.add_argument("--strict", action="store_true", help="treat glTF warnings as failures")
+    mesh.add_argument("--json", action="store_true")
+
+    capability = commands.add_parser(
+        "capabilities", help="list optional capabilities, what they unlock, and how to install them"
+    )
+    capability.add_argument("--json", action="store_true")
+    capability.add_argument("--versions", action="store_true", help="also probe installed versions")
+    capability.add_argument("--missing", action="store_true", help="list only unavailable ones")
 
     commands.add_parser("refs", help="list bundle references discovered recursively in Config/")
     check_log = commands.add_parser("check-log", help="fail on Unity disabled-module warnings")
@@ -84,6 +107,19 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     if args.command == "inspect":
+        if args.deep:
+            report = deep_inspect(args.bundle)
+            if args.json:
+                print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+            else:
+                print(f"path: {report.path}")
+                print(f"objects: {report.object_count}")
+                print("types: " + ", ".join(f"{k}={v}" for k, v in report.type_counts.items()))
+                for entry in report.entries:
+                    components = ", ".join(f"{k}={v}" for k, v in entry.components.items())
+                    detail = f" [{entry.object_count} objects: {components}]" if components else ""
+                    print(f"  {entry.asset_stem} ({entry.type}) name={entry.object_name!r}{detail}")
+            return 0
         info = inspect_bundle(args.bundle)
         data = {
             "path": str(info.path),
@@ -98,9 +134,42 @@ def run(args: argparse.Namespace) -> int:
             for key, value in data.items():
                 print(f"{key}: {value}")
         return 0
+    if args.command == "check-mesh":
+        report = check_mesh(args.mesh, args.max_extent, args.strict)
+        if args.json:
+            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+        else:
+            data = report.as_dict()
+            for key in ("path", "extents", "geometry_count", "vertex_count", "face_count",
+                        "watertight", "gltf_errors", "gltf_warnings"):
+                if data[key] is not None:
+                    print(f"{key}: {data[key]}")
+            for note in report.skipped:
+                print(f"skipped: {note}")
+            for problem in report.problems:
+                print(f"problem: {problem}")
+            print("OK" if report.ok else "FAILED")
+        return 0 if report.ok else 1
     if args.command == "check-log":
         reject_disabled_modules(args.log)
         print(f"OK: no disabled-module warnings in {args.log}")
+        return 0
+    if args.command == "capabilities":
+        found = capabilities(args.versions)
+        if args.missing:
+            found = [item for item in found if not item.available]
+        if args.json:
+            print(json.dumps([item.as_dict() for item in found], indent=2, sort_keys=True))
+        else:
+            for item in found:
+                mark = "OK  " if item.available else "MISS"
+                detail = item.version or item.path or ""
+                print(f"{mark} {item.name:15} {item.purpose}")
+                print(f"     unlocks: {', '.join(item.unlocks)}")
+                if item.available and detail:
+                    print(f"     found:   {detail}")
+                if not item.available:
+                    print(f"     install: {item.install}")
         return 0
     if args.command == "unity-release" and args.version:
         data = fetch_release(args.version, args.platform).as_dict()

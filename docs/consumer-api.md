@@ -45,6 +45,9 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `build --probe` | no | yes | no | prove the environment; stages nothing |
 | `build` | no | yes | **yes** | build, gate, stage bundle + manifest |
 | `init MOD_ROOT` | no | no | **yes** | scaffold into a modlet |
+| `capabilities [--json]` | no | no | no | optional capabilities and how to install them |
+| `inspect --deep [--json]` | no | no | no | every serialized object (needs UnityPy) |
+| `check-mesh [--json] FILE` | no | no | no | mesh extents and glTF conformance |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |
 
 `build` is the only command that writes into the modlet, and only after every
@@ -77,6 +80,64 @@ collected into the structure so one broken thing does not hide the rest.
 }
 ```
 
+### `capabilities --json`
+
+The pipeline core is dependency-free, so some features are optional. This is
+the programmatic interface for asking which are usable **right now**, what each
+unlocks, and the exact command to install a missing one. It is the single
+source of truth: `doctor`'s capability rows, `status.capabilities`, and the
+errors raised by the commands that need one all read from it.
+
+```json
+[
+  {"name": "UnityPy", "kind": "module", "available": true, "version": "1.25.3",
+   "path": null, "purpose": "list every serialized object and per-prefab component…",
+   "unlocks": ["7dtd-assets inspect --deep"],
+   "install": "pip install 'sevendtd-asset-pipeline[inspect]'"}
+]
+```
+
+`--missing` lists only unavailable ones; `--versions` probes installed
+versions. Every command needing a capability fails with a message naming the
+capability, what it unlocks, and its install command — never a traceback:
+
+```text
+ERROR: 7dtd-assets inspect --deep needs the optional capability 'UnityPy'
+(list every serialized object …). Install it with: pip install '…[inspect]'
+```
+
+`status --json` carries a `capabilities` map of `{name: available}`, so a
+single call answers both "what is the mod's state" and "what can I run".
+
+Install everything at once:
+
+```bash
+pip install 'sevendtd-asset-pipeline[all]'   # UnityPy, Pillow, NumPy, trimesh
+scripts/install-tools.sh --with-authoring    # Blender, OpenSCAD, glTF validator, …
+```
+
+### `inspect --deep --json`
+
+The class-142 gate proves the container; this proves the *contents*. It lists
+every serialized object and, per prefab, the component census across the whole
+hierarchy — which is how you answer "did my ParticleSystem survive?" after a
+stripped-module scare:
+
+```text
+atomicdoomsdaynukedetonationvfx (GameObject) name='atomicDoomsdayNukeDetonationVfx'
+  [7 objects: ParticleSystem=6, ParticleSystemRenderer=6, Transform=7]
+```
+
+`object_name` is the name 7DTD compares against, so a silent fallback mesh
+shows up here as a mismatch.
+
+### `check-mesh`
+
+For the authored-mesh lane. Reports extents, watertightness, and geometry
+counts (trimesh) plus glTF conformance (Khronos validator), exiting non-zero on
+a problem. Its most common catch is a mesh authored in centimetres, which
+arrives a hundred times too large.
+
 `doctor --json` emits `[{"status": "OK"|"WARN"|"INFO"|"FAIL", "name": …,
 "detail": …}]`. `inspect --json` emits `path`, `unity_version`,
 `archive_format`, `class_ids`, `has_assetbundle_object`.
@@ -88,7 +149,8 @@ from the package root are supported; everything else may change.
 
 ```python
 from sevendtd_asset_pipeline import (
-    PipelineError, collect_status, load_config, run_build, validate_mod,
+    PipelineError, collect_status, deep_inspect, has_capability,
+    load_config, run_build, validate_mod,
 )
 
 config = load_config()               # finds .7dtd-assets.toml upward from cwd
@@ -102,6 +164,11 @@ try:
     report = validate_mod(config)
 except PipelineError as exc:
     ...                              # one user-actionable message
+
+# Branch on an optional capability instead of guessing or catching ImportError
+if has_capability("UnityPy"):
+    for entry in deep_inspect(config.bundle_output).entries:
+        print(entry.asset_stem, entry.components)
 ```
 
 | Name | Use |
@@ -118,6 +185,10 @@ except PipelineError as exc:
 | `game_unity_version(game_dir)` | `(revision, evidence_path)` |
 | `fetch_release(version)` | official editor download for a revision |
 | `initialize(root, mod_name, bundle_name, version)` | scaffold |
+| `capabilities(probe_versions=False)` | `list[Capability]`: availability, purpose, install |
+| `has_capability(name)` / `require_capability(name)` | branch on, or demand, a capability |
+| `deep_inspect(path)` | `DeepReport`: objects and per-prefab components |
+| `check_mesh(path, max_extent, strict)` | `MeshReport` for an authored mesh |
 
 ## Continuous integration
 

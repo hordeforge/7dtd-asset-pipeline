@@ -19,6 +19,17 @@ classifiers = [
   "Topic :: Games/Entertainment",
 ]
 
+[project.optional-dependencies]
+# Deep bundle inspection: proves which objects and components actually
+# survived serialization. Pin the minor version; UnityPy documents that minor
+# releases may break its API.
+inspect = ["UnityPy>=1.20,<2"]
+# The Python authoring lanes in scripts/generators/.
+authoring = ["pillow>=10", "numpy>=1.24"]
+# Pre-Unity mesh checks for the Blender/OpenSCAD lane.
+mesh = ["trimesh>=4"]
+all = ["UnityPy>=1.20,<2", "pillow>=10", "numpy>=1.24", "trimesh>=4"]
+
 [project.scripts]
 7dtd-assets = "sevendtd_asset_pipeline.cli:main"
 

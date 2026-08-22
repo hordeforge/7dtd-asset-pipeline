@@ -9,6 +9,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from .capabilities import capabilities
 from .config import PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version, validate_game_dir
@@ -125,46 +126,16 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
     else:
         checks.append(Check("WARN", "Unity editor", "set UNITY_EDITOR to build; inspection still works"))
 
-    optional = {
-        "blender": "headless mesh generation and conversion",
-        "openscad": "parametric hard-surface meshes",
-        "magick": "icons, masks, texture conversion",
-        "ffmpeg": "audio conversion and synthesis filters",
-        "gltf_validator": "glTF/GLB conformance",
-    }
-    for command, purpose in optional.items():
-        found = shutil.which(command)
-        checks.append(Check("OK" if found else "INFO", command, found or f"optional: {purpose}"))
+    checks.extend(_capability_checks())
     return checks
 
 
-def _editor_checks(config: PipelineConfig) -> list[Check]:
-    editor = config.unity_editor
-    assert editor is not None
-    if not editor.is_file() or not os.access(editor, os.X_OK):
-        return [Check("FAIL", "Unity editor", f"Unity editor is not executable: {editor}")]
-    windows = editor.parent / (
-        "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
-    )
-    if config.target == "StandaloneWindows64" and not windows.is_file():
-        return [
-            Check("FAIL", "Windows support", f"Windows Build Support (Mono) is missing: {windows}")
-        ]
-    try:
-        result = subprocess.run(
-            [str(editor), "-version"],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=30,
+def _capability_checks() -> list[Check]:
+    """Capability rows for humans; agents should call `capabilities()` instead."""
+    checks: list[Check] = []
+    for capability in capabilities():
+        detail = capability.path or "installed" if capability.available else (
+            f"optional: {capability.purpose} -> {capability.install}"
         )
-    except subprocess.TimeoutExpired:
-        return [Check("FAIL", "Unity editor", "Unity -version did not finish within 30 seconds")]
-    reported = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "unknown"
-    if result.returncode != 0:
-        return [Check("FAIL", "Unity editor", f"Unity -version exited {result.returncode}: {reported}")]
-    return [
-        Check("OK", "Unity editor", f"{editor} ({reported})"),
-        Check("OK", "Windows support", str(windows)),
-    ]
+        checks.append(Check("OK" if capability.available else "INFO", capability.name, detail))
+    return checks

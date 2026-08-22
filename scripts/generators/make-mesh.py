@@ -1,10 +1,21 @@
 #!/usr/bin/env python3
-"""Generate a parameterized primitive mesh through headless Blender.
+"""Generate a parameterized mesh through headless Blender.
 
-This is a working starting point for the mesh lane, not a modelling tool: it
+Blender is the authored-mesh lane: the right tool for organic, rigged, or
+sculpted geometry, and for anything a composition of primitives cannot express.
+This script is a working starting point for it, not a modelling tool — it
 exists so a mod's first mesh is a checked-in script with recorded dimensions
 rather than unrecorded GUI state, and so an agent has a template to extend.
-Copy it into the mod's own `assets-src/` and edit the geometry there.
+Copy it into the mod's own `assets-src/` and build the real geometry there with
+the full `bpy` API.
+
+Validate whatever you export before importing it into Unity:
+
+    7dtd-assets check-mesh out.glb
+
+For hard-surface props that are really a few boxes and cylinders, the other
+lane is cheaper: compose built-in primitives in the Unity project with
+`GeneratedAsset.Primitive(...)`, which emits no mesh asset at all.
 
     make-mesh.py out.glb --shape cylinder --size 0.19 0.19 0.42
     make-mesh.py out.glb --shape box --size 1 0.5 2 --name myModCrate

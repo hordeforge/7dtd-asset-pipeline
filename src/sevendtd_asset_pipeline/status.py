@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from .capabilities import capabilities
 from .config import PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version
@@ -43,6 +44,7 @@ class Status:
     references: list[dict[str, object]] = field(default_factory=list)
     valid: bool | None = None
     problems: list[str] = field(default_factory=list)
+    capabilities: dict[str, bool] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -70,6 +72,8 @@ def collect_status(config: PipelineConfig) -> Status:
         game_dir=str(config.game_dir) if config.game_dir else None,
         unity_editor=str(config.unity_editor) if config.unity_editor else None,
     )
+
+    status.capabilities = {item.name: item.available for item in capabilities()}
 
     declared = _record(status, lambda: read_mod_name(config.mod_root / "ModInfo.xml"))
     if declared is not None and declared != config.mod_name:

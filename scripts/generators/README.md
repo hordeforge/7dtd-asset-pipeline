@@ -13,7 +13,7 @@ They are **starting points, not a modelling suite.** Copy one into your mod's
 | `make-audio.py` | report, convert, and synthesize mono 16-bit WAV | stdlib only |
 | `make-icon.py` | derive an atlas icon from a source image | Pillow |
 | `make-texture-maps.py` | derive normal + mask maps from an albedo | Pillow, NumPy |
-| `make-mesh.py` | parameterized primitive to GLB | Blender on `PATH` |
+| `make-mesh.py` | authored mesh to GLB | Blender on `PATH` |
 
 Install the optional tools with `scripts/install-tools.sh --with-authoring`.
 Each script fails with an actionable message when its dependency is absent.
@@ -53,6 +53,26 @@ Follow it in your own generators too.
 ./make-mesh.py /tmp/crate.glb --shape box --size 1.0 0.6 0.8 --name myModCrate
 ```
 
+## Two mesh lanes
+
+Both are first-class; pick by what the shape needs.
+
+| Lane | Use it for | Cost | Result in the bundle |
+|---|---|---|---|
+| **Authored** — `make-mesh.py`, Blender, OpenSCAD | organic, rigged, sculpted, or anything primitives cannot express | Blender on the host | a real class-43 `Mesh` object |
+| **Procedural** — `GeneratedAsset.Primitive(...)` in the Unity project | hard-surface props that are boxes, cylinders, and spheres | nothing beyond Unity | no `Mesh` object; the prefab references Unity's built-in primitives |
+
+Validate an authored mesh before importing it:
+
+```bash
+7dtd-assets check-mesh out.glb            # extents, watertightness, glTF conformance
+7dtd-assets check-mesh out.glb --strict   # also fail on glTF warnings
+```
+
+That catches the expensive mistakes early — most often a mesh authored in
+centimetres, which arrives a hundred times too large and reads as a scale bug
+in game rather than an export bug.
+
 ## Unity side
 
 Generating a prefab or material from code is the Unity half of the same idea.
@@ -65,6 +85,10 @@ traps a batch script hits and the inspector hides:
   render queue, not just `_Mode`, so a particle card is not opaque;
 - `SavePrefab(...)` renames the root to the file stem, because 7DTD compares
   the loaded object's name and a mismatch yields a silent fallback mesh;
-- `RequireBundleStem(...)` rejects a stem too generic to stay unique.
+- `RequireBundleStem(...)` rejects a stem too generic to stay unique;
+- `Primitive(...)`, `Root(...)`, `RootCollider(...)`, `ScaleChildren(...)`, and
+  `MeasureBounds(...)` compose the procedural mesh lane: real-world metres, an
+  identity root the engine's own corrections do not compound with, one root
+  collider instead of one per visual part, and measurable bounds in the log.
 
 Both halves end at the same place: `7dtd-assets build`, then a fresh client.

@@ -7,6 +7,8 @@
 # use for.
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
 WITH_AUTHORING=0
 WITH_UNITY_PREREQS=0
 CHECK_ONLY=0
@@ -91,10 +93,15 @@ run_check() {
 	report git "version control" have git
 	report make "consumer Makefile targets" have make
 	if ((WITH_AUTHORING)); then
-		report blender "mesh authoring (optional)" have blender
-		report openscad "parametric geometry (optional)" have openscad
-		report magick "icons and textures (optional)" have magick
-		report ffmpeg "audio (optional)" have ffmpeg
+		report blender "mesh authoring" have blender
+		report openscad "parametric geometry" have openscad
+		report magick "icons and textures" have magick
+		report ffmpeg "audio" have ffmpeg
+		report gltf_validator "glTF conformance" have gltf_validator
+		report UnityPy "deep bundle inspection" python3 -c "import UnityPy"
+		report Pillow "icon and texture lanes" python3 -c "import PIL"
+		report NumPy "texture lane" python3 -c "import numpy"
+		report trimesh "mesh checks" python3 -c "import trimesh"
 	fi
 	if ((WITH_UNITY_PREREQS)); then
 		local tool
@@ -199,6 +206,76 @@ else
 	echo "ERROR: no supported package manager (pacman, apt-get, dnf) was found." >&2
 	echo "       Install the tools listed by 'scripts/install-tools.sh --check' by hand." >&2
 	exit 1
+fi
+
+install_gltf_validator() {
+	local url archive staging destination
+	destination="${HOME}/.local/bin"
+	if have gltf_validator || have gltf-validator; then
+		echo "OK: gltf_validator is already installed"
+		return
+	fi
+	if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
+		echo "note: automatic gltf_validator setup supports Linux x86_64 only; see"
+		echo "      https://github.com/KhronosGroup/glTF-Validator/releases"
+		return
+	fi
+	for required in curl tar python3; do
+		have "$required" || { echo "note: $required missing; skipped gltf_validator"; return; }
+	done
+	# Khronos publishes no 'latest' release, so resolve the newest tag rather
+	# than pinning a version that goes stale.
+	url="$(curl --fail --location --silent --show-error --max-time 30 \
+		https://api.github.com/repos/KhronosGroup/glTF-Validator/releases 2>/dev/null |
+		python3 -c 'import json,sys
+try:
+    releases = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)
+for release in releases if isinstance(releases, list) else []:
+    for asset in release.get("assets", []):
+        if asset.get("name", "").endswith("-linux64.tar.xz"):
+            print(asset["browser_download_url"]); raise SystemExit(0)' || true)"
+	if [[ -z "$url" ]]; then
+		echo "note: could not resolve a gltf_validator release; skipped"
+		return
+	fi
+	archive="$(mktemp)"
+	staging="$(mktemp -d)"
+	echo "Installing gltf_validator from $url"
+	if curl --fail --location --silent --show-error --max-time 120 "$url" -o "$archive" &&
+		tar -xJf "$archive" -C "$staging" 2>/dev/null &&
+		[[ -f "$staging/gltf_validator" ]]; then
+		mkdir -p "$destination"
+		install -m 755 "$staging/gltf_validator" "$destination/gltf_validator"
+		echo "OK: installed $destination/gltf_validator (ensure it is on PATH)"
+	else
+		echo "note: gltf_validator download or extraction failed; skipped"
+	fi
+	rm -f "$archive"
+	rm -rf "$staging"
+}
+
+install_python_extras() {
+	# Capabilities, not requirements: the pipeline core stays dependency-free
+	# and each command says what to install when a capability is missing.
+	local target="$ROOT"
+	echo "Installing optional Python capabilities (UnityPy, Pillow, NumPy, trimesh)"
+	if [[ -x "$ROOT/.venv/bin/pip" ]]; then
+		"$ROOT/.venv/bin/pip" install --quiet --upgrade "${target}[all]" && {
+			echo "OK: installed into $ROOT/.venv"; return; }
+	fi
+	if python3 -m pip install --quiet --user --upgrade "${target}[all]" 2>/dev/null; then
+		echo "OK: installed for the current user"
+		return
+	fi
+	echo "note: could not install the Python extras automatically. Run:"
+	echo "      pip install '$target"'[all]'"'"
+}
+
+if ((WITH_AUTHORING)); then
+	install_gltf_validator
+	install_python_extras
 fi
 
 echo

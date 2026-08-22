@@ -16,8 +16,11 @@ message when a gate fails.
 """
 
 from .build import reject_disabled_modules, run_build
+from .capabilities import Capability, capabilities, has_capability, require_capability
 from .config import PipelineConfig, load_config
+from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, failed, run_doctor
+from .mesh_check import MeshReport, check_mesh
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .references import AssetReference, discover_references, manifest_assets
@@ -32,26 +35,34 @@ __version__ = "0.1.0"
 __all__ = [
     "AssetReference",
     "BundleInfo",
+    "Capability",
     "Check",
+    "DeepReport",
+    "MeshReport",
     "PipelineConfig",
     "PipelineError",
     "Release",
     "Status",
     "ValidationReport",
+    "__version__",
+    "capabilities",
+    "check_mesh",
     "collect_status",
+    "deep_inspect",
     "discover_references",
     "failed",
     "fetch_release",
     "game_unity_version",
+    "has_capability",
     "initialize",
     "inspect_bundle",
     "load_config",
     "manifest_assets",
     "project_unity_version",
     "reject_disabled_modules",
+    "require_capability",
     "run_build",
     "run_doctor",
     "validate_bundle",
     "validate_mod",
-    "__version__",
 ]

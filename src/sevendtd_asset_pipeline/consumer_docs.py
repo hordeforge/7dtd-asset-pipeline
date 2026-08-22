@@ -36,15 +36,46 @@ Exit code 0 means valid. Start here rather than reading files.
 | Command | Cost | Effect |
 |---|---|---|
 | `7dtd-assets status --json` | instant | full state; no Unity, no network |
+| `7dtd-assets capabilities --json` | instant | which optional tools work, and how to install them |
 | `7dtd-assets doctor --json` | seconds | host readiness; exit 1 if any check is `FAIL` |
 | `7dtd-assets refs` | instant | every bundle URI in `Config/**/*.xml` |
 | `7dtd-assets inspect --json PATH` | fast | one bundle's revision and class IDs |
+| `7dtd-assets inspect --deep PATH` | fast | every object and per-prefab components (UnityPy) |
+| `7dtd-assets check-mesh FILE` | fast | authored-mesh extents and glTF conformance |
 | `7dtd-assets validate` | fast | bundle + every XML reference |
 | `7dtd-assets build --probe` | minutes | proves the environment; stages nothing |
 | `7dtd-assets build` | minutes | **the only command that writes into this mod** |
 
 Diagnose with the fast read-only commands. Reach for `build` only when an asset
 actually changed.
+
+## Optional capabilities
+
+Some features need a tool the core does not require. Never guess whether one is
+installed — ask, and act on the answer:
+
+```bash
+7dtd-assets capabilities --json          # what works now, and what unlocks what
+7dtd-assets capabilities --missing       # only what is absent, with install commands
+```
+
+`status --json` also carries a `capabilities` map. Install everything with
+`pip install 'sevendtd-asset-pipeline[all]'` plus, for Blender/OpenSCAD/glTF,
+the pipeline's `scripts/install-tools.sh --with-authoring`.
+
+## Making the assets
+
+Two mesh lanes, both first-class — pick by what the shape needs:
+
+- **authored**: Blender or OpenSCAD to `.glb`, checked with
+  `7dtd-assets check-mesh` before import. Use for organic, rigged, or sculpted
+  geometry.
+- **procedural**: compose Unity's built-in primitives in the Unity project with
+  `GeneratedAsset.Primitive(...)`. Use for hard-surface props. Emits no mesh
+  asset at all, so the geometry stays a reviewable diff of numbers.
+
+`GeneratedAsset` also builds materials with the shader keywords and transparent
+blend state that a batch script otherwise silently omits.
 
 ## Rules
 
@@ -86,6 +117,7 @@ Read the error; each one names its own fix. Then:
 ```bash
 7dtd-assets status --json
 7dtd-assets inspect Resources/{bundle_name}
+7dtd-assets inspect --deep Resources/{bundle_name}   # did the component survive?
 7dtd-assets check-log .asset-pipeline/build/bundle/unity-build.log
 ```
 

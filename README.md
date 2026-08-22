@@ -30,8 +30,11 @@ repository layout.
   documentation, plus an `AGENTS.md` contract for coding agents;
 - reproducible generators for the audio, icon, texture, and mesh lanes, plus a
   Unity-side `GeneratedAsset` library for asset-as-code prefabs and materials;
-- consumer interfaces: a one-call `status --json`, a supported Python API, and
-  an agent contract written straight into the consuming mod;
+- consumer interfaces: a one-call `status --json`, a programmatic capability
+  registry, a supported Python API, and an agent contract written straight
+  into the consuming mod;
+- optional OSS capabilities that degrade cleanly: UnityPy object-level bundle
+  inspection, and trimesh + the Khronos glTF validator for authored meshes;
 - unit tests with generated good and broken UnityFS fixtures.
 
 ## Requirements
@@ -108,7 +111,8 @@ Orient in an unfamiliar mod, or drive the pipeline from a script or agent, with
 one non-raising call:
 
 ```bash
-7dtd-assets status --json
+7dtd-assets status --json        # whole-mod state
+7dtd-assets capabilities --json  # which optional tools work, and what they unlock
 ```
 
 See [Consumer interfaces](docs/consumer-api.md) for the full contract and

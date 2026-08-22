@@ -1,4 +1,7 @@
 .venv/
+# This is a library published for others to install, not a pinned application,
+# so consumers resolve their own dependencies. uv run writes this locally.
+uv.lock
 __pycache__/
 *.py[cod]
 *.egg-info/

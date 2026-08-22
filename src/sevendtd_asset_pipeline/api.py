@@ -60,6 +60,7 @@ class Pipeline:
         game_dir: Path | str | None = None,
         mod_name: str | None = None,
         bundle_name: str | None = None,
+        changeset: str | None = None,
     ) -> tuple[Pipeline, list[Path]]:
         """Create the pipeline inside an existing modlet and return it, ready to use.
 
@@ -71,7 +72,7 @@ class Pipeline:
         if not unity_version:
             raise PipelineError("scaffolding needs game_dir or unity_version")
         root = Path(mod_root)
-        created = initialize(root, mod_name, bundle_name, unity_version)
+        created = initialize(root, mod_name, bundle_name, unity_version, changeset)
         return cls.discover(root), created
 
     def __repr__(self) -> str:
@@ -249,6 +250,7 @@ def _init(params: dict[str, Any]) -> dict[str, Any]:
         game_dir=params.get("game_dir"),
         mod_name=params.get("mod_name"),
         bundle_name=params.get("bundle_name"),
+        changeset=params.get("changeset"),
     )
     return {"created": [str(path) for path in created]}
 

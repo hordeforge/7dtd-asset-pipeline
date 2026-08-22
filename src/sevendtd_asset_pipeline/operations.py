@@ -199,6 +199,7 @@ _DEFINITIONS: tuple[Operation, ...] = (
                 "game_dir": PATH_PARAM,
                 "mod_name": {"type": "string"},
                 "bundle_name": {"type": "string"},
+                "changeset": {"type": "string"},
             },
             required=["mod_root"],
         ),

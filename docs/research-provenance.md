@@ -55,8 +55,14 @@ inclusion did.
 
 ## Current-version evidence
 
-At extraction time, the configured local V3.1.0 b14 install's shipped
-`Data/Bundles/Standalone/Entities/Entities` reported Unity `2022.3.62f2`.
+At extraction time, the configured local **V 3.1.0 b14** install's shipped
+`Data/Bundles/Standalone/Entities/Entities` reported Unity **2022.3.62f2**,
+changeset **7670c08855a9** — the same pairing the source project pinned in
+`ProjectSettings/ProjectVersion.txt` and hardcoded in its editor installer.
+Unity's release service independently resolves that revision to the same
+changeset and to the windows-mono module MD5 `b5adce741fb7633c039e216348110332`
+the source project had hardcoded, which is how the generalized installer
+replaces that table without losing accuracy.
 The Atomic Doomsday bundle reported the same revision, contained class 142,
 and all seven of its XML bundle references passed the source validator.
 

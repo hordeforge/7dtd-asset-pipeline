@@ -11,12 +11,18 @@ one the moment something is claimed but not verified.
 
 ### 1. The Unity editor download path is unexercised
 
-**Blocks:** `scripts/install-unity-editor.sh` resolves the changeset, URLs, and
-MD5s correctly and detects the existing editor, but this host already had
-Unity 2022.3.62f2, so the download-verify-unpack branch never ran. The
-resolution half is verified: it produces the same changeset (`7670c08855a9`)
-and windows-mono MD5 (`b5adce741fb7633c039e216348110332`) that Atomic
-Doomsday had hardcoded.
+**Not blocked:** the editor itself is present and proven. This host has
+Unity **2022.3.62f2** with Windows Build Support (Mono) installed at
+`~/Unity/Hub/Editor/2022.3.62f2/`, `doctor` passes against it, and real
+`build --probe` and `build` runs have produced class-142 bundles with it. A
+second editor, 6000.5.9f1, is also installed and is **not** usable here: wrong
+revision, no Windows module.
+
+**Blocks only this:** because that editor was already installed,
+`scripts/install-unity-editor.sh` took its reuse path, so its own
+download-verify-unpack branch has never executed. The resolution half *is*
+verified — it produces the same changeset (`7670c08855a9`) and windows-mono
+MD5 (`b5adce741fb7633c039e216348110332`) that Atomic Doomsday had hardcoded.
 
 **You run** (on a host without that editor, or with `UNITY_EDITOR_INSTALL_DIR`
 pointed somewhere fresh):

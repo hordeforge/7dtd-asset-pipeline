@@ -98,6 +98,28 @@ class PipelineTests(unittest.TestCase):
         log.write_text("Build completed with a result of 'Succeeded'\n")
         reject_disabled_modules(log)
 
+    def test_scaffold_pins_the_changeset_when_it_is_known(self) -> None:
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", "7670c08855a9")
+        version_file = (
+            self.root / "tools" / "7dtd-assets" / "UnityProject"
+            / "ProjectSettings" / "ProjectVersion.txt"
+        )
+        text = version_file.read_text()
+        self.assertIn("m_EditorVersion: 2022.3.62f2", text)
+        self.assertIn("m_EditorVersionWithRevision: 2022.3.62f2 (7670c08855a9)", text)
+
+    def test_scaffold_omits_the_revision_line_when_the_changeset_is_unknown(self) -> None:
+        # Unity writes that line itself on first open, so an unreachable
+        # release service must not fail the scaffold.
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        version_file = (
+            self.root / "tools" / "7dtd-assets" / "UnityProject"
+            / "ProjectSettings" / "ProjectVersion.txt"
+        )
+        text = version_file.read_text()
+        self.assertIn("m_EditorVersion: 2022.3.62f2", text)
+        self.assertNotIn("m_EditorVersionWithRevision", text)
+
     def test_doctor_runs_every_branch_including_the_editor_one(self) -> None:
         # A NameError in the editor branch survived until a real doctor run,
         # because no test ever configured UNITY_EDITOR.

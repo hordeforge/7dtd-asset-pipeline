@@ -75,6 +75,40 @@ The editor revision must match the installed game exactly, and **Windows Build
 Support (Mono)** is mandatory: the shipped client loads a Windows-target bundle
 even when it runs through Proton.
 
+### Known-good pairing
+
+| 7 Days to Die | Unity editor | Changeset |
+|---|---|---|
+| V 3.1.0 b14 | 2022.3.62f2 | `7670c08855a9` |
+
+This is the pairing the extraction was developed and verified against, and it
+is recorded here as **evidence, not a constant**. Every command discovers the
+revision from the installed game rather than trusting this table, because the
+game dictates it and a new game build can move it:
+
+```bash
+7dtd-assets init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+7dtd-assets doctor          # FAILs if project and game disagree
+```
+
+`init` also pins the changeset into the project's
+`ProjectSettings/ProjectVersion.txt`:
+
+```text
+m_EditorVersion: 2022.3.62f2
+m_EditorVersionWithRevision: 2022.3.62f2 (7670c08855a9)
+```
+
+Unity writes the second line itself on first open; writing it during scaffold
+records the exact build in review and in git history. Pass `--changeset`
+explicitly when the release service is unreachable.
+
+Do not assume a newer editor is fine. A host can have several installed — this
+one has both 2022.3.62f2 and 6000.5.9f1 — and only the game-matched revision
+with Windows Build Support can produce a loadable bundle. `doctor` compares the
+project against the game's own shipped bundle header and fails on a mismatch,
+which is why `UNITY_EDITOR` must point at the right one.
+
 ### Scripted (Linux)
 
 ```bash
@@ -102,6 +136,29 @@ Inspect exactly what would be downloaded, without downloading anything:
 ```bash
 7dtd-assets unity-release --version 2022.3.62f2 --json
 ```
+
+### Unity's own CLI
+
+Unity ships an experimental CLI that installs an editor plus modules directly.
+It is a legitimate alternative to the script above when you would rather drive
+Unity's tooling:
+
+```bash
+unity install 2022.3.62f2 -c 7670c08855a9 -m windows-mono
+```
+
+`-c` supplies the changeset, which is only needed when the requested revision
+is absent from the CLI's release feed. Resolve it, and the exact download URLs
+and checksums, without installing anything:
+
+```bash
+7dtd-assets unity-release --version 2022.3.62f2 --json
+```
+
+Unity documents the CLI at
+<https://docs.unity.com/en-us/unity-cli/unity-cli-reference> and Hub installs
+at <https://docs.unity.com/en-us/hub/install-hub>. Sign-in and license
+activation remain user-owned actions in every route.
 
 ### Manual (any platform)
 

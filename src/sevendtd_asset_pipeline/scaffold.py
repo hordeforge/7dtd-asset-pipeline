@@ -23,6 +23,7 @@ def initialize(
     mod_name: str | None,
     bundle_name: str | None,
     unity_version: str,
+    changeset: str | None = None,
 ) -> list[Path]:
     mod_root = mod_root.resolve()
     if not mod_root.is_dir():
@@ -49,11 +50,14 @@ def initialize(
         "# Put source assets and their Unity .meta files below this directory.\n",
         encoding="utf-8",
     )
+    # Unity adds m_EditorVersionWithRevision itself on first open, but writing
+    # it now pins the exact build in review and in git history, and tells
+    # install-unity-editor.sh which changeset the project expects.
     version_file = project / "ProjectSettings" / "ProjectVersion.txt"
-    version_file.write_text(
-        f"m_EditorVersion: {unity_version}\n",
-        encoding="utf-8",
-    )
+    lines = [f"m_EditorVersion: {unity_version}"]
+    if changeset:
+        lines.append(f"m_EditorVersionWithRevision: {unity_version} ({changeset})")
+    version_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
     makefile.write_text(
         ".PHONY: assets assets-probe assets-validate assets-doctor assets-status\n\n"
         "assets:\n\t7dtd-assets build\n\n"

@@ -39,6 +39,11 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--mod-name")
     init.add_argument("--bundle-name")
     init.add_argument("--unity-version", help="required when no game directory is supplied")
+    init.add_argument(
+        "--changeset",
+        help="Unity changeset to pin in ProjectVersion.txt; resolved from Unity's "
+        "release service when omitted and reachable",
+    )
     init.add_argument("--game-dir", type=Path, help="discover Unity version from an installed game")
 
     doctor = commands.add_parser("doctor", help="check configuration and required tooling")
@@ -119,7 +124,18 @@ def run(args: argparse.Namespace) -> int:
             version = args.unity_version
         else:
             raise PipelineError("init needs --game-dir or --unity-version")
-        created = initialize(args.mod_root, args.mod_name, args.bundle_name, version)
+        changeset = args.changeset
+        if not changeset:
+            # Best effort: pinning the revision is valuable, but not worth
+            # failing a scaffold over an unreachable network.
+            try:
+                changeset = fetch_release(version).changeset
+                print(f"Resolved Unity {version} changeset {changeset}")
+            except PipelineError:
+                print("Could not resolve the changeset; Unity will add it on first open")
+        created = initialize(
+            args.mod_root, args.mod_name, args.bundle_name, version, changeset
+        )
         for path in created:
             print(f"created {path}")
         print("Next: set SEVEN_DAYS_TO_DIE_DIR and UNITY_EDITOR, then run 7dtd-assets doctor")

@@ -62,3 +62,37 @@ and all seven of its XML bundle references passed the source validator.
 
 That version is evidence for the extraction, not a forever constant. New
 consumer projects discover their installed game's revision.
+
+## Live verification of the class-142 finding
+
+The extraction inherited the class-142 rule from the source project's
+investigation. It has since been reproduced directly against Unity 2022.3.62f2
+and the same installed game, which is stronger evidence than inheritance:
+
+With `Packages/manifest.json` emptied, Unity **exited zero** while logging
+
+```text
+'AssetBundle' is not supported because the module AssetBundle is disabled in the build.
+'BoxCollider' is not supported because the module Physics is disabled in the build.
+```
+
+and wrote a bundle whose serialized class table was `[33, 1, 21, 48, 4, 23]` —
+no class 142. The pipeline rejected it on the log gate, and the previously
+staged bundle was left byte-identical. Restoring the manifest produced a
+class-142 bundle that passed every gate.
+
+## Module resolution is not module declaration
+
+Testing the above turned up a fact worth recording, because it changes what
+"remove a module" means. Deleting `com.unity.modules.assetbundle` from
+`manifest.json` did **not** remove it: `packages-lock.json` pinned the
+previously resolved set, and after deleting the lock the module returned at
+`depth: 1`, pulled in transitively by
+`com.unity.modules.unitywebrequestassetbundle` and
+`com.unity.modules.unitywebrequestwww`.
+
+So a mod usually acquires the AssetBundle module by accident and works, and
+`doctor`'s manifest check is necessary but not sufficient: what ships is what
+Unity resolved, not what was declared. The class-142 artifact gate is what
+actually decides, which is why it inspects the built file rather than the
+project.

@@ -17,6 +17,10 @@
 | Component | Responsibility |
 |---|---|
 | Python CLI | config, scaffold, doctor, status, build orchestration, staging, XML/manifest validation |
+| `operations.py` | the operation registry: one machine-readable contract for every surface |
+| `api.py` | the `Pipeline` facade, and the dispatch `call`/`serve` share |
+| `serve.py` | line-delimited JSON request/response over stdio |
+| `capabilities.py` | which optional tools are usable, what they unlock, how to install them |
 | Unity project template | editor revision, package modules, source membership boundary |
 | `BundleBuilder.cs` | actual serialization, graphics APIs, options, collision rejection, probe |
 | `GeneratedAsset.cs` | asset-as-code prefab/material helpers that encode the batch-mode traps |
@@ -69,6 +73,21 @@ Consumer paths are relative to the mod root, generated support files live
 inside it, and machine paths come from environment variables. The standalone
 pipeline repository is a development/install source only; generated modlets do
 not require a relative checkout of it at build time once the CLI is installed.
+
+## One registry, several surfaces
+
+Programmatic consumers differ — Python callers, other languages, CI, agents —
+but a build tool with several interfaces that describe themselves differently
+is worse than one with a single interface. `operations.py` holds the contract;
+the `Pipeline` facade, `call`, `serve`, and the published `schema` all dispatch
+through it. A test asserts the registry and the dispatch table name the same
+operations, so the published schema cannot describe behaviour that does not
+exist.
+
+No server is built in. This tool reads a game install and drives a Unity editor
+on the same machine, so a listening port would be a liability, and `schema`
+publishes enough for a consumer to generate whatever protocol wrapper they
+actually need.
 
 ## Why the editor install is resolved, not pinned
 

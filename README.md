@@ -136,6 +136,7 @@ a fresh-client load and a visual/audio check appropriate to the changed asset.
 - [Game integration](docs/game-integration.md) — XML URIs, icons, audio, clients
 - [Consumer interfaces](docs/consumer-api.md) — schema, call, serve, Python API
 - [Blockers](docs/blockers.md) — what still needs a human, a licence, or a client
+- [Contributing](CONTRIBUTING.md) — proof boundaries and the uv toolchain
 - [Validation](docs/validation.md) — each gate and its proof boundary
 - [Authoring tools](docs/authoring-tools.md) — researched OSS tools for humans and agents
 - [Agent workflows](docs/agent-workflows.md) — reproducible asset-as-code patterns

@@ -9,7 +9,7 @@ one the moment something is claimed but not verified.
 
 ## Open
 
-### 2. The Unity editor download path is unexercised
+### 1. The Unity editor download path is unexercised
 
 **Blocks:** `scripts/install-unity-editor.sh` resolves the changeset, URLs, and
 MD5s correctly and detects the existing editor, but this host already had
@@ -29,7 +29,7 @@ UNITY_EDITOR_INSTALL_DIR=/tmp/unity-test \
 **Confirms it worked:** the script prints `OK: checksum verified` twice, then
 `OK: Windows Build Support (Mono) is installed`.
 
-### 3. Unity Hub sign-in and license activation
+### 2. Unity Hub sign-in and license activation
 
 **Blocks:** steps 2-4 of `install-unity-editor.sh` (Hub install, license
 activation, Flatpak-to-native license copy). These deliberately stop and wait
@@ -45,7 +45,7 @@ cd /path/to/MyMod
 
 **Confirms it worked:** `OK: Unity batch-mode license is active`.
 
-### 4. No fresh-client acceptance has been run
+### 3. No fresh-client acceptance has been run
 
 **Blocks:** the only gate that actually proves a bundle loads. Every offline
 gate in this repository is verified, and the docs are explicit that offline

@@ -49,6 +49,33 @@ Exit code 0 means valid. Start here rather than reading files.
 Diagnose with the fast read-only commands. Reach for `build` only when an asset
 actually changed.
 
+## Driving it programmatically
+
+Do not scrape `--help`. The operation surface is published, and every operation
+says what it costs, whether it writes, and what it needs:
+
+```bash
+7dtd-assets schema                       # every operation and its JSON Schema
+7dtd-assets call status                  # run one, JSON in and out
+7dtd-assets call build --params '{"probe":true}'
+7dtd-assets serve                        # many operations in one process
+```
+
+`serve` reads one JSON request per line and writes one response per line
+(`{"id":1,"op":"status"}` -> `{"id":1,"ok":true,"result":{...}}`). It refuses
+operations that write files unless started with `--allow-writes`, so an
+inspecting client cannot accidentally start a Unity build.
+
+From Python:
+
+```python
+from sevendtd_asset_pipeline import Pipeline
+pipeline = Pipeline.discover()
+if not pipeline.status().valid:
+    pipeline.build()
+    pipeline.validate()
+```
+
 ## Optional capabilities
 
 Some features need a tool the core does not require. Never guess whether one is
@@ -127,4 +154,10 @@ class 142 is missing, the cause is an engine module, not a build option.
 
 
 def render_agent_guide(mod_name: str, bundle_name: str) -> str:
-    return AGENT_GUIDE.format(mod_name=mod_name, bundle_name=bundle_name)
+    """Fill the guide's placeholders.
+
+    Deliberately not `str.format`: this document contains JSON examples, and
+    every brace in them would have to be doubled, which is a trap that breaks
+    scaffolding the moment someone adds an example without noticing.
+    """
+    return AGENT_GUIDE.replace("{mod_name}", mod_name).replace("{bundle_name}", bundle_name)

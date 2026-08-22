@@ -104,9 +104,33 @@ Machine-readable output for agents and CI:
 | `7dtd-assets check-mesh --json` | authored-mesh extents and glTF conformance |
 
 Every command exits non-zero with a single `ERROR: ...` line on stderr when a
-gate fails. Prefer the exit code over parsing prose. The full contract, the
-JSON shapes, and the supported Python API are in
-[docs/consumer-api.md](docs/consumer-api.md).
+gate fails. Prefer the exit code over parsing prose.
+
+Do not hardcode the command surface. It is published:
+
+```bash
+7dtd-assets schema                              # every operation, as JSON
+7dtd-assets call status                         # run one, JSON in and out
+7dtd-assets serve                               # many, one process, ~17x faster
+```
+
+Each operation declares its `cost`, whether it `writes`, whether it
+`needs_config`, and which `capabilities` it needs — so you can decide what is
+safe to run before running it. `serve` refuses writing operations unless
+started with `--allow-writes`.
+
+In Python, use the `Pipeline` facade rather than assembling the individual
+functions:
+
+```python
+from sevendtd_asset_pipeline import Pipeline
+pipeline = Pipeline.discover()
+```
+
+The full contract and JSON shapes are in
+[docs/consumer-api.md](docs/consumer-api.md). Adding an operation means adding
+it to `operations.OPERATIONS` and `api._DISPATCH`; the tests fail if the two
+disagree, which keeps the published schema honest.
 
 ## Cost and blast radius
 

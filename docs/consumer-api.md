@@ -1,7 +1,111 @@
 # Consumer interfaces
 
-Three ways to drive this pipeline from your own mod repository, in the order
-most consumers should reach for them.
+Ways to drive this pipeline from your own mod repository, in the order most
+consumers should reach for them.
+
+Everything below is generated from **one operation registry**
+(`operations.py`). The Python facade, the `call` and `serve` endpoints, and the
+published `schema` all dispatch through it, so they cannot describe different
+behaviour from what they run.
+
+## Which interface
+
+| You are | Use |
+|---|---|
+| writing Python | `Pipeline` — one object, typed results |
+| writing a shell script or CI job | `7dtd-assets <command>` with `--json` |
+| writing another language, or a tool | `7dtd-assets call NAME --params '{...}'` |
+| making many calls, or building a wrapper | `7dtd-assets serve` |
+| discovering what exists, from anything | `7dtd-assets schema` |
+
+### Why not a server
+
+This is a local build tool: it reads a game install and drives a Unity editor
+on the same machine. An HTTP or RPC server would add a network surface, a port,
+and a protocol dependency to something whose consumers are scripts, CI jobs,
+and agents that can already start a subprocess. `serve` gives the same
+efficiency over stdio with no listener and no dependency, and `schema` publishes
+enough for anyone to generate a server, an MCP adapter, or a client library in
+whatever protocol they actually need. That choice stays with the consumer.
+
+## 0. The machine-readable contract
+
+```bash
+7dtd-assets schema            # the full operation manifest, as JSON
+```
+
+Each operation publishes its name, summary, JSON Schema parameters, what it
+returns, and three fields a caller needs before running anything:
+
+| Field | Meaning |
+|---|---|
+| `cost` | `instant`, `fast`, `seconds`, or `minutes` — `minutes` starts Unity |
+| `writes` | whether it modifies files; only `build` and `init` do |
+| `needs_config` | whether it must run inside a scaffolded modlet |
+| `capabilities` | optional tools it requires, e.g. `["UnityPy"]` |
+
+Discover the surface without parsing help text or prose:
+
+```bash
+7dtd-assets schema | jq -r '.operations[] | select(.writes | not) | .name'
+```
+
+## 1. `call` — one operation, JSON in and out
+
+```bash
+7dtd-assets call status
+7dtd-assets call check_mesh --params '{"mesh":"crate.glb","max_extent":4}'
+7dtd-assets call build --params '{"probe":true}'
+```
+
+Prints the result as JSON on success; on failure prints `ERROR: ...` to stderr
+and exits non-zero. Unknown operations list the known ones, unknown parameters
+list what is accepted, and a missing one is named — so a caller does not have
+to guess from a traceback.
+
+## 2. `serve` — many operations, one process
+
+Each `call` pays process start. `serve` pays it once and then answers one JSON
+line per JSON line, in order, for as long as stdin stays open. Measured here:
+**73 ms per operation via `call`, 4 ms via `serve`** — about 17x.
+
+```text
+in:  {"id": 1, "op": "status", "params": {}}
+out: {"id": 1, "ok": true, "result": {...}}
+out: {"id": 1, "ok": false, "error": {"type": "PipelineError", "message": "..."}}
+```
+
+`id` is echoed untouched and may be omitted. `op: "schema"` and `op: "ping"`
+are answered over the same channel, so a client can discover and call without a
+second mechanism.
+
+Two safety properties worth relying on:
+
+- **Read-only by default.** Operations declaring `writes` are refused unless
+  the server was started with `--allow-writes`. A consumer that only inspects
+  cannot accidentally start a Unity build.
+- **A malformed line cannot desynchronize the session.** It gets an error
+  response; the stream stays aligned and the next request is answered normally.
+
+```python
+import json, subprocess
+
+server = subprocess.Popen(
+    ["7dtd-assets", "serve"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+)
+
+def call(op, **params):
+    server.stdin.write(json.dumps({"id": 1, "op": op, "params": params}) + "\n")
+    server.stdin.flush()
+    reply = json.loads(server.stdout.readline())
+    if not reply["ok"]:
+        raise RuntimeError(reply["error"]["message"])
+    return reply["result"]
+
+print(call("status")["valid"])
+```
+
+## 3. `Pipeline` — the Python entry point
 
 ## 1. What `init` puts in your mod
 
@@ -142,10 +246,44 @@ arrives a hundred times too large.
 "detail": …}]`. `inspect --json` emits `path`, `unity_version`,
 `archive_format`, `class_ids`, `has_assetbundle_object`.
 
-## 3. The Python API
+For consumers scripting the pipeline in-process. `Pipeline` is the recommended
+entry point; the individual functions stay available for callers that want one
+piece. Only names re-exported from the package root are supported.
 
-For consumers scripting the pipeline in-process. Only the names re-exported
-from the package root are supported; everything else may change.
+```python
+from sevendtd_asset_pipeline import Pipeline
+
+pipeline = Pipeline.discover()            # resolve .7dtd-assets.toml upward
+pipeline, created = Pipeline.scaffold(    # or create one in an existing modlet
+    "/path/to/MyMod", game_dir="/path/to/7 Days To Die"
+)
+
+status = pipeline.status()                # never raises for a mod-state problem
+if not status.valid:
+    pipeline.build()                      # the only method that writes
+    pipeline.validate()
+
+pipeline.call("inspect_deep")             # same dispatch as `call` and `serve`
+```
+
+| Method | Returns |
+|---|---|
+| `Pipeline.discover(start=None)` | a pipeline bound to the nearest config |
+| `Pipeline.scaffold(root, *, game_dir=…, unity_version=…)` | `(pipeline, created_paths)` |
+| `.status()` | `Status` |
+| `.doctor()` | `list[Check]` |
+| `.capabilities(probe_versions=False)` | `list[Capability]` |
+| `.refs()` | `list[AssetReference]` |
+| `.inspect(bundle=None)` | `BundleInfo` |
+| `.inspect_deep(bundle=None)` | `DeepReport` (needs UnityPy) |
+| `.validate(bundle=None)` | `ValidationReport` |
+| `.check_mesh(path, max_extent, strict)` | `MeshReport` (needs trimesh) |
+| `.check_log(path)` | raises if the log shows stripped modules |
+| `.unity_release(version=None)` | `Release` (uses the network) |
+| `.build(probe=False)` | staged bundle `Path` |
+| `.call(name, params)` | the registry operation, JSON-shaped |
+
+### The underlying functions
 
 ```python
 from sevendtd_asset_pipeline import (

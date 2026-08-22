@@ -162,7 +162,14 @@ audio, and server behavior.
 7dtd-assets status --json
 ```
 
-One call, no Unity, no network, and it never raises for a mod-state problem —
+```bash
+7dtd-assets schema               # every operation, machine-readable
+7dtd-assets call status          # run one operation, JSON in and out
+7dtd-assets serve                # many operations over one stdio session
+```
+
+`status` is one call, no Unity, no network, and it never raises for a
+mod-state problem —
 it reports what exists, whether the bundle matches the game, what the manifest
 lists, which XML references exist, and whether the mod is valid. `init` also
 wrote `tools/7dtd-assets/AGENTS.md` into your mod so an agent working there has

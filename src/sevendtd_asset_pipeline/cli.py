@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from .api import Pipeline, call_json
 from .build import reject_disabled_modules, run_build
 from .capabilities import capabilities
 from .config import load_config
@@ -16,7 +17,9 @@ from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .mesh_check import check_mesh
 from .references import discover_references
+from .operations import manifest
 from .scaffold import initialize
+from .serve import serve
 from .status import collect_status
 from .unity_release import fetch_release
 from .unityfs import inspect_bundle
@@ -80,6 +83,22 @@ def _parser() -> argparse.ArgumentParser:
     capability.add_argument("--json", action="store_true")
     capability.add_argument("--versions", action="store_true", help="also probe installed versions")
     capability.add_argument("--missing", action="store_true", help="list only unavailable ones")
+
+    schema = commands.add_parser(
+        "schema", help="print the machine-readable operation contract"
+    )
+    schema.add_argument("--json", action="store_true", default=True, help=argparse.SUPPRESS)
+
+    call = commands.add_parser("call", help="run one operation by name with JSON parameters")
+    call.add_argument("operation")
+    call.add_argument("--params", default="{}", help="JSON object of parameters")
+
+    server = commands.add_parser(
+        "serve", help="line-delimited JSON requests on stdin, responses on stdout"
+    )
+    server.add_argument(
+        "--allow-writes", action="store_true", help="permit operations that write files"
+    )
 
     commands.add_parser("refs", help="list bundle references discovered recursively in Config/")
     check_log = commands.add_parser("check-log", help="fail on Unity disabled-module warnings")
@@ -154,6 +173,28 @@ def run(args: argparse.Namespace) -> int:
         reject_disabled_modules(args.log)
         print(f"OK: no disabled-module warnings in {args.log}")
         return 0
+    if args.command == "schema":
+        print(json.dumps(manifest(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command in ("call", "serve"):
+        def resolve() -> Pipeline | None:
+            try:
+                return Pipeline(load_config(args.config))
+            except PipelineError:
+                return None
+
+        if args.command == "serve":
+            return serve(resolve, args.allow_writes)
+        try:
+            params = json.loads(args.params)
+        except json.JSONDecodeError as exc:
+            raise PipelineError(f"--params is not valid JSON: {exc}") from exc
+        if not isinstance(params, dict):
+            raise PipelineError("--params must be a JSON object")
+        print(json.dumps(call_json(resolve(), args.operation, params), indent=2, sort_keys=True))
+        return 0
+
     if args.command == "capabilities":
         found = capabilities(args.versions)
         if args.missing:

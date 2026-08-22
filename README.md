@@ -30,9 +30,10 @@ repository layout.
   documentation, plus an `AGENTS.md` contract for coding agents;
 - reproducible generators for the audio, icon, texture, and mesh lanes, plus a
   Unity-side `GeneratedAsset` library for asset-as-code prefabs and materials;
-- consumer interfaces: a one-call `status --json`, a programmatic capability
-  registry, a supported Python API, and an agent contract written straight
-  into the consuming mod;
+- programmatic interfaces built on one operation registry: a self-describing
+  `schema`, a `call` endpoint for any language, a `serve` stdio loop about 17x
+  faster for repeated calls, a `Pipeline` Python facade, and a capability
+  registry — plus an agent contract written straight into the consuming mod;
 - optional OSS capabilities that degrade cleanly: UnityPy object-level bundle
   inspection, and trimesh + the Khronos glTF validator for authored meshes;
 - unit tests with generated good and broken UnityFS fixtures.
@@ -113,6 +114,9 @@ one non-raising call:
 ```bash
 7dtd-assets status --json        # whole-mod state
 7dtd-assets capabilities --json  # which optional tools work, and what they unlock
+7dtd-assets schema               # every operation, machine-readable
+7dtd-assets call status          # run one operation, JSON in and out
+7dtd-assets serve                # many operations over one stdio session
 ```
 
 See [Consumer interfaces](docs/consumer-api.md) for the full contract and
@@ -128,7 +132,8 @@ a fresh-client load and a visual/audio check appropriate to the changed asset.
 - [Bundle generation](docs/bundle-generation.md) — the complete build path
 - [Configuration](docs/configuration.md) — every `.7dtd-assets.toml` key
 - [Game integration](docs/game-integration.md) — XML URIs, icons, audio, clients
-- [Consumer interfaces](docs/consumer-api.md) — CLI contract, JSON, Python API
+- [Consumer interfaces](docs/consumer-api.md) — schema, call, serve, Python API
+- [Blockers](docs/blockers.md) — what still needs a human, a licence, or a client
 - [Validation](docs/validation.md) — each gate and its proof boundary
 - [Authoring tools](docs/authoring-tools.md) — researched OSS tools for humans and agents
 - [Agent workflows](docs/agent-workflows.md) — reproducible asset-as-code patterns

@@ -64,6 +64,11 @@ class StatusTests(unittest.TestCase):
         self.assertIn("ExampleMod", text)
         self.assertIn("example.unity3d", text)
         self.assertIn("7dtd-assets status --json", text)
+        # The guide carries JSON examples; rendering must not mangle their
+        # braces or choke on them.
+        self.assertIn('{"id":1,"op":"status"}', text)
+        self.assertNotIn("{mod_name}", text)
+        self.assertNotIn("{bundle_name}", text)
 
 
 if __name__ == "__main__":

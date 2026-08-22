@@ -11,6 +11,7 @@ repository layout.
 
 ## What it includes
 
+- host-tooling and Unity-editor installers that start from a bare machine;
 - a mod-scaffolding command and generic Unity project template;
 - a real editor-side `BuildPipeline.BuildAssetBundles` implementation;
 - Windows-target, LZ4, strict, forced-rebuild bundle generation;
@@ -19,13 +20,18 @@ repository layout.
 - dependency-free UnityFS metadata inspection and the required class-142
   `AssetBundle` gate;
 - installed-game Unity-version discovery instead of a permanently hardcoded
-  version;
+  version, and checksum-verified editor resolution from Unity's release
+  service instead of a hardcoded changeset;
 - recursive `Config/**/*.xml` reference discovery;
 - validation of mod names, bundle paths, manifest membership, exact case, and
   bundle-wide file-stem uniqueness;
 - atomic staging of the bundle and its tracked manifest;
 - setup, integration, troubleshooting, authoring, agent-workflow, and release
-  documentation;
+  documentation, plus an `AGENTS.md` contract for coding agents;
+- reproducible generators for the audio, icon, texture, and mesh lanes, plus a
+  Unity-side `GeneratedAsset` library for asset-as-code prefabs and materials;
+- consumer interfaces: a one-call `status --json`, a supported Python API, and
+  an agent contract written straight into the consuming mod;
 - unit tests with generated good and broken UnityFS fixtures.
 
 ## Requirements
@@ -42,6 +48,17 @@ environment variables by this project.
 
 ## Quick start
 
+[Quickstart](docs/quickstart.md) is the complete path from a bare machine to a
+validated bundle. The short form:
+
+Install host tooling (`pacman`, `apt-get`, or `dnf`; `--check` installs
+nothing and just reports what is missing):
+
+```bash
+scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
+scripts/install-tools.sh --with-unity-prereqs
+```
+
 Install this checkout:
 
 ```bash
@@ -57,6 +74,15 @@ Unity version from the installed game:
 ```bash
 7dtd-assets init /path/to/MyMod \
   --game-dir "/path/to/7 Days To Die"
+```
+
+Install the game-matched Unity editor and its mandatory Windows Build Support
+(Mono). The revision, changeset, URLs, and checksums come from Unity's official
+release service; sign-in and license activation stay user-owned:
+
+```bash
+cd /path/to/MyMod
+/path/to/7dtd-asset-pipeline/scripts/install-unity-editor.sh
 ```
 
 Set machine-local paths, then prove the environment:
@@ -78,15 +104,27 @@ validate:
 7dtd-assets validate
 ```
 
+Orient in an unfamiliar mod, or drive the pipeline from a script or agent, with
+one non-raising call:
+
+```bash
+7dtd-assets status --json
+```
+
+See [Consumer interfaces](docs/consumer-api.md) for the full contract and
+[scripts/generators/](scripts/generators/) for the asset-creation lanes.
+
 The offline gates are necessary, not sufficient. Acceptance always ends with
 a fresh-client load and a visual/audio check appropriate to the changed asset.
 
 ## Documentation
 
+- [Quickstart](docs/quickstart.md) — bare machine to a validated bundle
 - [Setup](docs/setup.md) — Python, game path, Unity, licensing, Windows module
 - [Bundle generation](docs/bundle-generation.md) — the complete build path
 - [Configuration](docs/configuration.md) — every `.7dtd-assets.toml` key
 - [Game integration](docs/game-integration.md) — XML URIs, icons, audio, clients
+- [Consumer interfaces](docs/consumer-api.md) — CLI contract, JSON, Python API
 - [Validation](docs/validation.md) — each gate and its proof boundary
 - [Authoring tools](docs/authoring-tools.md) — researched OSS tools for humans and agents
 - [Agent workflows](docs/agent-workflows.md) — reproducible asset-as-code patterns
@@ -94,6 +132,7 @@ a fresh-client load and a visual/audio check appropriate to the changed asset.
 - [Architecture](docs/architecture.md) — design, boundaries, and trust model
 - [Research provenance](docs/research-provenance.md) — where the 7DTD-specific rules came from
 - [Release checklist](docs/release-checklist.md) — artifact and live acceptance
+- [AGENTS.md](AGENTS.md) — the contract for coding agents working here
 
 See [examples/ExampleMod](examples/ExampleMod) for a minimal consumer layout.
 

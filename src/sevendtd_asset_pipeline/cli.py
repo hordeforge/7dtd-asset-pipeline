@@ -9,11 +9,13 @@ from pathlib import Path
 
 from .build import reject_disabled_modules, run_build
 from .config import load_config
-from .doctor import run_doctor
+from .doctor import failed, run_doctor
 from .errors import PipelineError
-from .game import game_unity_version
+from .game import game_unity_version, project_unity_version
 from .references import discover_references
 from .scaffold import initialize
+from .status import collect_status
+from .unity_release import fetch_release
 from .unityfs import inspect_bundle
 from .validation import validate_bundle, validate_mod
 
@@ -42,6 +44,20 @@ def _parser() -> argparse.ArgumentParser:
     inspect = commands.add_parser("inspect", help="print UnityFS metadata for one bundle")
     inspect.add_argument("bundle", type=Path)
     inspect.add_argument("--json", action="store_true")
+    release = commands.add_parser(
+        "unity-release", help="resolve the official Unity editor download for a revision"
+    )
+    release.add_argument(
+        "--version", help="Unity revision; defaults to the configured project's ProjectVersion.txt"
+    )
+    release.add_argument("--platform", default="LINUX", help="editor host platform (default LINUX)")
+    release.add_argument("--json", action="store_true")
+
+    status = commands.add_parser(
+        "status", help="report the mod's whole pipeline state without failing"
+    )
+    status.add_argument("--json", action="store_true")
+
     commands.add_parser("refs", help="list bundle references discovered recursively in Config/")
     check_log = commands.add_parser("check-log", help="fail on Unity disabled-module warnings")
     check_log.add_argument("log", type=Path)
@@ -86,6 +102,14 @@ def run(args: argparse.Namespace) -> int:
         reject_disabled_modules(args.log)
         print(f"OK: no disabled-module warnings in {args.log}")
         return 0
+    if args.command == "unity-release" and args.version:
+        data = fetch_release(args.version, args.platform).as_dict()
+        if args.json:
+            print(json.dumps(data, indent=2, sort_keys=True))
+        else:
+            for key, value in data.items():
+                print(f"{key}: {value}")
+        return 0
     if args.command == "validate" and args.bundle and args.config is None:
         info = validate_bundle(args.bundle)
         print(f"OK: {info.path} Unity {info.unity_version}; class-142 present")
@@ -99,7 +123,9 @@ def run(args: argparse.Namespace) -> int:
         else:
             for check in checks:
                 print(f"{check.status:4} {check.name}: {check.detail}")
-        return 0
+        # Every check reports its own verdict so the JSON stays complete; the
+        # exit code is what makes a failure fatal to a script or CI job.
+        return 1 if failed(checks) else 0
     if args.command == "build":
         output = run_build(config, args.probe)
         print(f"OK: {output}")
@@ -116,6 +142,29 @@ def run(args: argparse.Namespace) -> int:
             print(*report.messages, sep="\n")
             print(f"OK: bundle and {report.reference_count} XML reference(s) validated")
         return 0
+    if args.command == "unity-release":
+        data = fetch_release(project_unity_version(config.unity_project), args.platform).as_dict()
+        if args.json:
+            print(json.dumps(data, indent=2, sort_keys=True))
+        else:
+            for key, value in data.items():
+                print(f"{key}: {value}")
+        return 0
+    if args.command == "status":
+        report = collect_status(config)
+        if args.json:
+            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+        else:
+            data = report.as_dict()
+            for key in (
+                "mod_name", "bundle_path", "bundle_present", "bundle_unity_version",
+                "game_unity_version", "version_matches_game",
+                "bundle_has_assetbundle_object", "asset_count", "reference_count", "valid",
+            ):
+                print(f"{key}: {data[key]}")
+            for problem in report.problems:
+                print(f"problem: {problem}")
+        return 0 if report.valid else 1
     if args.command == "refs":
         for reference in discover_references(config.config_dir):
             print(f"{reference.source.relative_to(config.mod_root)}: {reference.uri}")

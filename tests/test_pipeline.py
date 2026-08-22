@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from sevendtd_asset_pipeline.build import reject_disabled_modules
+from sevendtd_asset_pipeline.config import CONFIG_NAME
 from sevendtd_asset_pipeline.config import load_config
 from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.scaffold import initialize
@@ -43,6 +44,44 @@ class PipelineTests(unittest.TestCase):
         )
         report = validate_mod(config)
         self.assertEqual(1, report.reference_count)
+
+    def _stage_mod(self, uri: str) -> None:
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        config = load_config(self.root / CONFIG_NAME)
+        config.resources_dir.mkdir()
+        config.bundle_output.write_bytes(unityfs_bundle([1, 142]))
+        config.tracked_manifest.parent.mkdir(parents=True)
+        config.tracked_manifest.write_text(
+            "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n",
+            encoding="utf-8",
+        )
+        config.config_dir.mkdir()
+        (config.config_dir / "blocks.xml").write_text(
+            f'<configs><block name="x"><property name="Model" value="{uri}" /></block></configs>',
+            encoding="utf-8",
+        )
+        self.config = config
+
+    def test_validate_accepts_bare_modfolder_uri(self) -> None:
+        self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
+        self.assertEqual(1, validate_mod(self.config).reference_count)
+
+    def test_validate_rejects_foreign_mod_name(self) -> None:
+        self._stage_mod("#@modfolder(OtherMod):Resources/example.unity3d?exampleThing.prefab")
+        with self.assertRaisesRegex(PipelineError, "expected 'ExampleMod'"):
+            validate_mod(self.config)
+
+    def test_validate_rejects_non_modfolder_uri(self) -> None:
+        self._stage_mod("#Resources/example.unity3d?exampleThing.prefab")
+        with self.assertRaisesRegex(PipelineError, "targets game bundles"):
+            validate_mod(self.config)
+
+    def test_init_refuses_to_clobber_an_existing_makefile(self) -> None:
+        makefile = self.root / "Makefile.assets"
+        makefile.write_text("assets:\n\techo mine\n", encoding="utf-8")
+        with self.assertRaisesRegex(PipelineError, "Makefile.assets"):
+            initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        self.assertIn("echo mine", makefile.read_text())
 
     def test_stem_collision_is_case_insensitive_and_extension_independent(self) -> None:
         with self.assertRaisesRegex(PipelineError, "ambiguous"):

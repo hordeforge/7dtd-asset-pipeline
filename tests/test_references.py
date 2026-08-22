@@ -40,6 +40,22 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual("Resources/my.unity3d", ref.bundle_path)
         self.assertEqual("Thing", ref.asset_stem)
 
+    def test_parses_bare_modfolder_self_reference(self) -> None:
+        # 7DTD accepts '@modfolder:' as well as '@modfolder(Name):'
+        # (maci0/7dtd-research docs/mod-loading.md; Assembly-CSharp string table).
+        ref = parse_reference(
+            Path("blocks.xml"), "#@modfolder:Resources/my.unity3d?Thing.prefab"
+        )
+        self.assertTrue(ref.is_modfolder)
+        self.assertIsNone(ref.mod_name)
+        self.assertEqual("Resources/my.unity3d", ref.bundle_path)
+        self.assertEqual("Thing", ref.asset_stem)
+
+    def test_flags_non_modfolder_uri(self) -> None:
+        ref = parse_reference(Path("blocks.xml"), "#Other/Bundles/thing.unity3d?Thing.prefab")
+        self.assertFalse(ref.is_modfolder)
+        self.assertIsNone(ref.mod_name)
+
     def test_manifest_assets_accepts_indentation(self) -> None:
         manifest = self.root / "bundle.manifest"
         manifest.write_text("ManifestFileVersion: 0\nAssets:\n- Assets/A.prefab\n- Assets/B.wav\nDependencies: {}\n")

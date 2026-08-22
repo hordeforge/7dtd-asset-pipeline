@@ -1,5 +1,20 @@
 # Setup
 
+For the shortest end-to-end path, follow [Quickstart](quickstart.md). This
+page explains each step's reasoning and its alternatives.
+
+## 0. Install host tooling
+
+```bash
+scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
+```
+
+`--check` reports `OK`/`MISS` per tool and installs nothing. Drop `--check` to
+install through `pacman`, `apt-get`, or `dnf`. Only Python is required for the
+CLI itself; `--with-unity-prereqs` covers the editor installer's needs and
+`--with-authoring` the optional art tooling in
+[Authoring tools](authoring-tools.md).
+
 ## 1. Install the pipeline CLI
 
 The runtime has no third-party Python dependencies. Python 3.11 is required
@@ -49,38 +64,52 @@ Record how that revision was verified in the mod's documentation.
 
 ## 3. Install Unity and Windows Build Support
 
-Use Unity Hub or Unity's standalone CLI to install the exact revision plus
-**Windows Build Support (Mono)**. Unity's current CLI is experimental, so the
-repository helper prints the action before it runs anything:
+The editor revision must match the installed game exactly, and **Windows Build
+Support (Mono)** is mandatory: the shipped client loads a Windows-target bundle
+even when it runs through Proton.
+
+### Scripted (Linux)
 
 ```bash
-scripts/setup-unity --version 2022.3.62f2 \
-  --changeset 7670c08855a9
+scripts/install-tools.sh --with-unity-prereqs
+cd /path/to/MyMod
+/path/to/7dtd-asset-pipeline/scripts/install-unity-editor.sh
 ```
 
-Add `--run` only after reviewing the printed command. The equivalent current
-Unity CLI shape is:
+The script resolves the changeset, archive URL, and MD5 for the project's
+revision from Unity's official release service, so it does not go stale when
+the game updates its engine. It installs Unity Hub, waits for you to sign in
+and activate a license, copies that license to Unity's native Linux location,
+installs the checksum-verified editor and Windows module, and proves batch
+mode works. It refuses to install any download Unity published no checksum for.
+
+Point it at an existing licensed editor instead with:
 
 ```bash
-unity install 2022.3.62f2 -c 7670c08855a9 -m windows-mono
+export UNITY_EDITOR="/path/to/Unity/Hub/Editor/2022.3.62f2/Editor/Unity"
+scripts/install-unity-editor.sh --skip-hub
 ```
 
-For newer game revisions, obtain the version from the game and use Unity's
-release feed. Supply a changeset only when that revision is absent from the
-feed. Unity documents the CLI at
-<https://docs.unity.com/en-us/unity-cli/unity-cli-reference> and Hub installs
-at <https://docs.unity.com/en-us/hub/install-hub>.
+Inspect exactly what would be downloaded, without downloading anything:
+
+```bash
+7dtd-assets unity-release --version 2022.3.62f2 --json
+```
+
+### Manual (any platform)
 
 The Hub UI is equally valid:
 
 1. Install Unity Hub from Unity's official distribution.
 2. Sign in yourself.
 3. Activate an appropriate license through Unity's supported UI.
-4. Install the exact editor revision.
+4. Install the exact editor revision reported by `7dtd-assets init` or
+   `7dtd-assets doctor`.
 5. Add Windows Build Support (Mono) to that editor.
 
 Never place Unity usernames, passwords, tokens, or license files in a mod
-repository, pipeline config, CI log, or agent prompt.
+repository, pipeline config, CI log, or agent prompt. No script in this
+repository reads, prints, or stores them.
 
 ## 4. Configure machine-local paths
 
@@ -105,7 +134,9 @@ cd /path/to/MyMod
 
 `doctor` checks the mod identity, Unity project revision, package modules,
 game revision, editor executable, and Windows Build Support. It also reports
-optional authoring tools. Use `7dtd-assets doctor --json` for CI or agents.
+optional authoring tools. Each check reports its own `OK`/`WARN`/`FAIL`
+verdict, and the command exits non-zero when any check is `FAIL`, so one broken
+check never hides the rest. Use `7dtd-assets doctor --json` for CI or agents.
 
 The probe is the decisive setup test. It asks Unity to create a cube prefab,
 build a throwaway Windows bundle, checks the Unity log, parses the result for

@@ -9,7 +9,11 @@
 
 The four pieces are contractual:
 
-1. `ExampleMod` is the `ModInfo.xml` `Name`, not merely a folder label.
+1. `ExampleMod` is the `ModInfo.xml` `Name`, not merely a folder label. The
+   game also accepts the bare `@modfolder:` form, which resolves to the mod
+   that owns the patch file; validation treats it as a self-reference and
+   accepts it. Prefer the explicit named form, because it fails loudly when a
+   file is copied into a different mod.
 2. `Resources/examplemod.unity3d` is the path below the deployed modlet.
 3. `?` separates the bundle from its asset request.
 4. `exampleModWorkbench` is resolved by file-name stem. The displayed

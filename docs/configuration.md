@@ -39,7 +39,7 @@ directory = ""
 | `config_dir` | Root recursively scanned for XML bundle references. |
 | `target` | Unity `BuildTarget`; use `StandaloneWindows64` for normal 7DTD clients. |
 | `unity.editor` | Optional machine path; `UNITY_EDITOR` overrides it. |
-| `unity.version` | Human-readable scaffold record. ProjectSettings and game bundles are authoritative. |
+| `unity.version` | Human-readable scaffold record only; the pipeline never reads it. `ProjectSettings/ProjectVersion.txt` and the installed game's bundles are authoritative. |
 | `game.directory` | Optional machine path; `SEVEN_DAYS_TO_DIE_DIR` overrides it. |
 
 Commit the TOML file, Unity project source/settings, `.meta` files, tracked

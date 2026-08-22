@@ -4,6 +4,12 @@ Only Python and Unity are pipeline requirements. The tools below are optional
 and selected for reproducible, scriptable workflows that humans and coding
 agents can both drive. Pin versions in each mod when output stability matters.
 
+Install them with `scripts/install-tools.sh --with-authoring`.
+[scripts/generators/](../scripts/generators/) already ships working generators
+built on this stack — audio (standard library only), icons (Pillow), texture
+maps (Pillow + NumPy), and meshes (Blender) — and the scaffolded Unity project
+ships `GeneratedAsset.cs` for prefabs and materials. Start from those.
+
 ## Geometry
 
 ### Blender — recommended general 3D authoring tool

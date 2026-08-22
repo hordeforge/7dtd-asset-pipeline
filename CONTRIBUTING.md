@@ -8,6 +8,13 @@ scripts/bootstrap
 make check test
 ```
 
+`make check` compiles the package, syntax-checks every shell script, and runs
+`shellcheck` when it is installed. `make check test` needs no network, no
+Unity, and no game install.
+
+Agent-facing rules live in [AGENTS.md](AGENTS.md) and apply to human
+contributors too.
+
 When changing UnityFS parsing, add a generated fixture for both acceptance and
 rejection. When changing bundle generation, document which real failure or
 engine requirement motivates the change and run a game-matched probe plus a

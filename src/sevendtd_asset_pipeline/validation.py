@@ -57,11 +57,14 @@ def _check_reference(
     expected_version: str | None,
 ) -> str:
     relative_source = reference.source.relative_to(config.mod_root)
-    if reference.mod_name is None:
+    if not reference.is_modfolder:
         raise PipelineError(
-            f"{relative_source}: {reference.uri} does not use @modfolder(...); it targets game bundles"
+            f"{relative_source}: {reference.uri} uses neither '@modfolder:' nor "
+            "'@modfolder(Name):'; it targets game bundles, which this pipeline does not own"
         )
-    if reference.mod_name != config.mod_name:
+    # A bare '@modfolder:' resolves to the mod owning the patch file, which is
+    # this mod, so only an explicit name can disagree with the configuration.
+    if reference.mod_name is not None and reference.mod_name != config.mod_name:
         raise PipelineError(
             f"{relative_source}: URI names mod {reference.mod_name!r}, expected {config.mod_name!r}"
         )

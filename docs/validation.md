@@ -3,13 +3,19 @@
 ## Commands
 
 ```bash
+7dtd-assets status --json
+7dtd-assets doctor --json
 7dtd-assets inspect Resources/examplemod.unity3d
 7dtd-assets check-log .asset-pipeline/build/bundle/unity-build.log
 7dtd-assets refs
 7dtd-assets validate
 ```
 
-`inspect --json` is suitable for CI and agent workflows.
+`inspect --json` and `doctor --json` are suitable for CI and agent workflows.
+`doctor` gives every check its own `OK`/`WARN`/`FAIL` verdict and exits
+non-zero when any is `FAIL`, so a single broken check never hides the rest of
+the report. Every other command exits non-zero with one `ERROR: ...` line on
+stderr. Prefer exit codes over parsing prose.
 
 ## Offline gates
 
@@ -20,7 +26,7 @@
 | UnityFS signature/revision | wrong file or editor revision | built bundle header and installed game bundle header |
 | Class-142 gate | container cannot become a runtime `AssetBundle` | first serialized file's class/type table |
 | Manifest stem uniqueness | assets unreachable because 7DTD discards path/extension | complete tracked manifest |
-| URI mod identity | wrong `@modfolder` name | `ModInfo.xml` and recursive XML scan |
+| URI mod identity | wrong `@modfolder` name, or a URI targeting game bundles | `ModInfo.xml` and recursive XML scan |
 | Bundle path | missing, wrong, or escaped file | case-insensitive resolution below mod root |
 | Asset case/membership | typo, case mismatch, or absent stem | URI and tracked manifest |
 

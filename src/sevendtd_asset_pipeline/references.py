@@ -10,13 +10,17 @@ from pathlib import Path
 from .errors import PipelineError
 
 BUNDLE_URI = re.compile(r"#[^\s\"'<>]+\?[^\s\"'<>]+")
-MODFOLDER = re.compile(r"@modfolder\(([^)]*)\):", re.IGNORECASE)
+# 7DTD accepts both tokens; ReadPatchXmlWithFixedModFolders rewrites either.
+# Source: maci0/7dtd-research docs/mod-loading.md, confirmed against the
+# installed Assembly-CSharp.dll string table ('@modfolder(' and '@modfolder:').
+MODFOLDER = re.compile(r"@modfolder(?:\(([^)]*)\))?:", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
 class AssetReference:
     source: Path
     uri: str
+    is_modfolder: bool
     mod_name: str | None
     bundle_path: str
     asset_name: str
@@ -42,9 +46,12 @@ def parse_reference(source: Path, uri: str) -> AssetReference:
     if not separator or not asset:
         raise PipelineError(f"{source}: malformed bundle URI {uri!r}")
     match = MODFOLDER.search(body)
-    mod_name = match.group(1) if match else None
+    # '@modfolder(Name):' names a mod explicitly; bare '@modfolder:' means the
+    # mod that owns the patch file, so an absent group is a self-reference, not
+    # an absent modfolder token.
+    mod_name = match.group(1) or None if match else None
     bundle_path = MODFOLDER.sub("", body).lstrip("/\\") if match else body
-    return AssetReference(source, uri, mod_name, bundle_path, asset)
+    return AssetReference(source, uri, match is not None, mod_name, bundle_path, asset)
 
 
 def discover_references(config_dir: Path) -> list[AssetReference]:

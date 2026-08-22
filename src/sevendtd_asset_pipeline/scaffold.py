@@ -8,6 +8,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from .config import CONFIG_NAME, render_config
+from .consumer_docs import render_agent_guide
 from .errors import PipelineError
 from .references import read_mod_name
 
@@ -28,9 +29,13 @@ def initialize(
         raise PipelineError(f"mod root does not exist: {mod_root}")
     config_path = mod_root / CONFIG_NAME
     project = mod_root / "tools" / "7dtd-assets" / "UnityProject"
-    if config_path.exists() or project.exists():
+    makefile = mod_root / "Makefile.assets"
+    existing = [path for path in (config_path, project, makefile) if path.exists()]
+    if existing:
         raise PipelineError(
-            f"pipeline files already exist below {mod_root}; move them aside or update them explicitly"
+            "pipeline files already exist below "
+            f"{mod_root}: {', '.join(path.name for path in existing)}; "
+            "move them aside or update them explicitly"
         )
     if mod_name is None:
         mod_name = read_mod_name(mod_root / "ModInfo.xml")
@@ -49,13 +54,17 @@ def initialize(
         f"m_EditorVersion: {unity_version}\n",
         encoding="utf-8",
     )
-    makefile = mod_root / "Makefile.assets"
     makefile.write_text(
-        ".PHONY: assets assets-probe assets-validate assets-doctor\n\n"
+        ".PHONY: assets assets-probe assets-validate assets-doctor assets-status\n\n"
         "assets:\n\t7dtd-assets build\n\n"
         "assets-probe:\n\t7dtd-assets build --probe\n\n"
         "assets-validate:\n\t7dtd-assets validate\n\n"
-        "assets-doctor:\n\t7dtd-assets doctor\n",
+        "assets-doctor:\n\t7dtd-assets doctor\n\n"
+        "assets-status:\n\t7dtd-assets status\n",
         encoding="utf-8",
     )
-    return [config_path, project, makefile]
+    # The mod is where an agent actually works, so the rules travel with the
+    # scaffold rather than living only in this repository.
+    guide = mod_root / "tools" / "7dtd-assets" / "AGENTS.md"
+    guide.write_text(render_agent_guide(mod_name, bundle_name), encoding="utf-8")
+    return [config_path, project, makefile, guide]

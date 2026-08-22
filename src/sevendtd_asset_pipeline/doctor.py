@@ -30,6 +30,24 @@ class Check:
     detail: str
 
 
+def failed(checks: list[Check]) -> bool:
+    return any(check.status == "FAIL" for check in checks)
+
+
+def _guard(checks: list[Check], name: str, action):
+    """Record a failing check instead of aborting the whole report.
+
+    Agents and CI consume ``doctor --json``. A raised exception would collapse
+    every remaining check into one stderr line, so each check reports its own
+    verdict and the caller decides the exit code.
+    """
+    try:
+        return action()
+    except PipelineError as exc:
+        checks.append(Check("FAIL", name, str(exc)))
+        return None
+
+
 def _modules(project: Path) -> dict[str, str]:
     manifest = project / "Packages" / "manifest.json"
     try:
@@ -44,57 +62,66 @@ def _modules(project: Path) -> dict[str, str]:
 
 def run_doctor(config: PipelineConfig) -> list[Check]:
     checks: list[Check] = []
-    actual_name = read_mod_name(config.mod_root / "ModInfo.xml")
-    if actual_name != config.mod_name:
-        raise PipelineError(f"ModInfo name {actual_name!r} does not match {config.mod_name!r}")
-    checks.append(Check("OK", "modlet", f"{config.mod_root} ({actual_name})"))
 
-    project_version = project_unity_version(config.unity_project)
-    checks.append(Check("OK", "Unity project", f"{config.unity_project} ({project_version})"))
-    dependencies = _modules(config.unity_project)
-    missing = [name for name in REQUIRED_MODULES if name not in dependencies]
-    if missing:
-        raise PipelineError("Unity package manifest is missing required modules: " + ", ".join(missing))
-    checks.append(Check("OK", "engine modules", "required AssetBundle module is enabled"))
-    omitted = [name for name in RECOMMENDED_MODULES if name not in dependencies]
-    if omitted:
-        checks.append(Check("WARN", "optional modules", "add when used: " + ", ".join(omitted)))
+    actual_name = _guard(checks, "modlet", lambda: read_mod_name(config.mod_root / "ModInfo.xml"))
+    if actual_name is None:
+        pass
+    elif actual_name != config.mod_name:
+        checks.append(
+            Check("FAIL", "modlet", f"ModInfo name {actual_name!r} does not match {config.mod_name!r}")
+        )
     else:
-        checks.append(Check("OK", "optional modules", "common audio/image/particle/physics modules enabled"))
+        checks.append(Check("OK", "modlet", f"{config.mod_root} ({actual_name})"))
+
+    project_version = _guard(
+        checks, "Unity project", lambda: project_unity_version(config.unity_project)
+    )
+    if project_version is not None:
+        checks.append(Check("OK", "Unity project", f"{config.unity_project} ({project_version})"))
+
+    dependencies = _guard(checks, "engine modules", lambda: _modules(config.unity_project))
+    if dependencies is not None:
+        missing = [name for name in REQUIRED_MODULES if name not in dependencies]
+        if missing:
+            checks.append(
+                Check(
+                    "FAIL",
+                    "engine modules",
+                    "Unity package manifest is missing required modules: " + ", ".join(missing),
+                )
+            )
+        else:
+            checks.append(Check("OK", "engine modules", "required AssetBundle module is enabled"))
+        omitted = [name for name in RECOMMENDED_MODULES if name not in dependencies]
+        if omitted:
+            checks.append(Check("WARN", "optional modules", "add when used: " + ", ".join(omitted)))
+        else:
+            checks.append(
+                Check("OK", "optional modules", "common audio/image/particle/physics modules enabled")
+            )
 
     if config.game_dir:
-        validate_game_dir(config.game_dir)
-        game_version, source = game_unity_version(config.game_dir)
-        if game_version != project_version:
-            raise PipelineError(
-                f"Unity project uses {project_version}; installed game bundle uses {game_version} ({source})"
-            )
-        checks.append(Check("OK", "game", f"{config.game_dir}; Unity {game_version} from {source.name}"))
+        discovered = _guard(checks, "game", lambda: game_unity_version(config.game_dir))
+        if discovered is not None:
+            game_version, source = discovered
+            if project_version is not None and game_version != project_version:
+                checks.append(
+                    Check(
+                        "FAIL",
+                        "game",
+                        f"Unity project uses {project_version}; installed game bundle uses "
+                        f"{game_version} ({source})",
+                    )
+                )
+            else:
+                checks.append(
+                    Check("OK", "game", f"{config.game_dir}; Unity {game_version} from {source.name}")
+                )
     else:
         checks.append(Check("WARN", "game", "set SEVEN_DAYS_TO_DIE_DIR for authoritative version checks"))
 
     if config.unity_editor:
-        if not config.unity_editor.is_file() or not os.access(config.unity_editor, os.X_OK):
-            raise PipelineError(f"Unity editor is not executable: {config.unity_editor}")
-        windows = config.unity_editor.parent / "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
-        if config.target == "StandaloneWindows64" and not windows.is_file():
-            raise PipelineError(f"Windows Build Support (Mono) is missing: {windows}")
-        try:
-            result = subprocess.run(
-                [str(config.unity_editor), "-version"],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=30,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise PipelineError("Unity -version did not finish within 30 seconds") from exc
-        reported = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "unknown"
-        if result.returncode != 0:
-            raise PipelineError(f"Unity -version exited {result.returncode}: {reported}")
-        checks.append(Check("OK", "Unity editor", f"{config.unity_editor} ({reported})"))
-        checks.append(Check("OK", "Windows support", str(windows)))
+        checks.extend(_editor_checks(config))
     else:
         checks.append(Check("WARN", "Unity editor", "set UNITY_EDITOR to build; inspection still works"))
 
@@ -109,3 +136,35 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
         found = shutil.which(command)
         checks.append(Check("OK" if found else "INFO", command, found or f"optional: {purpose}"))
     return checks
+
+
+def _editor_checks(config: PipelineConfig) -> list[Check]:
+    editor = config.unity_editor
+    assert editor is not None
+    if not editor.is_file() or not os.access(editor, os.X_OK):
+        return [Check("FAIL", "Unity editor", f"Unity editor is not executable: {editor}")]
+    windows = editor.parent / (
+        "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
+    )
+    if config.target == "StandaloneWindows64" and not windows.is_file():
+        return [
+            Check("FAIL", "Windows support", f"Windows Build Support (Mono) is missing: {windows}")
+        ]
+    try:
+        result = subprocess.run(
+            [str(editor), "-version"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return [Check("FAIL", "Unity editor", "Unity -version did not finish within 30 seconds")]
+    reported = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "unknown"
+    if result.returncode != 0:
+        return [Check("FAIL", "Unity editor", f"Unity -version exited {result.returncode}: {reported}")]
+    return [
+        Check("OK", "Unity editor", f"{editor} ({reported})"),
+        Check("OK", "Windows support", str(windows)),
+    ]

@@ -144,66 +144,105 @@ def _class_ids(serialized: bytes) -> tuple[int, ...]:
     return tuple(result)
 
 
+HEADER_WINDOW = 4096
+# The class table sits at the start of the serialized file, so decompressing a
+# bounded prefix answers the gate. Shipped game bundles hold serialized files of
+# hundreds of megabytes and pure-Python LZ4 is slow, so the full node is only
+# decompressed if the prefix turns out to be too small.
+TYPE_TABLE_PREFIX = 32 * 1024 * 1024
+
+
+def _read_at(handle, offset: int, length: int, label: str) -> bytes:
+    """Read exactly `length` bytes at `offset`, or fail with a bounded error."""
+    if offset < 0 or length < 0:
+        raise PipelineError(f"truncated Unity bundle while reading {label}")
+    handle.seek(offset)
+    chunk = handle.read(length)
+    if len(chunk) != length:
+        raise PipelineError(f"truncated Unity bundle while reading {label}")
+    return chunk
+
+
 def inspect_bundle(path: Path) -> BundleInfo:
+    """Read revision and serialized class IDs without loading the whole file.
+
+    Shipped game bundles reach hundreds of megabytes, and this runs on every
+    doctor/build/validate call, so only the header, the block table, and the
+    blocks covering the first directory node are ever read.
+    """
     path = path.resolve()
     try:
-        data = path.read_bytes()
+        with path.open("rb") as handle:
+            file_size = path.stat().st_size
+            header = handle.read(HEADER_WINDOW)
+            if not header.startswith(b"UnityFS\x00"):
+                raise PipelineError(f"{path} is not a UnityFS asset bundle")
+            position = len(b"UnityFS\x00")
+            _need(header, position, 4, "archive format")
+            archive_format = struct.unpack_from(">I", header, position)[0]
+            position += 4
+            _engine_version, position = _c_string(header, position)
+            unity_version, position = _c_string(header, position)
+            _need(header, position, 20, "UnityFS sizes and flags")
+            _archive_size, table_compressed, table_uncompressed, flags = struct.unpack_from(
+                ">QIII", header, position
+            )
+            position += 20
+            if archive_format >= 7:
+                position += (-position) % 16
+
+            if flags & 0x80:
+                raw_table = _read_at(
+                    handle, file_size - table_compressed, table_compressed, "block table"
+                )
+            else:
+                raw_table = _read_at(handle, position, table_compressed, "block table")
+                position += table_compressed
+            table = _decompress(raw_table, table_uncompressed, flags)
+            _need(table, 16, 4, "block count")
+            cursor = 16
+            block_count = struct.unpack_from(">I", table, cursor)[0]
+            cursor += 4
+            blocks: list[tuple[int, int, int]] = []
+            for _ in range(block_count):
+                _need(table, cursor, 10, "block descriptor")
+                blocks.append(struct.unpack_from(">IIH", table, cursor))
+                cursor += 10
+            _need(table, cursor, 4, "node count")
+            node_count = struct.unpack_from(">I", table, cursor)[0]
+            cursor += 4
+            if node_count == 0:
+                raise PipelineError(f"{path} has no UnityFS directory nodes")
+            _need(table, cursor, 20, "first node")
+            node_offset, node_size, _node_flags = struct.unpack_from(">QQI", table, cursor)
+            _node_name, _ = _c_string(table, cursor + 20)
+            if flags & 0x200:
+                position += (-position) % 16
+
+            needed = node_offset + node_size
+
+            def read_payload(limit: int) -> bytes:
+                payload = bytearray()
+                cursor = position
+                for uncompressed, compressed, block_flags in blocks:
+                    chunk = _read_at(handle, cursor, compressed, "payload block")
+                    payload.extend(_decompress(chunk, uncompressed, block_flags))
+                    cursor += compressed
+                    if len(payload) >= limit:
+                        break
+                if len(payload) < min(limit, needed):
+                    raise PipelineError(
+                        "UnityFS payload does not contain the first directory node"
+                    )
+                return bytes(payload[node_offset : min(len(payload), needed)])
+
+            prefix_limit = min(needed, node_offset + TYPE_TABLE_PREFIX)
+            try:
+                class_ids = _class_ids(read_payload(prefix_limit))
+            except PipelineError:
+                if prefix_limit >= needed:
+                    raise
+                class_ids = _class_ids(read_payload(needed))
     except OSError as exc:
         raise PipelineError(f"cannot read bundle {path}: {exc}") from exc
-    if not data.startswith(b"UnityFS\x00"):
-        raise PipelineError(f"{path} is not a UnityFS asset bundle")
-    position = len(b"UnityFS\x00")
-    _need(data, position, 4, "archive format")
-    archive_format = struct.unpack_from(">I", data, position)[0]
-    position += 4
-    _engine_version, position = _c_string(data, position)
-    unity_version, position = _c_string(data, position)
-    _need(data, position, 20, "UnityFS sizes and flags")
-    _archive_size, table_compressed, table_uncompressed, flags = struct.unpack_from(
-        ">QIII", data, position
-    )
-    position += 20
-    if archive_format >= 7:
-        position += (-position) % 16
-
-    if flags & 0x80:
-        table_start = len(data) - table_compressed
-        _need(data, table_start, table_compressed, "block table")
-        raw_table = data[table_start:]
-    else:
-        _need(data, position, table_compressed, "block table")
-        raw_table = data[position : position + table_compressed]
-        position += table_compressed
-    table = _decompress(raw_table, table_uncompressed, flags)
-    _need(table, 16, 4, "block count")
-    cursor = 16
-    block_count = struct.unpack_from(">I", table, cursor)[0]
-    cursor += 4
-    blocks: list[tuple[int, int, int]] = []
-    for _ in range(block_count):
-        _need(table, cursor, 10, "block descriptor")
-        blocks.append(struct.unpack_from(">IIH", table, cursor))
-        cursor += 10
-    _need(table, cursor, 4, "node count")
-    node_count = struct.unpack_from(">I", table, cursor)[0]
-    cursor += 4
-    if node_count == 0:
-        raise PipelineError(f"{path} has no UnityFS directory nodes")
-    _need(table, cursor, 20, "first node")
-    node_offset, node_size, _node_flags = struct.unpack_from(">QQI", table, cursor)
-    _node_name, _ = _c_string(table, cursor + 20)
-    if flags & 0x200:
-        position += (-position) % 16
-
-    payload = bytearray()
-    needed = node_offset + node_size
-    for uncompressed, compressed, block_flags in blocks:
-        _need(data, position, compressed, "payload block")
-        payload.extend(_decompress(data[position : position + compressed], uncompressed, block_flags))
-        position += compressed
-        if len(payload) >= needed:
-            break
-    if len(payload) < needed:
-        raise PipelineError("UnityFS payload does not contain the first directory node")
-    serialized = bytes(payload[node_offset:needed])
-    return BundleInfo(path, unity_version, archive_format, _class_ids(serialized))
+    return BundleInfo(path, unity_version, archive_format, class_ids)

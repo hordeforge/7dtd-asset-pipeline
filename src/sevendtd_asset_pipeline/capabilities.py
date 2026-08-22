@@ -61,7 +61,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="UnityPy",
         unlocks=("7dtd-assets inspect --deep",),
         purpose="list every serialized object and per-prefab component in a built bundle",
-        install="pip install 'sevendtd-asset-pipeline[inspect]'",
+        install="uv pip install 'sevendtd-asset-pipeline[inspect]'",
     ),
     _Spec(
         name="trimesh",
@@ -69,7 +69,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="trimesh",
         unlocks=("7dtd-assets check-mesh",),
         purpose="mesh extents, watertightness, and geometry counts",
-        install="pip install 'sevendtd-asset-pipeline[mesh]'",
+        install="uv pip install 'sevendtd-asset-pipeline[mesh]'",
     ),
     _Spec(
         name="gltf_validator",
@@ -104,7 +104,7 @@ REGISTRY: tuple[_Spec, ...] = (
             "scripts/generators/make-texture-maps.py",
         ),
         purpose="icon and texture generation",
-        install="pip install 'sevendtd-asset-pipeline[authoring]'",
+        install="uv pip install 'sevendtd-asset-pipeline[authoring]'",
     ),
     _Spec(
         name="numpy",
@@ -112,7 +112,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="numpy",
         unlocks=("scripts/generators/make-texture-maps.py",),
         purpose="seeded numeric texture synthesis",
-        install="pip install 'sevendtd-asset-pipeline[authoring]'",
+        install="uv pip install 'sevendtd-asset-pipeline[authoring]'",
     ),
     _Spec(
         name="magick",

@@ -33,7 +33,8 @@ scripts/install-tools.sh --with-unity-prereqs     # required for step 4
 scripts/install-tools.sh --with-authoring         # art and inspection tooling
 ```
 
-`--with-authoring` installs Blender, OpenSCAD, ImageMagick, FFmpeg, the
+`install-tools.sh` installs uv first, since every Python step runs through it.
+`--with-authoring` then installs Blender, OpenSCAD, ImageMagick, FFmpeg, the
 Khronos glTF validator, and the Python capabilities (UnityPy, Pillow, NumPy,
 trimesh). Blender and the glTF validator fall back to official
 checksum-verified builds where the distribution has no package. Check what is
@@ -50,9 +51,10 @@ scripts/bootstrap
 .venv/bin/7dtd-assets --help
 ```
 
-`scripts/bootstrap` creates `.venv/` in this checkout and nothing else. It is
-offline, needs no pip or setuptools, never uses `sudo`, and does not touch
-shell startup files. For a user-wide command instead, use `pipx install .`.
+`scripts/bootstrap` creates `.venv/` in this checkout and installs the package
+into it with uv, including the optional capabilities (`--no-extras` for the
+core alone). It never uses `sudo` and does not touch shell startup files. For a
+user-wide command instead, use `uv tool install .`.
 
 Put `.venv/bin` on `PATH`, or call `7dtd-assets` by its full path in the steps
 below.

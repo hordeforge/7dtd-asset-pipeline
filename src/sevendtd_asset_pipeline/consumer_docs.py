@@ -87,7 +87,7 @@ installed — ask, and act on the answer:
 ```
 
 `status --json` also carries a `capabilities` map. Install everything with
-`pip install 'sevendtd-asset-pipeline[all]'` plus, for Blender/OpenSCAD/glTF,
+`uv pip install 'sevendtd-asset-pipeline[all]'` plus, for Blender/OpenSCAD/glTF,
 the pipeline's `scripts/install-tools.sh --with-authoring`.
 
 ## Making the assets

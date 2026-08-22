@@ -36,7 +36,7 @@ class CapabilityTests(unittest.TestCase):
         message = str(caught.exception)
         self.assertIn("UnityPy", message)
         self.assertIn("inspect --deep", message)
-        self.assertIn("pip install", message)
+        self.assertIn("uv pip install", message)
 
     def test_require_passes_when_available(self) -> None:
         with mock.patch(
@@ -63,7 +63,7 @@ class OptionalFeatureTests(unittest.TestCase):
         with mock.patch(
             "sevendtd_asset_pipeline.capabilities._availability", return_value={"UnityPy": False}
         ):
-            with self.assertRaisesRegex(PipelineError, "pip install"):
+            with self.assertRaisesRegex(PipelineError, "uv pip install"):
                 deep_inspect(Path("/nonexistent.unity3d"))
 
     def test_check_mesh_without_any_tooling_explains_itself(self) -> None:
@@ -76,7 +76,7 @@ class OptionalFeatureTests(unittest.TestCase):
             with mock.patch(
                 "sevendtd_asset_pipeline.capabilities._availability", return_value={"trimesh": False}
             ), mock.patch("sevendtd_asset_pipeline.mesh_check.shutil.which", return_value=None):
-                with self.assertRaisesRegex(PipelineError, "install-tools|pip install"):
+                with self.assertRaisesRegex(PipelineError, "install-tools|uv pip install"):
                     check_mesh(Path(handle.name))
 
 

@@ -12,7 +12,7 @@ never invents art.
 
 Icons are not bundle assets: an icon-only change needs no bundle rebuild.
 Requires Pillow (scripts/install-tools.sh --with-authoring installs it via
-ImageMagick's ecosystem, or `pip install pillow`).
+ImageMagick's ecosystem, or `uv pip install pillow`).
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ try:
     from PIL import Image
 except ImportError:  # pragma: no cover - depends on host packages
     print(
-        "ERROR: Pillow is required for the icon lane. Install it with 'pip install pillow'.",
+        "ERROR: Pillow is required for the icon lane. Install it with 'uv pip install pillow'.",
         file=sys.stderr,
     )
     raise SystemExit(1)

@@ -19,9 +19,14 @@ records where each 7DTD-specific rule came from.
 ## Working on this repository
 
 ```bash
-scripts/bootstrap        # create .venv and install this checkout
+scripts/bootstrap        # uv venv + uv pip install --editable, with extras
 make check test          # compile, shellcheck, and the unit suite
 ```
+
+Use **uv** for every Python step — environments, installs, and runs. Do not
+add `pip`, `pipx`, `venv`, or `python -m pip` invocations to scripts, docs, or
+CI; `scripts/install-tools.sh` installs uv itself, from the distribution
+package or the official checksum-verified release.
 
 `make check test` must pass before you hand work back. It needs no network,
 no Unity, and no game install.

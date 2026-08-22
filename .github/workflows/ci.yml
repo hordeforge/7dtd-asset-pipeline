@@ -12,14 +12,31 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - run: python -m pip install -e .
+          enable-cache: true
+      - run: uv python install ${{ matrix.python-version }}
+      # Install the core alone: the suite must pass without the optional
+      # capabilities, because that is how most consumers first run it.
+      - run: uv pip install --system --python ${{ matrix.python-version }} --editable .
       # Exercise the installed console script, not only the source tree, so a
       # broken entry point or missing package data fails here rather than in a
       # consumer's checkout.
       - run: 7dtd-assets --help
+      - run: 7dtd-assets schema
+      - run: make check test
+
+  capabilities:
+    # The optional capabilities must also work, and must not be required.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: ./scripts/bootstrap
+      - run: .venv/bin/7dtd-assets capabilities --json
+      - run: .venv/bin/7dtd-assets capabilities --missing
       - run: make check test
 
   scaffold:
@@ -28,10 +45,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-      - run: python -m pip install -e .
+          enable-cache: true
+      - run: uv pip install --system --editable .
       - run: |
           mkdir -p /tmp/MyMod
           printf '<xml><Name value="MyMod" /></xml>\n' > /tmp/MyMod/ModInfo.xml
@@ -39,3 +56,4 @@ jobs:
           test -f /tmp/MyMod/tools/7dtd-assets/AGENTS.md
           cd /tmp/MyMod && 7dtd-assets status --json || true
           cd /tmp/MyMod && 7dtd-assets refs
+          cd /tmp/MyMod && 7dtd-assets call capabilities > /dev/null

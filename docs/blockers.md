@@ -9,28 +9,6 @@ one the moment something is claimed but not verified.
 
 ## Open
 
-### 1. OpenSCAD is not installed (needs sudo)
-
-**Blocks:** the OpenSCAD branch of `scripts/install-tools.sh` is the only
-authoring tool whose install path has never executed, and
-`7dtd-assets capabilities` reports it as the sole missing capability.
-
-**You run:**
-
-```bash
-cd /path/to/7dtd-asset-pipeline
-./scripts/install-tools.sh --with-authoring
-```
-
-**Confirms it worked:**
-
-```bash
-7dtd-assets capabilities --missing    # should print nothing
-```
-
-Blender, ImageMagick, FFmpeg, the Khronos glTF validator, UnityPy, Pillow,
-NumPy, and trimesh are all installed and verified already.
-
 ### 2. The Unity editor download path is unexercised
 
 **Blocks:** `scripts/install-unity-editor.sh` resolves the changeset, URLs, and
@@ -91,6 +69,10 @@ These were open and are now closed, so the list above stays meaningful:
 - UnityPy deep inspection reports 547 objects in the shipped Atomic Doomsday
   bundle, including `ParticleSystem=6` on the detonation VFX prefab.
 - The UnityFS reader parses real shipped game bundles, including a 650 MB one.
+- Every optional capability is installed and reported available:
+  `7dtd-assets capabilities --missing` prints nothing.
+- `scripts/bootstrap` builds a working `.venv` through uv, and the suite also
+  passes against a core-only install with no optional capabilities.
 - `7dtd-assets init` works from a real wheel install, and `doctor` passes every
   check against the installed game and editor.
 - `build --probe` and a full `build` both run against the real Unity

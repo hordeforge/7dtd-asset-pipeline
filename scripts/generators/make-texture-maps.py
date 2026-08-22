@@ -32,7 +32,7 @@ try:
     from PIL import Image
 except ImportError:  # pragma: no cover - depends on host packages
     print(
-        "ERROR: this lane needs Pillow and NumPy: pip install pillow numpy",
+        "ERROR: this lane needs Pillow and NumPy: uv pip install pillow numpy",
         file=sys.stderr,
     )
     raise SystemExit(1)

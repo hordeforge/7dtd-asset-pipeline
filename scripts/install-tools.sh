@@ -30,6 +30,7 @@ OPTIONS
 
 BASE TOOLS
   python3 (>=3.11)   The pipeline CLI and its TOML configuration parser
+  uv                 The Python toolchain: environments, installs, and runs
   git, make          Version control and the consumer Makefile targets
 
 WITH --with-authoring
@@ -90,6 +91,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 run_check() {
 	report python3 "pipeline CLI (>=3.11, REQUIRED)" has_python_311
+	report uv "Python toolchain (REQUIRED)" have uv
 	report git "version control" have git
 	report make "consumer Makefile targets" have make
 	if ((WITH_AUTHORING)); then
@@ -132,6 +134,7 @@ declare -a PACKAGES=()
 
 collect_pacman() {
 	has_python_311 || PACKAGES+=(python)
+	have uv || PACKAGES+=(uv)
 	have git || PACKAGES+=(git)
 	have make || PACKAGES+=(make)
 	if ((WITH_AUTHORING)); then
@@ -190,6 +193,8 @@ collect_dnf() {
 	fi
 }
 
+install_uv
+
 if command -v pacman >/dev/null 2>&1; then
 	collect_pacman
 	((${#PACKAGES[@]})) && $SUDO pacman -S --needed --noconfirm "${PACKAGES[@]}"
@@ -207,6 +212,72 @@ else
 	echo "       Install the tools listed by 'scripts/install-tools.sh --check' by hand." >&2
 	exit 1
 fi
+
+install_uv() {
+	local url sha_url archive staging expected actual destination
+	destination="$HOME/.local/bin"
+	if have uv; then
+		echo "OK: uv is already installed ($(uv --version 2>/dev/null | head -n1))"
+		return
+	fi
+	if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
+		echo "note: automatic uv setup supports Linux x86_64 only; see https://docs.astral.sh/uv/"
+		return
+	fi
+	for required in curl tar python3 sha256sum; do
+		have "$required" || { echo "note: $required missing; skipped uv"; return; }
+	done
+
+	# Deliberately not 'curl | sh': the release tarball and its published
+	# SHA-256 give the same result with something to verify against.
+	url="$(curl --fail --location --silent --show-error --max-time 30 \
+		https://api.github.com/repos/astral-sh/uv/releases/latest 2>/dev/null |
+		python3 -c 'import json,sys
+try:
+    release = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)
+for asset in release.get("assets", []):
+    if asset.get("name") == "uv-x86_64-unknown-linux-gnu.tar.gz":
+        print(asset["browser_download_url"]); raise SystemExit(0)' || true)"
+	if [[ -z "$url" ]]; then
+		echo "note: could not resolve a uv release; skipped"
+		return
+	fi
+	sha_url="$url.sha256"
+	expected="$(curl --fail --location --silent --show-error --max-time 30 "$sha_url" 2>/dev/null |
+		awk '{print $1}' | head -n1)"
+	if [[ -z "$expected" ]]; then
+		echo "ERROR: uv published no SHA-256 for $url; refusing to install it." >&2
+		return 1
+	fi
+
+	archive="$(mktemp)"
+	staging="$(mktemp -d)"
+	echo "Installing official uv from $url"
+	if ! curl --fail --location --silent --show-error --max-time 300 "$url" -o "$archive"; then
+		echo "note: uv download failed; skipped"
+		rm -f "$archive"; rm -rf "$staging"
+		return
+	fi
+	actual="$(sha256sum "$archive" | awk '{print $1}')"
+	if [[ "$actual" != "$expected" ]]; then
+		echo "ERROR: uv checksum mismatch (got $actual, expected $expected)." >&2
+		rm -f "$archive"; rm -rf "$staging"
+		return 1
+	fi
+	echo "OK: checksum verified"
+	tar -xzf "$archive" -C "$staging"
+	mkdir -p "$destination"
+	find "$staging" -type f -name uv -perm -u+x -exec install -m 755 {} "$destination/uv" \; -quit
+	find "$staging" -type f -name uvx -perm -u+x -exec install -m 755 {} "$destination/uvx" \; -quit
+	rm -f "$archive"; rm -rf "$staging"
+	if [[ -x "$destination/uv" ]]; then
+		echo "OK: installed $destination/uv (ensure it is on PATH)"
+	else
+		echo "note: uv archive did not contain the expected binary; skipped"
+	fi
+}
 
 install_blender() {
 	local series version base url archive staging destination expected actual
@@ -330,17 +401,24 @@ install_python_extras() {
 	# Capabilities, not requirements: the pipeline core stays dependency-free
 	# and each command says what to install when a capability is missing.
 	local target="$ROOT"
-	echo "Installing optional Python capabilities (UnityPy, Pillow, NumPy, trimesh)"
-	if [[ -x "$ROOT/.venv/bin/pip" ]]; then
-		"$ROOT/.venv/bin/pip" install --quiet --upgrade "${target}[all]" && {
-			echo "OK: installed into $ROOT/.venv"; return; }
-	fi
-	if python3 -m pip install --quiet --user --upgrade "${target}[all]" 2>/dev/null; then
-		echo "OK: installed for the current user"
+	if ! have uv; then
+		echo "note: uv is unavailable, so the Python capabilities were skipped. Run:"
+		echo "      uv pip install '${target}[all]'"
 		return
 	fi
-	echo "note: could not install the Python extras automatically. Run:"
-	echo "      pip install '$target"'[all]'"'"
+	echo "Installing optional Python capabilities (UnityPy, Pillow, NumPy, trimesh)"
+	if [[ -d "$ROOT/.venv" ]]; then
+		if uv pip install --quiet --python "$ROOT/.venv" "${target}[all]"; then
+			echo "OK: installed into $ROOT/.venv"
+			return
+		fi
+	fi
+	if uv pip install --quiet --system "${target}[all]" 2>/dev/null; then
+		echo "OK: installed into the system environment"
+		return
+	fi
+	echo "note: could not install the Python capabilities automatically. Run:"
+	echo "      uv venv && uv pip install '${target}[all]'"
 }
 
 if ((WITH_AUTHORING)); then

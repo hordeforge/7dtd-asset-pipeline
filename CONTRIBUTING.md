@@ -8,6 +8,11 @@ scripts/bootstrap
 make check test
 ```
 
+Every Python step goes through uv. `make` uses `uv run` when uv is on PATH and
+falls back to the plain interpreter otherwise, because the core has no
+dependencies and the suite must pass without the optional capabilities — CI
+runs it both ways.
+
 `make check` compiles the package, syntax-checks every shell script, and runs
 `shellcheck` when it is installed. `make check test` needs no network, no
 Unity, and no game install.

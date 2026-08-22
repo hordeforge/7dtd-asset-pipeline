@@ -1,27 +1,57 @@
 #!/usr/bin/env bash
-# Install this checkout into an isolated local virtual environment.
+# Install this checkout into an isolated local virtual environment with uv.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PYTHON="${PYTHON:-python3}"
 VENV="$ROOT/.venv"
+EXTRAS="${EXTRAS:-all}"
 
-if ! command -v "$PYTHON" >/dev/null 2>&1; then
-	echo "ERROR: Python 3.11 or newer is required." >&2
+usage() {
+	cat <<'HELP'
+Create .venv and install this checkout into it.
+
+USAGE
+  scripts/bootstrap [--no-extras]
+
+OPTIONS
+  --no-extras   Install only the dependency-free core, without the optional
+                capabilities (UnityPy, Pillow, NumPy, trimesh)
+  -h, --help    Show this help
+
+Uses uv for every Python step. Install it, and everything else, with
+scripts/install-tools.sh.
+HELP
+}
+
+while (($#)); do
+	case "$1" in
+		--no-extras) EXTRAS=""; shift ;;
+		-h|--help) usage; exit 0 ;;
+		*) echo "ERROR: unknown option $1" >&2; usage >&2; exit 1 ;;
+	esac
+done
+
+if ! command -v uv >/dev/null 2>&1; then
+	cat >&2 <<'MISSING'
+ERROR: uv is required and was not found on PATH.
+
+Install it with:
+  scripts/install-tools.sh
+
+or see https://docs.astral.sh/uv/ for other installation methods.
+MISSING
 	exit 1
 fi
-if ! "$PYTHON" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))'; then
-	echo "ERROR: Python 3.11 or newer is required." >&2
-	exit 1
-fi
 
-"$PYTHON" -m venv "$VENV"
-SITE_PACKAGES="$($VENV/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-printf '%s\n' "$ROOT/src" >"$SITE_PACKAGES/7dtd_asset_pipeline_checkout.pth"
-WRAPPER="$VENV/bin/7dtd-assets"
-printf '%s\n' '#!/usr/bin/env bash' \
-	'exec "$(dirname "$0")/python" -m sevendtd_asset_pipeline "$@"' >"$WRAPPER"
-chmod +x "$WRAPPER"
+# uv provisions an interpreter itself when the host has none new enough, so
+# the Python version is a constraint here rather than a prerequisite.
+uv venv --python '>=3.11' "$VENV"
+
+TARGET="$ROOT"
+if [[ -n "$EXTRAS" ]]; then
+	TARGET="${ROOT}[${EXTRAS}]"
+fi
+uv pip install --python "$VENV" --editable "$TARGET"
 
 cat <<EOF
 Installed the pipeline in $VENV
@@ -29,7 +59,9 @@ Installed the pipeline in $VENV
 Run:
   $VENV/bin/7dtd-assets --help
 
-This checkout setup is offline and does not need pip/setuptools. To install
-globally from a release, use pipx:
-  pipx install $ROOT
+Or, without activating anything:
+  uv run --project $ROOT 7dtd-assets --help
+
+For a user-wide command instead:
+  uv tool install $ROOT
 EOF

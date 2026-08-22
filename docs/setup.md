@@ -17,8 +17,14 @@ CLI itself; `--with-unity-prereqs` covers the editor installer's needs and
 
 ## 1. Install the pipeline CLI
 
-The runtime has no third-party Python dependencies. Python 3.11 is required
-because configuration uses the standard-library TOML parser.
+Every Python step in this project goes through [uv](https://docs.astral.sh/uv/):
+environments, installs, and test runs. `scripts/install-tools.sh` installs it,
+from the distribution package where one exists and otherwise from the official
+checksum-verified release.
+
+The runtime itself has no third-party Python dependencies. Python 3.11 is
+required because configuration uses the standard-library TOML parser; uv
+provisions a suitable interpreter itself if the host has none.
 
 From a checkout:
 
@@ -30,12 +36,13 @@ scripts/bootstrap
 For a user-wide isolated command:
 
 ```bash
-pipx install /path/to/7dtd-asset-pipeline
+uv tool install /path/to/7dtd-asset-pipeline
 ```
 
-`scripts/bootstrap` creates only `.venv/` in this checkout and adds the
-checkout's `src/` through a local `.pth` file. It is offline and does not need
-pip/setuptools, use `sudo`, install OS packages, or modify shell startup files.
+`scripts/bootstrap` creates only `.venv/` in this checkout and installs the
+package into it with `uv pip install --editable`, including the optional
+capabilities. Pass `--no-extras` for the dependency-free core alone. It never
+uses `sudo`, installs OS packages, or modifies shell startup files.
 
 ## 2. Identify the game install and Unity revision
 

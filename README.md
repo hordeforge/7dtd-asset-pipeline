@@ -40,7 +40,9 @@ repository layout.
 
 ## Requirements
 
-- Python 3.11 or newer for the pipeline CLI;
+- [uv](https://docs.astral.sh/uv/) — every Python step runs through it, and
+  `scripts/install-tools.sh` installs it;
+- Python 3.11 or newer for the pipeline CLI (uv provisions one if needed);
 - a legal, activated Unity Editor matching the installed game's own bundle
   revision;
 - Unity Windows Build Support (Mono), because the shipped game client loads a
@@ -66,11 +68,11 @@ scripts/install-tools.sh --with-unity-prereqs
 Install this checkout:
 
 ```bash
-scripts/bootstrap
+scripts/bootstrap            # uv venv + uv pip install --editable, with extras
 .venv/bin/7dtd-assets --help
 ```
 
-Or use `pipx install .`.
+Or, for a user-wide command, `uv tool install .`.
 
 Scaffold the pipeline into an existing modlet. The command reads the correct
 Unity version from the installed game:

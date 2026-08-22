@@ -197,7 +197,7 @@ errors raised by the commands that need one all read from it.
   {"name": "UnityPy", "kind": "module", "available": true, "version": "1.25.3",
    "path": null, "purpose": "list every serialized object and per-prefab component…",
    "unlocks": ["7dtd-assets inspect --deep"],
-   "install": "pip install 'sevendtd-asset-pipeline[inspect]'"}
+   "install": "uv pip install 'sevendtd-asset-pipeline[inspect]'"}
 ]
 ```
 
@@ -207,7 +207,7 @@ capability, what it unlocks, and its install command — never a traceback:
 
 ```text
 ERROR: 7dtd-assets inspect --deep needs the optional capability 'UnityPy'
-(list every serialized object …). Install it with: pip install '…[inspect]'
+(list every serialized object …). Install it with: uv pip install '…[inspect]'
 ```
 
 `status --json` carries a `capabilities` map of `{name: available}`, so a
@@ -216,7 +216,7 @@ single call answers both "what is the mod's state" and "what can I run".
 Install everything at once:
 
 ```bash
-pip install 'sevendtd-asset-pipeline[all]'   # UnityPy, Pillow, NumPy, trimesh
+uv pip install 'sevendtd-asset-pipeline[all]'   # UnityPy, Pillow, NumPy, trimesh
 scripts/install-tools.sh --with-authoring    # Blender, OpenSCAD, glTF validator, …
 ```
 
@@ -334,7 +334,7 @@ The offline half needs no Unity, no game install, and no network, so it runs
 on any hosted runner as a pull-request gate:
 
 ```yaml
-- run: pipx install 7dtd-asset-pipeline
+- run: uv tool install 7dtd-asset-pipeline
 - run: 7dtd-assets status --json
 - run: 7dtd-assets validate
 ```

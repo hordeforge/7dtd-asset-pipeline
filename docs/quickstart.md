@@ -30,8 +30,14 @@ the host is missing. Then install for real:
 
 ```bash
 scripts/install-tools.sh --with-unity-prereqs     # required for step 4
-scripts/install-tools.sh --with-authoring         # optional art tooling
+scripts/install-tools.sh --with-authoring         # art and inspection tooling
 ```
+
+`--with-authoring` installs Blender, OpenSCAD, ImageMagick, FFmpeg, the
+Khronos glTF validator, and the Python capabilities (UnityPy, Pillow, NumPy,
+trimesh). Blender and the glTF validator fall back to official
+checksum-verified builds where the distribution has no package. Check what is
+usable at any time with `7dtd-assets capabilities --json`.
 
 Supported package managers are `pacman`, `apt-get`, and `dnf`. On anything
 else, install the tools `--check` lists by hand; the script refuses to guess

@@ -70,6 +70,9 @@ def _measure(path: Path, report: MeshReport, max_extent: float) -> None:
     report.geometry_count = len(geometries)
     report.vertex_count = sum(len(getattr(g, "vertices", ())) for g in geometries)
     report.face_count = sum(len(getattr(g, "faces", ())) for g in geometries)
+    # Reported, not enforced: glTF export splits vertices at UV and normal
+    # seams, so a perfectly good exported cylinder is routinely not watertight.
+    # It matters for a mesh intended as a collider, and is noise otherwise.
     report.watertight = all(bool(getattr(g, "is_watertight", False)) for g in geometries)
     extents = getattr(loaded, "extents", None)
     if extents is not None:

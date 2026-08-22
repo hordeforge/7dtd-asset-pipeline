@@ -4,7 +4,11 @@ Only Python and Unity are pipeline requirements. The tools below are optional
 and selected for reproducible, scriptable workflows that humans and coding
 agents can both drive. Pin versions in each mod when output stability matters.
 
-Install them with `scripts/install-tools.sh --with-authoring`.
+Install them with `scripts/install-tools.sh --with-authoring`. That takes each
+tool from the distribution when it packages one, and falls back to the official
+checksum-verified build for Blender and the Khronos glTF validator, which
+several distributions omit or ship well behind upstream. Ask what is usable
+right now with `7dtd-assets capabilities --json`.
 [scripts/generators/](../scripts/generators/) already ships working generators
 built on this stack — audio (standard library only), icons (Pillow), texture
 maps (Pillow + NumPy), and meshes (Blender) — and the scaffolded Unity project
@@ -19,6 +23,11 @@ Blender can create, UV, rig, bake, render, and export meshes. Its `--background
 agent-authored geometry and deterministic batch conversion. Keep a `.blend`
 or a generator script as source, apply transforms deliberately, and export a
 Unity-supported interchange format.
+
+`scripts/install-tools.sh --with-authoring` installs it, and
+[scripts/generators/make-mesh.py](../scripts/generators/make-mesh.py) is a
+working `--background --python` template to extend. Validate what it exports
+with `7dtd-assets check-mesh` before importing.
 
 - Official scripting guide: <https://docs.blender.org/api/main/info_quickstart.html>
 - Background/module automation: <https://docs.blender.org/api/main/info_advanced_blender_as_bpy.html>

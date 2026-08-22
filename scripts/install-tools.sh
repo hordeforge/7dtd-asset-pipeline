@@ -208,6 +208,76 @@ else
 	exit 1
 fi
 
+install_blender() {
+	local series version base url archive staging destination expected actual
+	destination="${BLENDER_INSTALL_DIR:-$HOME/.local/share/blender}"
+	if have blender; then
+		echo "OK: blender is already installed ($(command -v blender))"
+		return
+	fi
+	if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
+		echo "note: automatic Blender setup supports Linux x86_64 only; see https://www.blender.org/download/"
+		return
+	fi
+	for required in curl tar xz python3 sha256sum; do
+		have "$required" || { echo "note: $required missing; skipped Blender"; return; }
+	done
+
+	# Blender's distribution packages lag and some distributions omit them, so
+	# fall back to the official build. Track the newest LTS series rather than
+	# pinning a version that goes stale, and verify the published SHA-256.
+	series="${BLENDER_SERIES:-}"
+	if [[ -z "$series" ]]; then
+		series="$(curl --fail --location --silent --show-error --max-time 30 \
+			https://download.blender.org/release/ 2>/dev/null |
+			grep -oE 'Blender[0-9]+\.[0-9]+/' | tr -d '/' | sort -u -V | tail -n1)"
+	fi
+	if [[ -z "$series" ]]; then
+		echo "note: could not resolve a Blender release series; skipped"
+		return
+	fi
+	base="https://download.blender.org/release/$series"
+	version="$(curl --fail --location --silent --show-error --max-time 30 "$base/" 2>/dev/null |
+		grep -oE 'blender-[0-9]+\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz' |
+		sed -E 's/^blender-(.*)-linux-x64\.tar\.xz$/\1/' | sort -u -V | tail -n1)"
+	if [[ -z "$version" ]]; then
+		echo "note: could not resolve a Blender version in $series; skipped"
+		return
+	fi
+
+	url="$base/blender-$version-linux-x64.tar.xz"
+	expected="$(curl --fail --location --silent --show-error --max-time 30 \
+		"$base/blender-$version.sha256" 2>/dev/null |
+		awk -v file="blender-$version-linux-x64.tar.xz" '$2 == file {print $1}')"
+	if [[ -z "$expected" ]]; then
+		echo "ERROR: Blender published no SHA-256 for $version; refusing to install it." >&2
+		return 1
+	fi
+
+	archive="$(mktemp)"
+	staging="$(mktemp -d)"
+	echo "Installing official Blender $version (about 400 MB)"
+	if ! curl --fail --location --silent --show-error --max-time 900 "$url" -o "$archive"; then
+		echo "note: Blender download failed; skipped"
+		rm -f "$archive"; rm -rf "$staging"
+		return
+	fi
+	actual="$(sha256sum "$archive" | awk '{print $1}')"
+	if [[ "$actual" != "$expected" ]]; then
+		echo "ERROR: Blender checksum mismatch (got $actual, expected $expected)." >&2
+		rm -f "$archive"; rm -rf "$staging"
+		return 1
+	fi
+	echo "OK: checksum verified"
+	tar -xJf "$archive" -C "$staging"
+	mkdir -p "$destination" "$HOME/.local/bin"
+	rm -rf "${destination:?}/$version"
+	mv "$staging/blender-$version-linux-x64" "$destination/$version"
+	ln -sf "$destination/$version/blender" "$HOME/.local/bin/blender"
+	rm -f "$archive"; rm -rf "$staging"
+	echo "OK: installed $destination/$version (linked as ~/.local/bin/blender)"
+}
+
 install_gltf_validator() {
 	local url archive staging destination
 	destination="${HOME}/.local/bin"
@@ -274,6 +344,7 @@ install_python_extras() {
 }
 
 if ((WITH_AUTHORING)); then
+	install_blender
 	install_gltf_validator
 	install_python_extras
 fi

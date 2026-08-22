@@ -73,6 +73,15 @@ That catches the expensive mistakes early — most often a mesh authored in
 centimetres, which arrives a hundred times too large and reads as a scale bug
 in game rather than an export bug.
 
+`watertight: False` is reported but never fails the check: glTF export splits
+vertices at UV and normal seams, so a correctly exported cylinder is routinely
+not watertight. It matters when the mesh is meant to be a collider, and is
+noise otherwise.
+
+Blender is Z-up and glTF is Y-up, so a mesh authored at `--size W D H` arrives
+with its height on Y. `make-mesh.py` puts the pivot at the base, so exported
+bounds start at Y = 0 and a placed block rests on the ground.
+
 ## Unity side
 
 Generating a prefab or material from code is the Unity half of the same idea.

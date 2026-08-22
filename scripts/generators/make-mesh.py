@@ -20,9 +20,13 @@ lane is cheaper: compose built-in primitives in the Unity project with
     make-mesh.py out.glb --shape cylinder --size 0.19 0.19 0.42
     make-mesh.py out.glb --shape box --size 1 0.5 2 --name myModCrate
 
-Axes follow Unity's convention after import: sizes are metres as X (width),
-Y (height), Z (depth), and the mesh is authored with its pivot at the base so
-a placed block sits on the ground rather than sinking half-way into it.
+`--size` is metres as **width, depth, height**. Blender is Z-up, so height is
+authored as Z there; the glTF exporter converts to the Y-up convention Unity
+and 7DTD use, and the height arrives as Y. Verified: `--size 0.19 0.19 0.42`
+exports bounds of 0.19 x 0.42 x 0.19 in XYZ.
+
+The pivot sits at the base, not the centre, so a placed block rests on the
+ground instead of sinking half-way into it (exported bounds start at Y = 0).
 
 Requires Blender on PATH (scripts/install-tools.sh --with-authoring).
 """
@@ -76,8 +80,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("output", type=Path, help="destination .glb")
     parser.add_argument("--shape", choices=("box", "cylinder", "sphere"), default="box")
     parser.add_argument(
-        "--size", nargs=3, type=float, metavar=("X", "Y", "Z"), default=[1.0, 1.0, 1.0],
-        help="real-world metres: width, depth, height",
+        "--size", nargs=3, type=float, metavar=("WIDTH", "DEPTH", "HEIGHT"),
+        default=[1.0, 1.0, 1.0],
+        help="real-world metres; height arrives as Y after the Y-up conversion",
     )
     parser.add_argument("--name", default="generatedMesh", help="object and mesh name")
     args = parser.parse_args(argv)
@@ -121,7 +126,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"vertices: {line.split()[1]}")
     print(f"path:     {args.output}")
     print(f"name:     {args.name}   (rename the Unity prefab to the bundle stem)")
-    print("next:     validate with gltf_validator, then import and prefab in Unity")
+    print("note:     height is the third value and arrives as Y after export")
+    print("next:     7dtd-assets check-mesh " + str(args.output))
     return 0
 
 

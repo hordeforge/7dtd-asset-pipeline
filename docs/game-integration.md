@@ -25,8 +25,10 @@ case-sensitive. Keep exact case everywhere rather than relying on the first
 half of that behavior.
 
 Common properties that use the same `DataLoader` asset path include block
-`Model` and item `Meshfile`/`HandMeshfile`/`DropMeshFile`. Code can load other
-Unity types through the same URI mechanism.
+`Model` and item `Meshfile`/`HandMeshfile`/`DropMeshFile`. Code loads other
+Unity types through the same mechanism with `DataLoader.LoadAsset<T>` —
+`GameObject`, `Transform`, `AudioClip` — so one URI form covers meshes,
+prefabs, and audio.
 
 ## One mod-owned bundle
 
@@ -47,17 +49,30 @@ currently models one bundle per config file.
 Current 7DTD mod UI atlases load individual PNGs placed under:
 
 ```text
-UIAtlases/ItemIconAtlas/<CustomIconName>.png
+UIAtlases/<AtlasName>/<CustomIconName>.png
 ```
 
-The filename stem is the `CustomIcon` key and the client packs the folder at
-runtime. Keep icon source/provenance outside the deployable path and commit the
-final PNG. A bundle rebuild is unnecessary for icon-only changes.
+`ModManager.LoadUiAtlases` loads **each immediate subfolder** of a mod's
+`UIAtlases/` directory as a runtime-packed atlas: the folder name is the atlas
+name, and each `.png` inside is keyed by its filename stem. The game already
+registers `ItemIconAtlas`, so a mod extends it by adding files to a folder of
+that name rather than declaring anything.
+
+The filename stem is the `CustomIcon` key. Keep icon source and provenance
+outside the deployable path and commit the final PNG. A bundle rebuild is
+unnecessary for icon-only changes, and `7dtd-assets validate` does not cover
+icons because they are not bundle members.
+
+`CustomIconTint` multiplies the icon's colour. If the PNG already carries an
+authored palette, leave the property off; a leftover tint from an earlier
+design silently recolours the new art.
 
 ## Audio
 
 Audio clips and AudioSource prefabs can live in the bundle. A `sounds.xml`
-entry can point `ClipName` at a mod-folder bundle URI. Validate in the actual
+entry can point `ClipName` at a mod-folder bundle URI, because
+`Audio.Manager.LoadAudio` resolves it through the same
+`DataLoader.LoadAsset<AudioClip>` path as meshes. Validate in the actual
 game because an AudioSource's `maxDistance`, sound-group fade ranges, looping,
 voice limits, and distant clip decide whether a correctly loaded clip is
 heard. A long-range event usually needs a deliberately authored source rather
@@ -66,9 +81,21 @@ than a grenade-scale vanilla source.
 ## Models and item state
 
 Author axes, root scale, colliders, and named child transforms against the
-specific consuming game path. Item code may apply correction rotations,
-`DropScale`, tint, activation transforms, or fallback meshes after loading.
-Test held and dropped forms separately from placed block models.
+specific consuming game path. The engine applies its own corrections *after*
+loading, so the prefab root must stay at identity and let them apply:
+
+- `ItemClass.GetDroppedCorrectionRotation` lays a dropped item flat — measured
+  as `(-90, 0, 0)` on V 3.1.0 b14. Author the item standing along local +Y,
+  the way a held grenade does, and the engine puts it on its side when dropped.
+- `DropScale` multiplies the dropped form's size, so the held and dropped
+  readings of one mesh differ by that factor.
+- `ItemClass.CloneModel` calls `UpdateLight.SetTintColor`, which multiplies
+  **every material's `_Color`** by the item's `TintColor`. On a mesh with an
+  authored palette this darkens or recolours the paint, so omit `TintColor`
+  rather than relying on a neutral value.
+
+Test held, dropped, and placed forms separately; they are three different code
+paths over the same asset.
 
 ## Clients and servers
 

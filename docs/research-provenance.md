@@ -16,7 +16,20 @@ decompiling the installed `Assembly-CSharp.dll` with `ilspycmd` and/or
 - `AssetBundleManager._get` reduces the asset request to file-name stem;
 - block model loading subsequently checks the loaded object name, making exact
   case significant;
-- item mesh and audio loading traverse the same `DataLoader` family.
+- item mesh and audio loading traverse the same `DataLoader` family, through
+  `DataLoader.LoadAsset<T>` for `GameObject`, `Transform`, and `AudioClip`;
+- `Audio.Manager.LoadAudio` resolves a `sounds.xml` `ClipName` bundle URI
+  through that same path, and plays nothing beyond the AudioSource prefab's
+  `maxDistance`, so a long-range sound needs a mod-owned AudioSource;
+- `ModManager.LoadUiAtlases` loads each immediate subfolder of a mod's
+  `UIAtlases/` as a runtime-packed atlas, keyed by folder name, with each PNG
+  keyed by its filename stem;
+- `BlockShapeModelEntity.getPrefab` substitutes `block_missingPrefab`, and
+  items fall back to `@:Other/Items/Crafting/leather.fbx`, so a failed load
+  still draws something and cannot be ruled out by eye;
+- `ItemClass.GetDroppedCorrectionRotation` returns `(-90, 0, 0)`, and
+  `ItemClass.CloneModel` applies `UpdateLight.SetTintColor`, which multiplies
+  every material `_Color` by the item's `TintColor`.
 
 Re-verify these method bodies after a major game update. The current CLI gates
 encode their consequences but do not decompile the game automatically.

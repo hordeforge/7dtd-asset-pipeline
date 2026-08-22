@@ -139,3 +139,41 @@ def _capability_checks() -> list[Check]:
         )
         checks.append(Check("OK" if capability.available else "INFO", capability.name, detail))
     return checks
+
+
+def _editor_checks(config: PipelineConfig) -> list[Check]:
+    """Verify the editor is runnable, licensed, and can target Windows.
+
+    Each failure returns immediately: a missing Windows module makes the
+    `-version` probe's result irrelevant, and running it anyway costs seconds.
+    """
+    editor = config.unity_editor
+    if editor is None:
+        return []
+    if not editor.is_file() or not os.access(editor, os.X_OK):
+        return [Check("FAIL", "Unity editor", f"Unity editor is not executable: {editor}")]
+    windows = editor.parent / (
+        "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
+    )
+    if config.target == "StandaloneWindows64" and not windows.is_file():
+        return [
+            Check("FAIL", "Windows support", f"Windows Build Support (Mono) is missing: {windows}")
+        ]
+    try:
+        result = subprocess.run(
+            [str(editor), "-version"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return [Check("FAIL", "Unity editor", "Unity -version did not finish within 30 seconds")]
+    reported = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "unknown"
+    if result.returncode != 0:
+        return [Check("FAIL", "Unity editor", f"Unity -version exited {result.returncode}: {reported}")]
+    return [
+        Check("OK", "Unity editor", f"{editor} ({reported})"),
+        Check("OK", "Windows support", str(windows)),
+    ]

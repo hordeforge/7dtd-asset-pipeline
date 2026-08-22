@@ -81,23 +81,6 @@ client, and load each changed asset by its real URI. See
 **Confirms it worked:** the asset renders or sounds correct, and the client log
 has no bundle-load, incompatibility, wrong-name, shader, or particle errors.
 
-### 5. `7dtd-assets build` has never run against a real Unity
-
-**Blocks:** end-to-end proof of `build` and `build --probe`. `doctor` passes
-fully against the real editor here, so the environment is ready, but no build
-has been executed from this repository.
-
-**You run:**
-
-```bash
-cd /path/to/MyMod
-export UNITY_EDITOR="/path/to/Unity/Hub/Editor/2022.3.62f2/Editor/Unity"
-7dtd-assets doctor && 7dtd-assets build --probe
-```
-
-**Confirms it worked:** `OK: .../probe/seven-days-to-die-pipeline-probe.unity3d`.
-The probe stages nothing into the modlet, so it is safe to run at any time.
-
 ## Verified, for contrast
 
 These were open and are now closed, so the list above stays meaningful:
@@ -110,3 +93,15 @@ These were open and are now closed, so the list above stays meaningful:
 - The UnityFS reader parses real shipped game bundles, including a 650 MB one.
 - `7dtd-assets init` works from a real wheel install, and `doctor` passes every
   check against the installed game and editor.
+- `build --probe` and a full `build` both run against the real Unity
+  2022.3.62f2 editor (12 s and 6 s), producing a class-142 bundle at the
+  game's own revision, staging bundle plus manifest, and passing `validate`.
+- `GeneratedAsset.cs` compiles and runs in that editor: a three-primitive
+  prefab with one root collider, two materials, bounds starting at Y = 0.
+- Every rejection gate fires on real artifacts: wrong asset case, absent stem,
+  wrong mod name, a URI targeting game bundles, and a mismatched game
+  revision. The bare `@modfolder:` form is accepted, as the engine does.
+- **The central gate is proven.** With an empty `Packages/manifest.json`,
+  Unity exits zero while logging that AssetBundle was stripped, and emits a
+  bundle with no class-142 object. The pipeline rejects it, names the fix, and
+  leaves the previously staged bundle byte-identical.

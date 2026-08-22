@@ -98,6 +98,30 @@ class PipelineTests(unittest.TestCase):
         log.write_text("Build completed with a result of 'Succeeded'\n")
         reject_disabled_modules(log)
 
+    def test_doctor_runs_every_branch_including_the_editor_one(self) -> None:
+        # A NameError in the editor branch survived until a real doctor run,
+        # because no test ever configured UNITY_EDITOR.
+        import os
+
+        from sevendtd_asset_pipeline.doctor import run_doctor
+
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        editor = self.root / "fake-editor"
+        editor.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        editor.chmod(0o755)
+        os.environ["UNITY_EDITOR"] = str(editor)
+        try:
+            config = load_config(self.root / CONFIG_NAME)
+            checks = run_doctor(config)
+        finally:
+            os.environ.pop("UNITY_EDITOR", None)
+        names = {check.name for check in checks}
+        # A fake editor has no Windows Build Support, so the editor branch
+        # returns that FAIL and stops before probing -version. What matters is
+        # that the branch ran at all and reported rather than raised.
+        self.assertIn("Windows support", names)
+        self.assertTrue(any(check.status == "FAIL" for check in checks))
+
     def test_config_rejects_resources_outside_mod_root(self) -> None:
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
         config_file = self.root / ".7dtd-assets.toml"

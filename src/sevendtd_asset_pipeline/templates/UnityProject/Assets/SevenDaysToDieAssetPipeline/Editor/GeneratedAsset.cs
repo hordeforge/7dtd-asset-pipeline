@@ -32,6 +32,102 @@ namespace SevenDaysToDie.AssetPipeline
         }
 
         /// <summary>
+        /// Add a built-in primitive as a child of <paramref name="parent"/>.
+        ///
+        /// This is one of the two mesh lanes, and the one that needs nothing
+        /// beyond Unity. Composing built-in primitives keeps the bundle free of
+        /// class-43 Mesh objects entirely — the prefab references Unity's
+        /// always-loaded default resources instead — so the geometry is a few
+        /// numbers in a reviewable diff rather than a binary blob. It suits
+        /// hard-surface props assembled from boxes, cylinders, and spheres.
+        ///
+        /// The other lane is an authored mesh from Blender or OpenSCAD, which
+        /// is the right choice for organic, rigged, or sculpted geometry. Check
+        /// those with `7dtd-assets check-mesh` before importing them.
+        ///
+        /// Sizes are metres. Unity's cube is 1 m at unit scale; its cylinder,
+        /// sphere, and capsule are 2 m tall, so scale accordingly.
+        /// </summary>
+        public static GameObject Primitive(
+            Transform parent,
+            PrimitiveType type,
+            string name,
+            Vector3 position,
+            Vector3 rotation,
+            Vector3 scale,
+            Material material)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            part.name = name;
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = position;
+            part.transform.localEulerAngles = rotation;
+            part.transform.localScale = scale;
+            // CreatePrimitive attaches a collider to every part. 7DTD wants one
+            // collider on the root, not one per visual piece, so strip them here
+            // and add the root collider deliberately with RootCollider.
+            var collider = part.GetComponent<Collider>();
+            if (collider != null) UnityEngine.Object.DestroyImmediate(collider);
+            if (material != null) part.GetComponent<MeshRenderer>().sharedMaterial = material;
+            return part;
+        }
+
+        /// <summary>
+        /// Create a prefab root with an identity transform.
+        ///
+        /// The root must stay at identity scale and rotation: the engine applies
+        /// its own corrections after loading (item code applies a dropped
+        /// correction rotation and DropScale), and a root that already carries a
+        /// transform compounds with those instead of replacing them. Author the
+        /// real dimensions on the child parts.
+        /// </summary>
+        public static GameObject Root(string name)
+        {
+            var root = new GameObject(name);
+            root.transform.localPosition = Vector3.zero;
+            root.transform.localRotation = Quaternion.identity;
+            root.transform.localScale = Vector3.one;
+            return root;
+        }
+
+        /// <summary>Add the single root collider a dropped or placed object needs.</summary>
+        public static BoxCollider RootCollider(GameObject root, Vector3 center, Vector3 size)
+        {
+            var collider = root.AddComponent<BoxCollider>();
+            collider.center = center;
+            collider.size = size;
+            return collider;
+        }
+
+        /// <summary>
+        /// Scale every child of a root uniformly, leaving the root at identity.
+        ///
+        /// This is how one authored shape yields size variants without a second
+        /// copy of its geometry, and without giving the root a transform the
+        /// engine's own corrections would compound with.
+        /// </summary>
+        public static void ScaleChildren(GameObject root, float factor)
+        {
+            if (factor <= 0f) throw new ArgumentException("Scale factor must be positive.");
+            foreach (Transform child in root.transform)
+            {
+                child.localPosition *= factor;
+                child.localScale *= factor;
+            }
+        }
+
+        /// <summary>Report a prefab's world bounds, so dimensions are reviewable in the log.</summary>
+        public static Bounds MeasureBounds(GameObject root)
+        {
+            var renderers = root.GetComponentsInChildren<MeshRenderer>();
+            if (renderers.Length == 0) return new Bounds(root.transform.position, Vector3.zero);
+            var bounds = renderers[0].bounds;
+            for (var index = 1; index < renderers.Length; index++)
+                bounds.Encapsulate(renderers[index].bounds);
+            return bounds;
+        }
+
+        /// <summary>
         /// Create or replace an opaque Standard material.
         ///
         /// Assigning _BumpMap or _MetallicGlossMap is not enough: the Standard

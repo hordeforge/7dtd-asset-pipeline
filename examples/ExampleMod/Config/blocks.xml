@@ -1,0 +1,11 @@
+<configs>
+	<!-- Enable only after building a bundle containing this exact prefab stem. -->
+	<!--
+	<append xpath="/blocks">
+		<block name="exampleModWorkbench">
+			<property name="Extends" value="workbench" />
+			<property name="Model" value="#@modfolder(ExampleMod):Resources/examplemod.unity3d?exampleModWorkbench.prefab" />
+		</block>
+	</append>
+	-->
+</configs>

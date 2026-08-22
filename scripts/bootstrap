@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Install this checkout into an isolated local virtual environment.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PYTHON="${PYTHON:-python3}"
+VENV="$ROOT/.venv"
+
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+	echo "ERROR: Python 3.11 or newer is required." >&2
+	exit 1
+fi
+if ! "$PYTHON" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))'; then
+	echo "ERROR: Python 3.11 or newer is required." >&2
+	exit 1
+fi
+
+"$PYTHON" -m venv "$VENV"
+SITE_PACKAGES="$($VENV/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+printf '%s\n' "$ROOT/src" >"$SITE_PACKAGES/7dtd_asset_pipeline_checkout.pth"
+WRAPPER="$VENV/bin/7dtd-assets"
+printf '%s\n' '#!/usr/bin/env bash' \
+	'exec "$(dirname "$0")/python" -m sevendtd_asset_pipeline "$@"' >"$WRAPPER"
+chmod +x "$WRAPPER"
+
+cat <<EOF
+Installed the pipeline in $VENV
+
+Run:
+  $VENV/bin/7dtd-assets --help
+
+This checkout setup is offline and does not need pip/setuptools. To install
+globally from a release, use pipx:
+  pipx install $ROOT
+EOF

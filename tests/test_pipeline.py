@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from sevendtd_asset_pipeline.build import reject_disabled_modules
+from sevendtd_asset_pipeline.config import load_config
+from sevendtd_asset_pipeline.errors import PipelineError
+from sevendtd_asset_pipeline.scaffold import initialize
+from sevendtd_asset_pipeline.validation import reject_ambiguous_stems, validate_mod
+
+from fixtures import unityfs_bundle
+
+
+class PipelineTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        (self.root / "ModInfo.xml").write_text(
+            '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+        )
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_scaffold_and_validate_mod(self) -> None:
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        config = load_config(self.root / ".7dtd-assets.toml")
+        config.resources_dir.mkdir()
+        config.bundle_output.write_bytes(unityfs_bundle([1, 142]))
+        config.tracked_manifest.parent.mkdir(parents=True)
+        config.tracked_manifest.write_text(
+            "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n",
+            encoding="utf-8",
+        )
+        config.config_dir.mkdir()
+        (config.config_dir / "items.xml").write_text(
+            '<configs><append xpath="/items"><item name="x"><property name="Meshfile" '
+            'value="#@modfolder(ExampleMod):Resources/example.unity3d?exampleThing.prefab" />'
+            "</item></append></configs>",
+            encoding="utf-8",
+        )
+        report = validate_mod(config)
+        self.assertEqual(1, report.reference_count)
+
+    def test_stem_collision_is_case_insensitive_and_extension_independent(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "ambiguous"):
+            reject_ambiguous_stems(["Assets/Thing.prefab", "Assets/Props/thing.fbx"])
+
+    def test_disabled_module_warning_fails(self) -> None:
+        log = self.root / "unity.log"
+        log.write_text("'AssetBundle' is not supported because the module AssetBundle is disabled in the build.\n")
+        with self.assertRaisesRegex(PipelineError, "stripped"):
+            reject_disabled_modules(log)
+
+    def test_clean_build_log_passes(self) -> None:
+        log = self.root / "unity.log"
+        log.write_text("Build completed with a result of 'Succeeded'\n")
+        reject_disabled_modules(log)
+
+    def test_config_rejects_resources_outside_mod_root(self) -> None:
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        config_file = self.root / ".7dtd-assets.toml"
+        config_file.write_text(
+            config_file.read_text().replace('resources_dir = "Resources"', 'resources_dir = "../outside"')
+        )
+        with self.assertRaisesRegex(PipelineError, "must stay below"):
+            load_config(config_file)
+
+
+if __name__ == "__main__":
+    unittest.main()

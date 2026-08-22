@@ -1,0 +1,2 @@
+m_EditorVersion: REPLACED_BY_SCAFFOLD
+m_EditorVersionWithRevision: REPLACED_BY_SCAFFOLD

@@ -1,0 +1,40 @@
+# Release checklist
+
+## Source and project
+
+- [ ] Every selected source asset and `.meta` is committed.
+- [ ] Generation scripts, seeds, prompts, references, and licenses are recorded.
+- [ ] No concept/source-only file accidentally sits below bundle source root.
+- [ ] Unity project revision equals the installed game's shipped bundle revision.
+- [ ] Required `com.unity.modules.*` dependencies cover every component type.
+- [ ] Bundle asset stems are mod-prefixed and globally unique.
+
+## Build and offline gates
+
+- [ ] `7dtd-assets doctor` has no relevant warnings.
+- [ ] `7dtd-assets build --probe` passes on the authoring host.
+- [ ] `7dtd-assets build` passes and stages bundle plus manifest.
+- [ ] `7dtd-assets validate` passes every recursive XML reference.
+- [ ] `7dtd-assets inspect --json` records correct revision and class 142.
+- [ ] Unity log contains no disabled-module, shader, particle, compiler, or serialization error.
+- [ ] A second unchanged build is byte-identical, or nondeterminism is explained.
+- [ ] Package contains `Resources/<bundle>.unity3d` and excludes authoring files.
+
+## Fresh-client acceptance
+
+- [ ] Start a genuinely fresh supported client with the candidate installed.
+- [ ] Load every changed prefab/clip/VFX stem by the real consuming path.
+- [ ] No incompatibility, bundle failure, wrong-name, fallback, shader, or exception log.
+- [ ] Check scale, axes, pivot, bounds, collider, attachment points, and state variants.
+- [ ] Check material maps under varied light and transparent material edges.
+- [ ] Check icons at native UI size and in every intended UI context.
+- [ ] Listen at near/fade/far distances and under concurrency where relevant.
+- [ ] Check VFX LOD, repeated effects, caps, cleanup, frame time, and accessibility.
+- [ ] Test presentation failure fallback when gameplay must remain functional.
+- [ ] Preserve bundle hash, logs/reports, and screenshots/listening notes.
+
+## Cross-platform/server scope
+
+- [ ] Test every promised client platform; do not infer Metal shader support from Windows.
+- [ ] Test dedicated-server paths that resolve bundle assets.
+- [ ] Confirm every joining client has the asset-bearing mod installed.

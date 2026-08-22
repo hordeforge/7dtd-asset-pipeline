@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<xml>
+	<Name value="ExampleMod" />
+	<DisplayName value="Example Asset Mod" />
+	<Description value="Consumer layout example for 7dtd-asset-pipeline." />
+	<Author value="Example" />
+	<Version value="0.1.0" />
+</xml>

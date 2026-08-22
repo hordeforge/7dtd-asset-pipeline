@@ -1,0 +1,13 @@
+.PHONY: assets assets-probe assets-validate assets-doctor
+
+assets:
+	7dtd-assets build
+
+assets-probe:
+	7dtd-assets build --probe
+
+assets-validate:
+	7dtd-assets validate
+
+assets-doctor:
+	7dtd-assets doctor

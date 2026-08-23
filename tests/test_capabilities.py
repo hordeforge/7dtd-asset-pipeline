@@ -8,9 +8,6 @@ from sevendtd_asset_pipeline.capabilities import REGISTRY, _availability, requir
 
 
 class CapabilityTests(unittest.TestCase):
-    def tearDown(self) -> None:
-        _availability.cache_clear()
-
     def test_every_capability_declares_what_it_unlocks_and_how_to_install(self) -> None:
         for capability in capabilities():
             with self.subTest(capability.name):
@@ -27,7 +24,6 @@ class CapabilityTests(unittest.TestCase):
         self.assertEqual(len(REGISTRY), len(json.loads(payload)))
 
     def test_require_names_the_capability_and_its_install_command(self) -> None:
-        _availability.cache_clear()
         with mock.patch(
             "sevendtd_asset_pipeline.capabilities._availability", return_value={"UnityPy": False}
         ), self.assertRaises(PipelineError) as caught:
@@ -47,12 +43,34 @@ class CapabilityTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "unknown capability"):
             require_capability("no-such-tool")
 
+    def test_an_install_landing_mid_session_is_honored_without_a_restart(self) -> None:
+        """`serve` outlives the installs its own error messages call for.
+
+        `require_capability` and the `capabilities` operation must read the same
+        answer, or a consumer that installs a capability and retries over the
+        same serve session is refused forever while `capabilities --json`
+        reports it present.
+        """
+        from sevendtd_asset_pipeline.capabilities import has_capability
+
+        with mock.patch(
+            "sevendtd_asset_pipeline.capabilities.importlib.util.find_spec",
+            return_value=None,
+        ):
+            self.assertFalse(has_capability("UnityPy"))
+            with self.assertRaises(PipelineError):
+                require_capability("UnityPy")
+        # The install lands; nothing is cached, so the next ask sees it.
+        with mock.patch(
+            "sevendtd_asset_pipeline.capabilities.importlib.util.find_spec",
+            return_value=object(),
+        ):
+            self.assertTrue(has_capability("UnityPy"))
+            require_capability("UnityPy")
+
 
 class OptionalFeatureTests(unittest.TestCase):
     """The optional features must degrade with an actionable message, never a traceback."""
-
-    def tearDown(self) -> None:
-        _availability.cache_clear()
 
     def test_deep_inspect_without_unitypy_explains_itself(self) -> None:
         from pathlib import Path

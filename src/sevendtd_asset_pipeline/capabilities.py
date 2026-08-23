@@ -18,7 +18,6 @@ import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
-from functools import cache
 from pathlib import Path
 
 from .errors import PipelineError
@@ -248,8 +247,12 @@ def capabilities(probe_versions: bool = False) -> list[Capability]:
     return [_resolve(spec, probe_versions) for spec in REGISTRY]
 
 
-@cache
 def _availability() -> dict[str, bool]:
+    # Deliberately recomputed on every ask rather than cached: a `shamway serve`
+    # session outlives the installs its own error messages call for, and a
+    # frozen answer would have `capabilities` report a capability as present
+    # while every gated operation keeps refusing it. The probes are
+    # `find_spec` and `which` — cheap next to any operation they gate.
     return {capability.name: capability.available for capability in capabilities()}
 
 

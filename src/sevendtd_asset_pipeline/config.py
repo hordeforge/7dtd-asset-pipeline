@@ -134,8 +134,9 @@ def _machine_bundle_source(configured: str) -> str:
     Whether an editor exists on this particular machine is not: the same
     committed configuration is checked out on a build host with an editor and
     on a laptop or agent box without one, exactly like `UNITY_EDITOR`. So
-    `SHAMWAY_BUNDLE_SOURCE` chooses between "unity" and "external" and may
-    never invent or remove a bundle.
+    `SHAMWAY_BUNDLE_SOURCE` chooses where *this* machine gets the bundle from
+    ("unity", "synthesized", or "external") but may never invent or remove a
+    bundle.
     """
     override = os.environ.get(BUNDLE_SOURCE_ENV, "").strip()
     if not override:

@@ -57,7 +57,7 @@ Machine-local paths never go in the TOML. The pipeline reads these, and no
 | Variable | Meaning |
 |---|---|
 | `SEVEN_DAYS_TO_DIE_DIR` | the installed client, containing `Data/Config/items.xml`; read-only evidence |
-| `SHAMWAY_BUNDLE_SOURCE` | `unity` or `external`: where *this machine* gets the bundle from, overriding `bundle_source`. It cannot give a mod a bundle it does not have, or take one away — that stays the mod's decision, in the file |
+| `SHAMWAY_BUNDLE_SOURCE` | `unity`, `synthesized`, or `external`: where *this machine* gets the bundle from, overriding `bundle_source`. It cannot give a mod a bundle it does not have, or take one away — that stays the mod's decision, in the file |
 | `UNITY_EDITOR` | the game-matched editor executable |
 | `SEVEN_DAYS_TO_DIE_LOG_DIR` | overrides where `shamway client` looks for `output_log_client__*.txt` (derived from the game dir's Steam library on Proton hosts otherwise) |
 | `SEVEN_DAYS_TO_DIE_MODS_DIR` | overrides the per-user `Mods/` folder `shamway client deploy` writes to |

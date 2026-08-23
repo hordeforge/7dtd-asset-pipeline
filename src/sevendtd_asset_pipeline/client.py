@@ -718,9 +718,9 @@ class LogReport:
 def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogReport:
     """Classify a client log by the markers this pipeline knows about.
 
-    `atlas_packed` and `localization_loaded` are only required when the mod
-    ships an atlas or a localization file; callers pass `mod_name=None` to
-    treat every positive marker as informational.
+    With a `mod_name`, every positive marker becomes required and any it did
+    not find fails the report; callers pass `mod_name=None` to treat every
+    positive marker as informational.
     """
     found: dict[str, str] = {}
     problems: list[str] = []
@@ -812,9 +812,11 @@ def fresh_client_run(
     Refuses to start while another session holds the shared client lock, and
     holds it for the duration of this run. Refuses too while a client is
     running: a bundle stays cached for the life of the process, so a reused
-    client cannot prove a rebuilt bundle. A `mute` run is muted at the OS layer
-    and unmuted again before returning; a *listening* run must not be muted,
-    and says so in its report.
+    client cannot prove a rebuilt bundle. A timed (`run_seconds`) mute run is
+    muted at the OS layer and unmuted again before returning; an unbounded one
+    leaves the client running and still muted, and the report says so via
+    `muted` and `unmuted_again`. A *listening* run must not be muted, and says
+    so in its report.
     """
     refuse_while_held("launch a client")
     if running_client_pids():

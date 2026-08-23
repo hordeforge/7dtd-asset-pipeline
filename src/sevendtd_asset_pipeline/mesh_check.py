@@ -27,7 +27,9 @@ from .capabilities import extra_install, has_capability
 from .errors import PipelineError
 
 GLTF_SUFFIXES = (".glb", ".gltf")
-# The independent tools whose absence `_measure` and `_validate_gltf` each record.
+# `skipped` gains exactly one entry per lane: trimesh's absence from
+# `_measure`, and either gltf_validator's absence or the not-a-glTF scope
+# note. Two entries therefore mean no lane produced any evidence at all.
 TOOL_COUNT = 2
 
 

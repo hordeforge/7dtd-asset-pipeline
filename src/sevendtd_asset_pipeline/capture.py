@@ -15,9 +15,10 @@ and becomes a file some later session can reopen and disagree with.
     shamway client capture held-nuke --observable "held upright, not sunk into the hand"
     shamway client capture --list
 
-The manifest accumulates across a run: one entry per capture, each with the
-observable, the backend that took it, and the image's own hash and mtime. The
-verdict field is deliberately left `null` — nothing here writes a pass.
+The manifest holds one entry per label: re-capturing a label replaces its
+earlier entry, each carrying the observable, the backend that took it, and the
+image's own hash and mtime. The verdict field is deliberately left `null` —
+nothing here writes a pass.
 """
 
 from __future__ import annotations

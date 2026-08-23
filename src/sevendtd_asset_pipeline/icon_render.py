@@ -4,7 +4,7 @@ This is the second of the two icon lanes (the first is generated or drawn art;
 see docs/art-direction.md). It exists because an icon that *is* the item cannot
 drift from the item: regenerating the mesh regenerates the icon.
 
-Two mistakes are designed out here rather than documented:
+Three mistakes are designed out here rather than documented:
 
 * **`-nographics` produces a blank image, not an error.** Unity runs the editor
   method, `Camera.Render()` draws nothing, and the PNG is a uniform transparent

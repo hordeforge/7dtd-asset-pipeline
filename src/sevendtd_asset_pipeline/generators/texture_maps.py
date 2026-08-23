@@ -139,9 +139,10 @@ def normal_map(height: np.ndarray, slope_p99: float = DEFAULT_SLOPE_P99, flip_gr
 
     Gradients are wrapped central differences, so a tileable height field stays
     tileable. They are rescaled so the 99th-percentile slope is `slope_p99`.
-    Image rows grow downward while tangent +Y points up the texture, which is
-    why the Y component takes +dy: the surface rising toward the bottom of the
-    image tilts the normal toward -Y.
+    Image rows grow downward while tangent +Y points up the texture, and `dy`
+    is measured in row order: a surface rising toward the bottom of the image
+    has `dy > 0`, so taking `ny = +dy` tilts the normal back against the
+    ascent, toward +Y.
     """
     dx = (np.roll(height, -1, axis=1) - np.roll(height, 1, axis=1)) * 0.5
     dy = (np.roll(height, -1, axis=0) - np.roll(height, 1, axis=0)) * 0.5

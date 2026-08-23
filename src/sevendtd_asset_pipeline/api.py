@@ -11,8 +11,10 @@ configuration through each one. `Pipeline` is that knowledge, expressed once.
         pipeline.build()
         pipeline.validate()
 
-Every method returns a dataclass that serializes to JSON, and every failure
-raises `PipelineError` with one user-actionable message. `call()` dispatches
+Every method returns a JSON-serializable value — usually a dataclass with an
+`as_dict`, sometimes a `Path`, list, or mapping; `_as_json` normalizes them all
+— and every failure raises `PipelineError` with one user-actionable message.
+`call()` dispatches
 the same operations by name against the registry in `operations.py`, which is
 what `shamway call` and `shamway serve` use, so the Python API and the
 out-of-process API cannot drift apart.

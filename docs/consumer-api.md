@@ -163,8 +163,8 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `generate NAME [ARGS]` | no | Blender for `mesh` | **yes** (writes what you ask for) | run a packaged asset generator |
 | `prompt KIND --subject …` | no | no | no | render a house-style image prompt and its lane |
 | `docs [TOPIC]` | no | no | no | print packaged documentation |
-| `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts) |
-| `client where\|deploy\|launch\|log\|mute\|unmute\|capture` | no | no | **deploy/launch/capture** write outside the modlet | fresh-client acceptance plumbing |
+| `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance) |
+| `client where\|deploy\|launch\|log\|mute\|unmute\|capture\|disable-discord` | no | no | **deploy/launch/capture** write outside the modlet | fresh-client acceptance plumbing |
 | `schema` / `call NAME` / `serve` | no | no | per operation | the machine-readable surface |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |
 

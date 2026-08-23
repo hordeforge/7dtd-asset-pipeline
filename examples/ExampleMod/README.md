@@ -1,19 +1,19 @@
 # Example consumer
 
-This directory illustrates the files a mod owns after `7dtd-assets init`.
+This directory illustrates the files a mod owns after `shamway init`.
 The full Unity template is omitted here because the CLI creates it.
 
 ```bash
-7dtd-assets init /path/to/real/ExampleMod \
+shamway init /path/to/real/ExampleMod \
   --game-dir "/path/to/7 Days To Die"
 cd /path/to/real/ExampleMod
-7dtd-assets doctor
-7dtd-assets build --probe
+shamway doctor
+shamway build --probe
 ```
 
-`init` also writes `tools/7dtd-assets/AGENTS.md` here — the contract an agent
+`init` also writes `tools/shamway/AGENTS.md` here — the contract an agent
 working in this mod should follow. Point the mod's own `AGENTS.md`/`CLAUDE.md`
-at it. Orient at any time with `7dtd-assets status --json`; see
+at it. Orient at any time with `shamway status --json`; see
 [Consumer interfaces](../../docs/consumer-api.md).
 
 `init` also creates `assets-src/`, where editable sources and their provenance
@@ -30,7 +30,7 @@ enabling the sample XML references in `Config/`.
 |---|---|
 | `Config/blocks.xml` | a block `Model` bundle URI |
 | `Config/sounds.xml` | a `sounds.xml` `ClipName` bundle URI, which `validate` checks the same way |
-| `UIAtlases/ItemIconAtlas/` | where icons go — **not** the bundle; `7dtd-assets check-icons` covers them |
+| `UIAtlases/ItemIconAtlas/` | where icons go — **not** the bundle; `shamway check-icons` covers them |
 
 ```bash
 make -f Makefile.assets assets-validate   # bundle references + atlas icons

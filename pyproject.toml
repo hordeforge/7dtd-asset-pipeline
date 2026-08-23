@@ -31,7 +31,7 @@ mesh = ["trimesh>=4"]
 all = ["UnityPy>=1.20,<2", "pillow>=10", "numpy>=1.24", "trimesh>=4"]
 
 [project.scripts]
-7dtd-assets = "sevendtd_asset_pipeline.cli:main"
+shamway = "sevendtd_asset_pipeline.cli:main"
 
 [project.urls]
 Repository = "https://github.com/ywy50/7dtd-asset-pipeline"
@@ -46,7 +46,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 # templates/ is the Unity project init copies into a mod; docs/ is staged into
-# the package by setup.py so `7dtd-assets docs` works without a checkout.
+# the package by setup.py so `shamway docs` works without a checkout.
 sevendtd_asset_pipeline = ["templates/**/*", "docs/*.md"]
 
 [tool.pytest.ini_options]

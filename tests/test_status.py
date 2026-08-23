@@ -58,12 +58,12 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(status.as_dict(), json.loads(json.dumps(status.as_dict())))
 
     def test_scaffold_writes_a_consumer_agent_guide(self) -> None:
-        guide = self.root / "tools" / "7dtd-assets" / "AGENTS.md"
+        guide = self.root / "tools" / "shamway" / "AGENTS.md"
         self.assertTrue(guide.is_file())
         text = guide.read_text()
         self.assertIn("ExampleMod", text)
         self.assertIn("example.unity3d", text)
-        self.assertIn("7dtd-assets status --json", text)
+        self.assertIn("shamway status --json", text)
         # The guide carries JSON examples; rendering must not mangle their
         # braces or choke on them.
         self.assertIn('{"id":1,"op":"status"}', text)

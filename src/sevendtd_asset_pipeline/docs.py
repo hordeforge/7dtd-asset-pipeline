@@ -1,6 +1,6 @@
 """Serve this project's documentation from the installed package.
 
-An agent working in a mod repository has the `7dtd-assets` command and nothing
+An agent working in a mod repository has the `shamway` command and nothing
 else — no checkout of this repository, and often no network. The rules it needs
 (the art-direction contract, the sound lane's engine facts, the ownership split
 between the two repositories) would otherwise have to be copied into every mod,
@@ -8,8 +8,8 @@ which is exactly the duplication this pipeline exists to avoid.
 
 So the docs ship inside the package and are readable from anywhere:
 
-    7dtd-assets docs                  # what is available
-    7dtd-assets docs art-direction    # print one, to read or to pipe
+    shamway docs                  # what is available
+    shamway docs art-direction    # print one, to read or to pipe
 
 The mod keeps its own mod-specific documentation. This serves only what is
 general.
@@ -38,7 +38,7 @@ TOPICS: dict[str, tuple[str, str]] = {
     "bundle-generation": ("bundle-generation.md", "the complete build path"),
     "validation": ("validation.md", "each gate and its proof boundary"),
     "troubleshooting": ("troubleshooting.md", "failure messages and their root causes"),
-    "configuration": ("configuration.md", "every .7dtd-assets.toml key"),
+    "configuration": ("configuration.md", "every .shamway.toml key"),
     "architecture": ("architecture.md", "design, boundaries, and the trust model"),
     "research-provenance": ("research-provenance.md", "where each 7DTD-specific rule came from"),
     "release-checklist": ("release-checklist.md", "artifact and live acceptance"),

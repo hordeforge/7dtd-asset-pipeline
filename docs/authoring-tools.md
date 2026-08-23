@@ -8,8 +8,8 @@ Install them with `scripts/install-tools.sh --with-authoring`. That takes each
 tool from the distribution when it packages one, and falls back to the official
 checksum-verified build for Blender and the Khronos glTF validator, which
 several distributions omit or ship well behind upstream. Ask what is usable
-right now with `7dtd-assets capabilities --json`.
-`7dtd-assets generate` already ships working generators
+right now with `shamway capabilities --json`.
+`shamway generate` already ships working generators
 built on this stack — sound synthesis and audio conversion (standard library
 only), background cutout and icons (Pillow), texture maps (Pillow + NumPy), and
 meshes (Blender) — and the scaffolded Unity project ships `GeneratedAsset.cs`
@@ -27,9 +27,9 @@ or a generator script as source, apply transforms deliberately, and export a
 Unity-supported interchange format.
 
 `scripts/install-tools.sh --with-authoring` installs it, and
-`7dtd-assets generate mesh` is a
+`shamway generate mesh` is a
 working `--background --python` template to extend. Validate what it exports
-with `7dtd-assets check-mesh` before importing.
+with `shamway check-mesh` before importing.
 
 - Official scripting guide: <https://docs.blender.org/api/main/info_quickstart.html>
 - Background/module automation: <https://docs.blender.org/api/main/info_advanced_blender_as_bpy.html>
@@ -107,17 +107,17 @@ or script.
 
 Python's standard `wave` module is also effective for wholly procedural sound,
 and needs no third-party package at all:
-`7dtd-assets generate sound` builds
+`shamway generate sound` builds
 explosions, ticks, whooshes, hums, and cues from seeded noise and one-pole
 filters, and prints the matching `sounds.xml` entry. Gate the result with
-`7dtd-assets check-sound`, then always listen to it; deterministic does not
+`shamway check-sound`, then always listen to it; deterministic does not
 mean good.
 
 ## Unity and bundle diagnostics
 
 ### This pipeline's inspector
 
-`7dtd-assets inspect` is the required zero-dependency preflight. It owns the
+`shamway inspect` is the required zero-dependency preflight. It owns the
 revision and class-142 gates used during staging.
 
 ### UnityPy
@@ -173,6 +173,6 @@ or live-client gates.
 | hard-surface mesh | OpenSCAD or Blender Python | trimesh + glTF Validator | Unity import + bundle + in-game view |
 | organic/rigged mesh | Blender | glTF Validator + render turntable | bundle + animation/in-game view |
 | PBR maps | Material Maker or seeded Python | channel/range checks + montage | `.mat` keywords/import + in-game light sweep |
-| item icon | `7dtd-assets generate cutout`, `7dtd-assets render-icon`, Pillow/ImageMagick | `7dtd-assets check-icons` + downscaled montage | client atlas lookup + human readability |
+| item icon | `shamway generate cutout`, `shamway render-icon`, Pillow/ImageMagick | `shamway check-icons` + downscaled montage | client atlas lookup + human readability |
 | particle card | Pillow/NumPy/Blender | alpha-edge montage | particle material state + live VFX |
-| sound | `7dtd-assets generate sound`, FFmpeg | `7dtd-assets check-sound` | sound group lookup + listening at range |
+| sound | `shamway generate sound`, FFmpeg | `shamway check-sound` | sound group lookup + listening at range |

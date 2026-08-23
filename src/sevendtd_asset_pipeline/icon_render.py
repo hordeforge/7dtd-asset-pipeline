@@ -97,7 +97,7 @@ def render_icon(
 ) -> RenderResult:
     """Render `prefab` (a bundle stem or project path) into an atlas PNG."""
     if config.unity_editor is None:
-        raise PipelineError("UNITY_EDITOR is not configured; run '7dtd-assets doctor'")
+        raise PipelineError("UNITY_EDITOR is not configured; run 'shamway doctor'")
     if not config.unity_editor.is_file() or not os.access(config.unity_editor, os.X_OK):
         raise PipelineError(f"Unity editor is not executable: {config.unity_editor}")
     require_capability("pillow")

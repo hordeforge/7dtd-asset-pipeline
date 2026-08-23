@@ -23,7 +23,7 @@ clip on a 3D AudioSource is downmixed anyway.
 
 Check the result before importing it:
 
-    7dtd-assets check-sound art/audio/blast-near.wav
+    shamway check-sound art/audio/blast-near.wav
 
 and listen to it. Deterministic does not mean good.
 """
@@ -107,7 +107,7 @@ def remove_dc(samples: list[float], cutoff_hz: float = 12.0, rate: int = RATE) -
     it is not free: it moves the waveform off centre, so the normalizer spends
     headroom on it and the clip clicks when playback starts. Long low-frequency
     layers — a filtered random walk, a sub-bass sweep — reliably leave some
-    behind, which `7dtd-assets check-sound` reports as a DC offset.
+    behind, which `shamway check-sound` reports as a DC offset.
     """
     return highpass(samples, cutoff_hz, rate)
 
@@ -351,7 +351,7 @@ def describe(path: Path, samples: list[float], rate: int, seed: int) -> None:
     print(f"format:   1 ch, {rate} Hz, 16-bit PCM")
     print(f"peak:     {peak:.4f} ({20 * math.log10(peak) if peak else float('-inf'):.1f} dBFS)")
     print(f"rms:      {energy:.4f}")
-    print(f"next:     7dtd-assets check-sound {path}   # then listen to it")
+    print(f"next:     shamway check-sound {path}   # then listen to it")
 
 
 SOUNDS_XML = """<configs>
@@ -370,7 +370,7 @@ DISTANT_LINES = """
 NOISE_LINE = """
 			<Noise ID="{group}" range="{range}" volumeScale="1" heardBy="Enemy" />"""
 
-GUIDANCE = """# Paste into Config/sounds.xml, then: 7dtd-assets validate
+GUIDANCE = """# Paste into Config/sounds.xml, then: shamway validate
 #
 # DistantFadeStart defaults to -1, meaning never, so a DistantClip without it
 # is authored and then never played. Both elements are emitted above whenever

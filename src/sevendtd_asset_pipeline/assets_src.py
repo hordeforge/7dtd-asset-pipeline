@@ -3,7 +3,7 @@
 The bundle is a build output. Everything that produced it — a prompt, a seed, a
 Blender script, an ImageMagick command — is the actual source, and if it lives
 only in someone's shell history the asset cannot be regenerated, corrected, or
-defended. So `7dtd-assets init` creates a home for it with a README that says
+defended. So `shamway init` creates a home for it with a README that says
 what belongs in each lane and what a provenance row has to carry.
 
 This directory is deliberately *outside* the Unity bundle-membership folder.
@@ -32,7 +32,7 @@ at `Resources/{bundle_name}`, the PNGs under `UIAtlases/`, and nothing else.
 
 Keep it this way round on purpose. Concepts, rejected alternatives, masks,
 turntables and full-resolution sources live here; only a *selected* output is
-copied into `tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/`, so an
+copied into `tools/shamway/UnityProject/Assets/ModAssets/Bundle/`, so an
 unfinished asset cannot ship merely by sitting in the wrong folder.
 
 ## Layout
@@ -48,7 +48,7 @@ cannot be regenerated from what is written here is not finished.
 
 | Asset | Source | How it was made | Deployed as | Reviewed |
 |---|---|---|---|---|
-| _example_ | `icons/nuke-v4.png` | image generation, prompt below; cut out with `7dtd-assets generate cutout key --size 160` | `UIAtlases/ItemIconAtlas/myModNuke.png` | not yet |
+| _example_ | `icons/nuke-v4.png` | image generation, prompt below; cut out with `shamway generate cutout key --size 160` | `UIAtlases/ItemIconAtlas/myModNuke.png` | not yet |
 
 For generated art, record the model or tool, the **exact prompt**, the
 references used, which candidate was selected and why, and the licence basis.
@@ -65,28 +65,28 @@ Nothing here is a copy of the pipeline. Author with its generators and read its
 rules through the command itself — there is no checkout of it to point at:
 
 ```bash
-7dtd-assets generate --list              # the generators, and what each needs
-7dtd-assets docs art-direction           # the style contract and prompt patterns
-7dtd-assets docs audio                   # the sound lane
-7dtd-assets docs mod-repo-layout         # what belongs here vs in the pipeline
+shamway generate --list              # the generators, and what each needs
+shamway docs art-direction           # the style contract and prompt patterns
+shamway docs audio                   # the sound lane
+shamway docs mod-repo-layout         # what belongs here vs in the pipeline
 ```
 
 ```bash
-7dtd-assets generate sound blast audio/thing.wav --seed 7
-7dtd-assets generate cutout key icons/src.png ../UIAtlases/ItemIconAtlas/thing.png \
+shamway generate sound blast audio/thing.wav --seed 7
+shamway generate cutout key icons/src.png ../UIAtlases/ItemIconAtlas/thing.png \
     --size 160 --pad 0.9 --trim
-7dtd-assets generate mesh meshes/thing.glb --shape box --size 1 0.6 0.8
+shamway generate mesh meshes/thing.glb --shape box --size 1 0.6 0.8
 ```
 
 Then gate each lane, build, and validate — from the mod root:
 
 ```bash
-7dtd-assets capabilities --json          # what is installed, and what it unlocks
-7dtd-assets check-mesh assets-src/meshes/thing.glb
-7dtd-assets check-sound assets-src/audio/thing.wav
-7dtd-assets check-icons                  # every atlas PNG and CustomIcon key
-7dtd-assets render-icon myModThing       # photograph a prefab into an icon
-7dtd-assets build && 7dtd-assets validate
+shamway capabilities --json          # what is installed, and what it unlocks
+shamway check-mesh assets-src/meshes/thing.glb
+shamway check-sound assets-src/audio/thing.wav
+shamway check-icons                  # every atlas PNG and CustomIcon key
+shamway render-icon myModThing       # photograph a prefab into an icon
+shamway build && shamway validate
 ```
 
 Then a fresh client, and a human look or listen. Offline gates are necessary,

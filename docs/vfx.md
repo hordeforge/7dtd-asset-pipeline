@@ -9,11 +9,11 @@ Each of those has happened; each has a specific, cheap preventative below.
 ## Quick start
 
 ```bash
-7dtd-assets generate cutout luma assets-src/vfx/smoke-mask.png \
+shamway generate cutout luma assets-src/vfx/smoke-mask.png \
     assets-src/vfx/smoke-card.png --black-point 15
 # import the card, build the prefab with GeneratedAsset.ParticleMaterial(...)
-7dtd-assets build
-7dtd-assets inspect --deep Resources/mymod.unity3d    # did the systems survive?
+shamway build
+shamway inspect --deep Resources/mymod.unity3d    # did the systems survive?
 ```
 
 Everything below is detail.
@@ -46,7 +46,7 @@ you is whether a specific component survived, which is what
 `inspect --deep` is for:
 
 ```bash
-7dtd-assets inspect --deep Resources/mymod.unity3d
+shamway inspect --deep Resources/mymod.unity3d
 #   myModBlastVfx (GameObject) [7 objects: ParticleSystem=6, ParticleSystemRenderer=6, Transform=7]
 ```
 
@@ -74,7 +74,7 @@ by reading the built `.mat` rather than by trusting the assignment:
 
 ```bash
 grep -nE "_Mode:|_SrcBlend:|_DstBlend:|_ZWrite:|m_CustomRenderQueue" \
-  tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/**/*.mat
+  tools/shamway/UnityProject/Assets/ModAssets/Bundle/**/*.mat
 ```
 
 Additive is `_SrcBlend: 5` (SrcAlpha) with `_DstBlend: 1` (One); fade is `5`

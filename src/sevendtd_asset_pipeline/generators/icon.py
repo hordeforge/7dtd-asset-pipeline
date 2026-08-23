@@ -36,7 +36,7 @@ def require_imaging() -> None:
     if MISSING is not None:
         raise SystemExit(
             "ERROR: the icon lane needs Pillow ({}).\n"
-            "  Install it with: uv pip install 'sevendtd-asset-pipeline[authoring]'".format(MISSING)
+            "  Install it with: uv pip install '7dtd-asset-pipeline[authoring]'".format(MISSING)
         )
 
 

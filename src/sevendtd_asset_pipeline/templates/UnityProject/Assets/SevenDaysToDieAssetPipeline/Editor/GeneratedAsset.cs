@@ -43,7 +43,7 @@ namespace SevenDaysToDie.AssetPipeline
         ///
         /// The other lane is an authored mesh from Blender or OpenSCAD, which
         /// is the right choice for organic, rigged, or sculpted geometry. Check
-        /// those with `7dtd-assets check-mesh` before importing them.
+        /// those with `shamway check-mesh` before importing them.
         ///
         /// Sizes are metres. Unity's cube is 1 m at unit scale; its cylinder,
         /// sphere, and capsule are 2 m tall, so scale accordingly.

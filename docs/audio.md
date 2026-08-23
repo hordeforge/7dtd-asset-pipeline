@@ -10,17 +10,17 @@ can still be inaudible, and nothing offline will say so.
 Synthesize a clip, gate it, put it in the bundle, and wire it:
 
 ```bash
-7dtd-assets generate sound blast assets-src/audio/blast-near.wav --seed 7
-7dtd-assets check-sound assets-src/audio/blast-near.wav
+shamway generate sound blast assets-src/audio/blast-near.wav --seed 7
+shamway check-sound assets-src/audio/blast-near.wav
 cp assets-src/audio/blast-near.wav \
-   tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/Sounds/myModBlastNear.wav
-7dtd-assets build && 7dtd-assets validate
+   tools/shamway/UnityProject/Assets/ModAssets/Bundle/Sounds/myModBlastNear.wav
+shamway build && shamway validate
 ```
 
 Print the `Config/sounds.xml` entry to paste:
 
 ```bash
-7dtd-assets generate sound sounds-xml myModBlastNear \
+shamway generate sound sounds-xml myModBlastNear \
     --group myModBlast --mod MyMod --bundle mymod.unity3d
 ```
 
@@ -33,7 +33,7 @@ A `sounds.xml` `ClipName` may point at a mod-folder bundle URI, because
 `DataLoader.LoadAsset<AudioClip>` path that block models and item meshes use.
 The URI form and its four contractual pieces are in
 [game-integration.md](game-integration.md); the same stem, case, and uniqueness
-rules apply, and `7dtd-assets validate` checks a `ClipName` exactly as it
+rules apply, and `shamway validate` checks a `ClipName` exactly as it
 checks a `Model`, because it discovers every bundle URI under `Config/**/*.xml`
 without caring which file or property it came from.
 
@@ -73,7 +73,7 @@ rather than at the first play.
 
 **Do not add `<Noise>` reflexively.** It reports the sound to the AI director's
 heat map. A mod sound layered *on top of* a vanilla event that already reports
-its own noise calls the horde twice for one event. `7dtd-assets generate sound sounds-xml`
+its own noise calls the horde twice for one event. `shamway generate sound sounds-xml`
 therefore omits it unless you pass `--noise`.
 
 ## The three ways a loaded clip stays silent
@@ -128,12 +128,12 @@ distances, and they differ predictably:
 | Tail | rolling rumble | longer, more low-passed rumble |
 | Arrival | immediate | delayed by the real travel time of sound |
 
-`7dtd-assets generate sound blast` generates both from one seed, which is what keeps them
+`shamway generate sound blast` generates both from one seed, which is what keeps them
 recognisably the same event:
 
 ```bash
-7dtd-assets generate sound blast assets-src/audio/blast-near.wav --seed 7
-7dtd-assets generate sound blast assets-src/audio/blast-far.wav  --seed 7 --distant
+shamway generate sound blast assets-src/audio/blast-near.wav --seed 7
+shamway generate sound blast assets-src/audio/blast-far.wav  --seed 7 --distant
 ```
 
 If the mod plays the distant clip from code, delay it by `distance / 343`
@@ -142,7 +142,7 @@ even to a player who could not say why.
 
 ## The generator
 
-`7dtd-assets generate sound` is standard-library only, so the audio lane
+`shamway generate sound` is standard-library only, so the audio lane
 works on a bare host. Each subcommand is a **designed voice** rather than a
 generic oscillator, because "explosion" and "sine with noise" are not the same
 request:
@@ -169,8 +169,8 @@ sign of mod-made ambience there is.
 ## The offline gate
 
 ```bash
-7dtd-assets check-sound assets-src/audio/blast-near.wav
-7dtd-assets check-sound clip.wav --json      # for CI and agents
+shamway check-sound assets-src/audio/blast-near.wav
+shamway check-sound clip.wav --json      # for CI and agents
 ```
 
 It fails on the format mistakes a listener cannot fix afterwards: not mono, an
@@ -187,14 +187,14 @@ deliberate 2D UI or music cue.
 generators. Long low-frequency layers — a filtered random walk, a sub-bass
 sweep — reliably leave content below 20 Hz that no player can hear but that
 moves the waveform off centre, so the normalizer spends headroom on it and the
-clip clicks when playback starts. `7dtd-assets generate sound` high-passes every finished
+clip clicks when playback starts. `shamway generate sound` high-passes every finished
 mix at 12 Hz for this reason. This check caught exactly that defect in this
 repository's own generator.
 
 `check-sound` needs no configuration, so it runs outside a mod:
 
 ```bash
-7dtd-assets call check_sound --params '{"clip": "clip.wav"}'
+shamway call check_sound --params '{"clip": "clip.wav"}'
 ```
 
 ## Countdown ticks

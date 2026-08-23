@@ -33,10 +33,10 @@ from .validation import validate_bundle, validate_mod
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="7dtd-assets",
+        prog="shamway",
         description="Build and validate Unity asset bundles for 7 Days to Die mods.",
     )
-    parser.add_argument("--config", type=Path, help="path to .7dtd-assets.toml")
+    parser.add_argument("--config", type=Path, help="path to .shamway.toml")
     commands = parser.add_subparsers(dest="command", required=True)
 
     init = commands.add_parser("init", help="scaffold a pipeline into a modlet")
@@ -195,7 +195,7 @@ def run(args: argparse.Namespace) -> int:
         )
         for path in created:
             print(f"created {path}")
-        print("Next: set SEVEN_DAYS_TO_DIE_DIR and UNITY_EDITOR, then run 7dtd-assets doctor")
+        print("Next: set SEVEN_DAYS_TO_DIE_DIR and UNITY_EDITOR, then run shamway doctor")
         return 0
 
     if args.command == "inspect":
@@ -269,7 +269,7 @@ def run(args: argparse.Namespace) -> int:
                 print(f"{entry['name']:14} {entry['summary']}")
                 print(f"{'':14} needs: {needs}")
             print()
-            print("Run one with: 7dtd-assets generate NAME [ARGS...]  (--help works per generator)")
+            print("Run one with: shamway generate NAME [ARGS...]  (--help works per generator)")
             return 0
         return run_generator(args.generator, args.arguments)
     if args.command == "docs":
@@ -282,7 +282,7 @@ def run(args: argparse.Namespace) -> int:
                     mark = " " if entry["available"] == "true" else "!"
                     print(f"{mark} {entry['topic']:20} {entry['summary']}")
                 print()
-                print("Read one with: 7dtd-assets docs TOPIC")
+                print("Read one with: shamway docs TOPIC")
             return 0
         print(read_doc(args.topic), end="")
         return 0

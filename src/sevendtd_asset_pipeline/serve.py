@@ -1,6 +1,6 @@
 """Line-delimited JSON request/response over stdio.
 
-`7dtd-assets call` costs a process start per operation, which is fine
+`shamway call` costs a process start per operation, which is fine
 occasionally and wasteful in a loop. `serve` pays it once: a consumer writes
 one JSON object per line and reads one JSON object per line back, in order.
 

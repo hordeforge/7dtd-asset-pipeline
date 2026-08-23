@@ -5,8 +5,8 @@ purpose. A mod that uses this pipeline should never need a relative path into
 it — the mod owns its art, its prompts, and its seeds; this repository owns the
 generalized tooling, and the mod *calls* it:
 
-    7dtd-assets generate sound blast assets-src/audio/blast.wav --seed 7
-    7dtd-assets generate cutout key src.png UIAtlases/ItemIconAtlas/x.png --size 160
+    shamway generate sound blast assets-src/audio/blast.wav --seed 7
+    shamway generate cutout key src.png UIAtlases/ItemIconAtlas/x.png --size 160
 
 Each generator is an ordinary argparse program with a `main(argv)`, so it also
 runs directly (`python -m sevendtd_asset_pipeline.generators.sound --help`) and
@@ -81,7 +81,7 @@ def run(name: str, argv: list[str]) -> int:
 
     module = load(name)
     original = sys.argv[0]
-    sys.argv[0] = f"7dtd-assets generate {name}"
+    sys.argv[0] = f"shamway generate {name}"
     try:
         return int(module.main(argv) or 0)
     finally:

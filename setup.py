@@ -3,8 +3,8 @@
 The metadata lives in pyproject.toml; this file exists for one job. `docs/`
 stays at the repository root, because that is where a human and GitHub expect
 it and where every relative link between the pages resolves. But an agent
-working in a *mod* repository has only the installed `7dtd-assets` command —
-no checkout — and `7dtd-assets docs <topic>` has to work there, so the same
+working in a *mod* repository has only the installed `shamway` command —
+no checkout — and `shamway docs <topic>` has to work there, so the same
 files are copied into the package at build time.
 
 Copied, not symlinked: a symlink survives an editable install and nothing else.

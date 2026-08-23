@@ -67,7 +67,7 @@ has no bundle-load, incompatibility, wrong-name, shader, or particle errors.
 
 ### 4. The icon renderer has not been run in a real editor
 
-**Blocks:** any claim that `7dtd-assets render-icon` works. Its Python side is
+**Blocks:** any claim that `shamway render-icon` works. Its Python side is
 exercised — prefab resolution, the missing-editor and missing-Pillow errors,
 the coverage gate, and the atlas-cell check — but `IconRenderer.cs` itself has
 never been compiled or executed by Unity, and neither have the newer
@@ -80,8 +80,8 @@ C#.
 with a display (or under `xvfb-run -a`):
 
 ```bash
-7dtd-assets render-icon myModThing
-7dtd-assets check-icons
+shamway render-icon myModThing
+shamway check-icons
 ```
 
 **Confirms it worked:** a 160 x 160 RGBA PNG appears under
@@ -94,16 +94,16 @@ square means the render had no graphics device.
 These were open and are now closed, so the list above stays meaningful:
 
 - Blender installs from the official checksum-verified build, and
-  `7dtd-assets generate mesh` exports all three shapes with the pivot at the base.
+  `shamway generate mesh` exports all three shapes with the pivot at the base.
 - The Khronos glTF validator installs and catches a corrupt GLB.
 - UnityPy deep inspection reports 547 objects in the shipped Atomic Doomsday
   bundle, including `ParticleSystem=6` on the detonation VFX prefab.
 - The UnityFS reader parses real shipped game bundles, including a 650 MB one.
 - Every optional capability is installed and reported available:
-  `7dtd-assets capabilities --missing` prints nothing.
+  `shamway capabilities --missing` prints nothing.
 - `scripts/bootstrap` builds a working `.venv` through uv, and the suite also
   passes against a core-only install with no optional capabilities.
-- `7dtd-assets init` works from a real wheel install, and `doctor` passes every
+- `shamway init` works from a real wheel install, and `doctor` passes every
   check against the installed game and editor.
 - `build --probe` and a full `build` both run against the real Unity
   2022.3.62f2 editor (12 s and 6 s), producing a class-142 bundle at the

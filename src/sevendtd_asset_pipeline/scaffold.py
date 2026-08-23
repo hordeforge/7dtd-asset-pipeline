@@ -19,23 +19,23 @@ from .references import read_mod_name
 MAKEFILE_TARGETS = """.PHONY: assets assets-probe assets-validate assets-doctor assets-status assets-icons
 
 assets:
-	7dtd-assets build
+	shamway build
 
 assets-probe:
-	7dtd-assets build --probe
+	shamway build --probe
 
 assets-validate:
-	7dtd-assets validate
-	7dtd-assets check-icons
+	shamway validate
+	shamway check-icons
 
 assets-icons:
-	7dtd-assets check-icons
+	shamway check-icons
 
 assets-doctor:
-	7dtd-assets doctor
+	shamway doctor
 
 assets-status:
-	7dtd-assets status
+	shamway status
 """
 
 
@@ -55,7 +55,7 @@ def initialize(
     if not mod_root.is_dir():
         raise PipelineError(f"mod root does not exist: {mod_root}")
     config_path = mod_root / CONFIG_NAME
-    project = mod_root / "tools" / "7dtd-assets" / "UnityProject"
+    project = mod_root / "tools" / "shamway" / "UnityProject"
     makefile = mod_root / "Makefile.assets"
     existing = [path for path in (config_path, project, makefile) if path.exists()]
     if existing:
@@ -87,7 +87,7 @@ def initialize(
     makefile.write_text(MAKEFILE_TARGETS, encoding="utf-8")
     # The mod is where an agent actually works, so the rules travel with the
     # scaffold rather than living only in this repository.
-    guide = mod_root / "tools" / "7dtd-assets" / "AGENTS.md"
+    guide = mod_root / "tools" / "shamway" / "AGENTS.md"
     guide.write_text(render_agent_guide(mod_name, bundle_name), encoding="utf-8")
     # Editable sources and their provenance need a home outside the Unity
     # bundle folder, or they end up either unrecorded or accidentally shipped.

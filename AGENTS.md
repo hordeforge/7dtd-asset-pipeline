@@ -6,7 +6,7 @@ Read them before inspecting, planning, editing, or testing anything here.
 
 ## What this repository is
 
-`7dtd-assets` turns editable Unity assets into a validated
+`shamway` turns editable Unity assets into a validated
 `Resources/<name>.unity3d` inside a standalone modlet, and fails loudly on the
 silent-corruption modes a plain successful Unity build does not catch. It owns
 tooling only. It owns no art, no mod, and no game install.
@@ -35,7 +35,7 @@ no Unity, and no game install.
   and rejection. Never loosen a parser bound to make a real file work without
   first proving what that file actually contains.
 - Changes to bundle generation (`build.py`, `BundleBuilder.cs`) require
-  `make check test` plus a game-matched `7dtd-assets build --probe` when Unity
+  `make check test` plus a game-matched `shamway build --probe` when Unity
   is available on the host.
 - Changes to the editor-side C# (`GeneratedAsset.cs`, `IconRenderer.cs`) are not
   covered by the Python suite. State plainly whether an editor actually ran
@@ -47,13 +47,13 @@ no Unity, and no game install.
 - Keep the consumer scaffold standalone. A modlet built with this pipeline
   must never need a relative checkout of this repository, another mod, or a
   sibling project at build time. That is why the generators and the
-  documentation are packaged and reachable as `7dtd-assets generate` and
-  `7dtd-assets docs`: a mod calls them, never copies them. Anything general
+  documentation are packaged and reachable as `shamway generate` and
+  `shamway docs`: a mod calls them, never copies them. Anything general
   belongs here; anything mod-specific belongs in the mod. See
   [docs/mod-repo-layout.md](docs/mod-repo-layout.md).
 - Adding a generator means adding it to `generators.GENERATORS`; adding a doc
   page means adding it to `docs.TOPICS`. The tests fail when either drifts, and
-  both are published in `7dtd-assets schema`.
+  both are published in `shamway schema`.
 
 ## Gates you must not weaken
 
@@ -95,35 +95,35 @@ Full walkthrough: [docs/quickstart.md](docs/quickstart.md). The short form:
 ```bash
 scripts/install-tools.sh --with-unity-prereqs   # host packages
 scripts/bootstrap                               # the CLI
-7dtd-assets init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
-scripts/install-unity-editor.sh --project /path/to/MyMod/tools/7dtd-assets/UnityProject
-7dtd-assets doctor && 7dtd-assets build --probe
+shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+scripts/install-unity-editor.sh --project /path/to/MyMod/tools/shamway/UnityProject
+shamway doctor && shamway build --probe
 ```
 
 Then, per asset change:
 
 ```bash
-7dtd-assets build      # build, gate, stage bundle + tracked manifest
-7dtd-assets validate   # bundle and every recursive Config/**/*.xml reference
+shamway build      # build, gate, stage bundle + tracked manifest
+shamway validate   # bundle and every recursive Config/**/*.xml reference
 ```
 
 Machine-readable output for agents and CI:
 
 | Command | Contract |
 |---|---|
-| `7dtd-assets doctor --json` | array of `{status, name, detail}`; exit 1 if any `FAIL` |
-| `7dtd-assets inspect --json BUNDLE` | revision, archive format, class IDs, class-142 flag |
-| `7dtd-assets unity-release --json` | official editor URL, changeset, and MD5 for a revision |
-| `7dtd-assets refs` | one `source: uri` line per discovered XML reference |
-| `7dtd-assets status --json` | whole-mod state; never raises for a mod-state problem |
-| `7dtd-assets capabilities --json` | optional capabilities, what they unlock, install commands |
-| `7dtd-assets inspect --deep --json` | every serialized object and per-prefab components |
-| `7dtd-assets check-mesh --json` | authored-mesh extents and glTF conformance |
-| `7dtd-assets check-sound --json` | clip format, level, clipping, DC offset |
-| `7dtd-assets check-icons --json` | atlas cells and every `CustomIcon` key |
-| `7dtd-assets render-icon STEM` | render a prefab into its atlas cell (needs a display) |
-| `7dtd-assets generate --list` | the packaged asset generators, callable from any mod |
-| `7dtd-assets docs [TOPIC]` | this repository's documentation, served from the package |
+| `shamway doctor --json` | array of `{status, name, detail}`; exit 1 if any `FAIL` |
+| `shamway inspect --json BUNDLE` | revision, archive format, class IDs, class-142 flag |
+| `shamway unity-release --json` | official editor URL, changeset, and MD5 for a revision |
+| `shamway refs` | one `source: uri` line per discovered XML reference |
+| `shamway status --json` | whole-mod state; never raises for a mod-state problem |
+| `shamway capabilities --json` | optional capabilities, what they unlock, install commands |
+| `shamway inspect --deep --json` | every serialized object and per-prefab components |
+| `shamway check-mesh --json` | authored-mesh extents and glTF conformance |
+| `shamway check-sound --json` | clip format, level, clipping, DC offset |
+| `shamway check-icons --json` | atlas cells and every `CustomIcon` key |
+| `shamway render-icon STEM` | render a prefab into its atlas cell (needs a display) |
+| `shamway generate --list` | the packaged asset generators, callable from any mod |
+| `shamway docs [TOPIC]` | this repository's documentation, served from the package |
 
 Every command exits non-zero with a single `ERROR: ...` line on stderr when a
 gate fails. Prefer the exit code over parsing prose.
@@ -131,9 +131,9 @@ gate fails. Prefer the exit code over parsing prose.
 Do not hardcode the command surface. It is published:
 
 ```bash
-7dtd-assets schema                              # every operation, as JSON
-7dtd-assets call status                         # run one, JSON in and out
-7dtd-assets serve                               # many, one process, ~17x faster
+shamway schema                              # every operation, as JSON
+shamway call status                         # run one, JSON in and out
+shamway serve                               # many, one process, ~17x faster
 ```
 
 Each operation declares its `cost`, whether it `writes`, whether it
@@ -161,9 +161,9 @@ and never in a loop:
 
 - `scripts/install-unity-editor.sh` downloads several gigabytes and needs an
   interactive desktop for license activation.
-- `7dtd-assets build` starts a real Unity editor; a cold project import takes
+- `shamway build` starts a real Unity editor; a cold project import takes
   minutes.
-- `7dtd-assets build` (without `--probe`) is the only command that writes into
+- `shamway build` (without `--probe`) is the only command that writes into
   the modlet, and only after every offline gate passes. Use `--probe` for any
   environment question — it never stages anything.
 
@@ -183,7 +183,7 @@ generated and drawn 2D assets — read it before writing any generation prompt.
 particle lanes, including the runtime behaviours that make a correctly built
 asset silent or invisible.
 
-`7dtd-assets generate` ships working generators for the
+`shamway generate` ships working generators for the
 sound, audio-conversion, cutout, icon, texture, and mesh lanes, and the
 scaffolded Unity project ships `GeneratedAsset.cs` for asset-as-code prefabs,
 materials, imports, particles, and audio, plus `IconRenderer.cs`. Extend those
@@ -198,7 +198,7 @@ Never guess whether an optional tool is present, and never catch `ImportError`
 to find out. Ask the registry:
 
 ```bash
-7dtd-assets capabilities --json
+shamway capabilities --json
 ```
 
 ```python

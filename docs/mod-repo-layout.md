@@ -16,16 +16,16 @@ uv tool install git+https://github.com/ywy50/7dtd-asset-pipeline
 Scaffold it into a mod that already has a `ModInfo.xml`:
 
 ```bash
-7dtd-assets init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 ```
 
 From then on, everything is a command inside the mod:
 
 ```bash
 cd /path/to/MyMod
-7dtd-assets status --json          # where this mod stands
-7dtd-assets generate --list        # the asset generators, ready to call
-7dtd-assets docs                   # this repository's documentation
+shamway status --json          # where this mod stands
+shamway generate --list        # the asset generators, ready to call
+shamway docs                   # this repository's documentation
 ```
 
 Everything below is detail.
@@ -34,10 +34,10 @@ Everything below is detail.
 
 | This repository owns | Your mod owns |
 |---|---|
-| the `7dtd-assets` command and every gate | the `ModInfo.xml`, `Config/`, and gameplay XML |
+| the `shamway` command and every gate | the `ModInfo.xml`, `Config/`, and gameplay XML |
 | the Unity project template and `BundleBuilder.cs` | the assets in `Assets/ModAssets/Bundle/` and their `.meta` files |
 | `GeneratedAsset.cs` and `IconRenderer.cs` | the editor scripts that *use* them to build this mod's prefabs |
-| the generators (`7dtd-assets generate …`) | the prompts, seeds, commands, and source art in `assets-src/` |
+| the generators (`shamway generate …`) | the prompts, seeds, commands, and source art in `assets-src/` |
 | the art-direction, audio, and VFX contracts | this mod's own art direction, if it narrows them |
 | the engine facts, and the gates that encode them | the acceptance evidence for this mod's bundle |
 
@@ -55,12 +55,12 @@ MyMod/
 ├── Resources/mymod.unity3d              # BUILD OUTPUT — commit it, never edit it
 ├── UIAtlases/ItemIconAtlas/*.png        # yours: 160 x 160 atlas cells
 │
-├── .7dtd-assets.toml                    # written by init; commit it
+├── .shamway.toml                    # written by init; commit it
 ├── Makefile.assets                      # written by init; make -f Makefile.assets assets
 ├── assets-src/                          # written by init; YOURS from then on
 │   ├── README.md                        #   the provenance contract
 │   └── icons/ textures/ meshes/ audio/ vfx/
-└── tools/7dtd-assets/
+└── tools/shamway/
     ├── AGENTS.md                        # written by init: the agent contract
     ├── manifests/                       # BUILD OUTPUT — commit alongside the bundle
     └── UnityProject/                    # written by init; the mod owns it after that
@@ -88,22 +88,22 @@ Three of those need a word:
 
 ### Committing, and what never ships
 
-Commit: `.7dtd-assets.toml`, `Makefile.assets`, `assets-src/`, the Unity
+Commit: `.shamway.toml`, `Makefile.assets`, `assets-src/`, the Unity
 project (including every `.meta`), the built bundle, and its tracked manifest.
 
-Do not ship in the released modlet: `.7dtd-assets.toml`, `tools/`,
-`assets-src/`, `.asset-pipeline/`, or the Unity project. The deployable modlet
+Do not ship in the released modlet: `.shamway.toml`, `tools/`,
+`assets-src/`, `.shamway/`, or the Unity project. The deployable modlet
 is `ModInfo.xml`, `Config/`, `Localization.csv`, `Resources/`, and `UIAtlases/`
 — see [game-integration.md](game-integration.md).
 
 Add to the mod's `.gitignore`:
 
 ```gitignore
-.asset-pipeline/
-tools/7dtd-assets/UnityProject/Library/
-tools/7dtd-assets/UnityProject/Temp/
-tools/7dtd-assets/UnityProject/Logs/
-tools/7dtd-assets/UnityProject/UserSettings/
+.shamway/
+tools/shamway/UnityProject/Library/
+tools/shamway/UnityProject/Temp/
+tools/shamway/UnityProject/Logs/
+tools/shamway/UnityProject/UserSettings/
 ```
 
 ## Calling the tooling from the mod
@@ -111,24 +111,24 @@ tools/7dtd-assets/UnityProject/UserSettings/
 Everything generalized is reachable through the one command, from anywhere:
 
 ```bash
-7dtd-assets generate --list                     # what generators exist
-7dtd-assets generate sound --help               # a generator's own options
-7dtd-assets generate sound blast assets-src/audio/blast.wav --seed 7
-7dtd-assets generate cutout key assets-src/icons/src.png \
+shamway generate --list                     # what generators exist
+shamway generate sound --help               # a generator's own options
+shamway generate sound blast assets-src/audio/blast.wav --seed 7
+shamway generate cutout key assets-src/icons/src.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
-7dtd-assets generate texture-maps assets-src/textures/paint.png \
-    --out-dir tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/Textures \
+shamway generate texture-maps assets-src/textures/paint.png \
+    --out-dir tools/shamway/UnityProject/Assets/ModAssets/Bundle/Textures \
     --stem myModPaint
-7dtd-assets generate mesh assets-src/meshes/crate.glb --shape box --size 1 0.6 0.8
+shamway generate mesh assets-src/meshes/crate.glb --shape box --size 1 0.6 0.8
 ```
 
 The generators live inside the installed package, so this works with no
 checkout of this repository and no relative paths. The documentation does too:
 
 ```bash
-7dtd-assets docs                    # the topics
-7dtd-assets docs art-direction      # the style contract, in full
-7dtd-assets docs audio              # the sound lane
+shamway docs                    # the topics
+shamway docs art-direction      # the style contract, in full
+shamway docs audio              # the sound lane
 ```
 
 That is the answer to "where do I read the rules" for an agent working in a mod
@@ -136,24 +136,24 @@ repository: it has the command, so it has the rules.
 
 ## Pointing an agent at it
 
-`init` writes `tools/7dtd-assets/AGENTS.md` into the mod — the contract for
+`init` writes `tools/shamway/AGENTS.md` into the mod — the contract for
 asset work *in that mod*, naming its bundle, its commands, and the rules whose
 violation is silent. Point the mod's own instructions at it, rather than
 copying its content:
 
 ```markdown
-For asset-bundle work, follow @tools/7dtd-assets/AGENTS.md.
-Generators and full documentation: `7dtd-assets generate --list`, `7dtd-assets docs`.
+For asset-bundle work, follow @tools/shamway/AGENTS.md.
+Generators and full documentation: `shamway generate --list`, `shamway docs`.
 ```
 
 An agent that starts from those two lines can discover the whole surface
 without being told any of it in advance:
 
 ```bash
-7dtd-assets status --json           # where this mod stands; never raises
-7dtd-assets schema                  # every operation, its cost, whether it writes
-7dtd-assets capabilities --json     # which optional tools work, and how to install them
-7dtd-assets docs                    # every rule this pipeline knows
+shamway status --json           # where this mod stands; never raises
+shamway schema                  # every operation, its cost, whether it writes
+shamway capabilities --json     # which optional tools work, and how to install them
+shamway docs                    # every rule this pipeline knows
 ```
 
 ## When a mod outgrows a generator
@@ -172,7 +172,7 @@ it. The dividing line does not move just because the code was written in a mod.
 ## Multiple mods on one machine
 
 Install the pipeline once; scaffold it into each mod. Each mod carries its own
-`.7dtd-assets.toml`, its own Unity project, its own bundle, and its own
+`.shamway.toml`, its own Unity project, its own bundle, and its own
 `assets-src/`. The command resolves the configuration upward from the working
 directory, so `cd`-ing into a mod is all the context switching there is.
 

@@ -24,7 +24,7 @@ namespace SevenDaysToDie.AssetPipeline
     /// <c>-nographics</c>. With that flag Unity executes this method happily,
     /// <c>Camera.Render()</c> draws nothing, and the output is a uniform
     /// transparent square that reads as a framing bug rather than a missing
-    /// device. <c>7dtd-assets render-icon</c> launches it correctly.</para>
+    /// device. <c>shamway render-icon</c> launches it correctly.</para>
     /// </summary>
     public static class IconRenderer
     {
@@ -56,7 +56,7 @@ namespace SevenDaysToDie.AssetPipeline
             }
             catch (Exception error)
             {
-                Debug.LogError("[7dtd-assets] icon render failed: " + error);
+                Debug.LogError("[shamway] icon render failed: " + error);
                 exitCode = 2;
             }
             EditorApplication.Exit(exitCode);
@@ -137,7 +137,7 @@ namespace SevenDaysToDie.AssetPipeline
                 string folder = Path.GetDirectoryName(Path.GetFullPath(outputPath));
                 if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
                 File.WriteAllBytes(outputPath, readback.EncodeToPNG());
-                Debug.Log("[7dtd-assets] rendered " + prefabPath + " -> " + outputPath
+                Debug.Log("[shamway] rendered " + prefabPath + " -> " + outputPath
                     + " (" + pixels + " px)");
             }
             finally

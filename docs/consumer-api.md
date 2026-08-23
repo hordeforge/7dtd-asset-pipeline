@@ -13,10 +13,10 @@ behaviour from what they run.
 | You are | Use |
 |---|---|
 | writing Python | `Pipeline` — one object, typed results |
-| writing a shell script or CI job | `7dtd-assets <command>` with `--json` |
-| writing another language, or a tool | `7dtd-assets call NAME --params '{...}'` |
-| making many calls, or building a wrapper | `7dtd-assets serve` |
-| discovering what exists, from anything | `7dtd-assets schema` |
+| writing a shell script or CI job | `shamway <command>` with `--json` |
+| writing another language, or a tool | `shamway call NAME --params '{...}'` |
+| making many calls, or building a wrapper | `shamway serve` |
+| discovering what exists, from anything | `shamway schema` |
 
 ### Why not a server
 
@@ -31,7 +31,7 @@ whatever protocol they actually need. That choice stays with the consumer.
 ## 0. The machine-readable contract
 
 ```bash
-7dtd-assets schema            # the full operation manifest, as JSON
+shamway schema            # the full operation manifest, as JSON
 ```
 
 Each operation publishes its name, summary, JSON Schema parameters, what it
@@ -47,15 +47,15 @@ returns, and three fields a caller needs before running anything:
 Discover the surface without parsing help text or prose:
 
 ```bash
-7dtd-assets schema | jq -r '.operations[] | select(.writes | not) | .name'
+shamway schema | jq -r '.operations[] | select(.writes | not) | .name'
 ```
 
 ## 1. `call` — one operation, JSON in and out
 
 ```bash
-7dtd-assets call status
-7dtd-assets call check_mesh --params '{"mesh":"crate.glb","max_extent":4}'
-7dtd-assets call build --params '{"probe":true}'
+shamway call status
+shamway call check_mesh --params '{"mesh":"crate.glb","max_extent":4}'
+shamway call build --params '{"probe":true}'
 ```
 
 Prints the result as JSON on success; on failure prints `ERROR: ...` to stderr
@@ -91,7 +91,7 @@ Two safety properties worth relying on:
 import json, subprocess
 
 server = subprocess.Popen(
-    ["7dtd-assets", "serve"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    ["shamway", "serve"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
 )
 
 def call(op, **params):
@@ -109,15 +109,15 @@ print(call("status")["valid"])
 
 ## 1. What `init` puts in your mod
 
-`7dtd-assets init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"` writes:
+`shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"` writes:
 
 ```text
 MyMod/
-├── .7dtd-assets.toml                   # configuration; commit it
+├── .shamway.toml                   # configuration; commit it
 ├── Makefile.assets                     # make -f Makefile.assets assets
 ├── assets-src/                         # editable sources + provenance; never ships
 │   └── README.md                       # what each lane holds, what a row must record
-└── tools/7dtd-assets/
+└── tools/shamway/
     ├── AGENTS.md                       # the agent contract, in your repo
     ├── manifests/                      # tracked build membership
     └── UnityProject/                   # the Unity project your mod owns
@@ -126,13 +126,13 @@ MyMod/
 Nothing here points back at a checkout of this repository, so the mod stays a
 standalone repo. `init` refuses to overwrite any of those files.
 
-`tools/7dtd-assets/AGENTS.md` is the interface for coding agents: it names the
+`tools/shamway/AGENTS.md` is the interface for coding agents: it names the
 mod's bundle, the commands and their costs, the rules that cause silent
 breakage when ignored, and the URI form. Point your repository's own
 `AGENTS.md`/`CLAUDE.md` at it:
 
 ```markdown
-For asset-bundle work, follow @tools/7dtd-assets/AGENTS.md.
+For asset-bundle work, follow @tools/shamway/AGENTS.md.
 ```
 
 ## 2. The CLI contract
@@ -205,8 +205,8 @@ errors raised by the commands that need one all read from it.
 [
   {"name": "UnityPy", "kind": "module", "available": true, "version": "1.25.3",
    "path": null, "purpose": "list every serialized object and per-prefab component…",
-   "unlocks": ["7dtd-assets inspect --deep"],
-   "install": "uv pip install 'sevendtd-asset-pipeline[inspect]'"}
+   "unlocks": ["shamway inspect --deep"],
+   "install": "uv pip install '7dtd-asset-pipeline[inspect]'"}
 ]
 ```
 
@@ -215,7 +215,7 @@ versions. Every command needing a capability fails with a message naming the
 capability, what it unlocks, and its install command — never a traceback:
 
 ```text
-ERROR: 7dtd-assets inspect --deep needs the optional capability 'UnityPy'
+ERROR: shamway inspect --deep needs the optional capability 'UnityPy'
 (list every serialized object …). Install it with: uv pip install '…[inspect]'
 ```
 
@@ -225,7 +225,7 @@ single call answers both "what is the mod's state" and "what can I run".
 Install everything at once:
 
 ```bash
-uv pip install 'sevendtd-asset-pipeline[all]'   # UnityPy, Pillow, NumPy, trimesh
+uv pip install '7dtd-asset-pipeline[all]'   # UnityPy, Pillow, NumPy, trimesh
 scripts/install-tools.sh --with-authoring    # Blender, OpenSCAD, glTF validator, …
 ```
 
@@ -274,13 +274,13 @@ These two are argv-passthrough commands rather than JSON operations, and they
 exist so a consuming mod needs nothing from this repository's filesystem:
 
 ```bash
-7dtd-assets generate --list                 # sound, audio, cutout, icon, texture-maps, mesh
-7dtd-assets generate sound --help           # each generator's own options
-7dtd-assets docs                            # the topics
-7dtd-assets docs art-direction              # one page, in full
+shamway generate --list                 # sound, audio, cutout, icon, texture-maps, mesh
+shamway generate sound --help           # each generator's own options
+shamway docs                            # the topics
+shamway docs art-direction              # one page, in full
 ```
 
-Both are published in `7dtd-assets schema` under `generators` and
+Both are published in `shamway schema` under `generators` and
 `documentation`, so a consumer discovers them from the same document as the
 operations. A generator writes exactly the output path it is given; none of
 them touches the modlet on its own.
@@ -302,7 +302,7 @@ piece. Only names re-exported from the package root are supported.
 ```python
 from sevendtd_asset_pipeline import Pipeline
 
-pipeline = Pipeline.discover()            # resolve .7dtd-assets.toml upward
+pipeline = Pipeline.discover()            # resolve .shamway.toml upward
 pipeline, created = Pipeline.scaffold(    # or create one in an existing modlet
     "/path/to/MyMod", game_dir="/path/to/7 Days To Die"
 )
@@ -343,7 +343,7 @@ from sevendtd_asset_pipeline import (
     load_config, run_build, validate_mod,
 )
 
-config = load_config()               # finds .7dtd-assets.toml upward from cwd
+config = load_config()               # finds .shamway.toml upward from cwd
 status = collect_status(config)      # never raises for a mod-state problem
 if not status.valid:
     for problem in status.problems:
@@ -363,7 +363,7 @@ if has_capability("UnityPy"):
 
 | Name | Use |
 |---|---|
-| `load_config(path=None)` | resolve `.7dtd-assets.toml` into a `PipelineConfig` |
+| `load_config(path=None)` | resolve `.shamway.toml` into a `PipelineConfig` |
 | `collect_status(config)` | `Status`; the non-raising orientation call |
 | `run_doctor(config)` / `failed(checks)` | `list[Check]` and its verdict |
 | `run_build(config, probe=False)` | build, gate, stage; returns the bundle path |
@@ -389,8 +389,8 @@ on any hosted runner as a pull-request gate:
 
 ```yaml
 - run: uv tool install 7dtd-asset-pipeline
-- run: 7dtd-assets status --json
-- run: 7dtd-assets validate
+- run: shamway status --json
+- run: shamway validate
 ```
 
 `status`/`validate` catch the review-time failures — a bundle committed without

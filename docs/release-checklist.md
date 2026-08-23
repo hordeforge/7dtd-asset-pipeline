@@ -14,14 +14,14 @@
 
 ## Build and offline gates
 
-- [ ] `7dtd-assets doctor` has no relevant warnings.
-- [ ] `7dtd-assets build --probe` passes on the authoring host.
-- [ ] `7dtd-assets build` passes and stages bundle plus manifest.
-- [ ] `7dtd-assets validate` passes every recursive XML reference.
-- [ ] `7dtd-assets check-icons` passes, and every external `CustomIcon` key is deliberate.
-- [ ] `7dtd-assets check-sound` passes for every shipped clip.
-- [ ] `7dtd-assets check-mesh` passes for every authored mesh.
-- [ ] `7dtd-assets inspect --json` records correct revision and class 142.
+- [ ] `shamway doctor` has no relevant warnings.
+- [ ] `shamway build --probe` passes on the authoring host.
+- [ ] `shamway build` passes and stages bundle plus manifest.
+- [ ] `shamway validate` passes every recursive XML reference.
+- [ ] `shamway check-icons` passes, and every external `CustomIcon` key is deliberate.
+- [ ] `shamway check-sound` passes for every shipped clip.
+- [ ] `shamway check-mesh` passes for every authored mesh.
+- [ ] `shamway inspect --json` records correct revision and class 142.
 - [ ] Unity log contains no disabled-module, shader, particle, compiler, or serialization error.
 - [ ] A second unchanged build is byte-identical, or nondeterminism is explained.
 - [ ] Package contains `Resources/<bundle>.unity3d` and excludes authoring files.

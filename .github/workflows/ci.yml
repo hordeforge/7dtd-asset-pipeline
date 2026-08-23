@@ -22,8 +22,8 @@ jobs:
       # Exercise the installed console script, not only the source tree, so a
       # broken entry point or missing package data fails here rather than in a
       # consumer's checkout.
-      - run: 7dtd-assets --help
-      - run: 7dtd-assets schema
+      - run: shamway --help
+      - run: shamway schema
       - run: make check test
 
   capabilities:
@@ -35,8 +35,8 @@ jobs:
         with:
           enable-cache: true
       - run: ./scripts/bootstrap
-      - run: .venv/bin/7dtd-assets capabilities --json
-      - run: .venv/bin/7dtd-assets capabilities --missing
+      - run: .venv/bin/shamway capabilities --json
+      - run: .venv/bin/shamway capabilities --missing
       - run: make check test
 
   scaffold:
@@ -52,8 +52,8 @@ jobs:
       - run: |
           mkdir -p /tmp/MyMod
           printf '<xml><Name value="MyMod" /></xml>\n' > /tmp/MyMod/ModInfo.xml
-          7dtd-assets init /tmp/MyMod --unity-version 2022.3.62f2
-          test -f /tmp/MyMod/tools/7dtd-assets/AGENTS.md
-          cd /tmp/MyMod && 7dtd-assets status --json || true
-          cd /tmp/MyMod && 7dtd-assets refs
-          cd /tmp/MyMod && 7dtd-assets call capabilities > /dev/null
+          shamway init /tmp/MyMod --unity-version 2022.3.62f2
+          test -f /tmp/MyMod/tools/shamway/AGENTS.md
+          cd /tmp/MyMod && shamway status --json || true
+          cd /tmp/MyMod && shamway refs
+          cd /tmp/MyMod && shamway call capabilities > /dev/null

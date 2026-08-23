@@ -23,9 +23,9 @@ alpha and RGB becomes white, so the particle system's own colour-over-lifetime
 tints it. Raising the black point removes the faint halo a generator leaves in
 "empty" space without hardening the puff edges.
 
-Needs Pillow: uv pip install 'sevendtd-asset-pipeline[authoring]'
+Needs Pillow: uv pip install '7dtd-asset-pipeline[authoring]'
 
-Check the result with `7dtd-assets check-icons` (for an atlas cell) and look at
+Check the result with `shamway check-icons` (for an atlas cell) and look at
 it against both a light and a dark background — a fringe is invisible on one.
 """
 
@@ -49,7 +49,7 @@ def require_imaging() -> None:
     if MISSING is not None:
         raise SystemExit(
             "ERROR: the cutout lane needs Pillow ({}).\n"
-            "  Install it with: uv pip install 'sevendtd-asset-pipeline[authoring]'".format(MISSING)
+            "  Install it with: uv pip install '7dtd-asset-pipeline[authoring]'".format(MISSING)
         )
 
 

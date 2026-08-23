@@ -60,7 +60,7 @@ that name rather than declaring anything.
 
 The filename stem is the `CustomIcon` key. Keep icon source and provenance
 outside the deployable path and commit the final PNG. A bundle rebuild is
-unnecessary for icon-only changes, and `7dtd-assets validate` does not cover
+unnecessary for icon-only changes, and `shamway validate` does not cover
 icons because they are not bundle members.
 
 `CustomIconTint` multiplies the icon's colour. If the PNG already carries an
@@ -72,7 +72,7 @@ design silently recolours the new art.
 Audio clips and AudioSource prefabs can live in the bundle. A `sounds.xml`
 entry points `ClipName` at a mod-folder bundle URI, because
 `Audio.Manager.LoadAudio` resolves it through the same
-`DataLoader.LoadAsset<AudioClip>` path as meshes — so `7dtd-assets validate`
+`DataLoader.LoadAsset<AudioClip>` path as meshes — so `shamway validate`
 checks a `ClipName` exactly as it checks a `Model`:
 
 ```xml
@@ -89,7 +89,7 @@ checks a `ClipName` exactly as it checks a `Model`:
 ```
 
 Generate that block with
-`7dtd-assets generate sound sounds-xml <stem>`.
+`shamway generate sound sounds-xml <stem>`.
 
 A correctly loaded clip can still be inaudible: `LoadAudio` plays nothing past
 the AudioSource prefab's `maxDistance`, and `DistantFadeStart` defaults to `-1`
@@ -179,7 +179,7 @@ prefixed by the mod id. It is not an asset this pipeline builds, but every
 custom item, block, and control needs a string there, and a missing one shows
 in game as the raw key.
 
-Do not deploy `.7dtd-assets.toml`, `tools/`, `assets-src/`, editable sources,
+Do not deploy `.shamway.toml`, `tools/`, `assets-src/`, editable sources,
 Unity project state, manifests, build logs, scripts, or documentation unless
 the mod's release policy explicitly includes authoring material. Zip so that
 extracting into `Mods/` yields `Mods/MyMod/ModInfo.xml` immediately — no nested

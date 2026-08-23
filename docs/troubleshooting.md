@@ -5,8 +5,8 @@
 Run:
 
 ```bash
-7dtd-assets inspect Resources/mybundle.unity3d
-7dtd-assets check-log .asset-pipeline/build/bundle/unity-build.log
+shamway inspect Resources/mybundle.unity3d
+shamway check-log .shamway/build/bundle/unity-build.log
 ```
 
 If class 142 is absent, ensure `Packages/manifest.json` contains
@@ -33,7 +33,7 @@ output mtime and SHA-256 before drawing conclusions.
 ## “Model has a wrong name” or a silent fallback mesh
 
 The requested file-name stem and loaded object name differ by spelling or
-case, or two assets share a stem. Run `7dtd-assets validate`, inspect the
+case, or two assets share a stem. Run `shamway validate`, inspect the
 tracked manifest, and rename the root prefab/object and source file together.
 
 ## Bundle loads but prefab/component is empty or missing
@@ -79,12 +79,12 @@ behaviours can still silence it, and all three pass every offline gate:
 - an unknown sound-group name does not error; it simply never plays.
 
 See [audio.md](audio.md). Check the clip itself first with
-`7dtd-assets check-sound`, which rejects silence, near-silence, clipping, and
+`shamway check-sound`, which rejects silence, near-silence, clipping, and
 DC offset.
 
 ## A rendered icon is a uniform transparent square
 
-The render ran without a graphics device. `7dtd-assets render-icon` never
+The render ran without a graphics device. `shamway render-icon` never
 passes `-nographics` for this reason — with that flag Unity executes the editor
 method happily, `Camera.Render()` draws nothing, and the output looks like a
 framing bug rather than a missing device. On a headless host, run the command
@@ -97,10 +97,10 @@ renderers, or the camera yaw may be photographing an empty side of it.
 ## An icon has a coloured halo, or its whole cell is opaque
 
 The background was removed with a hard threshold, or not at all. Use
-`7dtd-assets generate cutout key`, which keeps partial alpha through the
+`shamway generate cutout key`, which keeps partial alpha through the
 transition band and de-spills the residual key tint, and inspect the result
 against **both** a light and a dark background — a fringe is invisible against
-one of them. `7dtd-assets check-icons` fails a cell whose alpha is entirely
+one of them. `shamway check-icons` fails a cell whose alpha is entirely
 opaque, because that means the cutout never happened.
 
 ## A property you deleted is still applied
@@ -125,7 +125,7 @@ Use absolute machine-local environment variables:
 ```bash
 export SEVEN_DAYS_TO_DIE_DIR="/path/containing/Data/Config/items.xml"
 export UNITY_EDITOR="/path/ending/Editor/Unity"
-7dtd-assets doctor
+shamway doctor
 ```
 
 Do not commit these paths.

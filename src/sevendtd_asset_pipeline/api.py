@@ -6,7 +6,7 @@ configuration through each one. `Pipeline` is that knowledge, expressed once.
 
     from sevendtd_asset_pipeline import Pipeline
 
-    pipeline = Pipeline.discover()          # finds .7dtd-assets.toml upward
+    pipeline = Pipeline.discover()          # finds .shamway.toml upward
     if not pipeline.status().valid:
         pipeline.build()
         pipeline.validate()
@@ -14,7 +14,7 @@ configuration through each one. `Pipeline` is that knowledge, expressed once.
 Every method returns a dataclass that serializes to JSON, and every failure
 raises `PipelineError` with one user-actionable message. `call()` dispatches
 the same operations by name against the registry in `operations.py`, which is
-what `7dtd-assets call` and `7dtd-assets serve` use, so the Python API and the
+what `shamway call` and `shamway serve` use, so the Python API and the
 out-of-process API cannot drift apart.
 """
 
@@ -44,7 +44,7 @@ from .validation import ValidationReport, validate_bundle, validate_mod
 
 
 class Pipeline:
-    """A mod's asset pipeline, bound to one `.7dtd-assets.toml`."""
+    """A mod's asset pipeline, bound to one `.shamway.toml`."""
 
     def __init__(self, config: PipelineConfig) -> None:
         self.config = config
@@ -175,7 +175,7 @@ class Pipeline:
     def call(self, name: str, params: dict[str, Any] | None = None) -> Any:
         """Run a registered operation by name with a JSON-shaped params dict.
 
-        This is what `7dtd-assets call` and `7dtd-assets serve` dispatch through,
+        This is what `shamway call` and `shamway serve` dispatch through,
         so an out-of-process consumer reaches exactly the methods above.
         """
         operation = get_operation(name)
@@ -236,7 +236,7 @@ def call_json(pipeline: Pipeline | None, name: str, params: dict[str, Any] | Non
     if operation.needs_config and pipeline is None:
         raise PipelineError(
             f"operation {name!r} needs a mod configuration; run it inside a modlet "
-            "containing .7dtd-assets.toml, or pass a config path"
+            "containing .shamway.toml, or pass a config path"
         )
     if pipeline is None:
         return _as_json(_STATELESS[name](_validated(operation, params)))

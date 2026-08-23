@@ -5,7 +5,7 @@ optional. An agent must be able to ask *programmatically* which of them are
 usable right now, what each one enables, and the exact command to install a
 missing one — not scrape prose out of a diagnostic report.
 
-This registry is the single source of truth. `7dtd-assets capabilities --json`,
+This registry is the single source of truth. `shamway capabilities --json`,
 the `capabilities` block in `status --json`, the `doctor` capability rows, and
 the errors raised by the commands that need a capability all read from it, so
 they cannot disagree.
@@ -30,7 +30,7 @@ class Capability:
     kind: str
     """Either "command" (an executable on PATH) or "module" (an importable)."""
     unlocks: tuple[str, ...]
-    """The `7dtd-assets` commands or generator scripts this makes usable."""
+    """The `shamway` commands or generator scripts this makes usable."""
     purpose: str
     install: str
     """The exact command that installs it."""
@@ -59,23 +59,23 @@ REGISTRY: tuple[_Spec, ...] = (
         name="UnityPy",
         kind="module",
         probe="UnityPy",
-        unlocks=("7dtd-assets inspect --deep",),
+        unlocks=("shamway inspect --deep",),
         purpose="list every serialized object and per-prefab component in a built bundle",
-        install="uv pip install 'sevendtd-asset-pipeline[inspect]'",
+        install="uv pip install '7dtd-asset-pipeline[inspect]'",
     ),
     _Spec(
         name="trimesh",
         kind="module",
         probe="trimesh",
-        unlocks=("7dtd-assets check-mesh",),
+        unlocks=("shamway check-mesh",),
         purpose="mesh extents, watertightness, and geometry counts",
-        install="uv pip install 'sevendtd-asset-pipeline[mesh]'",
+        install="uv pip install '7dtd-asset-pipeline[mesh]'",
     ),
     _Spec(
         name="gltf_validator",
         kind="command",
         probe="gltf_validator",
-        unlocks=("7dtd-assets check-mesh",),
+        unlocks=("shamway check-mesh",),
         purpose="Khronos glTF/GLB conformance for authored meshes",
         install="scripts/install-tools.sh --with-authoring",
     ),
@@ -83,7 +83,7 @@ REGISTRY: tuple[_Spec, ...] = (
         name="blender",
         kind="command",
         probe="blender",
-        unlocks=("7dtd-assets generate mesh",),
+        unlocks=("shamway generate mesh",),
         purpose="authored mesh lane: organic, rigged, and sculpted geometry",
         install="scripts/install-tools.sh --with-authoring",
     ),
@@ -100,22 +100,22 @@ REGISTRY: tuple[_Spec, ...] = (
         kind="module",
         probe="PIL",
         unlocks=(
-            "7dtd-assets render-icon",
-            "7dtd-assets generate icon",
-            "7dtd-assets generate cutout",
-            "7dtd-assets generate texture-maps",
-            "alpha coverage in 7dtd-assets check-icons",
+            "shamway render-icon",
+            "shamway generate icon",
+            "shamway generate cutout",
+            "shamway generate texture-maps",
+            "alpha coverage in shamway check-icons",
         ),
         purpose="icon generation, background cutout, texture maps, and icon rendering",
-        install="uv pip install 'sevendtd-asset-pipeline[authoring]'",
+        install="uv pip install '7dtd-asset-pipeline[authoring]'",
     ),
     _Spec(
         name="numpy",
         kind="module",
         probe="numpy",
-        unlocks=("7dtd-assets generate texture-maps",),
+        unlocks=("shamway generate texture-maps",),
         purpose="seeded numeric texture synthesis",
-        install="uv pip install 'sevendtd-asset-pipeline[authoring]'",
+        install="uv pip install '7dtd-asset-pipeline[authoring]'",
     ),
     _Spec(
         name="magick",
@@ -129,7 +129,7 @@ REGISTRY: tuple[_Spec, ...] = (
         name="xvfb",
         kind="command",
         probe="xvfb-run",
-        unlocks=("7dtd-assets render-icon on a headless host",),
+        unlocks=("shamway render-icon on a headless host",),
         purpose="a virtual display; the icon renderer needs a real graphics device and "
         "silently produces a blank image without one",
         install="scripts/install-tools.sh --with-authoring",

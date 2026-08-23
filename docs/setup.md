@@ -16,7 +16,7 @@ CLI itself; `--with-unity-prereqs` covers the editor installer's needs and
 [Authoring tools](authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
 and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy).
 
-Xvfb is there for one specific reason: `7dtd-assets render-icon` needs a real
+Xvfb is there for one specific reason: `shamway render-icon` needs a real
 graphics device, and Unity run with `-nographics` renders a blank image instead
 of failing. On a headless host, run that one command under `xvfb-run -a`.
 Nothing else in the pipeline needs a display — `build` uses `-nographics`
@@ -37,7 +37,7 @@ From a checkout:
 
 ```bash
 scripts/bootstrap
-.venv/bin/7dtd-assets --help
+.venv/bin/shamway --help
 ```
 
 For a user-wide isolated command:
@@ -58,7 +58,7 @@ The installed game is the authority. Point `--game-dir` or
 `Data/Config/items.xml`. The pipeline reads only from it.
 
 ```bash
-7dtd-assets init /path/to/MyMod \
+shamway init /path/to/MyMod \
   --game-dir "/absolute/path/to/7 Days To Die"
 ```
 
@@ -71,7 +71,7 @@ If the game is not installed on the authoring host, pass an explicitly
 verified revision:
 
 ```bash
-7dtd-assets init /path/to/MyMod --unity-version 2022.3.62f2
+shamway init /path/to/MyMod --unity-version 2022.3.62f2
 ```
 
 Record how that revision was verified in the mod's documentation.
@@ -94,8 +94,8 @@ revision from the installed game rather than trusting this table, because the
 game dictates it and a new game build can move it:
 
 ```bash
-7dtd-assets init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
-7dtd-assets doctor          # FAILs if project and game disagree
+shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+shamway doctor          # FAILs if project and game disagree
 ```
 
 `init` also pins the changeset into the project's
@@ -141,7 +141,7 @@ scripts/install-unity-editor.sh --skip-hub
 Inspect exactly what would be downloaded, without downloading anything:
 
 ```bash
-7dtd-assets unity-release --version 2022.3.62f2 --json
+shamway unity-release --version 2022.3.62f2 --json
 ```
 
 ### Unity's own CLI
@@ -159,7 +159,7 @@ is absent from the CLI's release feed. Resolve it, and the exact download URLs
 and checksums, without installing anything:
 
 ```bash
-7dtd-assets unity-release --version 2022.3.62f2 --json
+shamway unity-release --version 2022.3.62f2 --json
 ```
 
 Unity documents the CLI at
@@ -174,8 +174,8 @@ The Hub UI is equally valid:
 1. Install Unity Hub from Unity's official distribution.
 2. Sign in yourself.
 3. Activate an appropriate license through Unity's supported UI.
-4. Install the exact editor revision reported by `7dtd-assets init` or
-   `7dtd-assets doctor`.
+4. Install the exact editor revision reported by `shamway init` or
+   `shamway doctor`.
 5. Add Windows Build Support (Mono) to that editor.
 
 Never place Unity usernames, passwords, tokens, or license files in a mod
@@ -199,15 +199,15 @@ path.
 
 ```bash
 cd /path/to/MyMod
-7dtd-assets doctor
-7dtd-assets build --probe
+shamway doctor
+shamway build --probe
 ```
 
 `doctor` checks the mod identity, Unity project revision, package modules,
 game revision, editor executable, and Windows Build Support. It also reports
 optional authoring tools. Each check reports its own `OK`/`WARN`/`FAIL`
 verdict, and the command exits non-zero when any check is `FAIL`, so one broken
-check never hides the rest. Use `7dtd-assets doctor --json` for CI or agents.
+check never hides the rest. Use `shamway doctor --json` for CI or agents.
 
 The probe is the decisive setup test. It asks Unity to create a cube prefab,
 build a throwaway Windows bundle, checks the Unity log, parses the result for

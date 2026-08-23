@@ -10,7 +10,7 @@ __pycache__/
 htmlcov/
 dist/
 build/
-.asset-pipeline/
+.shamway/
 .local.env
 
 # Unity working state. Project source, settings, and .meta files stay tracked.
@@ -23,7 +23,11 @@ build/
 **/*.csproj
 **/*.sln
 
-# Staged by setup.py so `7dtd-assets docs` works from a wheel; not a source of truth.
+# Staged by setup.py so `shamway docs` works from a wheel; not a source of truth.
 src/sevendtd_asset_pipeline/docs/
 build/
 dist/
+
+
+.claude
+.agents

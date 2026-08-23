@@ -42,7 +42,7 @@ def require_imaging() -> None:
     if MISSING is not None:
         raise SystemExit(
             "ERROR: the texture lane needs Pillow and NumPy ({}).\n"
-            "  Install it with: uv pip install 'sevendtd-asset-pipeline[authoring]'".format(MISSING)
+            "  Install it with: uv pip install '7dtd-asset-pipeline[authoring]'".format(MISSING)
         )
 
 

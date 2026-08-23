@@ -57,10 +57,10 @@ cat <<EOF
 Installed the pipeline in $VENV
 
 Run:
-  $VENV/bin/7dtd-assets --help
+  $VENV/bin/shamway --help
 
 Or, without activating anything:
-  uv run --project $ROOT 7dtd-assets --help
+  uv run --project $ROOT shamway --help
 
 For a user-wide command instead:
   uv tool install $ROOT

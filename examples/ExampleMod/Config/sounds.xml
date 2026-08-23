@@ -1,6 +1,6 @@
 <configs>
 	<!-- Enable only after building a bundle containing this exact clip stem.
-	     `7dtd-assets validate` checks a ClipName exactly as it checks a Model,
+	     `shamway validate` checks a ClipName exactly as it checks a Model,
 	     because Audio.Manager.LoadAudio resolves both through DataLoader. -->
 	<!--
 	<append xpath="/Sounds">

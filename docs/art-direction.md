@@ -15,15 +15,15 @@ Generate a source at high resolution against a flat key colour, cut it out,
 reduce it to the atlas cell, and check it:
 
 ```bash
-7dtd-assets generate cutout key assets-src/icons/thing-src.png \
+shamway generate cutout key assets-src/icons/thing-src.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
-7dtd-assets check-icons
+shamway check-icons
 ```
 
 Or render the item's own prefab, when the icon should *be* the item:
 
 ```bash
-7dtd-assets render-icon myModThing
+shamway render-icon myModThing
 ```
 
 Then look at it at 160 px, in the game, in a backpack next to vanilla items.
@@ -108,7 +108,7 @@ Two rules about doing this:
   not pixels.
 - **Never write to the game install.** It is evidence.
 
-`7dtd-assets inspect --deep` reads a bundle's objects when UnityPy is
+`shamway inspect --deep` reads a bundle's objects when UnityPy is
 installed; for extracting the images themselves, UnityPy is the scriptable
 option and AssetStudio or UABE are the interactive ones. Pin whichever you use
 — all three track Unity's serialization format and break across versions.
@@ -200,8 +200,8 @@ Derive the normal and packed mask from that albedo rather than generating them
 normal has to be redrawn every time the albedo changes:
 
 ```bash
-7dtd-assets generate texture-maps assets-src/textures/paint.png \
-    --out-dir tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/Textures \
+shamway generate texture-maps assets-src/textures/paint.png \
+    --out-dir tools/shamway/UnityProject/Assets/ModAssets/Bundle/Textures \
     --stem myModPaint --metallic 0.58 --smoothness 0.16
 ```
 
@@ -225,7 +225,7 @@ Then convert brightness to alpha and make the colour white, so the particle
 system's own colour-over-lifetime tints it:
 
 ```bash
-7dtd-assets generate cutout luma assets-src/vfx/smoke-mask.png \
+shamway generate cutout luma assets-src/vfx/smoke-mask.png \
     assets-src/vfx/smoke-card.png --black-point 15
 ```
 
@@ -236,11 +236,11 @@ grey rectangle around every particle.
 ## Cutting the background out
 
 A hard threshold produces a coloured fringe on every soft edge, and a fringe is
-precisely what makes an icon look pasted on. `7dtd-assets generate cutout key` keeps partial
+precisely what makes an icon look pasted on. `shamway generate cutout key` keeps partial
 alpha through the transition band and pulls the residual key tint out of it:
 
 ```bash
-7dtd-assets generate cutout key assets-src/icons/thing-src.png \
+shamway generate cutout key assets-src/icons/thing-src.png \
     assets-src/icons/thing.png
 ```
 
@@ -260,19 +260,19 @@ Atlas icons are **not** bundle assets. They are PNGs under
 `ItemIconAtlas` is the one the game already registers. The cell is 160 × 160.
 
 ```bash
-7dtd-assets generate cutout key assets-src/icons/thing.png \
+shamway generate cutout key assets-src/icons/thing.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
 ```
 
 `--trim` crops to the subject before scaling, so the item fills the cell rather
 than floating in whatever margin the generator left; `--pad 0.9` then puts a
-deliberate margin back. `7dtd-assets generate icon` does the same job from an
+deliberate margin back. `shamway generate icon` does the same job from an
 already-transparent source and can emit a legibility contact sheet.
 
 Then reconcile every icon against every `CustomIcon` key in the mod's XML:
 
 ```bash
-7dtd-assets check-icons
+shamway check-icons
 ```
 
 That catches the atlas failures that are silent in game: a cell that is not
@@ -287,7 +287,7 @@ Both are first-class. Pick by what the icon should show.
 | Lane | Use it when | Why |
 |---|---|---|
 | **Generated or drawn art** | the icon should show something the mesh does not: a weathered studio render, an object the primitive geometry cannot express | no mesh has to exist first, and the art can be better than the model |
-| **Rendered from the prefab** — `7dtd-assets render-icon` | the icon should *be* the item | it cannot drift: regenerating the mesh regenerates the icon |
+| **Rendered from the prefab** — `shamway render-icon` | the icon should *be* the item | it cannot drift: regenerating the mesh regenerates the icon |
 
 The second lane exists because of a specific failure worth remembering: an item
 whose icon was a flat drawing of a green pipe bomb while its actual mesh was a
@@ -295,8 +295,8 @@ drum-and-charges assembly. Both were "finished", and they disagreed. A rendered
 icon makes that impossible.
 
 ```bash
-7dtd-assets render-icon myModThing                     # UIAtlases/ItemIconAtlas/myModThing.png
-7dtd-assets render-icon myModThing --yaw 150 --pitch 20 --padding 1.1
+shamway render-icon myModThing                     # UIAtlases/ItemIconAtlas/myModThing.png
+shamway render-icon myModThing --yaw 150 --pitch 20 --padding 1.1
 ```
 
 Two things about it, both of which cost a render to learn:

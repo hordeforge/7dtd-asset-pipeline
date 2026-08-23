@@ -1,9 +1,13 @@
-# 7DTD Asset Pipeline
+# shamway
 
 A reusable, testable pipeline for building Unity asset bundles for **7 Days to
 Die mods**. It gives mod authors one path from editable Unity assets to a
 staged `Resources/*.unity3d` file, with the failure gates that a normal
 successful Unity build does not provide.
+
+The command is `shamway`, after the game's own food factory — the one visible
+production line in 7 Days to Die, and a company that turns questionable inputs
+into convincing finished goods. This one refuses to.
 
 The project was extracted from the production asset workflow in Atomic
 Doomsday and generalized so it has no dependency on that mod, its art, or its
@@ -40,7 +44,7 @@ repository layout.
 - an art-direction contract with prompt patterns, so generated 2D assets match
   the game rather than merely being clean;
 - generators and documentation served from the installed package
-  (`7dtd-assets generate`, `7dtd-assets docs`), so a consuming mod owns only its
+  (`shamway generate`, `shamway docs`), so a consuming mod owns only its
   own content and never a path into this repository;
 - programmatic interfaces built on one operation registry: a self-describing
   `schema`, a `call` endpoint for any language, a `serve` stdio loop about 17x
@@ -81,7 +85,7 @@ Install this checkout:
 
 ```bash
 scripts/bootstrap            # uv venv + uv pip install --editable, with extras
-.venv/bin/7dtd-assets --help
+.venv/bin/shamway --help
 ```
 
 Or, for a user-wide command, `uv tool install .`.
@@ -90,7 +94,7 @@ Scaffold the pipeline into an existing modlet. The command reads the correct
 Unity version from the installed game:
 
 ```bash
-7dtd-assets init /path/to/MyMod \
+shamway init /path/to/MyMod \
   --game-dir "/path/to/7 Days To Die"
 ```
 
@@ -109,17 +113,17 @@ Set machine-local paths, then prove the environment:
 export SEVEN_DAYS_TO_DIE_DIR="/path/to/7 Days To Die"
 export UNITY_EDITOR="/path/to/Unity/Hub/Editor/VERSION/Editor/Unity"
 cd /path/to/MyMod
-7dtd-assets doctor
-7dtd-assets build --probe
+shamway doctor
+shamway build --probe
 ```
 
 Put source assets and their `.meta` files below
-`tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/`, then build and
+`tools/shamway/UnityProject/Assets/ModAssets/Bundle/`, then build and
 validate:
 
 ```bash
-7dtd-assets build
-7dtd-assets validate
+shamway build
+shamway validate
 ```
 
 Author sources in the `assets-src/` tree `init` creates, gate each lane before
@@ -128,25 +132,25 @@ The generators and the documentation ship **inside the installed package**, so
 a mod calls them without a checkout of this repository or any relative path:
 
 ```bash
-7dtd-assets generate --list
-7dtd-assets generate sound blast assets-src/audio/blast.wav --seed 7
-7dtd-assets generate cutout key assets-src/icons/thing-src.png \
+shamway generate --list
+shamway generate sound blast assets-src/audio/blast.wav --seed 7
+shamway generate cutout key assets-src/icons/thing-src.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
-7dtd-assets check-sound assets-src/audio/blast.wav
-7dtd-assets check-icons
-7dtd-assets render-icon myModThing
-7dtd-assets docs art-direction
+shamway check-sound assets-src/audio/blast.wav
+shamway check-icons
+shamway render-icon myModThing
+shamway docs art-direction
 ```
 
 Orient in an unfamiliar mod, or drive the pipeline from a script or agent, with
 one non-raising call:
 
 ```bash
-7dtd-assets status --json        # whole-mod state
-7dtd-assets capabilities --json  # which optional tools work, and what they unlock
-7dtd-assets schema               # every operation, machine-readable
-7dtd-assets call status          # run one operation, JSON in and out
-7dtd-assets serve                # many operations over one stdio session
+shamway status --json        # whole-mod state
+shamway capabilities --json  # which optional tools work, and what they unlock
+shamway schema               # every operation, machine-readable
+shamway call status          # run one operation, JSON in and out
+shamway serve                # many operations over one stdio session
 ```
 
 See [Mod repo layout](docs/mod-repo-layout.md) for the ownership split between
@@ -162,7 +166,7 @@ a fresh-client load and a visual/audio check appropriate to the changed asset.
 - [Mod repo layout](docs/mod-repo-layout.md) — what lives in the mod, what lives here
 - [Setup](docs/setup.md) — Python, game path, Unity, licensing, Windows module
 - [Bundle generation](docs/bundle-generation.md) — the complete build path
-- [Configuration](docs/configuration.md) — every `.7dtd-assets.toml` key
+- [Configuration](docs/configuration.md) — every `.shamway.toml` key
 - [Game integration](docs/game-integration.md) — XML URIs, icons, audio, clients
 - [Consumer interfaces](docs/consumer-api.md) — schema, call, serve, Python API
 - [Blockers](docs/blockers.md) — what still needs a human, a licence, or a client

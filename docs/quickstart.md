@@ -38,7 +38,7 @@ scripts/install-tools.sh --with-authoring         # art and inspection tooling
 Khronos glTF validator, and the Python capabilities (UnityPy, Pillow, NumPy,
 trimesh). Blender and the glTF validator fall back to official
 checksum-verified builds where the distribution has no package. Check what is
-usable at any time with `7dtd-assets capabilities --json`.
+usable at any time with `shamway capabilities --json`.
 
 Supported package managers are `pacman`, `apt-get`, and `dnf`. On anything
 else, install the tools `--check` lists by hand; the script refuses to guess
@@ -48,7 +48,7 @@ package names rather than installing the wrong thing.
 
 ```bash
 scripts/bootstrap
-.venv/bin/7dtd-assets --help
+.venv/bin/shamway --help
 ```
 
 `scripts/bootstrap` creates `.venv/` in this checkout and installs the package
@@ -56,7 +56,7 @@ into it with uv, including the optional capabilities (`--no-extras` for the
 core alone). It never uses `sudo` and does not touch shell startup files. For a
 user-wide command instead, use `uv tool install .`.
 
-Put `.venv/bin` on `PATH`, or call `7dtd-assets` by its full path in the steps
+Put `.venv/bin` on `PATH`, or call `shamway` by its full path in the steps
 below.
 
 ## 3. Scaffold a modlet (seconds)
@@ -65,7 +65,7 @@ Point at the directory containing `Data/Config/items.xml`:
 
 ```bash
 export SEVEN_DAYS_TO_DIE_DIR="/path/to/7 Days To Die"
-7dtd-assets init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 ```
 
 `MyMod` must already exist and contain `ModInfo.xml`. The command reads the
@@ -74,12 +74,12 @@ wiki page, then writes:
 
 ```text
 MyMod/
-├── .7dtd-assets.toml                       # configuration; commit it
+├── .shamway.toml                       # configuration; commit it
 ├── Makefile.assets                         # assets / assets-probe / ... targets
 ├── assets-src/                             # editable sources + provenance; never ships
 │   ├── README.md                           # what each lane holds and must record
 │   └── icons/ textures/ meshes/ audio/ vfx/
-└── tools/7dtd-assets/
+└── tools/shamway/
     ├── AGENTS.md                           # the agent contract, in your repo
     └── UnityProject/                       # the Unity project the mod owns
         ├── Assets/ModAssets/Bundle/        # put selected source assets here
@@ -126,8 +126,8 @@ scripts/install-unity-editor.sh --skip-hub
 ```bash
 export UNITY_EDITOR="/path/to/Unity/Hub/Editor/<revision>/Editor/Unity"
 cd /path/to/MyMod
-7dtd-assets doctor
-7dtd-assets build --probe
+shamway doctor
+shamway build --probe
 ```
 
 `doctor` checks mod identity, project revision, engine modules, game revision,
@@ -145,13 +145,13 @@ problem, never an asset problem.
 ## 6. Add an asset and ship it
 
 Put source assets **and their `.meta` files** under
-`tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/`. Name each one with a
+`tools/shamway/UnityProject/Assets/ModAssets/Bundle/`. Name each one with a
 mod-prefixed, globally unique stem — 7DTD resolves assets by file-name stem
 alone, discarding folder and extension.
 
 ```bash
-7dtd-assets build      # build, gate, and stage bundle + tracked manifest
-7dtd-assets validate   # bundle plus every reference in Config/**/*.xml
+shamway build      # build, gate, and stage bundle + tracked manifest
+shamway validate   # bundle plus every reference in Config/**/*.xml
 ```
 
 Reference it from XML using the mod's `ModInfo.xml` name:
@@ -170,27 +170,27 @@ Two deployable asset classes are **not** bundle members and have their own
 gates:
 
 ```bash
-7dtd-assets check-icons                        # UIAtlases cells + every CustomIcon key
-7dtd-assets check-sound assets-src/audio/x.wav # format, level, clipping, DC offset
+shamway check-icons                        # UIAtlases cells + every CustomIcon key
+shamway check-sound assets-src/audio/x.wav # format, level, clipping, DC offset
 ```
 
 ## 7. Driving it from a script or an agent
 
 ```bash
-7dtd-assets status --json
+shamway status --json
 ```
 
 ```bash
-7dtd-assets schema               # every operation, machine-readable
-7dtd-assets call status          # run one operation, JSON in and out
-7dtd-assets serve                # many operations over one stdio session
+shamway schema               # every operation, machine-readable
+shamway call status          # run one operation, JSON in and out
+shamway serve                # many operations over one stdio session
 ```
 
 `status` is one call, no Unity, no network, and it never raises for a
 mod-state problem —
 it reports what exists, whether the bundle matches the game, what the manifest
 lists, which XML references exist, and whether the mod is valid. `init` also
-wrote `tools/7dtd-assets/AGENTS.md` into your mod so an agent working there has
+wrote `tools/shamway/AGENTS.md` into your mod so an agent working there has
 the rules. See [Consumer interfaces](consumer-api.md).
 
 ## 8. Acceptance
@@ -202,17 +202,17 @@ prove; [Release checklist](release-checklist.md) is the full list.
 
 ## Creating the assets themselves
 
-`7dtd-assets generate` ships reproducible generators for
+`shamway generate` ships reproducible generators for
 the sound, cutout, icon, texture, and mesh lanes; the scaffolded Unity project
 ships `GeneratedAsset.cs` for building prefabs, materials, imports, particle
 state, and audio from code, and `IconRenderer.cs` for photographing a prefab
 into an atlas cell.
 
 ```bash
-7dtd-assets generate sound blast assets-src/audio/blast.wav --seed 7
-7dtd-assets generate cutout key assets-src/icons/thing-src.png \
+shamway generate sound blast assets-src/audio/blast.wav --seed 7
+shamway generate cutout key assets-src/icons/thing-src.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
-7dtd-assets render-icon myModThing        # or render the item itself
+shamway render-icon myModThing        # or render the item itself
 ```
 
 Read these before authoring:
@@ -228,11 +228,11 @@ Read these before authoring:
 ## When something fails
 
 ```bash
-7dtd-assets status --json                     # whole-mod state; never raises
-7dtd-assets doctor --json                     # structured environment report
-7dtd-assets inspect Resources/mymod.unity3d   # revision, class IDs, class 142
-7dtd-assets check-log .asset-pipeline/build/bundle/unity-build.log
-7dtd-assets refs                              # every URI the XML actually uses
+shamway status --json                     # whole-mod state; never raises
+shamway doctor --json                     # structured environment report
+shamway inspect Resources/mymod.unity3d   # revision, class IDs, class 142
+shamway check-log .shamway/build/bundle/unity-build.log
+shamway refs                              # every URI the XML actually uses
 ```
 
 [Troubleshooting](troubleshooting.md) maps each failure message to its root

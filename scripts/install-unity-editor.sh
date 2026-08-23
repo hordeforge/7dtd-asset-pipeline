@@ -27,7 +27,7 @@ OPTIONS
   --version VERSION  Unity revision to install. Defaults to the revision in
                      --project's ProjectSettings/ProjectVersion.txt.
   --project DIR      Unity project whose revision and license are verified.
-                     Defaults to $PWD/tools/7dtd-assets/UnityProject.
+                     Defaults to $PWD/tools/shamway/UnityProject.
   --skip-hub         Do not install or open Unity Hub. Use when a license is
                      already active in Unity's native Linux location.
   -h, --help         Show this help
@@ -62,11 +62,11 @@ while (($#)); do
 	esac
 done
 
-PROJECT="${PROJECT:-$PWD/tools/7dtd-assets/UnityProject}"
+PROJECT="${PROJECT:-$PWD/tools/shamway/UnityProject}"
 if [[ -z "$VERSION" ]]; then
 	if [[ ! -f "$PROJECT/ProjectSettings/ProjectVersion.txt" ]]; then
 		echo "ERROR: no Unity project at $PROJECT and no --version given." >&2
-		echo "       Run '7dtd-assets init' first, or pass --version explicitly." >&2
+		echo "       Run 'shamway init' first, or pass --version explicitly." >&2
 		exit 1
 	fi
 	VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
@@ -327,6 +327,6 @@ Export this machine-local path (do not commit it):
   export UNITY_EDITOR="$UNITY_EDITOR_PATH"
 
 Then prove the whole pipeline:
-  7dtd-assets doctor
-  7dtd-assets build --probe
+  shamway doctor
+  shamway build --probe
 EOF

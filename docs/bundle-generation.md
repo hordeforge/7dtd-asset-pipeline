@@ -10,11 +10,11 @@ Unity project: Assets/ModAssets/Bundle/**
         |
         | BundleBuilder.cs (batch mode)
         v
-.asset-pipeline/build/bundle/<name>.unity3d + .manifest + Unity log
+.shamway/build/bundle/<name>.unity3d + .manifest + Unity log
         |
         | log gate + UnityFS revision gate + class-142 gate
         v
-Resources/<name>.unity3d + tools/7dtd-assets/manifests/<name>.manifest
+Resources/<name>.unity3d + tools/shamway/manifests/<name>.manifest
 ```
 
 Only `Resources/<name>.unity3d` is deployed. The Unity project, editable art,
@@ -81,7 +81,7 @@ build dependencies; serialization then strips it and may only warn.
 ## Build command
 
 ```bash
-7dtd-assets build
+shamway build
 ```
 
 The CLI:
@@ -103,10 +103,10 @@ partially copies a candidate into the modlet.
 Unity is asked to fully rebuild. For a reproducibility check:
 
 ```bash
-7dtd-assets build
-sha256sum Resources/examplemod.unity3d tools/7dtd-assets/manifests/*
-7dtd-assets build
-sha256sum Resources/examplemod.unity3d tools/7dtd-assets/manifests/*
+shamway build
+sha256sum Resources/examplemod.unity3d tools/shamway/manifests/*
+shamway build
+sha256sum Resources/examplemod.unity3d tools/shamway/manifests/*
 ```
 
 If hashes move with unchanged tracked inputs, inspect generated asset scripts,

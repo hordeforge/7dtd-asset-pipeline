@@ -1,19 +1,19 @@
 """Reusable asset-bundle tooling for 7 Days to Die mods.
 
 The names re-exported here are the supported Python API for consumers who want
-to script the pipeline instead of shelling out to `7dtd-assets`. Everything
+to script the pipeline instead of shelling out to `shamway`. Everything
 else in this package is an implementation detail and may change without notice.
 
     from sevendtd_asset_pipeline import Pipeline
 
-    pipeline = Pipeline.discover()     # finds .7dtd-assets.toml upward from cwd
+    pipeline = Pipeline.discover()     # finds .shamway.toml upward from cwd
     status = pipeline.status()         # never raises for a mod-state problem
     if not status.valid:
         print(status.problems)
 
 `Pipeline` is the recommended entry point; the individual functions remain
 available for callers that want one piece. Out-of-process consumers should use
-`7dtd-assets schema`, `call`, and `serve`, which dispatch through the same
+`shamway schema`, `call`, and `serve`, which dispatch through the same
 operation registry — see docs/consumer-api.md.
 
 Every entry point raises `PipelineError` with a single user-actionable message

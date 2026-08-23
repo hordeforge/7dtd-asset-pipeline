@@ -4,9 +4,9 @@ The generators moved into the installed package. They are no longer scripts you
 copy or path into — a mod calls them through the one command it already has:
 
 ```bash
-7dtd-assets generate --list
-7dtd-assets generate sound --help
-7dtd-assets generate sound blast assets-src/audio/blast.wav --seed 7
+shamway generate --list
+shamway generate sound --help
+shamway generate sound blast assets-src/audio/blast.wav --seed 7
 ```
 
 Their source is [`src/sevendtd_asset_pipeline/generators/`](../../src/sevendtd_asset_pipeline/generators/).
@@ -26,7 +26,7 @@ of this repository. The full ownership split is in
 | `mesh` | authored mesh to GLB | Blender on `PATH` |
 
 Install the optional tools with `scripts/install-tools.sh --with-authoring`;
-ask what works right now with `7dtd-assets capabilities --json`. Each generator
+ask what works right now with `shamway capabilities --json`. Each generator
 fails with an actionable message when its dependency is absent, and `--help`
 works either way.
 
@@ -50,9 +50,9 @@ for:
 Each lane has an offline check that needs no Unity, no network, and no game:
 
 ```bash
-7dtd-assets check-sound assets-src/audio/blast.wav   # format, level, DC offset
-7dtd-assets check-icons                              # cells + every CustomIcon key
-7dtd-assets check-mesh  assets-src/meshes/thing.glb  # extents, glTF conformance
+shamway check-sound assets-src/audio/blast.wav   # format, level, DC offset
+shamway check-icons                              # cells + every CustomIcon key
+shamway check-mesh  assets-src/meshes/thing.glb  # extents, glTF conformance
 ```
 
 ## Two mesh lanes
@@ -61,14 +61,14 @@ Both are first-class; pick by what the shape needs.
 
 | Lane | Use it for | Cost | Result in the bundle |
 |---|---|---|---|
-| **Authored** — `7dtd-assets generate mesh`, Blender, OpenSCAD | organic, rigged, sculpted, or anything primitives cannot express | Blender on the host | a real class-43 `Mesh` object |
+| **Authored** — `shamway generate mesh`, Blender, OpenSCAD | organic, rigged, sculpted, or anything primitives cannot express | Blender on the host | a real class-43 `Mesh` object |
 | **Procedural** — `GeneratedAsset.Primitive(...)` in the Unity project | hard-surface props that are boxes, cylinders, and spheres | nothing beyond Unity | no `Mesh` object; the prefab references Unity's built-in primitives |
 
 Validate an authored mesh before importing it:
 
 ```bash
-7dtd-assets check-mesh out.glb            # extents, watertightness, glTF conformance
-7dtd-assets check-mesh out.glb --strict   # also fail on glTF warnings
+shamway check-mesh out.glb            # extents, watertightness, glTF conformance
+shamway check-mesh out.glb --strict   # also fail on glTF warnings
 ```
 
 That catches the expensive mistakes early — most often a mesh authored in
@@ -109,6 +109,6 @@ a batch script hits and the inspector hides:
 - `ImportAudioClip(...)` and `AudioSourcePrefab(...)` are the audio half.
 
 `IconRenderer.cs` ships beside it for the other icon lane, driven by
-`7dtd-assets render-icon`.
+`shamway render-icon`.
 
-Both halves end at the same place: `7dtd-assets build`, then a fresh client.
+Both halves end at the same place: `shamway build`, then a fresh client.

@@ -71,7 +71,7 @@ def _read(path: Path) -> tuple[list[int], int, int, int]:
     if width != 2:
         raise PipelineError(
             f"{path} is {width * 8}-bit PCM; convert it to 16-bit first "
-            f"(7dtd-assets generate audio convert)"
+            f"(shamway generate audio convert)"
         )
     samples = array.array("h")
     samples.frombytes(frames)

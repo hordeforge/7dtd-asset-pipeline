@@ -50,7 +50,7 @@ def _atomic_copy(source: Path, destination: Path) -> None:
 
 def run_build(config: PipelineConfig, probe: bool = False) -> Path:
     if config.unity_editor is None:
-        raise PipelineError("UNITY_EDITOR is not configured; run '7dtd-assets doctor'")
+        raise PipelineError("UNITY_EDITOR is not configured; run 'shamway doctor'")
     if not config.unity_editor.is_file() or not os.access(config.unity_editor, os.X_OK):
         raise PipelineError(f"Unity editor is not executable: {config.unity_editor}")
     project_version = project_unity_version(config.unity_project)

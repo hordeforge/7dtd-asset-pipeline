@@ -5,13 +5,13 @@ references it. `ModManager.LoadUiAtlases` packs each immediate subfolder of
 `UIAtlases/` at runtime, so the folder name is the atlas name and each file
 stem is a key.
 
-These never enter the asset bundle, which is why `7dtd-assets validate` cannot
-see them and `7dtd-assets check-icons` exists.
+These never enter the asset bundle, which is why `shamway validate` cannot
+see them and `shamway check-icons` exists.
 
 ```bash
-7dtd-assets generate cutout key ../../assets-src/icons/thing-src.png \
+shamway generate cutout key ../../assets-src/icons/thing-src.png \
     exampleModThing.png --size 160 --pad 0.9 --trim
-7dtd-assets check-icons
+shamway check-icons
 ```
 
 Art direction and the prompt patterns: `docs/art-direction.md` in the pipeline.

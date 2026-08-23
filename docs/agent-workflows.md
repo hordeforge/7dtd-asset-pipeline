@@ -6,7 +6,7 @@ derivative without guessing which GUI state produced it.
 
 ## Repository pattern
 
-`7dtd-assets init` creates this, with a README that says what a provenance row
+`shamway init` creates this, with a README that says what a provenance row
 must carry:
 
 ```text
@@ -18,7 +18,7 @@ assets-src/
 ├── audio/                    # sound generators and their .wav
 └── vfx/                      # particle card sources and opacity masks
 
-tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/
+tools/shamway/UnityProject/Assets/ModAssets/Bundle/
 └── selected Unity inputs + every .meta file
 ```
 
@@ -78,26 +78,26 @@ prompt pattern, and the key-colour convention.
 1. Keep a high-resolution source; generate against a flat key colour rather
    than asking for transparency.
 2. Cut the background out with partial alpha and de-spill
-   (`7dtd-assets generate cutout key`), or render the prefab (`7dtd-assets render-icon`).
+   (`shamway generate cutout key`), or render the prefab (`shamway render-icon`).
 3. Derive the exact deployed cell — 160 x 160 for `ItemIconAtlas`.
 4. Create a contact sheet at native and 2x/4x zoom, and check it on a light
    *and* a dark background.
 5. Place the PNG in `UIAtlases/ItemIconAtlas/`, not the bundle.
-6. Run `7dtd-assets check-icons`: cell shape, alpha, and every `CustomIcon` key.
+6. Run `shamway check-icons`: cell shape, alpha, and every `CustomIcon` key.
 7. Test atlas lookup by stem and inspect in inventory/perk/recipe contexts.
 
 ## Audio lane
 
 Full lane, with the engine facts that decide audibility: [audio.md](audio.md).
 
-1. Synthesize with `7dtd-assets generate sound` (a designed voice and a recorded seed) or
+1. Synthesize with `shamway generate sound` (a designed voice and a recorded seed) or
    keep a lossless source and a transformation script.
-2. Gate it with `7dtd-assets check-sound`: mono, rate, level, clipping, DC
+2. Gate it with `shamway check-sound`: mono, rate, level, clipping, DC
    offset, edge silence.
 3. Import the clip and, when range matters, a deliberate AudioSource prefab —
    `GeneratedAsset.AudioSourcePrefab(...)`.
 4. Configure `sounds.xml` near/distant behavior and voice limits;
-   `7dtd-assets generate sound sounds-xml` prints the entry.
+   `shamway generate sound sounds-xml` prints the entry.
 5. Validate load, then listen near, across fade, at maximum range, and under
    simultaneous events.
 
@@ -141,8 +141,8 @@ For a release candidate preserve:
 - source commit;
 - tool/editor/game versions;
 - bundle and manifest SHA-256;
-- `7dtd-assets inspect --json` output;
-- `7dtd-assets validate`, `check-icons`, and `check-sound` output;
+- `shamway inspect --json` output;
+- `shamway validate`, `check-icons`, and `check-sound` output;
 - client/server logs for the exact run;
 - screenshots/turntables/listening notes;
 - negative-control result where graceful fallback matters.

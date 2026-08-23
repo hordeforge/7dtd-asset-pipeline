@@ -1,6 +1,6 @@
 # Configuration
 
-`7dtd-assets init` writes `.7dtd-assets.toml` at the mod root. Paths are
+`shamway init` writes `.shamway.toml` at the mod root. Paths are
 relative to that file unless absolute. Environment variables are expanded;
 `~` is expanded for user convenience.
 
@@ -9,10 +9,10 @@ schema_version = 1
 mod_root = "."
 mod_name = "ExampleMod"
 bundle_name = "examplemod.unity3d"
-unity_project = "tools/7dtd-assets/UnityProject"
+unity_project = "tools/shamway/UnityProject"
 source_root = "Assets/ModAssets/Bundle"
-build_dir = ".asset-pipeline/build"
-manifest_dir = "tools/7dtd-assets/manifests"
+build_dir = ".shamway/build"
+manifest_dir = "tools/shamway/manifests"
 resources_dir = "Resources"
 config_dir = "Config"
 target = "StandaloneWindows64"

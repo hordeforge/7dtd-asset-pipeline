@@ -243,7 +243,7 @@ class GeneratorTests(unittest.TestCase):
     """The generators are the pipeline's public authoring surface.
 
     They must be reachable by name from an installed package — a mod calls
-    `7dtd-assets generate <name>` and never a path into this repository — and
+    `shamway generate <name>` and never a path into this repository — and
     each must be able to explain itself on a host that has none of the optional
     imaging or mesh packages installed.
     """
@@ -268,7 +268,7 @@ class GeneratorTests(unittest.TestCase):
                     run(name, ["--help"])
                 self.assertEqual(0, raised.exception.code)
                 self.assertIn("usage:", output.getvalue())
-                self.assertIn(f"7dtd-assets generate {name}", output.getvalue())
+                self.assertIn(f"shamway generate {name}", output.getvalue())
 
     def test_an_unknown_generator_lists_the_known_ones(self) -> None:
         from sevendtd_asset_pipeline.generators import run
@@ -323,7 +323,7 @@ class GeneratorTests(unittest.TestCase):
 
 
 class DocumentationTests(unittest.TestCase):
-    """`7dtd-assets docs` is how an agent in a mod repo reads the rules."""
+    """`shamway docs` is how an agent in a mod repo reads the rules."""
 
     def test_every_topic_resolves_to_a_real_page(self) -> None:
         from sevendtd_asset_pipeline.docs import TOPICS, read

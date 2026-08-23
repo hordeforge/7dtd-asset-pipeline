@@ -1,20 +1,20 @@
 .PHONY: assets assets-probe assets-validate assets-doctor assets-status assets-icons
 
 assets:
-	7dtd-assets build
+	shamway build
 
 assets-probe:
-	7dtd-assets build --probe
+	shamway build --probe
 
 assets-validate:
-	7dtd-assets validate
-	7dtd-assets check-icons
+	shamway validate
+	shamway check-icons
 
 assets-icons:
-	7dtd-assets check-icons
+	shamway check-icons
 
 assets-doctor:
-	7dtd-assets doctor
+	shamway doctor
 
 assets-status:
-	7dtd-assets status
+	shamway status

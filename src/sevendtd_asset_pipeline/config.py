@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .errors import PipelineError
 
-CONFIG_NAME = ".7dtd-assets.toml"
+CONFIG_NAME = ".shamway.toml"
 VALID_BUNDLE = re.compile(r"^[a-z0-9][a-z0-9._-]*\.unity3d$")
 
 
@@ -60,7 +60,7 @@ def find_config(start: Path | None = None) -> Path:
         if candidate.is_file():
             return candidate
     raise PipelineError(
-        f"could not find {CONFIG_NAME} from {current}; run '7dtd-assets init MOD_ROOT'"
+        f"could not find {CONFIG_NAME} from {current}; run 'shamway init MOD_ROOT'"
     )
 
 
@@ -93,10 +93,10 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         mod_root=mod_root,
         mod_name=mod_name,
         bundle_name=bundle_name,
-        unity_project=_path(base, data.get("unity_project", "tools/7dtd-assets/UnityProject"), "unity_project"),
+        unity_project=_path(base, data.get("unity_project", "tools/shamway/UnityProject"), "unity_project"),
         source_root=str(data.get("source_root", "Assets/ModAssets/Bundle")),
-        build_dir=_path(base, data.get("build_dir", ".asset-pipeline/build"), "build_dir"),
-        manifest_dir=_path(base, data.get("manifest_dir", "tools/7dtd-assets/manifests"), "manifest_dir"),
+        build_dir=_path(base, data.get("build_dir", ".shamway/build"), "build_dir"),
+        manifest_dir=_path(base, data.get("manifest_dir", "tools/shamway/manifests"), "manifest_dir"),
         resources_dir=_path(mod_root, data.get("resources_dir", "Resources"), "resources_dir"),
         config_dir=_path(mod_root, data.get("config_dir", "Config"), "config_dir"),
         target=str(data.get("target", "StandaloneWindows64")),
@@ -118,10 +118,10 @@ schema_version = 1
 mod_root = "."
 mod_name = "{mod_name}"
 bundle_name = "{bundle_name}"
-unity_project = "tools/7dtd-assets/UnityProject"
+unity_project = "tools/shamway/UnityProject"
 source_root = "Assets/ModAssets/Bundle"
-build_dir = ".asset-pipeline/build"
-manifest_dir = "tools/7dtd-assets/manifests"
+build_dir = ".shamway/build"
+manifest_dir = "tools/shamway/manifests"
 resources_dir = "Resources"
 config_dir = "Config"
 target = "StandaloneWindows64"

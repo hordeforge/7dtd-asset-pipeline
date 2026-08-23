@@ -1,6 +1,6 @@
 """Offline gate for item icons, which are *not* bundle assets.
 
-`7dtd-assets validate` covers everything the bundle owns. Icons are the one
+`shamway validate` covers everything the bundle owns. Icons are the one
 deployable asset class it cannot see: `ModManager.LoadUiAtlases` packs each
 immediate subfolder of a mod's `UIAtlases/` at runtime, keyed by folder name,
 with every PNG inside keyed by its filename stem. Nothing about that path
@@ -254,7 +254,7 @@ def check_icons(
     if icons and icons[0].alpha_coverage is None:
         notes.append(
             "alpha coverage was not measured; install Pillow "
-            "(uv pip install 'sevendtd-asset-pipeline[authoring]') to gate empty icons"
+            "(uv pip install '7dtd-asset-pipeline[authoring]') to gate empty icons"
         )
     return IconReport(
         atlas_dir=str(atlas_dir),

@@ -27,7 +27,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_scaffold_and_validate_mod(self) -> None:
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
-        config = load_config(self.root / ".7dtd-assets.toml")
+        config = load_config(self.root / ".shamway.toml")
         config.resources_dir.mkdir()
         config.bundle_output.write_bytes(unityfs_bundle([1, 142]))
         config.tracked_manifest.parent.mkdir(parents=True)
@@ -101,7 +101,7 @@ class PipelineTests(unittest.TestCase):
     def test_scaffold_pins_the_changeset_when_it_is_known(self) -> None:
         initialize(self.root, None, "example.unity3d", "2022.3.62f2", "7670c08855a9")
         version_file = (
-            self.root / "tools" / "7dtd-assets" / "UnityProject"
+            self.root / "tools" / "shamway" / "UnityProject"
             / "ProjectSettings" / "ProjectVersion.txt"
         )
         text = version_file.read_text()
@@ -113,7 +113,7 @@ class PipelineTests(unittest.TestCase):
         # release service must not fail the scaffold.
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
         version_file = (
-            self.root / "tools" / "7dtd-assets" / "UnityProject"
+            self.root / "tools" / "shamway" / "UnityProject"
             / "ProjectSettings" / "ProjectVersion.txt"
         )
         text = version_file.read_text()
@@ -146,7 +146,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_config_rejects_resources_outside_mod_root(self) -> None:
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
-        config_file = self.root / ".7dtd-assets.toml"
+        config_file = self.root / ".shamway.toml"
         config_file.write_text(
             config_file.read_text().replace('resources_dir = "Resources"', 'resources_dir = "../outside"')
         )

@@ -11,7 +11,7 @@ the full `bpy` API.
 
 Validate whatever you export before importing it into Unity:
 
-    7dtd-assets check-mesh out.glb
+    shamway check-mesh out.glb
 
 For hard-surface props that are really a few boxes and cylinders, the other
 lane is cheaper: compose built-in primitives in the Unity project with
@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"path:     {args.output}")
     print(f"name:     {args.name}   (rename the Unity prefab to the bundle stem)")
     print("note:     height is the third value and arrives as Y after export")
-    print("next:     7dtd-assets check-mesh " + str(args.output))
+    print("next:     shamway check-mesh " + str(args.output))
     return 0
 
 

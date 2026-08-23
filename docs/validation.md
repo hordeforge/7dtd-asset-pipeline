@@ -3,15 +3,15 @@
 ## Commands
 
 ```bash
-7dtd-assets status --json
-7dtd-assets doctor --json
-7dtd-assets inspect Resources/examplemod.unity3d
-7dtd-assets check-log .asset-pipeline/build/bundle/unity-build.log
-7dtd-assets refs
-7dtd-assets validate
-7dtd-assets check-icons
-7dtd-assets check-sound assets-src/audio/clip.wav
-7dtd-assets check-mesh assets-src/meshes/thing.glb
+shamway status --json
+shamway doctor --json
+shamway inspect Resources/examplemod.unity3d
+shamway check-log .shamway/build/bundle/unity-build.log
+shamway refs
+shamway validate
+shamway check-icons
+shamway check-sound assets-src/audio/clip.wav
+shamway check-mesh assets-src/meshes/thing.glb
 ```
 
 `inspect --json` and `doctor --json` are suitable for CI and agent workflows.

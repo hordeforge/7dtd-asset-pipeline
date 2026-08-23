@@ -4,12 +4,12 @@ Programmatic consumers of a build tool come in three shapes, and all three are
 served from this one table rather than from three drifting implementations:
 
 1. Python callers, through the `Pipeline` facade in `api.py`.
-2. Other languages and CI, through `7dtd-assets call NAME --params '{...}'`,
+2. Other languages and CI, through `shamway call NAME --params '{...}'`,
    which is a subprocess away from anything.
-3. Anything that needs many operations cheaply, through `7dtd-assets serve`,
+3. Anything that needs many operations cheaply, through `shamway serve`,
    a line-delimited JSON request/response loop that pays process start once.
 
-`7dtd-assets schema --json` publishes this table, so a consumer discovers the
+`shamway schema --json` publishes this table, so a consumer discovers the
 operations, their JSON Schema parameters, what each returns, whether it writes,
 what it costs, and which optional capability it needs — without parsing help
 text or prose. A wrapper for any protocol can be generated from that manifest;
@@ -278,7 +278,7 @@ def manifest() -> dict[str, Any]:
         "version": __version__,
         "description": "Build and validate Unity asset bundles for 7 Days to Die mods.",
         "conventions": {
-            "config": "Operations with needs_config resolve .7dtd-assets.toml upward "
+            "config": "Operations with needs_config resolve .shamway.toml upward "
             "from the working directory unless a config path is supplied.",
             "errors": "A failed operation reports a single user-actionable message. "
             "The CLI exits non-zero and prints 'ERROR: ...' to stderr; 'call' and "
@@ -297,14 +297,14 @@ def manifest() -> dict[str, Any]:
 
 
 def _generators() -> list[dict[str, Any]]:
-    """The packaged asset generators, callable as `7dtd-assets generate NAME`."""
+    """The packaged asset generators, callable as `shamway generate NAME`."""
     from .generators import describe
 
     return describe()
 
 
 def _documentation() -> list[dict[str, str]]:
-    """The packaged documentation, readable as `7dtd-assets docs TOPIC`."""
+    """The packaged documentation, readable as `shamway docs TOPIC`."""
     from .docs import topics
 
     return topics()

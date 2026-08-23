@@ -38,7 +38,7 @@ WITH --with-authoring
   openscad           Parametric hard-surface geometry
   imagemagick        Icons, masks, channel packing, contact sheets
   ffmpeg             Audio conversion, normalization, and synthesis
-  xvfb               A virtual display for 7dtd-assets render-icon, which
+  xvfb               A virtual display for shamway render-icon, which
                      needs a real graphics device and silently renders a
                      blank image without one
 
@@ -441,6 +441,6 @@ cat <<'EOF'
 
 Next:
   scripts/bootstrap                    install the pipeline CLI
-  7dtd-assets init MOD --game-dir ...  scaffold a modlet
+  shamway init MOD --game-dir ...  scaffold a modlet
   scripts/install-unity-editor.sh      install the game-matched Unity editor
 EOF

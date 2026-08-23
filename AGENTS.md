@@ -135,6 +135,14 @@ The offline gates are necessary, not sufficient. Never describe a bundle as
 working, verified, or accepted on offline output alone: acceptance always ends
 with a fresh client and a human look or listen at the changed asset.
 
+A passing in-client suite does not change that. `shamway acceptance-provider`
+generates cases that load every bundle member through the game's own
+`DataLoader.LoadAsset<T>` — the strongest mechanical evidence available, and
+since 2026-08-24 the proof that the engine reads a synthesized bundle — but
+every one of those cases passes on a texture that loads upside down and a clip
+at the wrong pitch. **A load is not a look.** Report a green suite as "the game
+read it", never as "it works", and say plainly when nobody has yet looked.
+
 Unity is optional; the gates are not. A mod may declare `bundle_source =
 "none"` and ship no bundle, `"external"` and have its bundle built by an editor
 on another machine, or `"synthesized"` and have this tool write the bundle with

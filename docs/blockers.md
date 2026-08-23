@@ -141,79 +141,69 @@ shamway validate
 log and `SEVEN_DAYS_TO_DIE_DIR` were present), `validate` passes, and the
 bundle then loads in a fresh client per entry 3.
 
-### 6. No synthesized bundle has been loaded by a client
+### 6. A synthesized bundle has not been *looked at* in a client
 
-**Not blocked:** the writer itself, and more of it than expected. A bundle
-`shamway build` synthesized with no editor in its path — `Texture2D`,
-`AudioClip` and `TextAsset` — was loaded on 2026-08-23 by a real Unity
-2022.3.62f2 runtime through `AssetBundle.LoadFromFile`, and every object
-deserialized with the engine's own class definitions: the text came back, the
-texture as `4x2 RGBA32` with its rows the right way up, and FMOD decoded the
-hand-written FSB5 bank to `channels=1 frequency=44100 samples=4410`. That is
-`shamway verify-bundle`, and it is repeatable on any host with an editor.
+**No longer blocked:** the load itself. On 2026-08-24 **7 Days to Die V 3.1.0
+b14 loaded a bundle this repository serialized with no editor anywhere in its
+path**, through the engine's own `DataLoader.LoadAsset<T>`, and returned both
+objects. Measured, from the client log of that run:
 
-**Blocks only this:** the claim that **7 Days to Die** loads one. A Unity
-runtime of the same revision is not the game: it does not exercise
-`DataLoader.ParseDataPathIdentifier`, `AssetBundleManager._get`'s stem
-reduction, or the block/sound systems that consume the result. And on a
-synthesized bundle the class-142 and stem gates are true by construction, so
-the fresh client is not a confirmation step here — it is the acceptance. The
-mode is exposed anyway, at the user's direction, which is a deliberate
-deviation from the phase-4 bar in
-[offline-bundle-builder.md](offline-bundle-builder.md); every synthesize prints
-what its gates are worth.
+```text
+INF [MODS]     Loaded Mod: ShamwaySynthProof (1.0.0)
+INF [7dtd-playtest] synthProofBeep: synthProofBeep channels=1 frequency=44100 samples=20727 length=0.47
+INF [7dtd-playtest] synthProofOverlay: synthProofOverlay 512x512 RGBA32
+INF [7dtd-playtest] SUMMARY pass=3 fail=0 skip=0 total=3
+```
 
-**No longer blocked:** the plumbing for closing it. On 2026-08-24 this
-repository gained `shamway acceptance-provider`, which generates a
-[hordeforge/7dtd-playtest](https://github.com/hordeforge/7dtd-playtest)
-scenario provider from the mod's own tracked manifest — one case per bundle
-member, each calling `DataLoader.LoadAsset<T>` inside the live client, plus a
-stem the bundle does not contain that must return null — and
-`scripts/playtest-acceptance.sh`, which generates, builds, deploys and hands
-the run to that harness. That reaches the engine code a runtime load cannot:
-`@modfolder(Name)` rewriting, `AssetBundleManager` opening the archive, and
-the stem reduction that reads the class-142 `m_Container` table.
+What that covers, and why each line matters:
 
-Two defects were found and fixed on the way, and both are why this entry stayed
-open longer than the writer deserved: `shamway client deploy` read no
-exclusivity lock, so it could copy a modlet into another session's run; and
+- both assets were requested **by stem** (`?synthProofBeep`, no extension), so
+  `AssetBundleManager._get`'s stem reduction read the `m_Container` table in
+  the class-142 object this tool wrote. The by-construction caveat on that gate
+  is now backed by the engine agreeing with it;
+- `@modfolder(ShamwaySynthProof):` resolved, so `ModManager.PatchModPathString`
+  accepted the mod and the archive opened — no `[MODS] Mod reference for a mod
+  that is not loaded`;
+- **FMOD decoded the hand-written FSB5 bank inside the game**, to the same
+  channel count, rate and sample count the WAV had;
+- a third case asked for a stem the bundle does not contain and got `null`, so
+  the three passes are not a loader answering everything;
+- the log carries no bundle-load, incompatibility or wrong-name lines.
+
+Reproduce with `scripts/playtest-acceptance.sh` in a mod whose bundle is
+staged; it generates the provider from the tracked manifest, deploys, and hands
+the run to
+[hordeforge/7dtd-playtest](https://github.com/hordeforge/7dtd-playtest).
+
+**Still blocked, and this is the whole of what is left:** a person. Every case
+above passes on a texture that loads upside down, a clip at the wrong pitch, a
+panel whose alpha is inverted. The engine said it could read the bytes; nobody
+has said they are the right bytes. Until someone looks and listens, a
+synthesized bundle is *loadable*, not *correct*, and no report may call it
+accepted.
+
+Two defects were found on the way and are fixed: `shamway client deploy` read
+no exclusivity lock and could copy a modlet into another session's run, and
 `playtest_run.py` preflighted the dedicated server but not the client, so a
 caller who exported the wrong variable waited out a fifteen-minute timeout
-instead of reading one error. The second is fixed upstream in
-`hordeforge/7dtd-playtest`.
+instead of reading one error line (fixed upstream,
+hordeforge/7dtd-playtest#19).
 
-**Still blocked:** the run itself. No suite has completed against a synthesized
-bundle yet, so nothing here may be described as client-accepted.
-
-**You run:** in a mod with `bundle_source = "synthesized"`, an XML reference to
-one of its assets, and a client installed:
-
-```bash
-shamway build
-shamway validate
-shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
-```
+**You run,** in a mod with a staged bundle, on a host with a client:
 
 ```bash
 shamway script playtest-acceptance
 ```
 
-Without the harness, the weaker form that proves the mod loads but not that
-anything read the bundle:
+Then, for the half that is still owed, with the client up and the asset on
+screen:
 
 ```bash
-shamway client deploy .
-shamway client launch --mod-name MyMod
+shamway client capture bundle-assets --observable "the panel reads upright, the cue is one clean beep"
 ```
 
-**Confirms it worked:** every generated case passes (`[7dtd-playtest] PASS
-<mod>_bundle/load_<stem>`, and `absent_stem_is_null` among them, or the loader
-is answering requests it should refuse), the client log carries `Loaded Mod:
-MyMod` with no bundle-load, incompatibility or wrong-name lines, and the asset
-itself is right when a person looks at or listens to it — a texture the right
-way up, a clip at the right pitch. Record that last judgement with `shamway
-client capture <label> --observable "..."`; without it the only evidence the
-asset was ever *looked at* is a chat message.
+**Confirms it worked:** every generated case passes with `fail=0`, and the
+capture manifest carries a frame and the observable it was judged against.
 
 ## Verified, for contrast
 

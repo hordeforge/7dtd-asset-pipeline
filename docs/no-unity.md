@@ -209,8 +209,18 @@ It says nothing about whether the asset is right.
 
 ### What is still owed
 
-A fresh client. For a synthesized bundle that is not a confirmation step, it is
-*the* acceptance, and [blockers.md](blockers.md) records how far it has got.
+A person's eyes and ears — and, as of 2026-08-24, only that.
+
+The load is proven. 7 Days to Die V 3.1.0 b14 opened a bundle this tool
+serialized with no editor in its path and returned both objects through
+`DataLoader.LoadAsset<T>`, requested by stem, with FMOD decoding the
+hand-written FSB5 bank to `channels=1 frequency=44100 samples=20727`. The log
+lines and what each one covers are in [blockers.md](blockers.md) entry 6.
+
+What that does **not** establish is that the asset is right. Every case there
+passes on a texture that loads upside down and a clip at the wrong pitch. For a
+synthesized bundle the human look is not a formality on top of the gates; it is
+the only step that has an opinion about the content.
 
 The mechanical half is automated. `shamway acceptance-provider` generates a
 scenario provider for

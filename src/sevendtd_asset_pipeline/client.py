@@ -312,6 +312,23 @@ def new_session_id(prefix: str = "shamway") -> str:
 # ------------------------------------------------------------------- deploy
 
 
+def _deploy_name(mod_name: str) -> str:
+    """Validate a deployment folder name as one plain path component.
+
+    The name can come from a mod's own ModInfo.xml or an API parameter, so it
+    is untrusted input at this boundary: without this check a name like
+    `../../elsewhere` or `/tmp/x` would aim the `rmtree`/`mkdir` below outside
+    the Mods directory.
+    """
+    name = mod_name.strip()
+    if not name or name in (".", "..") or "/" in name or "\\" in name or "\0" in name:
+        raise PipelineError(
+            f"mod name {mod_name!r} is not a single folder name; refusing to derive "
+            "a deployment path from it"
+        )
+    return name
+
+
 def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = True) -> list[str]:
     """Copy the deployable part of a modlet into `<mods_dir>/<mod_name>/`.
 
@@ -321,10 +338,11 @@ def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = Tr
     deployment is removed first, so a stale bundle cannot survive next to a
     new one. Returns the relative paths copied.
     """
+    name = _deploy_name(mod_name)
     mod_root = Path(mod_root).resolve()
     if not (mod_root / "ModInfo.xml").is_file():
         raise PipelineError(f"{mod_root} has no ModInfo.xml; nothing deployable here")
-    destination = Path(mods_dir) / mod_name
+    destination = Path(mods_dir) / name
     if destination.exists():
         if not replace:
             raise PipelineError(f"{destination} already exists; pass replace=True to refresh it")

@@ -105,6 +105,27 @@ class DeployTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp, self.assertRaises(PipelineError):
             client.deploy_mod(Path(temp), Path(temp) / "Mods", "X")
 
+    def test_refuses_a_name_that_traverses_out_of_the_mods_dir(self) -> None:
+        """A mod name is a folder name, never a path.
+
+        The name can come from the deployed mod's own ModInfo.xml or an API
+        parameter, so a traversal or absolute name must be rejected before it
+        reaches the rmtree/mkdir that prepare the destination.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mod = root / "MyMod"
+            mod.mkdir()
+            (mod / "ModInfo.xml").write_text("<xml/>")
+            mods_dir = root / "Mods"
+            hostage = root / "hostage"
+            hostage.mkdir()
+            for name in ("../hostage", "../../hostage", str(root / "elsewhere"), "..", ".", ""):
+                with self.assertRaises(PipelineError, msg=name):
+                    client.deploy_mod(mod, mods_dir, name)
+            self.assertTrue(hostage.is_dir())
+            self.assertFalse(mods_dir.exists())
+
     def test_deploy_resolves_the_mod_name_from_modinfo(self) -> None:
         """`deploy` without --name reads ModInfo.xml through read_mod_name.
 

@@ -34,8 +34,8 @@ all = ["UnityPy>=1.20,<2", "pillow>=10", "numpy>=1.24", "trimesh>=4"]
 shamway = "sevendtd_asset_pipeline.cli:main"
 
 [project.urls]
-Repository = "https://github.com/ywy50/7dtd-asset-pipeline"
-Issues = "https://github.com/ywy50/7dtd-asset-pipeline/issues"
+Repository = "https://github.com/hordeforge/7dtd-asset-pipeline"
+Issues = "https://github.com/hordeforge/7dtd-asset-pipeline/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

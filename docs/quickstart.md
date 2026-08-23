@@ -20,7 +20,7 @@ You do **not** need the game running, a server, or any mod already made.
 ## 1. Host tooling (about a minute)
 
 ```bash
-git clone https://github.com/ywy50/7dtd-asset-pipeline
+git clone https://github.com/hordeforge/7dtd-asset-pipeline
 cd 7dtd-asset-pipeline
 scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
 ```

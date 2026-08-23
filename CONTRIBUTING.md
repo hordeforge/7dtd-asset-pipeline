@@ -25,6 +25,18 @@ say which: compiled (`make check` on a host with the editor), probed
 (`shamway build --probe` ran it), or executed for real (`render-icon`, a
 generator, a fresh client). Never describe the first as the third.
 
+## Portability
+
+The CLI claims to run on Linux, macOS, and Windows
+([docs/quickstart.md](docs/quickstart.md)); CI exercises Linux only. The rest
+of that claim rests on construction, not evidence: no Unix-only module at
+import time (`PortabilityTests` in tests/test_client.py simulates Windows'
+missing `fcntl`), explicit endianness in every binary format, pathlib instead
+of string paths, and [`.gitattributes`](.gitattributes) pinning LF so a
+Windows checkout cannot ship CRLF shell scripts through `shamway script`. A
+platform absent from CI is asserted, never proven; extend the matrix before
+extending the claim.
+
 ## Releases
 
 Releases are tag-driven, like the rest of hordeforge: bump `version` in

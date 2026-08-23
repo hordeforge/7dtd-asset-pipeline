@@ -466,6 +466,11 @@ def _is_client_pid(pid: int, proc: Path = Path("/proc")) -> bool:
 
 
 def stop_client(pids: list[int], grace_seconds: float = 5.0, proc: Path = Path("/proc")) -> None:
+    # SIGKILL does not exist on every platform the CLI claims to run on, and
+    # the module keeps Unix-only facilities out of the Windows-facing paths
+    # (the fcntl probe in held_lock follows the same rule). Where the kernel
+    # has no SIGKILL, SIGTERM again is the strongest signal available.
+    kill_signal = getattr(signal, "SIGKILL", signal.SIGTERM)
     for pid in pids:
         if _is_client_pid(pid, proc):
             with contextlib.suppress(ProcessLookupError):
@@ -476,7 +481,7 @@ def stop_client(pids: list[int], grace_seconds: float = 5.0, proc: Path = Path("
     for pid in pids:
         if _is_client_pid(pid, proc):
             with contextlib.suppress(ProcessLookupError):
-                os.kill(pid, signal.SIGKILL)
+                os.kill(pid, kill_signal)
 
 
 def launch_command(steam_bin: str = "steam", extra_args: tuple[str, ...] = ()) -> list[str]:

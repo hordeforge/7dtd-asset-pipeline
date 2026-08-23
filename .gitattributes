@@ -1,0 +1,30 @@
+# Line-ending policy for a repository whose CLI claims portability
+# (docs/quickstart.md: Linux, macOS, Windows). The shell scripts run under
+# bash both here (`make check`, `scripts/bootstrap`) and from an installed
+# package (`shamway script`, which executes the packaged copies), so a CRLF
+# checkout would break every one of them -- and any sdist or wheel built from
+# such a checkout. Force LF on text files that bash, make, or a diff must
+# read byte-exactly; let git handle the rest.
+* text=auto
+
+*.sh text eol=lf
+scripts/bootstrap text eol=lf
+Makefile text eol=lf
+*.py text eol=lf
+*.cs text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.in text eol=lf
+.gitkeep text eol=lf
+
+# Binary artifacts: never convert, never diff.
+*.png binary
+*.wav binary
+*.unity3d binary
+*.ico binary
+*.pdf binary

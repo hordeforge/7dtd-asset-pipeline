@@ -11,8 +11,9 @@ from .errors import PipelineError
 
 BUNDLE_URI = re.compile(r"#[^\s\"'<>]+\?[^\s\"'<>]+")
 # 7DTD accepts both tokens; ReadPatchXmlWithFixedModFolders rewrites either.
-# Source: maci0/7dtd-research docs/mod-loading.md, confirmed against the
-# installed Assembly-CSharp.dll string table ('@modfolder(' and '@modfolder:').
+# Source: hordeforge/7dtd-engine-research docs/mod-loading.md, confirmed
+# against the installed Assembly-CSharp.dll string table ('@modfolder(' and
+# '@modfolder:').
 MODFOLDER = re.compile(r"@modfolder(?:\(([^)]*)\))?:", re.IGNORECASE)
 
 

@@ -43,7 +43,8 @@ class ReferenceTests(unittest.TestCase):
 
     def test_parses_bare_modfolder_self_reference(self) -> None:
         # 7DTD accepts '@modfolder:' as well as '@modfolder(Name):'
-        # (maci0/7dtd-research docs/mod-loading.md; Assembly-CSharp string table).
+        # (hordeforge/7dtd-engine-research docs/mod-loading.md; Assembly-CSharp
+        # string table).
         ref = parse_reference(
             Path("blocks.xml"), "#@modfolder:Resources/my.unity3d?Thing.prefab"
         )

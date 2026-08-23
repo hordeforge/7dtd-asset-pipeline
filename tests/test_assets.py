@@ -322,6 +322,104 @@ class GeneratorTests(unittest.TestCase):
         self.assertIn("DistantFadeStart", output.getvalue())
 
 
+class AdoptionTests(unittest.TestCase):
+    """Adopting a Unity project a mod already has.
+
+    This is the path every existing mod takes, and the one where a mistake is
+    expensive: moving a Unity project means moving every `.meta` with it, and
+    any slip re-imports each asset under a fresh GUID, silently breaking every
+    prefab reference. So adoption must move nothing.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        (self.root / "ModInfo.xml").write_text(
+            '<xml><Name value="ExistingMod" /></xml>', encoding="utf-8"
+        )
+        # A project shaped like one a mod already had: its own layout, its own
+        # editor scripts, and a source asset carrying a .meta.
+        self.project = self.root / "_meta" / "unity" / "ExistingModAssets"
+        self.bundle_source = self.project / "Assets" / "ExistingMod" / "Bundle"
+        self.bundle_source.mkdir(parents=True)
+        (self.bundle_source / "existingModThing.prefab").write_text("prefab", encoding="utf-8")
+        self.meta = self.bundle_source / "existingModThing.prefab.meta"
+        self.meta.write_text("guid: 0123456789abcdef", encoding="utf-8")
+        (self.project / "Assets" / "ExistingMod" / "Editor").mkdir(parents=True)
+        self.mod_builder = self.project / "Assets" / "ExistingMod" / "Editor" / "WorldBuilder.cs"
+        self.mod_builder.write_text("// the mod's own generator", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _adopt(self, **overrides):
+        from sevendtd_asset_pipeline import Pipeline
+
+        options = dict(
+            unity_version="2022.3.62f2",
+            adopt_project=self.project,
+            source_root="Assets/ExistingMod/Bundle",
+            manifest_dir="_meta/unity/manifests",
+        )
+        options.update(overrides)
+        return Pipeline.scaffold(self.root, **options)
+
+    def test_adoption_moves_nothing_and_keeps_the_mods_own_scripts(self) -> None:
+        before = sorted(path.name for path in self.bundle_source.iterdir())
+        self._adopt()
+        self.assertEqual(before, sorted(path.name for path in self.bundle_source.iterdir()))
+        self.assertEqual("guid: 0123456789abcdef", self.meta.read_text())
+        self.assertTrue(self.mod_builder.is_file())
+        self.assertFalse((self.root / "tools" / "shamway" / "UnityProject").exists())
+
+    def test_adoption_installs_only_the_pipeline_owned_editor_scripts(self) -> None:
+        from sevendtd_asset_pipeline.scaffold import EDITOR_FOLDER, PIPELINE_EDITOR_SCRIPTS
+
+        self._adopt()
+        installed = self.project / EDITOR_FOLDER
+        self.assertEqual(
+            sorted(PIPELINE_EDITOR_SCRIPTS), sorted(path.name for path in installed.iterdir())
+        )
+
+    def test_the_config_points_at_the_existing_project(self) -> None:
+        pipeline, _ = self._adopt()
+        self.assertEqual(self.project.resolve(), pipeline.config.unity_project)
+        self.assertEqual("Assets/ExistingMod/Bundle", pipeline.config.source_root)
+        self.assertEqual(
+            (self.root / "_meta" / "unity" / "manifests").resolve(),
+            pipeline.config.manifest_dir,
+        )
+
+    def test_a_missing_source_root_is_refused_with_what_it_means(self) -> None:
+        with self.assertRaises(PipelineError) as raised:
+            self._adopt(source_root="Assets/Wrong/Path")
+        self.assertIn("does not exist", str(raised.exception))
+        self.assertFalse((self.root / ".shamway.toml").exists())
+
+    def test_a_project_outside_the_mod_is_refused(self) -> None:
+        """A mod that reaches outside itself to build is not a standalone repo."""
+        with tempfile.TemporaryDirectory() as elsewhere:
+            outside = Path(elsewhere) / "Project"
+            (outside / "Assets").mkdir(parents=True)
+            with self.assertRaises(PipelineError) as raised:
+                self._adopt(adopt_project=outside, source_root=None)
+        self.assertIn("below the mod root", str(raised.exception))
+
+    def test_a_directory_that_is_not_a_unity_project_is_refused(self) -> None:
+        empty = self.root / "_meta" / "unity" / "NotAProject"
+        empty.mkdir(parents=True)
+        with self.assertRaises(PipelineError) as raised:
+            self._adopt(adopt_project=empty, source_root=None)
+        self.assertIn("not a Unity project", str(raised.exception))
+
+    def test_adoption_still_writes_the_agent_guide_and_source_tree(self) -> None:
+        _, created = self._adopt()
+        names = [path.name for path in created]
+        self.assertIn("AGENTS.md", names)
+        self.assertIn("assets-src", names)
+        self.assertTrue((self.root / "assets-src" / "README.md").is_file())
+
+
 class DocumentationTests(unittest.TestCase):
     """`shamway docs` is how an agent in a mod repo reads the rules."""
 

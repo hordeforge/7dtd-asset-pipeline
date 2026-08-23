@@ -51,7 +51,7 @@ its seed and its design notes, no — that is yours.
 MyMod/
 ├── ModInfo.xml                          # yours, and required before init runs
 ├── Config/                              # yours: blocks, items, sounds, recipes
-├── Localization.csv                     # yours
+│   └── Localization.csv                 # yours; must be inside Config/
 ├── Resources/mymod.unity3d              # BUILD OUTPUT — commit it, never edit it
 ├── UIAtlases/ItemIconAtlas/*.png        # yours: 160 x 160 atlas cells
 │
@@ -93,7 +93,7 @@ project (including every `.meta`), the built bundle, and its tracked manifest.
 
 Do not ship in the released modlet: `.shamway.toml`, `tools/`,
 `assets-src/`, `.shamway/`, or the Unity project. The deployable modlet
-is `ModInfo.xml`, `Config/`, `Localization.csv`, `Resources/`, and `UIAtlases/`
+is `ModInfo.xml`, `Config/` (with `Localization.csv` inside it), `Resources/`, and `UIAtlases/`
 — see [game-integration.md](game-integration.md).
 
 Add to the mod's `.gitignore`:
@@ -105,6 +105,47 @@ tools/shamway/UnityProject/Temp/
 tools/shamway/UnityProject/Logs/
 tools/shamway/UnityProject/UserSettings/
 ```
+
+## Adopting a mod that already has a Unity project
+
+A mod with assets already has a Unity project, its own editor scripts, and a
+committed bundle. Do **not** scaffold a fresh project and move things into it.
+Moving a Unity project means moving every `.meta` with it, and any slip
+re-imports each asset under a fresh GUID, silently breaking every prefab
+reference — and it forces a bundle rebuild, which invalidates whatever
+fresh-client acceptance you had recorded, for a change that produced no new art.
+
+Adopt it in place instead. Every path is configuration:
+
+```bash
+shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR" \
+    --adopt _meta/unity/MyModAssets \
+    --source-root Assets/MyMod/Bundle \
+    --manifest-dir _meta/unity/manifests
+```
+
+Nothing moves. `init` writes `.shamway.toml` pointing at what you already have,
+installs only the pipeline-owned editor scripts into
+`<project>/Assets/SevenDaysToDieAssetPipeline/Editor/`, and adds the agent guide
+and `assets-src/`. It refuses an adoption that could not build: a directory
+with no `Assets/`, a `--source-root` that does not exist in the project, or a
+project outside the mod root — the last because a mod that reaches outside
+itself to build is not a standalone repository.
+
+Then three changes in the mod:
+
+1. **Delete the mod's own `BundleBuilder`** and let shamway's take over. That
+   file is pipeline-owned; a fork of it does not get the gates.
+2. **Mark the mod's generators** with `[ShamwayPreBuild]` so they still run
+   before the bundle is collected — see
+   [bundle-generation.md](bundle-generation.md). Without this the build
+   succeeds and ships whatever the generators produced last time.
+3. **Retire the mod's build/validate scripts** in favour of `shamway build`,
+   `shamway validate`, `shamway check-icons`, and `shamway check-sound`, and
+   point its Makefile targets at those.
+
+Keep everything else: the mod's asset generators, its source art, its prompts
+and seeds, and the bundle itself. Those are content.
 
 ## Calling the tooling from the mod
 

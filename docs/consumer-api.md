@@ -150,7 +150,7 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `validate [--bundle PATH]` | no | no | no | bundle + all XML references |
 | `build --probe` | no | yes | no | prove the environment; stages nothing |
 | `build` | no | yes | **yes** | build, gate, stage bundle + manifest |
-| `init MOD_ROOT` | no | no | **yes** | scaffold into a modlet |
+| `init MOD_ROOT` | no | no | **yes** | scaffold into a modlet, or `--adopt` its existing Unity project |
 | `capabilities [--json]` | no | no | no | optional capabilities and how to install them |
 | `inspect --deep [--json]` | no | no | no | every serialized object (needs UnityPy) |
 | `check-mesh [--json] FILE` | no | no | no | mesh extents and glTF conformance |

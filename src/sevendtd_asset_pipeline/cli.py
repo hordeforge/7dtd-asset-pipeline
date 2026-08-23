@@ -50,6 +50,23 @@ def _parser() -> argparse.ArgumentParser:
         "release service when omitted and reachable",
     )
     init.add_argument("--game-dir", type=Path, help="discover Unity version from an installed game")
+    init.add_argument(
+        "--adopt",
+        type=Path,
+        metavar="UNITY_PROJECT",
+        help="adopt a Unity project the mod already has instead of creating one; "
+        "installs only the pipeline-owned editor scripts and moves nothing",
+    )
+    init.add_argument(
+        "--source-root",
+        help="bundle-membership folder relative to the Unity project "
+        "(default Assets/ModAssets/Bundle)",
+    )
+    init.add_argument(
+        "--manifest-dir",
+        help="where the tracked .manifest is committed, relative to the mod "
+        "(default tools/shamway/manifests)",
+    )
 
     doctor = commands.add_parser("doctor", help="check configuration and required tooling")
     doctor.add_argument("--json", action="store_true", help="emit machine-readable checks")
@@ -191,10 +208,16 @@ def run(args: argparse.Namespace) -> int:
             except PipelineError:
                 print("Could not resolve the changeset; Unity will add it on first open")
         created = initialize(
-            args.mod_root, args.mod_name, args.bundle_name, version, changeset
+            args.mod_root, args.mod_name, args.bundle_name, version, changeset,
+            args.adopt, args.source_root, args.manifest_dir,
         )
         for path in created:
             print(f"created {path}")
+        if args.adopt:
+            print(
+                "Adopted an existing Unity project. Mark the mod's own asset generators "
+                "with [ShamwayPreBuild] so 'shamway build' runs them before collecting."
+            )
         print("Next: set SEVEN_DAYS_TO_DIE_DIR and UNITY_EDITOR, then run shamway doctor")
         return 0
 

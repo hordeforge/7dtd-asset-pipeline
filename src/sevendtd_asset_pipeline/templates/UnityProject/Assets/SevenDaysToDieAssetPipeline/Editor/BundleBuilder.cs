@@ -32,7 +32,7 @@ namespace SevenDaysToDie.AssetPipeline
             }
             catch (Exception exception)
             {
-                Debug.LogError("[7dtd-asset-pipeline] build failed: " + exception);
+                Debug.LogError("[shamway] build failed: " + exception);
                 exitCode = 2;
             }
             EditorApplication.Exit(exitCode);
@@ -45,6 +45,9 @@ namespace SevenDaysToDie.AssetPipeline
             if (probe) CreateProbe();
             try
             {
+                // A probe deliberately skips this: it proves the environment
+                // with a throwaway cube and must not run the mod's generators.
+                if (!probe) ShamwayPreBuild.RunAll();
                 var assets = CollectAssets(sourceRoot);
                 if (assets.Length == 0)
                     throw new Exception("No assets found below " + sourceRoot + ".");
@@ -54,8 +57,8 @@ namespace SevenDaysToDie.AssetPipeline
                 BuildWindowsBundle(build, output, target);
                 var built = Path.Combine(output, bundleName);
                 if (!File.Exists(built)) throw new Exception("Expected output is missing: " + built);
-                Debug.Log("[7dtd-asset-pipeline] built " + bundleName + " with " + assets.Length + " assets");
-                foreach (var asset in assets) Debug.Log("[7dtd-asset-pipeline] asset: " + asset);
+                Debug.Log("[shamway] built " + bundleName + " with " + assets.Length + " assets");
+                foreach (var asset in assets) Debug.Log("[shamway] asset: " + asset);
             }
             finally
             {

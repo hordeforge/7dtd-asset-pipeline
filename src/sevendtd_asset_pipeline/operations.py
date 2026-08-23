@@ -247,7 +247,8 @@ _DEFINITIONS: tuple[Operation, ...] = (
     ),
     Operation(
         name="init",
-        summary="Scaffold the pipeline into an existing modlet. Refuses to overwrite.",
+        summary="Scaffold the pipeline into an existing modlet, or adopt the Unity project "
+        "the mod already has. Refuses to overwrite.",
         parameters=_schema(
             {
                 "mod_root": PATH_PARAM,
@@ -256,6 +257,19 @@ _DEFINITIONS: tuple[Operation, ...] = (
                 "mod_name": {"type": "string"},
                 "bundle_name": {"type": "string"},
                 "changeset": {"type": "string"},
+                "adopt_project": {
+                    "type": "string",
+                    "description": "existing Unity project to adopt instead of creating one; "
+                    "must live below the mod root",
+                },
+                "source_root": {
+                    "type": "string",
+                    "description": "bundle-membership folder, relative to the Unity project",
+                },
+                "manifest_dir": {
+                    "type": "string",
+                    "description": "where the tracked .manifest is committed, relative to the mod",
+                },
             },
             required=["mod_root"],
         ),

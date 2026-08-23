@@ -154,6 +154,18 @@ wiring a long-range sound.
 `GeneratedAsset` also builds materials, texture imports, particle blend state,
 and audio imports with the settings a batch script otherwise silently omits.
 
+**If this mod generates part of its bundle from code, mark each generator:**
+
+```csharp
+[ShamwayPreBuild(Order = 10)]
+public static void EnsureGeneratedPrefabs() { ... }
+```
+
+`shamway build` runs every marked method before it collects the folder,
+ascending by `Order`. Without the attribute the build succeeds and ships
+whatever the generators produced last time — a stale prefab is a perfectly
+valid prefab, so nothing reports it.
+
 ## Rules
 
 1. **Name every bundle asset with a unique, mod-prefixed stem.** 7DTD resolves
@@ -168,14 +180,18 @@ and audio imports with the settings a batch script otherwise silently omits.
    `tools/shamway/UnityProject/Packages/manifest.json` are build inputs. An
    absent module makes Unity strip those classes while still reporting success.
    The pipeline refuses to stage such a build, but the fix is always here.
-5. **Exclude inherited properties, do not just omit them.** `ItemClassesFromXml`
+5. **Never edit the pipeline's own editor scripts.** Everything in
+   `Assets/SevenDaysToDieAssetPipeline/Editor/` is vendored and an upgrade
+   replaces it. Put this mod's editor scripts in a folder of their own and
+   hook them in with `[ShamwayPreBuild]`.
+6. **Exclude inherited properties, do not just omit them.** `ItemClassesFromXml`
    and `BlocksFromXml` copy every parent property the `Extends` `param1` list
    does not name, so deleting a `TintColor`, `Meshfile`, `Model`, or
    `CustomIcon` line does not stop the parent's value applying. Name it in
    `param1` on anything that owns its own art.
-6. **Never write to the 7 Days to Die install.** It is read-only evidence.
-7. **Never handle Unity credentials or licenses.** Sign-in is a human action.
-8. **Offline gates are necessary, not sufficient.** Never report an asset as
+7. **Never write to the 7 Days to Die install.** It is read-only evidence.
+8. **Never handle Unity credentials or licenses.** Sign-in is a human action.
+9. **Offline gates are necessary, not sufficient.** Never report an asset as
    working, verified, or done on `build`/`validate` output alone. Acceptance
    is a fresh client that loads the asset by its real URI plus a human look or
    listen. Say plainly which of the two you did.

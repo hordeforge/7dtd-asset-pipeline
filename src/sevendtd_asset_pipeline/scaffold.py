@@ -1,4 +1,12 @@
-"""Scaffold a pipeline-owned Unity project into an existing modlet."""
+"""Scaffold a pipeline-owned Unity project into a modlet, or adopt an existing one.
+
+Two entry paths, because a mod that already ships assets is the harder and
+more common case. A fresh scaffold copies the whole Unity project template.
+*Adoption* copies only the pipeline-owned editor scripts into a project the
+mod already has, and points the configuration at it — because moving a Unity
+project means moving every `.meta` with it, and any mistake there re-imports
+every asset under a new GUID and silently breaks every prefab reference.
+"""
 
 from __future__ import annotations
 
@@ -44,20 +52,50 @@ def default_bundle_name(mod_name: str) -> str:
     return f"{stem or 'mod-assets'}.unity3d"
 
 
+# The editor scripts this pipeline owns. On adoption these are copied into a
+# project that already exists; treat them as vendored, because an upgrade
+# replaces them. A mod's own editor scripts belong in a folder of their own.
+PIPELINE_EDITOR_SCRIPTS = (
+    "BundleBuilder.cs",
+    "GeneratedAsset.cs",
+    "IconRenderer.cs",
+    "ShamwayPreBuild.cs",
+)
+EDITOR_FOLDER = "Assets/SevenDaysToDieAssetPipeline/Editor"
+
+
 def initialize(
     mod_root: Path,
     mod_name: str | None,
     bundle_name: str | None,
     unity_version: str,
     changeset: str | None = None,
+    adopt_project: Path | str | None = None,
+    source_root: str | None = None,
+    manifest_dir: str | None = None,
 ) -> list[Path]:
+    """Create the pipeline inside a modlet, or adopt the Unity project it has.
+
+    With `adopt_project`, no project template is copied and no
+    `ProjectVersion.txt` or package manifest is touched: those already exist and
+    are the mod's. Only the pipeline-owned editor scripts are installed.
+    """
     mod_root = mod_root.resolve()
     if not mod_root.is_dir():
         raise PipelineError(f"mod root does not exist: {mod_root}")
     config_path = mod_root / CONFIG_NAME
-    project = mod_root / "tools" / "shamway" / "UnityProject"
     makefile = mod_root / "Makefile.assets"
-    existing = [path for path in (config_path, project, makefile) if path.exists()]
+    adopting = adopt_project is not None
+
+    if adopting:
+        project = Path(adopt_project)
+        project = (project if project.is_absolute() else mod_root / project).resolve()
+        _check_adoptable(project, mod_root, source_root)
+    else:
+        project = mod_root / "tools" / "shamway" / "UnityProject"
+
+    guarded = [config_path, makefile] + ([] if adopting else [project])
+    existing = [path for path in guarded if path.exists()]
     if existing:
         raise PipelineError(
             "pipeline files already exist below "
@@ -67,30 +105,94 @@ def initialize(
     if mod_name is None:
         mod_name = read_mod_name(mod_root / "ModInfo.xml")
     bundle_name = bundle_name or default_bundle_name(mod_name)
-    config_path.write_text(render_config(mod_name, bundle_name, unity_version), encoding="utf-8")
-    template = files("sevendtd_asset_pipeline").joinpath("templates/UnityProject")
-    shutil.copytree(str(template), project)
-    bundle_source = project / "Assets" / "ModAssets" / "Bundle"
-    bundle_source.mkdir(parents=True, exist_ok=True)
-    (bundle_source / ".gitkeep").write_text(
-        "# Put source assets and their Unity .meta files below this directory.\n",
+
+    relative_project = _relative(project, mod_root, "the Unity project")
+    config_path.write_text(
+        render_config(
+            mod_name,
+            bundle_name,
+            unity_version,
+            unity_project=relative_project,
+            source_root=source_root or "Assets/ModAssets/Bundle",
+            manifest_dir=manifest_dir or "tools/shamway/manifests",
+        ),
         encoding="utf-8",
     )
-    # Unity adds m_EditorVersionWithRevision itself on first open, but writing
-    # it now pins the exact build in review and in git history, and tells
-    # install-unity-editor.sh which changeset the project expects.
-    version_file = project / "ProjectSettings" / "ProjectVersion.txt"
-    lines = [f"m_EditorVersion: {unity_version}"]
-    if changeset:
-        lines.append(f"m_EditorVersionWithRevision: {unity_version} ({changeset})")
-    version_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    template = files("sevendtd_asset_pipeline").joinpath("templates/UnityProject")
+    if adopting:
+        created_scripts = _install_editor_scripts(template, project)
+    else:
+        shutil.copytree(str(template), project)
+        bundle_source = project / "Assets" / "ModAssets" / "Bundle"
+        bundle_source.mkdir(parents=True, exist_ok=True)
+        (bundle_source / ".gitkeep").write_text(
+            "# Put source assets and their Unity .meta files below this directory.\n",
+            encoding="utf-8",
+        )
+        # Unity adds m_EditorVersionWithRevision itself on first open, but writing
+        # it now pins the exact build in review and in git history, and tells
+        # install-unity-editor.sh which changeset the project expects.
+        version_file = project / "ProjectSettings" / "ProjectVersion.txt"
+        lines = [f"m_EditorVersion: {unity_version}"]
+        if changeset:
+            lines.append(f"m_EditorVersionWithRevision: {unity_version} ({changeset})")
+        version_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        created_scripts = []
+
     makefile.write_text(MAKEFILE_TARGETS, encoding="utf-8")
     # The mod is where an agent actually works, so the rules travel with the
     # scaffold rather than living only in this repository.
     guide = mod_root / "tools" / "shamway" / "AGENTS.md"
+    guide.parent.mkdir(parents=True, exist_ok=True)
     guide.write_text(render_agent_guide(mod_name, bundle_name), encoding="utf-8")
     # Editable sources and their provenance need a home outside the Unity
     # bundle folder, or they end up either unrecorded or accidentally shipped.
     # Created without clobbering: a mod may already have art here.
     assets_src = create_assets_src(mod_root, mod_name, bundle_name)
-    return [config_path, project, makefile, guide, assets_src]
+    # Report the editor folder on adoption and the whole project on a fresh
+    # scaffold: in both cases it is what the caller now owns and should commit.
+    touched = created_scripts[0] if adopting else project
+    return [config_path, touched, makefile, guide, assets_src]
+
+
+def _relative(path: Path, root: Path, label: str) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        raise PipelineError(
+            f"{label} must live below the mod root, so the mod stays a standalone "
+            f"repository: {path} is outside {root}"
+        ) from None
+
+
+def _check_adoptable(project: Path, mod_root: Path, source_root: str | None) -> None:
+    """Refuse an adoption that would produce a configuration nothing can build."""
+    if not project.is_dir():
+        raise PipelineError(f"no Unity project at {project}")
+    if not (project / "Assets").is_dir():
+        raise PipelineError(
+            f"{project} has no Assets/ directory, so it is not a Unity project"
+        )
+    _relative(project, mod_root, "the Unity project")
+    if source_root:
+        bundle_source = project / source_root
+        if not bundle_source.is_dir():
+            raise PipelineError(
+                f"--source-root {source_root!r} does not exist in {project}. "
+                "It is the folder whose contents become the bundle, relative to the "
+                "Unity project root."
+            )
+
+
+def _install_editor_scripts(template, project: Path) -> list[Path]:
+    """Copy the pipeline-owned editor scripts into an adopted project."""
+    destination = project / EDITOR_FOLDER
+    destination.mkdir(parents=True, exist_ok=True)
+    written = [destination]
+    for name in PIPELINE_EDITOR_SCRIPTS:
+        source = template.joinpath(EDITOR_FOLDER).joinpath(name)
+        target = destination / name
+        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        written.append(target)
+    return written

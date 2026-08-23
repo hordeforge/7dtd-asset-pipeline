@@ -64,18 +64,28 @@ class Pipeline:
         mod_name: str | None = None,
         bundle_name: str | None = None,
         changeset: str | None = None,
+        adopt_project: Path | str | None = None,
+        source_root: str | None = None,
+        manifest_dir: str | None = None,
     ) -> tuple[Pipeline, list[Path]]:
         """Create the pipeline inside an existing modlet and return it, ready to use.
 
         Supply either `game_dir`, which reads the authoritative revision from a
         shipped game bundle, or an explicitly verified `unity_version`.
+
+        `adopt_project` points at a Unity project the mod already has: the
+        template is not copied, only the pipeline-owned editor scripts are
+        installed, and the configuration is written to match. Nothing moves.
         """
         if game_dir is not None:
             unity_version = game_unity_version(Path(game_dir).resolve())[0]
         if not unity_version:
             raise PipelineError("scaffolding needs game_dir or unity_version")
         root = Path(mod_root)
-        created = initialize(root, mod_name, bundle_name, unity_version, changeset)
+        created = initialize(
+            root, mod_name, bundle_name, unity_version, changeset,
+            adopt_project, source_root, manifest_dir,
+        )
         return cls.discover(root), created
 
     def __repr__(self) -> str:
@@ -287,6 +297,9 @@ def _init(params: dict[str, Any]) -> dict[str, Any]:
         mod_name=params.get("mod_name"),
         bundle_name=params.get("bundle_name"),
         changeset=params.get("changeset"),
+        adopt_project=params.get("adopt_project"),
+        source_root=params.get("source_root"),
+        manifest_dir=params.get("manifest_dir"),
     )
     return {"created": [str(path) for path in created]}
 

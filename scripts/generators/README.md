@@ -109,6 +109,7 @@ a batch script hits and the inspector hides:
 - `ImportAudioClip(...)` and `AudioSourcePrefab(...)` are the audio half.
 
 `IconRenderer.cs` ships beside it for the other icon lane, driven by
-`shamway render-icon`.
+`shamway render-icon`, and `ShamwayPreBuild.cs` is the seam a mod's own
+generators hook into so `shamway build` runs them before collecting the bundle.
 
 Both halves end at the same place: `shamway build`, then a fresh client.

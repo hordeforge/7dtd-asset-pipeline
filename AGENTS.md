@@ -37,9 +37,13 @@ no Unity, and no game install.
 - Changes to bundle generation (`build.py`, `BundleBuilder.cs`) require
   `make check test` plus a game-matched `shamway build --probe` when Unity
   is available on the host.
-- Changes to the editor-side C# (`GeneratedAsset.cs`, `IconRenderer.cs`) are not
-  covered by the Python suite. State plainly whether an editor actually ran
-  them, and never describe an untested editor change as verified.
+- Changes to the editor-side C# (`GeneratedAsset.cs`, `IconRenderer.cs`,
+  `ShamwayPreBuild.cs`, `BundleBuilder.cs`) are not covered by the Python suite.
+  State plainly whether an editor actually ran them, and never describe an
+  untested editor change as verified.
+- Those four files are what a consuming mod vendors. Adding a fifth means
+  adding it to `scaffold.PIPELINE_EDITOR_SCRIPTS`, or an adopted project silently
+  will not get it.
 - New engine facts need a named source: `Data/Config/*.xml` in the installed
   game, `ilspycmd`/`monodis` on `Assembly-CSharp.dll`, or `maci0/7dtd-research`.
   Record which tool produced the fact. "It seemed to work in game" is not a

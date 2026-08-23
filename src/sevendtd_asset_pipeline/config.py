@@ -112,16 +112,30 @@ def load_config(path: Path | None = None) -> PipelineConfig:
     return config
 
 
-def render_config(mod_name: str, bundle_name: str, unity_version: str) -> str:
+def render_config(
+    mod_name: str,
+    bundle_name: str,
+    unity_version: str,
+    unity_project: str = "tools/shamway/UnityProject",
+    source_root: str = "Assets/ModAssets/Bundle",
+    manifest_dir: str = "tools/shamway/manifests",
+) -> str:
+    """Render `.shamway.toml`.
+
+    The three path arguments exist because a mod that already had a Unity
+    project keeps it where it is: adoption is a configuration change, not a
+    file move. Moving a Unity project means moving every `.meta` with it, and
+    a mistake there re-imports every asset under a new GUID.
+    """
     return f'''# Paths are relative to this file unless absolute.
 schema_version = 1
 mod_root = "."
 mod_name = "{mod_name}"
 bundle_name = "{bundle_name}"
-unity_project = "tools/shamway/UnityProject"
-source_root = "Assets/ModAssets/Bundle"
+unity_project = "{unity_project}"
+source_root = "{source_root}"
 build_dir = ".shamway/build"
-manifest_dir = "tools/shamway/manifests"
+manifest_dir = "{manifest_dir}"
 resources_dir = "Resources"
 config_dir = "Config"
 target = "StandaloneWindows64"

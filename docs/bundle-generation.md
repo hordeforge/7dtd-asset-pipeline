@@ -31,6 +31,46 @@ Commit every source asset with its `.meta` file. Unity GUIDs live in `.meta`;
 losing one can break prefab/material/texture relationships while leaving
 filenames unchanged.
 
+## Generating part of the bundle at build time
+
+Most real mods build some of their bundle from code — prefabs composed from
+primitives, materials, particle systems. Those generators have to run **before**
+the folder is collected, or the build ships whatever was there last time.
+Silently, because a stale prefab is a perfectly valid prefab.
+
+`BundleBuilder` is pipeline-owned and should not be edited: it carries the
+stem-collision rejection, the graphics-API set, and the forced rebuild, and a
+mod that forks it inherits none of the later fixes. So the seam is an attribute:
+
+```csharp
+[ShamwayPreBuild(Order = 10)]
+public static void EnsureGeneratedPrefabs()
+{
+    // the mod's own generator, in the mod's own editor script
+}
+```
+
+Every marked method runs before assets are collected, ascending by `Order`,
+ties broken alphabetically so a build is reproducible. Use `Order` when one
+generator consumes another's materials. The method must be `static` and take no
+parameters, and anything it throws fails the build — which is the point: a
+generator that could not run must not produce a bundle that looks finished.
+
+Two deliberate behaviours:
+
+- **A probe skips them.** `shamway build --probe` proves the environment with a
+  throwaway cube; running the mod's generators there would be slow and
+  meaningless.
+- **The count is always logged**, including zero. `pre-build: 0 generators` in
+  the log distinguishes a mod that has none from a mod whose attribute sits on
+  a method the compiler never saw.
+
+Keep the generators idempotent. A common pattern is a stamp constant that the
+generator compares before rebuilding, so an unchanged build does not reassign
+Unity's internal IDs on every run — but then remember to bump the stamp when
+you change the generator's output, or the committed prefab silently keeps its
+old shape.
+
 ## Names are an engine contract
 
 7DTD resolves a requested asset by its **file-name stem**, after discarding

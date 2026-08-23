@@ -30,9 +30,8 @@ class CapabilityTests(unittest.TestCase):
         _availability.cache_clear()
         with mock.patch(
             "sevendtd_asset_pipeline.capabilities._availability", return_value={"UnityPy": False}
-        ):
-            with self.assertRaises(PipelineError) as caught:
-                require_capability("UnityPy")
+        ), self.assertRaises(PipelineError) as caught:
+            require_capability("UnityPy")
         message = str(caught.exception)
         self.assertIn("UnityPy", message)
         self.assertIn("inspect --deep", message)
@@ -62,9 +61,8 @@ class OptionalFeatureTests(unittest.TestCase):
 
         with mock.patch(
             "sevendtd_asset_pipeline.capabilities._availability", return_value={"UnityPy": False}
-        ):
-            with self.assertRaisesRegex(PipelineError, "uv pip install"):
-                deep_inspect(Path("/nonexistent.unity3d"))
+        ), self.assertRaisesRegex(PipelineError, "uv pip install"):
+            deep_inspect(Path("/nonexistent.unity3d"))
 
     def test_check_mesh_without_any_tooling_explains_itself(self) -> None:
         import tempfile
@@ -72,12 +70,15 @@ class OptionalFeatureTests(unittest.TestCase):
 
         from sevendtd_asset_pipeline.mesh_check import check_mesh
 
-        with tempfile.NamedTemporaryFile(suffix=".glb") as handle:
-            with mock.patch(
+        with (
+            tempfile.NamedTemporaryFile(suffix=".glb") as handle,
+            mock.patch(
                 "sevendtd_asset_pipeline.capabilities._availability", return_value={"trimesh": False}
-            ), mock.patch("sevendtd_asset_pipeline.mesh_check.shutil.which", return_value=None):
-                with self.assertRaisesRegex(PipelineError, "install-tools|uv pip install"):
-                    check_mesh(Path(handle.name))
+            ),
+            mock.patch("sevendtd_asset_pipeline.mesh_check.shutil.which", return_value=None),
+            self.assertRaisesRegex(PipelineError, "install-tools|uv pip install"),
+        ):
+            check_mesh(Path(handle.name))
 
 
 if __name__ == "__main__":

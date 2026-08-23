@@ -81,12 +81,12 @@ class _Serialized:
 def _node(class_id: int, unity_version: str):
     """The release type tree for one class at one exact Unity revision."""
     require_capability("UnityPy")
-    from UnityPy.helpers.Tpk import get_typetree_node  # noqa: PLC0415
-    from UnityPy.helpers.UnityVersion import UnityVersion  # noqa: PLC0415
+    from UnityPy.helpers.Tpk import get_typetree_node
+    from UnityPy.helpers.UnityVersion import UnityVersion
 
     try:
         return get_typetree_node(class_id, UnityVersion.from_str(unity_version))
-    except Exception as exc:  # noqa: BLE001 - any lookup failure is one message
+    except Exception as exc:
         raise PipelineError(
             f"no type tree for class {class_id} at Unity {unity_version}: {exc}. "
             "The type tree is the engine's own field layout; without it this "
@@ -95,13 +95,13 @@ def _node(class_id: int, unity_version: str):
 
 
 def _write_object(value: dict[str, Any], node) -> bytes:
-    from UnityPy.helpers.TypeTreeHelper import write_typetree  # noqa: PLC0415
-    from UnityPy.streams import EndianBinaryWriter  # noqa: PLC0415
+    from UnityPy.helpers.TypeTreeHelper import write_typetree
+    from UnityPy.streams import EndianBinaryWriter
 
     writer = EndianBinaryWriter(endian="<")
     try:
         write_typetree(value, node, writer)
-    except Exception as exc:  # noqa: BLE001 - a field mismatch is one message
+    except Exception as exc:
         raise PipelineError(
             f"cannot serialize a {node.m_Type} object: {exc}. Every field the "
             "type tree names must be present and of the right shape."
@@ -118,7 +118,7 @@ def _common_strings() -> dict[str, int]:
     too; a local copy would work, and would also be the first structural
     difference from Unity's own output that a diff would show.
     """
-    from UnityPy.helpers.Tpk import get_common_strings  # noqa: PLC0415
+    from UnityPy.helpers.Tpk import get_common_strings
 
     reverse: dict[str, int] = {}
     for offset, text in get_common_strings().items():
@@ -405,7 +405,7 @@ def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
     script needs it.
     """
     require_capability("pillow")
-    from PIL import Image  # noqa: PLC0415
+    from PIL import Image
 
     try:
         with Image.open(png) as handle:
@@ -500,7 +500,7 @@ def audio_clip(name: str, wav: Path) -> BundleObject:
     would encode to Vorbis, which needs an encoder and changes the samples a
     listener signed off on. PCM is larger and is exactly what was authored.
     """
-    import wave  # noqa: PLC0415
+    import wave
 
     try:
         with wave.open(str(wav), "rb") as handle:

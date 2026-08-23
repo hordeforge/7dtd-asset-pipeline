@@ -4,14 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import unityfs_bundle
+
 from sevendtd_asset_pipeline.build import reject_disabled_modules
-from sevendtd_asset_pipeline.config import CONFIG_NAME
-from sevendtd_asset_pipeline.config import load_config
+from sevendtd_asset_pipeline.config import CONFIG_NAME, load_config
 from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.scaffold import initialize
 from sevendtd_asset_pipeline.validation import reject_ambiguous_stems, validate_mod
-
-from fixtures import unityfs_bundle
 
 
 class PipelineTests(unittest.TestCase):

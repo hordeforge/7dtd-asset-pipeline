@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -15,7 +14,7 @@ from .bundle_writer import collect_sources
 from .capabilities import capabilities, extra_install, has_capability
 from .config import BUNDLE_SOURCES, PipelineConfig
 from .errors import PipelineError
-from .game import game_unity_version, project_unity_version, validate_game_dir
+from .game import game_unity_version, project_unity_version
 from .references import read_mod_name
 
 REQUIRED_MODULES = ("com.unity.modules.assetbundle",)

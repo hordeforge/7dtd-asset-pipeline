@@ -50,7 +50,7 @@ def write_wav(path: Path, *, rate: int = 44100, channels: int = 1, width: int = 
 
 
 def write_png(path: Path, size: tuple[int, int] = (4, 2)) -> Path:
-    from PIL import Image  # noqa: PLC0415
+    from PIL import Image
 
     image = Image.new("RGBA", size, (10, 20, 30, 255))
     image.putpixel((0, 0), (255, 0, 0, 255))
@@ -81,7 +81,7 @@ class WriterTests(unittest.TestCase):
 
     def test_unitypy_reads_back_every_field_this_writer_wrote(self) -> None:
         # An independent reader of Unity's format, with none of our code in it.
-        import UnityPy  # noqa: PLC0415
+        import UnityPy
 
         bundle = self.root / "readback.unity3d"
         bundle.write_bytes(
@@ -109,7 +109,7 @@ class WriterTests(unittest.TestCase):
         self.assertEqual({"mymodnote", "mymodpanel", "mymodblast"}, set(container))
 
     def test_the_clip_resource_is_an_fsb5_bank_the_object_points_into(self) -> None:
-        import UnityPy  # noqa: PLC0415
+        import UnityPy
 
         bundle = self.root / "clip.unity3d"
         bundle.write_bytes(

@@ -43,6 +43,10 @@ jobs:
       # consumer's checkout.
       - run: shamway --help
       - run: shamway schema
+      # Pinned to the version the [tool.ruff] configuration was written for:
+      # a rule-set bump changes verdicts, so it lands here deliberately. Into
+      # the job's venv: --system hits the runner's externally-managed marker.
+      - run: uv pip install ruff==0.16.4
       - run: make check test
 
   capabilities:
@@ -57,6 +61,7 @@ jobs:
       - run: ./scripts/bootstrap
       - run: .venv/bin/shamway capabilities --json
       - run: .venv/bin/shamway capabilities --missing
+      - run: uv pip install ruff==0.16.4
       - run: make check test
 
   scaffold:

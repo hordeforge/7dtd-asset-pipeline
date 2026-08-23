@@ -62,7 +62,8 @@ def run(name: str, argv: list[str]) -> int:
         return 0
     env = dict(os.environ)
     env.setdefault("SHAMWAY_SCRIPT_ROOT", str(script.parent))
-    result = subprocess.run(["bash", str(script), *argv], check=False, env=env)
+    # bash resolves over PATH by design; the scripts are shipped host tooling.
+    result = subprocess.run(["bash", str(script), *argv], check=False, env=env)  # noqa: S607
     return result.returncode
 
 

@@ -148,8 +148,8 @@ def _classify(bundle: Path, log: Path, exit_code: int) -> VerifyReport:
         lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError as exc:
         raise PipelineError(f"cannot read the verifier log {log}: {exc}") from exc
-    for line in lines:
-        line = line.strip()
+    for raw_line in lines:
+        line = raw_line.strip()
         match = ASSET_LINE.match(line)
         if match:
             report.assets.append(

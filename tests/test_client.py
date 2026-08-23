@@ -102,9 +102,8 @@ class DeployTests(unittest.TestCase):
             self.assertFalse((stale / "old.unity3d").exists())
 
     def test_refuses_a_mod_without_modinfo(self) -> None:
-        with tempfile.TemporaryDirectory() as temp:
-            with self.assertRaises(PipelineError):
-                client.deploy_mod(Path(temp), Path(temp) / "Mods", "X")
+        with tempfile.TemporaryDirectory() as temp, self.assertRaises(PipelineError):
+            client.deploy_mod(Path(temp), Path(temp) / "Mods", "X")
 
     def test_deploy_resolves_the_mod_name_from_modinfo(self) -> None:
         """`deploy` without --name reads ModInfo.xml through read_mod_name.
@@ -197,9 +196,8 @@ class LatestLogTests(unittest.TestCase):
             self.assertEqual(client.latest_client_log(logs, written_after=time.time() - 60), new)
 
     def test_no_logs_is_an_error(self) -> None:
-        with tempfile.TemporaryDirectory() as temp:
-            with self.assertRaises(PipelineError):
-                client.latest_client_log(Path(temp))
+        with tempfile.TemporaryDirectory() as temp, self.assertRaises(PipelineError):
+            client.latest_client_log(Path(temp))
 
 
 class ProcessAndAudioTests(unittest.TestCase):

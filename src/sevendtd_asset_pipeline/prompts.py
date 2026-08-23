@@ -387,12 +387,12 @@ def render(
 
 def _print(result: dict[str, object]) -> None:
     print(result["prompt"])
-    notes = list(result["notes"])  # type: ignore[arg-type]
+    notes = list(result["notes"])
     if notes:
         print()
         for note in notes:
             print(textwrap.fill(note, width=78, initial_indent="- ", subsequent_indent="  "))
-    lane = list(result["next"])  # type: ignore[arg-type]
+    lane = list(result["next"])
     if lane:
         print()
         print("Then, on the image the model returns:")

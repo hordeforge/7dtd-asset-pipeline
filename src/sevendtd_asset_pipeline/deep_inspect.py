@@ -25,6 +25,7 @@ from typing import Any
 from .capabilities import require_capability
 from .errors import PipelineError
 
+
 @dataclass
 class BundleEntry:
     """One addressable asset in the bundle, as the runtime will see it."""
@@ -55,7 +56,7 @@ class DeepReport:
 
 def _load_unitypy() -> ModuleType:
     require_capability("UnityPy")
-    import UnityPy  # noqa: PLC0415 - optional dependency, imported on demand
+    import UnityPy
 
     return UnityPy
 
@@ -89,7 +90,7 @@ def _walk(game_object: Any, depth: int = 0) -> tuple[Counter, int]:
     for child in children:
         try:
             child_object = child.read().m_GameObject.read()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S112 - an unreadable child must not abort the walk
             continue
         child_counts, child_total = _walk(child_object, depth + 1)
         counts += child_counts
@@ -108,7 +109,7 @@ def deep_inspect(path: Path) -> DeepReport:
         container = dict(environment.container)
     except PipelineError:
         raise
-    except Exception as exc:  # noqa: BLE001 - UnityPy raises many unrelated types
+    except Exception as exc:
         raise PipelineError(f"UnityPy could not read {path}: {exc}") from exc
 
     entries: list[BundleEntry] = []

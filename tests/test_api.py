@@ -222,7 +222,7 @@ class ImportHygieneTests(unittest.TestCase):
                 if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
                 for sub in ast.walk(node):
-                    bad = isinstance(sub, ast.ImportFrom) and sub.level > 0 or (
+                    bad = (isinstance(sub, ast.ImportFrom) and sub.level > 0) or (
                         isinstance(sub, ast.Import)
                         and any(
                             alias.name.startswith("sevendtd_asset_pipeline")
@@ -234,7 +234,7 @@ class ImportHygieneTests(unittest.TestCase):
                                   f"intra-package import inside {node.name}()")
 
     def test_registry_reads_the_version_without_importing_upward(self) -> None:
-        import sevendtd_asset_pipeline.operations as operations
+        from sevendtd_asset_pipeline import operations
 
         source = Path(operations.__file__).read_text(encoding="utf-8")
         self.assertNotIn("from . import", source)

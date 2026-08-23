@@ -20,6 +20,7 @@ from pathlib import Path
 from sevendtd_asset_pipeline.bundle_writer import build_bundle, text_asset
 from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.deep_inspect import deep_inspect
+from sevendtd_asset_pipeline.errors import PipelineError
 
 REVISION = "2022.3.62f2"
 
@@ -61,8 +62,10 @@ class DeepInspectResourceTests(unittest.TestCase):
             gc.enable()
         self.assertEqual(before, open_descriptor_count())
 
-    def test_a_missing_bundle_is_named_not_loaded(self) -> None:
-        with self.assertRaisesRegex(Exception, "no such file"):
+    def test_a_missing_bundle_is_a_pipeline_error_not_a_raw_os_error(self) -> None:
+        # deep_inspect is diagnostic: every failure it reports must be
+        # actionable (PipelineError), never a bare OSError from UnityPy.
+        with self.assertRaisesRegex(PipelineError, "no such file"):
             deep_inspect(self.root / "absent.unity3d")
 
 

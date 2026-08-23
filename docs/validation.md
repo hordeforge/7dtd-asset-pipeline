@@ -190,6 +190,12 @@ extension the writer can emit means adding it to `acceptance.ASSET_CASES` with
 the `LoadAsset<T>` the engine really uses; an unmapped member is refused, not
 skipped.
 
+Stems and mod names reach the generated C# and XML as untrusted text — a
+staged manifest or a vendored ModInfo.xml can come from another machine — so
+the generator escapes them into its string literals, XML attributes, and
+comments; a stem that is not a legal C# identifier still gets a valid local
+variable name.
+
 Two boundaries this does not cross. It proves the engine read the bytes, never
 that they are the right bytes — step 5 is still a person. And it runs against a
 client the harness drives, which means it takes the shared client lock; see

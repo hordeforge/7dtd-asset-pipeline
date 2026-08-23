@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import base64
+import json
 import unittest
+import urllib.error
+from unittest import mock
 
 from sevendtd_asset_pipeline.errors import PipelineError
-from sevendtd_asset_pipeline.unity_release import parse_release
+from sevendtd_asset_pipeline.unity_release import fetch_release, parse_release
 
 
 def integrity(digest: str) -> str:
@@ -80,6 +83,45 @@ class UnityReleaseTests(unittest.TestCase):
     def test_missing_platform_fails(self) -> None:
         with self.assertRaisesRegex(PipelineError, "no MACOS"):
             parse_release(PAYLOAD, "2022.3.62f2", platform="MACOS")
+
+
+class _Response:
+    """The slice of urlopen's context manager fetch_release uses."""
+
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def read(self) -> bytes:
+        return self._payload
+
+    def __enter__(self) -> "_Response":
+        return self
+
+    def __exit__(self, *_exc: object) -> bool:
+        return False
+
+
+class FetchReleaseTests(unittest.TestCase):
+    """The network seam, without a network.
+
+    `init` degrades to 'Unity will add it on first open' only for a
+    PipelineError; any other escape from fetch_release crashes the scaffold.
+    """
+
+    def test_a_payload_parses_into_the_release(self) -> None:
+        with mock.patch(
+            "urllib.request.urlopen", return_value=_Response(json.dumps(PAYLOAD).encode())
+        ):
+            release = fetch_release("2022.3.62f2")
+        self.assertEqual("7670c08855a9", release.changeset)
+        self.assertEqual("7dffabdd28d7f2e5d5f2f1f8f2323d21", release.editor.md5)
+
+    def test_an_unreachable_service_is_a_pipeline_error_with_the_next_step(self) -> None:
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("no route to host"),
+        ), self.assertRaisesRegex(PipelineError, "cannot reach Unity's release service"):
+            fetch_release("2022.3.62f2")
 
 
 if __name__ == "__main__":

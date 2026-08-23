@@ -77,6 +77,26 @@ class CommandLineTests(unittest.TestCase):
         published = json.loads(stream.getvalue())
         self.assertEqual(set(OPERATIONS), {item["name"] for item in published["operations"]})
 
+    def test_a_failed_gate_exits_non_zero_with_one_error_line(self) -> None:
+        """The published agent contract: exit code over parsing prose.
+
+        AGENTS.md promises every failing command a single `ERROR:` line on
+        stderr and a non-zero exit; agents and CI key on exactly that shape.
+        """
+        import contextlib
+        import io
+
+        from sevendtd_asset_pipeline.cli import main
+
+        stderr = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            with contextlib.redirect_stderr(stderr):
+                code = main(["inspect", str(Path(directory) / "absent.unity3d")])
+        self.assertEqual(1, code)
+        lines = stderr.getvalue().splitlines()
+        self.assertEqual(1, len(lines), f"expected one ERROR line, got {lines}")
+        self.assertTrue(lines[0].startswith("ERROR: "), lines)
+
 
 class DispatchTests(unittest.TestCase):
     def setUp(self) -> None:

@@ -86,6 +86,39 @@ ABSENT_STEM = "shamwayAbsentStemProbe"
 _IDENTIFIER = re.compile(r"[^A-Za-z0-9_]")
 
 
+def _cs_body(text: str) -> str:
+    """Escape a value for embedding inside an existing C# string literal.
+
+    Stems and mod names arrive from a manifest or ModInfo.xml that can be built
+    on another machine (`shamway stage` gates exactly such a pair), so they are
+    untrusted here: unescaped, a `"` or a newline in a stem terminates the
+    literal and the rest of the name compiles as C# inside a provider the live
+    client executes.
+    """
+    return (
+        text.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+
+
+def _comment_text(text: str) -> str:
+    """Collapse a value to one line without an XML-comment terminator."""
+    return " ".join(text.split()).replace("--", "—")
+
+
+def _xml_attr(text: str) -> str:
+    """Escape a value for a double-quoted XML attribute."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
 @dataclass(frozen=True)
 class ProviderPlan:
     """What will be written, and the cases it will carry."""
@@ -166,44 +199,50 @@ def plan(config: PipelineConfig) -> ProviderPlan:
 def _case(stem: str, kind: str) -> str:
     detail = ASSET_DETAILS.get(kind, '""')
     assertion = next(check for suffix, (k, check) in ASSET_CASES.items() if k == kind)
+    name = _cs_body(stem)
+    # The local variable must be a C# identifier even when the stem is not
+    # ("blast-loop" would otherwise emit `blast-loopLoaded`): each case's
+    # variable lives in its own lambda scope, so sanitized names cannot collide.
+    variable = _identifier(stem)
     return f"""
-        {kind} {stem}Loaded = null;
-        queue.Add(CaseDef.Live(label, "load_{stem}", new[] {{ "bundle" }},
+        {kind} {variable}Loaded = null;
+        queue.Add(CaseDef.Live(label, "load_{name}", new[] {{ "bundle" }},
             act: ctx =>
             {{
-                {stem}Loaded = DataLoader.LoadAsset<{kind}>(Bundle + "?{stem}");
-                var loaded = {stem}Loaded;
+                {variable}Loaded = DataLoader.LoadAsset<{kind}>(Bundle + "?{name}");
+                var loaded = {variable}Loaded;
                 Report.Info(loaded == null
-                    ? "{stem}: LoadAsset<{kind}> returned null"
-                    : "{stem}: " + loaded.name + {detail});
+                    ? "{name}: LoadAsset<{kind}> returned null"
+                    : "{name}: " + loaded.name + {detail});
             }},
             assert: ctx =>
             {{
-                var loaded = {stem}Loaded;
-                return loaded != null && loaded.name == "{stem}" && {assertion};
+                var loaded = {variable}Loaded;
+                return loaded != null && loaded.name == "{name}" && {assertion};
             }},
-            fail: "the game did not load {stem} from the staged bundle"));
+            fail: "the game did not load {name} from the staged bundle"));
 """
 
 
 def render(plan_: ProviderPlan) -> dict[str, str]:
     """The provider's files, as `filename -> text`."""
     cases = "".join(_case(stem, kind) for stem, kind in plan_.stems)
+    mod_name = _cs_body(plan_.mod_name)
     source = _template("AcceptanceProvider.cs.in").format(
-        MOD_NAME=plan_.mod_name,
+        MOD_NAME=mod_name,
         CLASS_NAME=f"{plan_.assembly}Provider",
         SUITE_ID=plan_.suite_id,
-        BUNDLE_URI_PATH=plan_.bundle_uri_path,
+        BUNDLE_URI_PATH=_cs_body(plan_.bundle_uri_path),
         CASES=cases,
         ABSENT_STEM=ABSENT_STEM,
     )
     project = _template("AcceptanceProvider.csproj.in").format(
-        MOD_NAME=plan_.mod_name, ASSEMBLY_NAME=plan_.assembly
+        MOD_NAME=_comment_text(plan_.mod_name), ASSEMBLY_NAME=plan_.assembly
     )
     mod_info = (
         '<?xml version="1.0" encoding="UTF-8" ?>\n<xml>\n'
-        f'\t<Name value="{plan_.assembly}" />\n'
-        f'\t<DisplayName value="{plan_.mod_name} bundle acceptance" />\n'
+        f'\t<Name value="{_xml_attr(plan_.assembly)}" />\n'
+        f'\t<DisplayName value="{_xml_attr(plan_.mod_name + " bundle acceptance")}" />\n'
         '\t<Description value="Generated 7dtd-playtest scenario provider: loads every '
         'bundle member through the game\'s own DataLoader." />\n'
         '\t<Author value="shamway" />\n\t<Version value="1.0.0" />\n</xml>\n'

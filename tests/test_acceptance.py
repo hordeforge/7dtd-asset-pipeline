@@ -111,6 +111,76 @@ class RenderTests(unittest.TestCase):
             self.assertTrue(all(acceptance.PROVIDER_DIRECTORY in str(p) for p in first))
 
 
+class InjectionTests(unittest.TestCase):
+    """Manifest stems and mod names are untrusted: they can arrive from an
+    editor on another machine (`shamway stage`) or from a vendored ModInfo.xml,
+    and they land in C# source the live client executes."""
+
+    def _plan_with_stem(self, tmp: Path, stem: str):
+        config = _mod(Path(tmp), ["panel.png"])
+        planned = acceptance.plan(config)
+        return acceptance.ProviderPlan(
+            directory=planned.directory,
+            assembly=planned.assembly,
+            suite_id=planned.suite_id,
+            mod_name=planned.mod_name,
+            bundle_uri_path=planned.bundle_uri_path,
+            stems=((stem, "Texture2D"),),
+        )
+
+    def test_a_stem_cannot_break_out_of_the_generated_string_literals(self) -> None:
+        hostile = 'x" ; System.Console.WriteLine("pwned"); var y = "'
+        with tempfile.TemporaryDirectory() as tmp:
+            source = acceptance.render(self._plan_with_stem(tmp, hostile))[
+                "ExampleModAcceptance.cs"
+            ]
+        # The stem survives exactly, only escaped...
+        self.assertIn(acceptance._cs_body(hostile), source)
+        # ...and every double quote in the file still closes its literal, so
+        # nothing outside a string can have terminated one early.
+        self.assertEqual(source.count('"') % 2, 0)
+
+    def test_control_characters_in_a_stem_are_escaped_not_embedded_raw(self) -> None:
+        stem = "bad\tname\rx"
+        with tempfile.TemporaryDirectory() as tmp:
+            source = acceptance.render(self._plan_with_stem(tmp, stem))[
+                "ExampleModAcceptance.cs"
+            ]
+        self.assertIn(acceptance._cs_body(stem), source)
+
+    def test_a_non_identifier_stem_yields_a_valid_local_variable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = acceptance.render(self._plan_with_stem(tmp, "blast-loop"))[
+                "ExampleModAcceptance.cs"
+            ]
+        self.assertIn("blastloopLoaded", source)
+        self.assertNotIn("-loopLoaded", source)
+
+    def test_a_mod_name_with_quotes_cannot_break_the_bundle_literal_or_xml(self) -> None:
+        import xml.etree.ElementTree as ET
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # The fixture stores the entity form; read_mod_name decodes it back
+            # to a raw quote, which render must then re-escape.
+            config = _mod(Path(tmp), ["panel.png"], mod_name="Evil&quot;Mod")
+            planned = acceptance.plan(config)
+            files = acceptance.render(planned)
+        source = files[f"{planned.assembly}.cs"]
+        self.assertIn('"#@modfolder(Evil\\"Mod):Resources/examplemod.unity3d"', source.replace("\n        ", ""))
+        ET.fromstring(files["ModInfo.xml"])  # must still parse
+        self.assertIn('value="Evil&quot;Mod bundle acceptance"', files["ModInfo.xml"])
+
+    def test_a_mod_name_with_markup_cannot_escape_the_project_comment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _mod(Path(tmp), ["panel.png"], mod_name="Evil&lt;/Name&gt;--&gt;&lt;Target&gt;")
+            planned = acceptance.plan(config)
+            project = acceptance.render(planned)[f"{planned.assembly}.csproj"]
+        # Exactly the template's own two comment terminators; the name may
+        # not add a third, so injected markup can only ever sit inside a
+        # comment.
+        self.assertEqual(project.count("-->"), 2)
+
+
 class RegistryTests(unittest.TestCase):
     def test_every_writer_kind_has_a_detail_line(self) -> None:
         kinds = {kind for kind, _ in acceptance.ASSET_CASES.values()}

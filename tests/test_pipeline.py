@@ -236,6 +236,44 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("Windows support", names)
         self.assertTrue(any(check.status == "FAIL" for check in checks))
 
+    def test_doctor_reports_the_synthesized_build_readiness(self) -> None:
+        """The editorless writer answers three questions: revision, sources, UnityPy.
+
+        This branch decided whether `shamway build` can write a bundle at all,
+        and none of the Unity-project rows apply to it.
+        """
+        from sevendtd_asset_pipeline.capabilities import has_capability
+        from sevendtd_asset_pipeline.doctor import run_doctor
+
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="synthesized")
+        config = load_config(self.root / CONFIG_NAME)
+
+        def by_name() -> dict:
+            return {check.name: check for check in run_doctor(config)}
+
+        # No game dir: the scaffolded [unity] version is WARN-grade evidence,
+        # and the freshly scaffolded source folder holds only .gitkeep.
+        checks = by_name()
+        self.assertEqual("WARN", checks["Unity revision"].status)
+        self.assertEqual("FAIL", checks["bundle sources"].status)
+        self.assertIn("holds no assets", checks["bundle sources"].detail)
+        writer = checks["writer"]
+        self.assertEqual("FAIL" if not has_capability("UnityPy") else "OK", writer.status)
+
+        (config.bundle_source_dir / "myModNote.txt").write_text("hello", encoding="utf-8")
+        self.assertEqual("OK", by_name()["bundle sources"].status)
+
+    def test_doctor_fails_a_synthesized_mod_with_no_revision_evidence(self) -> None:
+        """A bundle carries the revision it claims; writing one with no answer is refused."""
+        from sevendtd_asset_pipeline.doctor import failed, run_doctor
+
+        initialize(self.root, None, "example.unity3d", "", bundle_source="synthesized")
+        config = load_config(self.root / CONFIG_NAME)
+        checks = run_doctor(config)
+        self.assertTrue(failed(checks))
+        revision = next(check for check in checks if check.name == "Unity revision")
+        self.assertEqual("FAIL", revision.status)
+
     def test_config_rejects_resources_outside_mod_root(self) -> None:
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
         config_file = self.root / ".shamway.toml"
@@ -244,6 +282,49 @@ class PipelineTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(PipelineError, "must stay below"):
             load_config(config_file)
+
+    def test_config_rejects_a_foreign_schema_version(self) -> None:
+        """A newer schema must fail loudly, not mis-parse into a silent corruption."""
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        config_file = self.root / CONFIG_NAME
+        config_file.write_text(
+            config_file.read_text().replace("schema_version = 1", "schema_version = 2")
+        )
+        with self.assertRaisesRegex(PipelineError, "schema_version"):
+            load_config(config_file)
+
+    def test_code_references_are_refused_on_a_bundle_free_mod(self) -> None:
+        """A stem list implies assets inside a bundle; without one it can only lie."""
+        initialize(self.root, None, None, "", bundle_source="none")
+        config_file = self.root / CONFIG_NAME
+        config_file.write_text(
+            config_file.read_text().replace(
+                "mod_root = \".\"", "code_references = [\"exampleThing\"]\nmod_root = \".\""
+            )
+        )
+        with self.assertRaisesRegex(PipelineError, 'bundle_source = "none"'):
+            load_config(config_file)
+
+    def test_the_revision_gate_names_a_directory_that_is_not_an_install(self) -> None:
+        game = self.root / "not-an-install"
+        game.mkdir()
+        with self.assertRaisesRegex(PipelineError, "is not a 7 Days to Die install"):
+            from sevendtd_asset_pipeline.game import game_unity_version
+
+            game_unity_version(game)
+
+    def test_the_revision_gate_names_a_game_with_no_readable_bundle(self) -> None:
+        """Unreadable candidates are skipped until the answer is 'none found'."""
+        from sevendtd_asset_pipeline.game import game_unity_version
+
+        game = self.root / "game"
+        (game / "Data" / "Config").mkdir(parents=True)
+        (game / "Data" / "Config" / "items.xml").write_text("<configs/>", encoding="utf-8")
+        bundles = game / "Data" / "Bundles" / "Standalone"
+        bundles.mkdir(parents=True)
+        (bundles / "corrupt.unity3d").write_bytes(b"garbage")
+        with self.assertRaisesRegex(PipelineError, "no readable UnityFS bundle"):
+            game_unity_version(game)
 
 
 MANIFEST = (

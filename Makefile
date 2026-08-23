@@ -1,4 +1,4 @@
-.PHONY: check test all
+.PHONY: check test coverage all
 
 # uv runs the suite when it is available so contributors share one toolchain;
 # the plain interpreter still works, because the core has no dependencies.
@@ -24,3 +24,11 @@ check:
 
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -v
+
+# Line coverage of src/ under the unit suite. Writes .coverage in the repo
+# root; CI renders it into the README badge with scripts/coverage_badge.py.
+COV := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project --with coverage python" || echo python3)
+
+coverage:
+	PYTHONPATH=src $(COV) -m coverage run --source=src -m unittest discover -s tests
+	$(COV) -m coverage report -m

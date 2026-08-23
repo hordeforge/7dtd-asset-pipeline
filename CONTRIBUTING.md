@@ -25,6 +25,15 @@ say which: compiled (`make check` on a host with the editor), probed
 (`shamway build --probe` ran it), or executed for real (`render-icon`, a
 generator, a fresh client). Never describe the first as the third.
 
+## Releases
+
+Releases are tag-driven, like the rest of hordeforge: bump `version` in
+[pyproject.toml](pyproject.toml), land that on `main`, then push a matching
+`vX.Y.Z` tag. The release workflow re-runs the suite on the tagged tree and
+publishes a GitHub Release carrying the sdist and wheel built from exactly
+that tree. A tag that disagrees with `pyproject.toml` fails the release
+instead of publishing a mismatched artifact.
+
 Agent-facing rules live in [AGENTS.md](AGENTS.md) and apply to human
 contributors too.
 

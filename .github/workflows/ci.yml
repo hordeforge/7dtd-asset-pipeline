@@ -1,24 +1,43 @@
-name: CI
+name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+# One run per ref: a fresh push cancels the superseded in-progress run
+# instead of queueing duplicate parallel jobs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: the pipeline only needs to read the code.
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      # Actions pinned by full commit SHA (tag in comment) so a moved tag or a
+      # compromised major-version release cannot inject code into the pipeline.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
       - run: uv python install ${{ matrix.python-version }}
       # Install the core alone: the suite must pass without the optional
-      # capabilities, because that is how most consumers first run it.
-      - run: uv pip install --system --python ${{ matrix.python-version }} --editable .
+      # capabilities, because that is how most consumers first run it. Into a
+      # venv, not --system: recent uv refuses to write into its own managed
+      # interpreters (externally-managed error), which left these jobs red.
+      - run: uv venv --python ${{ matrix.python-version }}
+      - run: uv pip install --editable .
+      # Later steps (and the Makefile's `uv run`) resolve ./.venv from PATH.
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       # Exercise the installed console script, not only the source tree, so a
       # broken entry point or missing package data fails here rather than in a
       # consumer's checkout.
@@ -29,9 +48,10 @@ jobs:
   capabilities:
     # The optional capabilities must also work, and must not be required.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
       - run: ./scripts/bootstrap
@@ -43,12 +63,15 @@ jobs:
     # Prove the consumer path end to end: a bare modlet becomes a scaffolded
     # one whose status is machine-readable. Needs no Unity and no game install.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-      - run: uv pip install --system --editable .
+      - run: uv venv
+      - run: uv pip install --editable .
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: |
           mkdir -p /tmp/MyMod
           printf '<xml><Name value="MyMod" /></xml>\n' > /tmp/MyMod/ModInfo.xml
@@ -57,3 +80,50 @@ jobs:
           cd /tmp/MyMod && shamway status --json || true
           cd /tmp/MyMod && shamway refs
           cd /tmp/MyMod && shamway call capabilities > /dev/null
+
+  coverage-badge:
+    # Publishes the line-coverage badge to the badges branch, which
+    # raw.githubusercontent serves to the README. Main pushes only: a PR gets
+    # its verdict from the jobs above and never sees the write token this job
+    # needs.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # Actions pinned by full commit SHA (tag in comment) so a moved tag or a
+      # compromised major-version release cannot inject code into the pipeline.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: true
+      - run: uv venv
+      - run: uv pip install --editable .
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - run: make coverage
+      - run: uv run --no-project --with coverage python scripts/coverage_badge.py "$RUNNER_TEMP/coverage.svg"
+      - name: Publish the badge to the badges branch
+        env:
+          # The default token is not in the environment unless mapped here,
+          # and set -u fails the step on the unbound GITHUB_TOKEN otherwise.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
+            git clone --depth 1 --branch badges "$url" badge-repo
+          else
+            git init -q -b badges badge-repo
+            # Only the fresh-init path needs the remote: clone already has it,
+            # and adding a duplicate fails the step under set -e.
+            git -C badge-repo remote add origin "$url"
+          fi
+          cp "$RUNNER_TEMP/coverage.svg" badge-repo/
+          cd badge-repo
+          git config user.name "hordeforge-ci"
+          git config user.email "ci@hordeforge.noreply.github.com"
+          git add coverage.svg
+          git diff --cached --quiet || git commit -m "update coverage badge"
+          git push origin badges

@@ -32,4 +32,4 @@ dist/
 
 .claude
 .agents
-.gauntlet.lock
+.gauntlet.lock.coverage.json

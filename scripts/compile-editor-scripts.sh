@@ -82,9 +82,12 @@ if [[ -z "$EDITOR_DATA" ]]; then
 		# editor Hub has installed — the one a developer of this repo builds with.
 		revision="$(sed -n 's/^m_EditorVersion: //p' "$TEMPLATE/ProjectSettings/ProjectVersion.txt" | head -n1)"
 		if [[ -z "$revision" || ! -d "$HOME/Unity/Hub/Editor/$revision" ]]; then
-			revision="$(for editor in "$HOME/Unity/Hub/Editor"/2022.3.*/; do
-				[[ -d "$editor" ]] && basename "$editor"
-			done | sort -V | tail -n1)"
+		revision="$(for editor in "$HOME/Unity/Hub/Editor"/2022.3.*/; do
+			[[ -d "$editor" ]] && basename "$editor"
+		done | sort -V | tail -n1)" || true
+		# `|| true`: an unmatched glob fails the loop once, and pipefail would
+		# turn that into a failed assignment under set -e, dying here instead
+		# of reaching the graceful skip below. Empty means nothing installed.
 		fi
 		[[ -n "$revision" ]] || skip "no Unity 2022.3 editor under ~/Unity/Hub/Editor and no UNITY_EDITOR"
 		EDITOR_DATA="$HOME/Unity/Hub/Editor/$revision/Editor/Data"

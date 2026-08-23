@@ -56,7 +56,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .capture import DEFAULT_ROOT, capture, read_manifest, record_existing
 from .errors import PipelineError
+from .references import read_mod_name
 
 STEAM_APP_ID = 251570
 # Proton launches the Windows client; the EAC wrapper is a second executable.
@@ -850,13 +852,13 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
                 print(f"{key:12} {value if not isinstance(value, list) else ' '.join(value)}")
         return 0
     if args.command == "deploy":
-        from .references import read_mod_name  # noqa: PLC0415
-
-        # The Mods/ folder is shared with whoever holds the client: a mod
-        # dropped in during someone else's run is loaded by their next launch.
-        refuse_while_held("deploy into the shared Mods folder")
         name = args.name or read_mod_name(args.mod_root / "ModInfo.xml")
         mods_dir = args.mods_dir or user_mods_dir(game_dir)
+        # Checked here rather than on entry: the lock guards the *write*, and a
+        # malformed modlet should say so whoever happens to hold the client.
+        # The Mods/ folder is shared with that holder, and a mod dropped in
+        # during their run is loaded by their next launch.
+        refuse_while_held("deploy into the shared Mods folder")
         copied = deploy_mod(args.mod_root, mods_dir, name, replace=not args.keep_existing)
         print(f"deployed {name} to {mods_dir / name}: {', '.join(copied)}")
         return 0
@@ -925,8 +927,6 @@ def _capture(args: argparse.Namespace) -> int:
     or of the terminal the operator alt-tabbed to, files cleanly into the
     manifest and looks exactly like evidence to the next reader.
     """
-    from .capture import DEFAULT_ROOT, capture, read_manifest, record_existing  # noqa: PLC0415
-
     root = args.out or DEFAULT_ROOT
 
     if args.list:

@@ -21,7 +21,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from ._version import __version__
+from .docs import topics
 from .errors import PipelineError
+from .generators import describe
+from .prompts import kinds
 
 # Cost classes, so a caller can decide what to run in a tight loop.
 INSTANT = "instant"  # no I/O beyond the mod directory
@@ -462,8 +466,6 @@ OPERATIONS: dict[str, Operation] = {item.name: item for item in _DEFINITIONS}
 
 def manifest() -> dict[str, Any]:
     """The full machine-readable contract, as published by `schema --json`."""
-    from . import __version__
-
     return {
         "name": "7dtd-asset-pipeline",
         "version": __version__,
@@ -490,22 +492,16 @@ def manifest() -> dict[str, Any]:
 
 def _generators() -> list[dict[str, Any]]:
     """The packaged asset generators, callable as `shamway generate NAME`."""
-    from .generators import describe
-
     return describe()
 
 
 def _prompt_kinds() -> list[dict[str, str]]:
     """The house-style prompt shapes, rendered by the 'prompt' operation."""
-    from .prompts import kinds
-
     return kinds()
 
 
 def _documentation() -> list[dict[str, str]]:
     """The packaged documentation, readable as `shamway docs TOPIC`."""
-    from .docs import topics
-
     return topics()
 
 

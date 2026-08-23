@@ -6,6 +6,8 @@ wait, and the only logic worth a unit test sits either side of it.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import tempfile
 import time
@@ -103,6 +105,20 @@ class DeployTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             with self.assertRaises(PipelineError):
                 client.deploy_mod(Path(temp), Path(temp) / "Mods", "X")
+
+    def test_deploy_resolves_the_mod_name_from_modinfo(self) -> None:
+        """`deploy` without --name reads ModInfo.xml through read_mod_name.
+
+        The name lookup lives in `references`; this path once imported it from
+        `config`, where it does not exist, and the function-level import hid
+        the ImportError until a real deploy ran.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                status = client.main(["deploy", temp])
+            self.assertEqual(status, 1)
+            self.assertIn("cannot parse", stderr.getvalue())
 
 
 class LogScanTests(unittest.TestCase):
@@ -292,6 +308,25 @@ class LockTests(unittest.TestCase):
             self.assertIsNone(client.lock_holder(path))
             self.assertIn("running=no", path.read_text(encoding="utf-8"))
 
+    def test_deploy_writes_only_when_the_lock_is_free(self) -> None:
+        """The guard sits on the write, so a free lock still deploys."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mod"
+            (root / "Config").mkdir(parents=True)
+            (root / "ModInfo.xml").write_text(
+                '<?xml version="1.0"?><xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+            )
+            (root / "Config" / "items.xml").write_text("<configs />", encoding="utf-8")
+            free = Path(tmp) / "playtest_running"
+            free.write_text("running=no\n", encoding="utf-8")
+            os.environ[client.LOCK_ENV] = str(free)
+            try:
+                status = client.main(["deploy", str(root), "--mods-dir", str(Path(tmp) / "Mods")])
+            finally:
+                del os.environ[client.LOCK_ENV]
+            self.assertEqual(status, 0)
+            self.assertTrue((Path(tmp) / "Mods/ExampleMod/Config/items.xml").is_file())
+
     def test_holding_refuses_over_another_fresh_holder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._lock(Path(tmp), running="yes", session="other-1", heartbeat=self._stamp(5))
@@ -301,26 +336,6 @@ class LockTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
-    def test_deploy_resolves_the_mod_name_through_the_module_that_has_it(self) -> None:
-        """`client deploy` once imported read_mod_name from the wrong module."""
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mod"
-            (root / "Config").mkdir(parents=True)
-            (root / "ModInfo.xml").write_text(
-                '<?xml version="1.0"?><xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
-            )
-            (root / "Config" / "items.xml").write_text("<configs />", encoding="utf-8")
-            mods = Path(tmp) / "Mods"
-            free = Path(tmp) / "playtest_running"
-            free.write_text("running=no\n", encoding="utf-8")
-            os.environ[client.LOCK_ENV] = str(free)
-            try:
-                code = client.main(["deploy", str(root), "--mods-dir", str(mods)])
-            finally:
-                del os.environ[client.LOCK_ENV]
-            self.assertEqual(code, 0)
-            self.assertTrue((mods / "ExampleMod" / "Config" / "items.xml").is_file())
-
     def test_where_without_a_game_dir_prints_nulls(self) -> None:
         import contextlib
         import io

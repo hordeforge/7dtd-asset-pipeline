@@ -25,20 +25,29 @@ from pathlib import Path
 from typing import Any
 
 from . import client
-from .build import reject_disabled_modules, run_build, stage_bundle
+from .acceptance import generate as generate_acceptance_provider
+from .build import (
+    SYNTHESIZED_CAVEATS,
+    expected_unity_version,
+    reject_disabled_modules,
+    run_build,
+    stage_bundle,
+)
+from .bundle_verify import verify_with_editor
+from .bundle_writer import pack_directory
 from .client import AcceptanceRun, LogReport
 from .capabilities import Capability, capabilities, require_capability
 from .config import PipelineConfig, load_config
 from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, run_doctor
 from .errors import PipelineError
-from .game import game_unity_version
+from .game import game_unity_version, project_unity_version
 from .icon_check import IconReport, check_icons
 from .icon_render import RenderResult, render_icon
 from .mesh_check import MeshReport, check_mesh
 from .operations import Operation, get as get_operation
 from .prompts import render as render_prompt
-from .references import AssetReference, discover_references
+from .references import AssetReference, discover_references, manifest_assets
 from .scaffold import initialize
 from .sound_check import SoundReport, check_sound
 from .status import Status, collect_status
@@ -149,14 +158,13 @@ class Pipeline:
         The cases are the mod's own manifest, so a bundle member that nothing
         asserts is a member nobody proved.
         """
-        from .acceptance import generate  # noqa: PLC0415
-        from .client import refuse_while_held, user_mods_dir  # noqa: PLC0415
-
         install_dir = None
         if install:
-            refuse_while_held("install into the shared Mods folder")
-            install_dir = Path(mods_dir) if mods_dir else user_mods_dir(self.config.game_dir)
-        return generate(
+            client.refuse_while_held("install into the shared Mods folder")
+            install_dir = (
+                Path(mods_dir) if mods_dir else client.user_mods_dir(self.config.game_dir)
+            )
+        return generate_acceptance_provider(
             self.config,
             self.config.game_dir,
             Path(harness_dll) if harness_dll else None,
@@ -169,9 +177,6 @@ class Pipeline:
         Needs an editor, and needs nothing else to have used one: this is how a
         synthesized bundle gets a check that this repository did not write.
         """
-        from .build import expected_unity_version  # noqa: PLC0415
-        from .bundle_verify import verify_with_editor  # noqa: PLC0415
-
         return verify_with_editor(
             Path(bundle) if bundle else self.config.bundle_output,
             self.config.unity_editor,
@@ -211,9 +216,9 @@ class Pipeline:
 
     def unity_release(self, version: str | None = None, platform: str = "LINUX") -> Release:
         """Resolve the official editor download for a revision. Uses the network."""
-        from .game import project_unity_version
-
-        return fetch_release(version or project_unity_version(self.config.unity_project), platform)
+        return fetch_release(
+            version or project_unity_version(self.config.unity_project), platform
+        )
 
     # -- writes ------------------------------------------------------------
 
@@ -504,9 +509,6 @@ def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
     an installed game answers. A bundle carries the revision it claims to be
     for, and a wrong one loads as "not compatible with this newer version".
     """
-    from .build import SYNTHESIZED_CAVEATS  # noqa: PLC0415
-    from .bundle_writer import pack_directory  # noqa: PLC0415
-
     source = Path(params["source"])
     output = Path(params["output"])
     version = params.get("unity_version")
@@ -523,8 +525,6 @@ def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
     output.write_bytes(bundle)
     manifest = Path(params["manifest"]) if params.get("manifest") else Path(f"{output}.manifest")
     manifest.write_text(manifest_text, encoding="utf-8")
-    from .references import manifest_assets  # noqa: PLC0415
-
     return {
         "bundle": str(output),
         "manifest": str(manifest),

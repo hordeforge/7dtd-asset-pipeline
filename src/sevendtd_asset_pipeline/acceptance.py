@@ -42,9 +42,13 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 
+from .client import refuse_while_held, user_mods_dir
+from .config import load_config
 from .errors import PipelineError
+from .references import manifest_assets, read_mod_name
 
 # Which `LoadAsset<T>` a bundle member is fetched with, and what about it is
 # worth asserting once loaded. Keyed by source extension, the same mapping
@@ -110,8 +114,6 @@ def _identifier(text: str) -> str:
 
 
 def _template(name: str) -> str:
-    from importlib.resources import files  # noqa: PLC0415
-
     path = files("sevendtd_asset_pipeline").joinpath(f"templates/{TEMPLATE_DIR}/{name}")
     try:
         return path.read_text(encoding="utf-8")
@@ -121,8 +123,6 @@ def _template(name: str) -> str:
 
 def plan(config: object) -> ProviderPlan:
     """Derive the provider from the mod's own configuration and manifest."""
-    from .references import manifest_assets, read_mod_name  # noqa: PLC0415
-
     mod_root = Path(config.mod_root)  # type: ignore[attr-defined]
     mod_name = read_mod_name(mod_root / "ModInfo.xml")
     manifest = Path(config.tracked_manifest)  # type: ignore[attr-defined]
@@ -303,9 +303,6 @@ def generate(
 
 
 def main(argv: list[str] | None = None) -> int:
-    from .client import refuse_while_held, user_mods_dir  # noqa: PLC0415
-    from .config import load_config  # noqa: PLC0415
-
     parser = argparse.ArgumentParser(
         prog="shamway acceptance-provider",
         description="generate the 7dtd-playtest scenario provider that loads this mod's "

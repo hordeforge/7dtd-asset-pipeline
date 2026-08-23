@@ -57,14 +57,20 @@ def reject_disabled_modules(log: Path) -> None:
     The name is historical; it is the build-log gate, and it now has two
     families. Each one produced a bundle that passed every other check.
     """
-    hits = disabled_module_lines(log)
+    # One read serves both families: a Unity build log reaches tens of
+    # megabytes, and reading it twice per gate doubled the cost of every
+    # `build`, `stage`, and `check-log`.
+    lines = _log_lines(log)
+    hits = [
+        line for line in lines if DISABLED_MODULE_TEXT in line and DISABLED_MODULE_SUFFIX in line
+    ]
     if hits:
         raise PipelineError(
             "Unity stripped engine-module classes while reporting build success:\n"
             + "\n".join(hits)
             + "\nAdd the matching com.unity.modules.* packages and rebuild."
         )
-    curves = particle_curve_mode_lines(log)
+    curves = [line for line in lines if PARTICLE_CURVE_MODE_TEXT in line]
     if curves:
         raise PipelineError(
             "a particle system mixes MinMaxCurve modes; the client logs this on every frame:\n"

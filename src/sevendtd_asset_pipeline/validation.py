@@ -154,6 +154,8 @@ def validate_mod(
     *,
     game_version: tuple[str, Path] | None = None,
     bundle_info: BundleInfo | None = None,
+    assets: list[str] | None = None,
+    references: list[AssetReference] | None = None,
 ) -> ValidationReport:
     """Gate the whole mod.
 
@@ -161,6 +163,10 @@ def validate_mod(
     `collect_status`) has already computed for this configuration; both are
     expensive reads that must not run twice in one pass. They must describe
     `config.game_dir`'s answer and a parse of `config.bundle_output`.
+    `assets` and `references` are the same kind of hand-off for the tracked
+    manifest and the Config/ XML scan, which a status pass has usually already
+    read; None means "compute it here", including when a caller's earlier read
+    failed and the gate should fail on the same read.
     """
     actual_mod_name = read_mod_name(config.mod_root / "ModInfo.xml")
     if actual_mod_name != config.mod_name:
@@ -176,10 +182,12 @@ def validate_mod(
     else:
         expected_version = None
     validate_bundle(config.bundle_output, expected_version, bundle_info)
-    assets = manifest_assets(config.tracked_manifest)
+    if assets is None:
+        assets = manifest_assets(config.tracked_manifest)
     reject_ambiguous_stems(assets)
     stems = _stem_index(assets)
-    references = discover_references(config.config_dir)
+    if references is None:
+        references = discover_references(config.config_dir)
     owned = config.bundle_output.resolve()
     resolved: dict[str, Path | None] = {}
     messages = [

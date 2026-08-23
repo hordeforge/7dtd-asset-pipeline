@@ -677,7 +677,10 @@ def markers_for(mod_name: str | None) -> tuple[Marker, ...]:
         ),
         Marker(
             "duplicate_mod",
-            r"(?i)duplicate mod|mod .* already loaded",
+            # Scoped flag form, not a leading (?i): scan_log_text joins these
+            # patterns into one alternation, and Python rejects a global flag
+            # that is not at the very start of an expression.
+            r"(?i:duplicate mod|mod .* already loaded)",
             "the mod exists in both the per-user Mods/ and the install Mods/; the second copy is ignored",
             False,
         ),
@@ -755,13 +758,21 @@ def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogRe
     warnings: list[str] = []
     markers = markers_for(mod_name)
     compiled = [(marker, re.compile(marker.pattern)) for marker in markers]
+    # A client log runs to hundreds of thousands of lines and almost all of
+    # them match nothing, so each line first meets one combined alternation —
+    # a single C-level search — and only a line it hits pays the per-marker
+    # searches that attribute the match. Same verdicts, one twelfth the scans.
+    any_marker = re.compile("|".join(f"(?:{marker.pattern})" for marker in markers))
     for line in text.splitlines():
+        if not any_marker.search(line):
+            continue
+        stripped = line.strip()
         for marker, pattern in compiled:
             if pattern.search(line):
-                found.setdefault(marker.key, line.strip())
+                found.setdefault(marker.key, stripped)
                 if marker.positive:
                     continue
-                (warnings if marker.warning else problems).append(f"{marker.key}: {line.strip()}")
+                (warnings if marker.warning else problems).append(f"{marker.key}: {stripped}")
     missing = tuple(
         marker.key for marker in markers if marker.positive and marker.key not in found
     ) if mod_name else ()

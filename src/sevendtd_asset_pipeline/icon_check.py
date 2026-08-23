@@ -56,6 +56,16 @@ DISPLAY_ENTRY_ICON = re.compile(r'<display_entry\b[^>]*\bicon\s*=\s*"([^"]+)"')
 # the text is the honest parser here.
 DEFINITION = re.compile(r'<(item|block)\s+name\s*=\s*"([^"]+)"[^>]*>(.*?)</\1>', re.DOTALL)
 CUSTOM_ICON_INSIDE = re.compile(r'name\s*=\s*"CustomIcon"')
+# One compiled pattern per icon property, hoisted out of the per-file scan:
+# `discover_icon_references` runs these against every Config/ XML, and
+# recompiling inside that loop paid a cache miss per file for nothing.
+_PROPERTY_PATTERNS = {
+    name: re.compile(
+        rf'name\s*=\s*"{name}"\s+value\s*=\s*"([^"]+)"|'
+        rf'value\s*=\s*"([^"]+)"\s+name\s*=\s*"{name}"'
+    )
+    for name in ICON_PROPERTIES
+}
 
 
 @dataclass(frozen=True)
@@ -199,8 +209,9 @@ def _scan_atlases(
     for folder in sorted(path for path in atlas_dir.iterdir() if path.is_dir()):
         members = sorted(folder.iterdir())
         pngs = [path for path in members if path.suffix.lower() == ".png"]
+        png_set = set(pngs)
         for stray in members:
-            if stray.is_file() and stray not in pngs:
+            if stray.is_file() and stray not in png_set:
                 notes.append(
                     f"{stray.relative_to(mod_root)} is not a .png; LoadUiAtlases ignores it"
                 )
@@ -285,15 +296,19 @@ def _reconcile_implicit_names(
     return implicit, unnamed, problems
 
 
-def discover_implicit_icon_names(config_dir: Path) -> dict[str, list[str]]:
+def discover_implicit_icon_names(
+    config_dir: Path, texts: list[tuple[Path, str]] | None = None
+) -> dict[str, list[str]]:
     """Item and block names defined without a `CustomIcon`, mapped to their files.
 
     These resolve their sprite by name (or by a `CustomIcon` inherited through
     `Extends`, which this cannot see), so a PNG named exactly like the item is
-    the icon whether or not any property says so.
+    the icon whether or not any property says so. `texts` accepts the file/text
+    pairs a caller (such as `check_icons`) has already read, so one pass over
+    Config/ serves every reconciliation below it.
     """
     names: dict[str, list[str]] = {}
-    for xml_file, text in _config_texts(config_dir):
+    for xml_file, text in texts if texts is not None else _config_texts(config_dir):
         for match in DEFINITION.finditer(text):
             if CUSTOM_ICON_INSIDE.search(match.group(3)):
                 continue
@@ -301,25 +316,24 @@ def discover_implicit_icon_names(config_dir: Path) -> dict[str, list[str]]:
     return names
 
 
-def discover_icon_references(config_dir: Path) -> dict[str, list[str]]:
+def discover_icon_references(
+    config_dir: Path, texts: list[tuple[Path, str]] | None = None
+) -> dict[str, list[str]]:
     """Every explicit atlas key under Config/, mapped to the files that ask for it.
 
     Explicit means `CustomIcon` and `display_entry icon=`; the name-default
-    lookup is `discover_implicit_icon_names`.
+    lookup is `discover_implicit_icon_names`. `texts` accepts file/text pairs
+    already read, so a caller running both discoveries reads each XML once.
     """
     references: dict[str, list[str]] = {}
-    for xml_file, text in _config_texts(config_dir):
+    for xml_file, text in texts if texts is not None else _config_texts(config_dir):
         for match in DISPLAY_ENTRY_ICON.finditer(text):
             value = match.group(1).strip()
             if value:
                 references.setdefault(value, []).append(str(xml_file))
-        for name in ICON_PROPERTIES:
-            # A regex rather than a parse: mod Config files are XPath patch
-            # fragments, and a fragment with several roots is not a document.
-            pattern = re.compile(
-                rf'name\s*=\s*"{name}"\s+value\s*=\s*"([^"]+)"|'
-                rf'value\s*=\s*"([^"]+)"\s+name\s*=\s*"{name}"'
-            )
+        # A regex rather than a parse: mod Config files are XPath patch
+        # fragments, and a fragment with several roots is not a document.
+        for pattern in _PROPERTY_PATTERNS.values():
             for match in pattern.finditer(text):
                 value = (match.group(1) or match.group(2)).strip()
                 if value:
@@ -349,8 +363,10 @@ def check_icons(
     provided_ci = {stem.casefold(): stem for stem in provided}
     config = config_dir if config_dir else mod_root / "Config"
 
+    # Both reconciliations scan the same Config/ XML; read it once.
+    texts = _config_texts(config)
     resolved, external, explicit_problems = _reconcile_explicit_keys(
-        discover_icon_references(config), provided, provided_ci
+        discover_icon_references(config, texts), provided, provided_ci
     )
     problems.extend(explicit_problems)
     if external:
@@ -362,7 +378,7 @@ def check_icons(
         )
 
     implicit, unnamed, implicit_problems = _reconcile_implicit_names(
-        discover_implicit_icon_names(config), provided, provided_ci
+        discover_implicit_icon_names(config, texts), provided, provided_ci
     )
     problems.extend(implicit_problems)
     if unnamed:

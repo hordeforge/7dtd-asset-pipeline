@@ -18,7 +18,7 @@ from .capabilities import capabilities
 from .config import PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version
-from .references import discover_references, manifest_assets, read_mod_name
+from .references import AssetReference, discover_references, manifest_assets, read_mod_name
 from .unityfs import inspect_bundle
 from .validation import validate_mod
 
@@ -113,30 +113,43 @@ def collect_status(config: PipelineConfig) -> Status:
                     bundle_info.unity_version == status.game_unity_version
                 )
 
+    assets_read: list[str] | None = None
     if status.manifest_present and manifest is not None:
-        assets = _record(status, lambda: manifest_assets(manifest))
-        if assets is not None:
-            status.assets = assets
-            status.asset_count = len(assets)
+        read = _record(status, lambda: manifest_assets(manifest))
+        if read is not None:
+            assets_read = read
+            status.assets = read
+            status.asset_count = len(read)
 
-    references = _record(status, lambda: discover_references(config.config_dir)) or []
-    status.reference_count = len(references)
-    status.references = [
-        {
-            "source": str(reference.source),
-            "uri": reference.uri,
-            "mod_name": reference.mod_name,
-            "bundle_path": reference.bundle_path,
-            "asset_stem": reference.asset_stem,
-        }
-        for reference in references
-    ]
+    references_read: list[AssetReference] | None = None
+    discovered_references = _record(status, lambda: discover_references(config.config_dir))
+    if discovered_references is not None:
+        references_read = discovered_references
+        status.reference_count = len(references_read)
+        status.references = [
+            {
+                "source": str(reference.source),
+                "uri": reference.uri,
+                "mod_name": reference.mod_name,
+                "bundle_path": reference.bundle_path,
+                "asset_stem": reference.asset_stem,
+            }
+            for reference in references_read
+        ]
 
     # The full validator is the authority on correctness; run it last so the
     # descriptive fields above are populated even when it rejects the mod. It
-    # reuses the reads above rather than paying for them a second time.
+    # reuses the reads above rather than paying for them a second time; a read
+    # that failed stays None, so the validator fails on the same read instead
+    # of inventing a different answer.
     try:
-        validate_mod(config, game_version=game_discovered, bundle_info=bundle_info)
+        validate_mod(
+            config,
+            game_version=game_discovered,
+            bundle_info=bundle_info,
+            assets=assets_read,
+            references=references_read,
+        )
         status.valid = True
     except PipelineError as exc:
         status.valid = False

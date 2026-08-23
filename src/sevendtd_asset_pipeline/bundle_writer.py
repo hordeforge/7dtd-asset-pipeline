@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -327,8 +328,8 @@ def build_bundle(
     """
     if not objects:
         raise PipelineError("a bundle needs at least one asset")
-    stems = [obj.name for obj in objects]
-    duplicates = {stem for stem in stems if stems.count(stem) > 1}
+    counts = Counter(obj.name for obj in objects)
+    duplicates = {stem for stem, count in counts.items() if count > 1}
     if duplicates:
         raise PipelineError(
             "two assets would answer the same name: " + ", ".join(sorted(duplicates))

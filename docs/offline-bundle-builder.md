@@ -209,10 +209,25 @@ none of them touch the command surface.
 
 **Outcome:** phase 1 was met by harvesting layouts from the game's own bundles
 and from an editor-built reference bundle; phase 2 was met by a stronger check
-(a runtime load, above) than the structural comparison it asked for; phase 3 —
-the fresh-client load — is **not done**, and phase 4 was surfaced anyway at the
-user's direction. Every synthesize says so in its own output, and
-[blockers.md](blockers.md) carries the open entry.
+(a runtime load, above) than the structural comparison it asked for; phase 4
+was surfaced ahead of its evidence at the user's direction.
+
+**Phase 3 is done, as of 2026-08-24.** 7 Days to Die V 3.1.0 b14 loaded a
+synthesized bundle through `DataLoader.LoadAsset<T>`, by stem, and returned a
+`512x512 RGBA32` texture and an `AudioClip` FMOD decoded from the hand-written
+FSB5 bank — `channels=1 frequency=44100 samples=20727`. A fourth request for a
+stem the bundle does not contain returned `null`, so the passes are not a
+loader answering everything. The evidence and the exact log lines are in
+[blockers.md](blockers.md) entry 6; the run is repeatable with
+`scripts/playtest-acceptance.sh`.
+
+The phased plan's own wording is worth keeping honest about what that buys:
+the plan called phase 3 "a fresh-client load ... **before** the mode is
+exposed". The order was inverted, so this is the evidence arriving late rather
+than a gate that held. And the sentence it does not discharge is the one every
+page here ends with — a load is not a look. The remaining entry in
+[blockers.md](blockers.md) is a person judging the asset, which no phase of
+this plan was ever going to close.
 
 ## Sources
 

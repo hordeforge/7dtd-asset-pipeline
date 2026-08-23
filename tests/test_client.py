@@ -6,6 +6,8 @@ wait, and the only logic worth a unit test sits either side of it.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import tempfile
 import time
@@ -103,6 +105,20 @@ class DeployTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             with self.assertRaises(PipelineError):
                 client.deploy_mod(Path(temp), Path(temp) / "Mods", "X")
+
+    def test_deploy_resolves_the_mod_name_from_modinfo(self) -> None:
+        """`deploy` without --name reads ModInfo.xml through read_mod_name.
+
+        The name lookup lives in `references`; this path once imported it from
+        `config`, where it does not exist, and the function-level import hid
+        the ImportError until a real deploy ran.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                status = client.main(["deploy", temp])
+            self.assertEqual(status, 1)
+            self.assertIn("cannot parse", stderr.getvalue())
 
 
 class LogScanTests(unittest.TestCase):

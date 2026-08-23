@@ -1,4 +1,13 @@
-# shamway
+# 🏭 Shamway (7DTD Asset Pipeline)
+
+> **Part of [HordeForge](https://github.com/hordeforge)** — High-Performance Systems Engineering for 7 Days to Die.
+
+![CI](https://github.com/hordeforge/7dtd-asset-pipeline/actions/workflows/ci.yml/badge.svg)
+![coverage](https://raw.githubusercontent.com/hordeforge/7dtd-asset-pipeline/badges/coverage.svg)
+![license](https://img.shields.io/github/license/hordeforge/7dtd-asset-pipeline)
+![last commit](https://img.shields.io/github/last-commit/hordeforge/7dtd-asset-pipeline)
+![languages](https://img.shields.io/github/languages/count/hordeforge/7dtd-asset-pipeline)
+![top language](https://img.shields.io/github/languages/top/hordeforge/7dtd-asset-pipeline)
 
 A reusable, testable pipeline for building Unity asset bundles for **7 Days to
 Die mods**. It gives mod authors one path from editable Unity assets to a

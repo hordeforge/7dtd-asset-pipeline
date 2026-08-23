@@ -184,5 +184,63 @@ class ServeTests(unittest.TestCase):
         self.assertTrue(response["error"]["message"])
 
 
+class ImportHygieneTests(unittest.TestCase):
+    """The package is a layered graph: leaf modules must not import upward.
+
+    `__init__` imports the facade, which imports the registry, so any
+    module-level import of the package root from below it is a cycle that only
+    works while every consumer enters through `__init__`. The convention this
+    pins: intra-package imports sit at module top level, and they point
+    downward (errors, _version, capabilities) or sideways, never up.
+    """
+
+    def test_every_module_imports_cleanly(self) -> None:
+        import importlib
+        import pkgutil
+
+        import sevendtd_asset_pipeline
+
+        for module in pkgutil.walk_packages(
+            sevendtd_asset_pipeline.__path__, prefix="sevendtd_asset_pipeline."
+        ):
+            if module.name.endswith(".__main__"):
+                # An entry point runs main() at import time by design; it is
+                # not part of the importable surface this test covers.
+                continue
+            with self.subTest(module.name):
+                importlib.import_module(module.name)
+
+    def test_no_intra_package_import_inside_a_function(self) -> None:
+        import ast
+
+        import sevendtd_asset_pipeline
+
+        root = Path(sevendtd_asset_pipeline.__file__).resolve().parent
+        for path in sorted(root.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                for sub in ast.walk(node):
+                    bad = isinstance(sub, ast.ImportFrom) and sub.level > 0 or (
+                        isinstance(sub, ast.Import)
+                        and any(
+                            alias.name.startswith("sevendtd_asset_pipeline")
+                            for alias in sub.names
+                        )
+                    )
+                    if bad:
+                        self.fail(f"{path.relative_to(root)}:{sub.lineno}: "
+                                  f"intra-package import inside {node.name}()")
+
+    def test_registry_reads_the_version_without_importing_upward(self) -> None:
+        import sevendtd_asset_pipeline.operations as operations
+
+        source = Path(operations.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("from . import", source)
+        self.assertIn("from ._version import __version__", source)
+        self.assertEqual(manifest()["version"], __import__("sevendtd_asset_pipeline").__version__)
+
+
 if __name__ == "__main__":
     unittest.main()

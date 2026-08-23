@@ -1,0 +1,71 @@
+name: release
+
+# Tag-driven releases, same shape as the other hordeforge projects: pushing
+# vX.Y.Z tests the tagged tree, then publishes a GitHub Release carrying the
+# sdist and wheel built from exactly that tree.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Actions pinned by full commit SHA (tag in comment) so a moved tag or a
+      # compromised major-version release cannot inject code into the pipeline.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv pip install --system --python 3.13 --editable .
+      - run: make check test
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: true
+
+      # The published artifact version must equal the tag, so a wheel can
+      # never claim a version nobody tagged. Fails loudly rather than guessing.
+      - name: Check the tag matches pyproject.toml
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          case "$TAG" in v*) ;; *) echo "ERROR: tag '$TAG' does not start with 'v'" >&2; exit 1;; esac
+          PYPROJECT="$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml)"
+          if [ -z "$PYPROJECT" ]; then
+            echo "ERROR: no version = \"...\" line found in pyproject.toml" >&2
+            exit 1
+          fi
+          if [ "$PYPROJECT" != "${TAG#v}" ]; then
+            echo "ERROR: tag $TAG but pyproject.toml says version $PYPROJECT; make them match before tagging" >&2
+            exit 1
+          fi
+
+      - run: uv build
+
+      - name: Create the GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          gh release create "$TAG" dist/*.whl dist/*.tar.gz \
+            --title "Shamway / Asset Pipeline ${VERSION}" \
+            --notes "HordeForge Release ${TAG}: Build and validate Unity asset bundles for 7 Days to Die mods."

@@ -9,8 +9,17 @@ import sys
 from pathlib import Path
 
 from .api import Pipeline, call_json
-from .build import SYNTHESIZED_CAVEATS, reject_disabled_modules, run_build, stage_bundle
+from .build import (
+    SYNTHESIZED_CAVEATS,
+    expected_unity_version,
+    reject_disabled_modules,
+    run_build,
+    stage_bundle,
+)
+from .bundle_verify import verify_with_editor
+from .bundle_writer import pack_directory
 from .capabilities import capabilities
+from .client import main as client_main
 from .config import BUNDLE_SOURCES, load_config
 from .deep_inspect import deep_inspect
 from .doctor import failed, run_doctor
@@ -23,6 +32,7 @@ from .icon_render import render_icon
 from .mesh_check import check_mesh
 from .references import discover_references
 from .operations import manifest
+from .prompts import main as prompt_main
 from .scaffold import initialize
 from .serve import serve
 from .sound_check import check_sound
@@ -379,8 +389,6 @@ def run(args: argparse.Namespace) -> int:
             print("OK" if report.ok else "FAILED")
         return 0 if report.ok else 1
     if args.command == "pack":
-        from .bundle_writer import pack_directory  # noqa: PLC0415
-
         if args.game_dir:
             version, source = game_unity_version(args.game_dir.resolve())
             print(f"Detected Unity {version} from {source}")
@@ -418,12 +426,8 @@ def run(args: argparse.Namespace) -> int:
             return 0
         return run_generator(args.generator, args.arguments)
     if args.command == "prompt":
-        from .prompts import main as prompt_main  # noqa: PLC0415
-
         return prompt_main(args.arguments or ["--list"])
     if args.command == "client":
-        from .client import main as client_main
-
         return client_main(args.arguments or ["--help"])
     if args.command == "docs":
         if not args.topic:
@@ -514,9 +518,6 @@ def run(args: argparse.Namespace) -> int:
             print("Offline gates passed. A fresh-client load is still required for acceptance.")
         return 0
     if args.command == "verify-bundle":
-        from .build import expected_unity_version  # noqa: PLC0415
-        from .bundle_verify import verify_with_editor  # noqa: PLC0415
-
         report = verify_with_editor(
             args.bundle or config.bundle_output,
             config.unity_editor,

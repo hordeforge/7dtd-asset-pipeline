@@ -51,7 +51,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .capture import DEFAULT_ROOT, capture, read_manifest, record_existing
 from .errors import PipelineError
+from .references import read_mod_name
 
 STEAM_APP_ID = 251570
 # Proton launches the Windows client; the EAC wrapper is a second executable.
@@ -688,8 +690,6 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
                 print(f"{key:12} {value if not isinstance(value, list) else ' '.join(value)}")
         return 0
     if args.command == "deploy":
-        from .config import read_mod_name  # noqa: PLC0415
-
         name = args.name or read_mod_name(args.mod_root / "ModInfo.xml")
         mods_dir = args.mods_dir or user_mods_dir(game_dir)
         copied = deploy_mod(args.mod_root, mods_dir, name, replace=not args.keep_existing)
@@ -760,8 +760,6 @@ def _capture(args: argparse.Namespace) -> int:
     or of the terminal the operator alt-tabbed to, files cleanly into the
     manifest and looks exactly like evidence to the next reader.
     """
-    from .capture import DEFAULT_ROOT, capture, read_manifest, record_existing  # noqa: PLC0415
-
     root = args.out or DEFAULT_ROOT
 
     if args.list:

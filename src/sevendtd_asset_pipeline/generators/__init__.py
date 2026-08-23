@@ -23,6 +23,8 @@ from __future__ import annotations
 import importlib
 from types import ModuleType
 
+from ..errors import PipelineError
+
 # name -> (module, one-line summary, optional capabilities it needs)
 GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "sound": (
@@ -60,8 +62,6 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
 
 def load(name: str) -> ModuleType:
     """Import one generator module by its public name."""
-    from ..errors import PipelineError  # noqa: PLC0415 - avoids an import cycle
-
     try:
         module_name = GENERATORS[name][0]
     except KeyError:

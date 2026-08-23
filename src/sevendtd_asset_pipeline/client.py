@@ -20,12 +20,16 @@ is a mechanical definition rather than a hope:
 * **finding the log this launch wrote** (the client rewrites it every start)
   and **scanning it** for the positive lines that prove a mod, its atlas, and
   its localization loaded, and the negative lines that name each silent
-  failure this pipeline knows.
+  failure this pipeline knows;
+* **capturing** the frame a person made a visual judgement on, paired with the
+  observable they were asked to check, because that judgement is otherwise the
+  one acceptance step that leaves no artefact at all (see `capture.py`).
 
 Everything here reads the installed game and writes only below the client's
-per-user data directory, which is outside the install. Nothing in this module
-can prove an asset *looks* or *sounds* right; it proves the client is fresh,
-the mod loaded, and the log is clean, and then hands over to a person.
+per-user data directory and the mod's `.local/acceptance/`, both outside the
+install. Nothing in this module can prove an asset *looks* or *sounds* right;
+it proves the client is fresh, the mod loaded, and the log is clean, records
+what was on screen, and then hands the verdict to a person.
 
 The facts it encodes come from the source project's playtest harness and
 `docs/environment.md`, confirmed on a Proton client of V 3.1.0 b14; see
@@ -597,7 +601,7 @@ def _game_dir_from_env() -> Path | None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="shamway client",
-        description="fresh-client acceptance: deploy, launch, mute, find and scan the client log",
+        description="fresh-client acceptance: deploy, launch, mute, scan the client log, and capture what a person saw",
     )
     parser.add_argument("--game-dir", type=Path, default=None, help="defaults to SEVEN_DAYS_TO_DIE_DIR")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -630,6 +634,27 @@ def main(argv: list[str] | None = None) -> int:
     mute.add_argument("--wait", type=int, default=60)
     unmute = sub.add_parser("unmute", help="unmute it, and report saved WirePlumber state")
     unmute.add_argument("--wait", type=int, default=5)
+
+    shot = sub.add_parser(
+        "capture",
+        help="record one screenshot and its observable, for the human visual sign-off",
+    )
+    shot.add_argument("label", nargs="?", help="how this frame is cited later, e.g. held-nuke")
+    shot.add_argument(
+        "--observable", default="", help="what the reviewer is being asked to check"
+    )
+    shot.add_argument(
+        "--wait", type=float, default=0.0, metavar="SECONDS",
+        help="setup time before the shutter, to frame the shot in the client",
+    )
+    shot.add_argument("--out", type=Path, default=None, help="evidence directory (default .local/acceptance)")
+    shot.add_argument("--file", type=Path, default=None, help="record an image already taken instead of capturing")
+    shot.add_argument("--list", action="store_true", help="print the manifest recorded so far")
+    shot.add_argument(
+        "--allow-no-client", action="store_true",
+        help="capture even though no client is running; a frame of a menu proves nothing about an asset",
+    )
+    shot.add_argument("--json", action="store_true")
 
     discord = sub.add_parser("disable-discord", help="set DiscordDisabled in the Proton user.reg")
     discord.add_argument("--user-reg", type=Path, default=None)
@@ -708,6 +733,8 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
             )
             return 1
         return 0
+    if args.command == "capture":
+        return _capture(args)
     if args.command == "disable-discord":
         user_reg = args.user_reg
         if user_reg is None:
@@ -721,6 +748,58 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
         print(f"no DiscordDisabled entry in {user_reg}; launch the game once first", file=sys.stderr)
         return 1
     raise PipelineError(f"unknown command {args.command}")
+
+
+def _capture(args: argparse.Namespace) -> int:
+    """`client capture`: record a frame and what it was meant to show.
+
+    The client-running check is not bureaucracy. A screenshot of a main menu,
+    or of the terminal the operator alt-tabbed to, files cleanly into the
+    manifest and looks exactly like evidence to the next reader.
+    """
+    from .capture import DEFAULT_ROOT, capture, read_manifest, record_existing  # noqa: PLC0415
+
+    root = args.out or DEFAULT_ROOT
+
+    if args.list:
+        entries = read_manifest(root)
+        if args.json:
+            print(json.dumps(entries, indent=2, sort_keys=True))
+            return 0
+        if not entries:
+            print(f"no captures recorded under {root}")
+            return 0
+        for entry in entries:
+            print(f"{entry.get('label', '?'):24} {entry.get('file', '?')}")
+            print(f"{'':24} {entry.get('observable') or '(no observable recorded)'}")
+        print()
+        print("A recorded frame is not a verdict. Only a person signs these off.")
+        return 0
+
+    if not args.label:
+        raise PipelineError("capture needs a LABEL, or --list to print the manifest")
+
+    if args.file is not None:
+        entry = record_existing(args.file, args.label, args.observable, root)
+    else:
+        if not args.allow_no_client and not running_client_pids():
+            raise PipelineError(
+                "no 7DaysToDie.exe is running, so there is nothing to look at. Start "
+                "one with 'shamway client launch', or pass --allow-no-client if you "
+                "really mean to capture whatever is on screen."
+            )
+        entry = capture(args.label, args.observable, root, args.wait)
+
+    if args.json:
+        print(json.dumps(entry.as_dict(), indent=2, sort_keys=True))
+        return 0
+    print(f"captured {Path(root) / entry.file} ({entry.bytes} bytes, via {entry.backend})")
+    if entry.observable:
+        print(f"look for: {entry.observable}")
+    for note in entry.notes:
+        print(f"note: {note}")
+    print("Recorded, not accepted. The verdict is yours to write into the manifest.")
+    return 0
 
 
 def _maybe(fn, game_dir: Path | None) -> str | None:

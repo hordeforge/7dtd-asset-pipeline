@@ -232,3 +232,53 @@ A run like this proves that everything resolves. It signs off nothing: the
 held lamp being legible, the smaller tier reading smaller beside the larger,
 the cloud reading from the ground and from two kilometres — those are a
 person's, and the evidence packet records who looked.
+
+### Steps 5 and 7: recording what a person saw
+
+The judgement stays a person's. What is mechanical is the artefact it leaves,
+and without one "looks right" is a sentence in a chat log that no later session
+can reopen, compare against, or disagree with.
+
+`shamway client capture` files the frame next to the observable it was checked
+against. Frame the shot in the client and let the countdown fire — a capture
+taken by alt-tabbing to a terminal photographs the terminal:
+
+```bash
+shamway client capture held-nuke --wait 5 \
+    --observable "held upright like a grenade, not sunk into the hand, at 0.42 m hand scale"
+shamway client capture --list
+```
+
+It writes `.local/acceptance/<label>.png` and appends to
+`.local/acceptance/manifest.json`: the label, the observable, the backend that
+took it, the image's own size, SHA-256 and mtime — and a `verdict` field that
+is always `null`. Nothing here writes a pass. A reviewer fills that field in,
+or the frame stands as an open question.
+
+What it refuses to do matters as much as what it does:
+
+- **It will not capture without a running client.** A screenshot of a main
+  menu, or of the terminal that ran the command, files into the manifest
+  looking exactly like evidence. `--allow-no-client` is there for the case
+  where you mean it.
+- **It picks the backend by session type, not by what is installed.** An X11
+  grabber under Wayland returns a black or garbage frame *and exits zero*, so
+  a preference list alone would file a black rectangle as a sign-off.
+  `shamway capabilities` reports which tool was found;
+  `shamway script install-tools --with-desktop-capture` installs one.
+- **It captures the full screen only.** Naming a specific window needs a
+  compositor-specific lookup, and one that picked the wrong window would
+  record the wrong thing under the right label.
+
+A screenshot taken with the desktop's own hotkey is exactly as good; enter it
+into the same manifest so it is cited rather than lost:
+
+```bash
+shamway client capture held-nuke --file ~/Pictures/screenshot.png \
+    --observable "held upright like a grenade, not sunk into the hand"
+```
+
+Audio has no equivalent artefact, and pretending otherwise would be worse than
+the gap: a waveform is not a listen. Record the clip's `check-sound` numbers,
+the sound group, and the fact that a person listened on a fresh client — see
+[audio.md](audio.md), "Acceptance".

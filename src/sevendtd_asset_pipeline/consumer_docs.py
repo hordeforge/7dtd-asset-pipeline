@@ -54,11 +54,14 @@ Exit code 0 means valid. Start here rather than reading files.
 | `shamway client deploy .` | fast | copy the deployable modlet there (outside the game install) |
 | `shamway client launch --mod-name {mod_name}` | minutes | a genuinely fresh client, then its log classified |
 | `shamway client log --mod-name {mod_name}` | instant | classify the newest client log |
+| `shamway client capture LABEL` | instant | record the frame a visual sign-off was made on |
+| `shamway prompt KIND --subject "..."` | instant | a house-style image prompt, and the lane that consumes it |
 
 Diagnose with the fast read-only commands. `build` and `render-icon` are the
 only two that write into this mod (`schema` marks them, `init`, and the two
 `client` writers with `writes: true`); `client deploy` writes into the client's
-per-user `Mods/` folder, which is outside both this mod and the game install.
+per-user `Mods/` folder and `client capture` into `.local/acceptance/`, both
+outside the game install.
 Reach for them only when an asset actually changed. `render-icon` needs a graphics device — run it under `xvfb-run -a` on
 a headless host, because with `-nographics` Unity writes a blank image instead
 of failing.
@@ -164,6 +167,23 @@ for particle effects.
   `GeneratedAsset.Primitive(...)`. Use for hard-surface props. Emits no mesh
   asset at all, so the geometry stays a reviewable diff of numbers.
 
+**Do not improvise an image-generation prompt.** `shamway prompt` renders the
+art-direction contract for you — the asset-type line, the key colour, the
+negative list, and the commands that consume the model's output. What it cannot
+supply is the part that decides whether the result is usable: the subject, and
+the specific wrong answer the last candidate produced.
+
+```bash
+shamway prompt --list
+shamway prompt item-icon --subject "a squat charcoal welded-steel control box" \
+    --role "a rugged wired electrical trigger" --avoid "carry handle" --stem myModThing
+```
+
+Generate against the flat key colour it names — never "transparent", which
+produces a checkerboard no cutout can key — then cut it out, reduce it to the
+cell, and gate it. Record the model, the exact prompt, and the selection reason
+in `assets-src/README.md`; a prompt is provenance, not acceptance.
+
 **Icons — two lanes, both first-class.** Generated or drawn art when the icon
 should show something the mesh does not; `shamway render-icon STEM` when the
 icon should *be* the item, which is the only way it cannot drift from the mesh.
@@ -254,6 +274,21 @@ error. `--mute` is for runs that are not listening runs; a listening run is
 never muted, and the report says which it was. PASS means the asset
 **loads**. Whether it looks or sounds right is still a person's call, and the
 report's last line says so.
+
+That call is the only step with no output of its own, so file it. Frame the
+shot in the client and let the countdown fire — capturing by alt-tabbing to a
+terminal photographs the terminal:
+
+```bash
+shamway client capture held-thing --wait 5 \
+    --observable "held upright, not sunk into the hand, at the right scale"
+shamway client capture --list
+```
+
+It writes `.local/acceptance/<label>.png` and a `manifest.json` pairing each
+frame with its observable, its hash, and a `verdict` field that is always
+`null`. Nothing writes a pass; a reviewer fills that in. Keep `.local/` out of
+the shipped modlet and out of git.
 
 ## Referencing an asset from XML
 

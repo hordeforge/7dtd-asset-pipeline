@@ -30,16 +30,20 @@ the host is missing. Then install for real:
 
 - `scripts/install-tools.sh --with-unity-prereqs` — required for step 4
 - `scripts/install-tools.sh --with-authoring` — art and inspection tooling
+- `scripts/install-tools.sh --with-desktop-capture` — a screenshot tool for step 8
 
 ```bash
 scripts/install-tools.sh --with-unity-prereqs
 scripts/install-tools.sh --with-authoring
+scripts/install-tools.sh --with-desktop-capture
 ```
 
 `install-tools.sh` installs uv first, since every Python step runs through it.
 `--with-authoring` then installs Blender, OpenSCAD, ImageMagick, FFmpeg, the
 Khronos glTF validator, and the Python capabilities (UnityPy, Pillow, NumPy,
-trimesh). Blender and the glTF validator fall back to official
+trimesh). `--with-desktop-capture` installs `grim` or `maim`, which is what
+lets step 8's visual sign-off leave a citable frame; skip it on a headless
+build host. Blender and the glTF validator fall back to official
 checksum-verified builds where the distribution has no package. Check what is
 usable at any time with `shamway capabilities --json`.
 

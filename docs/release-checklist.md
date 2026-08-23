@@ -47,6 +47,8 @@
 - [ ] Check VFX LOD, repeated effects, caps, cleanup, frame time, and accessibility.
 - [ ] Test presentation failure fallback when gameplay must remain functional.
 - [ ] Preserve bundle hash, logs/reports, and screenshots/listening notes.
+      `shamway client capture LABEL --observable "..."` records each frame with
+      what it was checked against; `shamway client capture --list` prints the set.
 - [ ] Name explicitly which acceptance items a human actually looked at or listened to,
       and which remain open. A green offline run closes none of them.
 
@@ -63,6 +65,9 @@ failed review* — kept distinct from "stand-in" and "accepted".
 - [ ] Materials: relief and uneven gloss on paint, seams where the albedo shows them, bare steel brushed not mirrored, rubber matte, nothing like wet plastic.
 - [ ] Effects: from the ground, from far, from above; a close-range billboard judged for what it necessarily fills.
 - [ ] Sound: near, across the fade, at maximum range, under concurrency, and on loop.
+- [ ] Every line above that a person actually checked has a captured frame and a
+      written verdict in `.local/acceptance/manifest.json`. A capture with a
+      `null` verdict is an open question, not a sign-off.
 
 ## After a game update
 

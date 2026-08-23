@@ -158,9 +158,10 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `check-icons [--json]` | no | no | no | atlas cells and every `CustomIcon` key |
 | `render-icon STEM` | no | yes | **yes** | photograph a prefab into its atlas cell |
 | `generate NAME [ARGS]` | no | Blender for `mesh` | **yes** (writes what you ask for) | run a packaged asset generator |
+| `prompt KIND --subject …` | no | no | no | render a house-style image prompt and its lane |
 | `docs [TOPIC]` | no | no | no | print packaged documentation |
 | `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts) |
-| `client where\|deploy\|launch\|log\|mute\|unmute` | no | no | **deploy/launch** write outside the modlet | fresh-client acceptance plumbing |
+| `client where\|deploy\|launch\|log\|mute\|unmute\|capture` | no | no | **deploy/launch/capture** write outside the modlet | fresh-client acceptance plumbing |
 | `schema` / `call NAME` / `serve` | no | no | per operation | the machine-readable surface |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |
 
@@ -229,11 +230,17 @@ Install everything at once:
 
 - `uv pip install '7dtd-asset-pipeline[all]'` — UnityPy, Pillow, NumPy, trimesh
 - `scripts/install-tools.sh --with-authoring` — Blender, OpenSCAD, glTF validator, …
+- `scripts/install-tools.sh --with-desktop-capture` — a screenshot tool for `client capture`
 
 ```bash
 uv pip install '7dtd-asset-pipeline[all]'
 scripts/install-tools.sh --with-authoring
+scripts/install-tools.sh --with-desktop-capture
 ```
+
+One capability, `desktop-capture`, has `kind: "any-command"`: any one of
+several interchangeable screenshot tools satisfies it, and `path` names the one
+that was found.
 
 ### `inspect --deep --json`
 
@@ -296,6 +303,44 @@ Both are published in `shamway schema` under `generators` and
 operations. A generator writes exactly the output path it is given; none of
 them touches the modlet on its own.
 
+### `prompt`
+
+The art-direction contract, rendered rather than recalled: the asset-type line,
+the key colour, the negative list, and the commands that consume the image the
+model returns. Needs no configuration and no modlet — a prompt is written
+before the asset exists as often as after.
+
+- `shamway prompt --list` — item-icon, block-concept, material-albedo, particle-card, opacity-mask
+- `shamway prompt item-icon --subject "…"` — one rendered prompt
+- `shamway prompt item-icon --subject "…" --json` — `{kind, key, key_hex, prompt, next, notes}`
+
+```bash
+shamway prompt --list
+shamway prompt item-icon --subject "a squat charcoal welded-steel control box"
+shamway prompt item-icon --subject "a squat charcoal welded-steel control box" --json
+```
+
+It is also a JSON operation, so `call`, `serve`, and `Pipeline.prompt()` reach
+the same renderer. `--subject` is required and never defaulted: a prompt whose
+subject the tool picked is a prompt for the wrong asset. `--avoid` is
+repeatable and is the one clause that has to be written fresh each round —
+generic negatives do not remove a specific recurring artefact, so name the
+wrong answer the last candidate actually produced.
+
+### `client capture`
+
+Records the frame a visual sign-off was made on, next to the observable it was
+checked against, in `.local/acceptance/`. It refuses to shoot when no client is
+running, picks its backend by session type rather than by availability, and
+writes a `verdict` field that is always `null` — see
+[validation.md](validation.md), "Steps 5 and 7". Needs the optional
+`desktop-capture` capability.
+
+```bash
+shamway client capture held-nuke --wait 5 --observable "upright in the hand"
+shamway client capture --list --json
+```
+
 ### `render-icon`
 
 Renders a bundle prefab into an atlas cell so the icon cannot drift from the
@@ -350,6 +395,7 @@ pipeline.call("inspect_deep")             # same dispatch as `call` and `serve`
 | `.client_deploy(mods_dir=None, mod_name=None, replace=True)` | `{destination, copied}` (writes outside the modlet) |
 | `.client_launch(run_seconds=None, mute=False, mod_name=None, …)` | `AcceptanceRun` (starts a real client) |
 | `.client_log(path=None, log_dir=None, mod_name=None)` | `LogReport` |
+| `.prompt(kind, subject, role="", palette="", key="", avoid=(), stem=…)` | the rendered prompt and its lane, as a dict |
 | `.call(name, params)` | the registry operation, JSON-shaped |
 
 ### The underlying functions

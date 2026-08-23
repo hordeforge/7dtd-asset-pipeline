@@ -113,6 +113,30 @@ filters, and prints the matching `sounds.xml` entry. Gate the result with
 `shamway check-sound`, then always listen to it; deterministic does not
 mean good.
 
+## Visual evidence
+
+### grim, maim, spectacle — the screenshot backends
+
+A visual sign-off is the last step of acceptance and the only one with no
+output of its own. `shamway client capture` uses whichever of `grim`,
+`spectacle`, `gnome-screenshot`, `maim`, `scrot`, or ImageMagick's `import` can
+serve the current session, and records the frame with the observable it was
+checked against.
+
+Which tool matters less than which *session*: an X11 grabber under Wayland
+returns a black or garbage frame **and exits zero**, so the session type
+selects the candidate rather than merely ordering it. `grim` is the Wayland
+answer, `maim` the X11 one, and an X11 host that already ran `--with-authoring`
+has `import` and needs neither.
+
+- `grim`: <https://sr.ht/~emersion/grim/>
+- `maim`: <https://github.com/naelstrof/maim>
+
+```bash
+shamway script install-tools --with-desktop-capture
+shamway capabilities --json
+```
+
 ## Engine facts
 
 ### ilspycmd and monodis — the named sources
@@ -195,4 +219,4 @@ or live-client gates.
 | particle card | Pillow/NumPy/Blender | alpha-edge montage | particle material state + live VFX |
 | sound | `shamway generate sound`, FFmpeg | `shamway check-sound` | sound group lookup + listening at range |
 | detail normal | `shamway generate texture-maps detail` | tiling seam check on a cylinder | in-game light sweep on the flat-colour part |
-| fresh client | `shamway client deploy` / `launch` | `shamway client log` | a person's look or listen |
+| fresh client | `shamway client deploy` / `launch` | `shamway client log` | a person's look or listen, filed with `shamway client capture` |

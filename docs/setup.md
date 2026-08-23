@@ -15,7 +15,10 @@ required for the CLI itself; `--with-unity-prereqs` covers the editor
 installer's needs, `--with-authoring` the optional art tooling in
 [Authoring tools](authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
 and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy) —
-and `--with-research` the decompilers every new engine fact must cite: the
+`--with-desktop-capture` a screenshot tool (`grim` on Wayland, `maim` on X11)
+so `shamway client capture` can record what a person looked at during
+acceptance — skip it on a headless build host — and `--with-research` the
+decompilers every new engine fact must cite: the
 .NET 8 SDK with `ilspycmd` as a global dotnet tool (in `~/.dotnet/tools`,
 which goes on `PATH`), and Mono for `monodis` and `mcs`. Never set a global
 `DOTNET_ROOT` for ilspycmd; a distribution .NET upgrade can strand the tool,

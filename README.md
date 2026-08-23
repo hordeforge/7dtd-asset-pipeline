@@ -76,11 +76,14 @@ shamway validate
 
 Author sources in the `assets-src/` tree `init` creates, gate each lane before
 importing, and render an icon from the prefab when the icon should be the item.
-The generators and the documentation ship **inside the installed package**, so
-a mod calls them without a checkout of this repository or any relative path:
+The generators, the prompts, and the documentation ship **inside the installed
+package**, so a mod calls them without a checkout of this repository or any
+relative path:
 
 ```bash
 shamway generate --list
+shamway prompt item-icon --subject "a squat charcoal welded-steel control box" \
+    --stem myModThing
 shamway generate sound blast assets-src/audio/blast.wav --seed 7
 shamway generate cutout key assets-src/icons/thing-src.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
@@ -120,6 +123,16 @@ shamway client deploy .
 shamway client launch --mod-name MyMod --run-seconds 120 --mute
 ```
 
+The looking half is not, and nothing here will do it for you. What the pipeline
+can do is make the result citable: record the frame a judgement was made on,
+next to the observable the reviewer was asked to check.
+
+```bash
+shamway client capture held-nuke --wait 5 \
+    --observable "held upright like a grenade, not sunk into the hand"
+shamway client capture --list
+```
+
 ## What it includes
 
 - host-tooling and Unity-editor installers that start from a bare machine;
@@ -149,7 +162,9 @@ shamway client launch --mod-name MyMod --run-seconds 120 --mute
 - an editor-side icon renderer, so an icon that should *be* the item cannot
   drift from the mesh;
 - an art-direction contract with prompt patterns, so generated 2D assets match
-  the game rather than merely being clean;
+  the game rather than merely being clean, and `shamway prompt`, which renders
+  those patterns as a ready prompt with the key colour, the negative list, and
+  the commands that consume the model's output;
 - generators, documentation, and host scripts served from the installed
   package (`shamway generate`, `shamway docs`, `shamway script`), so a
   consuming mod owns only its own content and never a path into this
@@ -164,7 +179,8 @@ shamway client launch --mod-name MyMod --run-seconds 120 --mute
   loads mods from and logs to, an allow-listed deploy, a launch that refuses a
   running client, an OS-layer mute for non-listening runs, and a log
   classifier that knows every positive line and every silent-failure
-  signature this project has met;
+  signature this project has met, plus `client capture`, which files the frame
+  a visual sign-off was made on next to the observable it was checked against;
 - a declared list of code-loaded bundle stems (`code_references`), so assets
   no XML names are validated too;
 - an editor-script compile gate that needs no running editor

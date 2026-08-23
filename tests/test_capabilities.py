@@ -14,7 +14,7 @@ class CapabilityTests(unittest.TestCase):
     def test_every_capability_declares_what_it_unlocks_and_how_to_install(self) -> None:
         for capability in capabilities():
             with self.subTest(capability.name):
-                self.assertIn(capability.kind, ("command", "module"))
+                self.assertIn(capability.kind, ("command", "any-command", "module"))
                 self.assertTrue(capability.unlocks, "must name what it unlocks")
                 self.assertTrue(capability.purpose)
                 self.assertTrue(capability.install, "must name an install command")

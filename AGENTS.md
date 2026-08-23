@@ -149,12 +149,14 @@ Machine-readable output for agents and CI:
 | `shamway check-icons --json` | atlas cells and every `CustomIcon` key |
 | `shamway render-icon STEM` | render a prefab into its atlas cell (needs a display) |
 | `shamway generate --list` | the packaged asset generators, callable from any mod |
+| `shamway prompt --list` | the house-style image prompts, rendered with the lane that consumes them |
 | `shamway docs [TOPIC]` | this repository's documentation, served from the package |
 | `shamway script NAME` | the host scripts (install-tools, install-unity-editor, compile-editor-scripts), served from the package |
 | `shamway client where --json` | the client's per-user `Mods/` and `logs/` paths |
 | `shamway client deploy MOD` | copy the deployable modlet there (writes outside the install only) |
 | `shamway client launch --mod-name NAME` | a genuinely fresh client, then its log classified; refuses a running one |
 | `shamway client log --json` | classify the newest client log: positive load lines and silent-failure signatures |
+| `shamway client capture LABEL` | record the frame a visual sign-off was made on, and its observable |
 
 Every command exits non-zero with a single `ERROR: ...` line on stderr when a
 gate fails. Prefer the exit code over parsing prose.
@@ -225,6 +227,17 @@ sound, audio-conversion, cutout, icon, texture, and mesh lanes, and the
 scaffolded Unity project ships `GeneratedAsset.cs` for asset-as-code prefabs,
 materials, imports, particles, and audio, plus `IconRenderer.cs`. Extend those
 rather than starting a new pattern.
+
+`shamway prompt KIND --subject "..."` renders the art-direction contract as a
+ready image-generation prompt — the asset-type line, the key colour, the
+negative list, and the commands that consume the model's output. Use it rather
+than improvising a prompt; improvising is the specific failure
+[docs/art-direction.md](docs/art-direction.md) opens with. Adding a prompt kind
+means adding it to `prompts.KINDS`, and it is published in `shamway schema`.
+
+The offline gates end at a fresh client and a human look. `shamway client
+capture LABEL --observable "..."` files that frame with what it was checked
+against, so a sign-off is citable later. It records; it never writes a verdict.
 
 There are **two mesh lanes and both are first-class**: an authored mesh from
 Blender or OpenSCAD for organic, rigged, or sculpted geometry, and composed

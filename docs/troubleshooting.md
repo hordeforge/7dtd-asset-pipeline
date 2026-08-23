@@ -213,6 +213,43 @@ entity in the stability pass; the client just reports air. Ground each
 column of the placement, never fall back to a local-only `SetBlockLocal`,
 and read the server log before hypothesising about bundles or replication.
 
+## `client capture` says there is no screenshot tool, or writes a black frame
+
+The session type decides which tools work, not what is installed. Under
+Wayland, an X11 grabber (`maim`, `scrot`, ImageMagick's `import`) reaches no
+compositor and returns a black or garbage image **while exiting zero** — which
+is why `capture` selects by session rather than trying each in turn, and why a
+black frame is more likely to mean "wrong tool" than "wrong moment".
+
+Check what the session is and what was found:
+
+```bash
+shamway capabilities --json
+```
+
+Install one that fits:
+
+```bash
+shamway script install-tools --with-desktop-capture
+```
+
+If the tool exits zero but writes nothing, `capture` fails rather than filing
+an empty file — some desktop portals refuse a screenshot without an interactive
+permission grant and report success anyway. Take the shot with the desktop's
+own hotkey and enter it into the same manifest:
+
+```bash
+shamway client capture held-nuke --file ~/Pictures/screenshot.png \
+    --observable "held upright, not sunk into the hand"
+```
+
+## `client capture` refuses because no client is running
+
+Deliberate. A frame of a main menu, a desktop, or the terminal that ran the
+command files into the manifest looking exactly like evidence, and the next
+reader has no way to tell. Launch a client first, or pass `--allow-no-client`
+when you genuinely mean to capture whatever is on screen.
+
 ## `doctor` cannot find game or editor
 
 Use absolute machine-local environment variables:

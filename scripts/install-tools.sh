@@ -12,6 +12,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WITH_AUTHORING=0
 WITH_UNITY_PREREQS=0
 WITH_RESEARCH=0
+WITH_DESKTOP_CAPTURE=0
 CHECK_ONLY=0
 
 usage() {
@@ -28,6 +29,8 @@ OPTIONS
                          needs (curl, tar, libarchive, flatpak, libxml2.so.2)
   --with-research        Also install the decompilers that engine facts must
                          cite (.NET 8 SDK + ilspycmd, Mono's monodis)
+  --with-desktop-capture Also install a screenshot tool, so the human visual
+                         sign-off leaves a citable frame (grim, maim)
   --check                Report what is present or missing and install nothing
   -h, --help             Show this help
 
@@ -54,6 +57,13 @@ WITH --with-unity-prereqs
   libxml2.so.2       The Unity 2022 editor links the old libxml2 soname;
                      distributions shipping 2.14+ provide only libxml2.so.16
 
+WITH --with-desktop-capture
+  grim               Screenshots on a Wayland session
+  maim               Screenshots on an X11 session
+                     Either one satisfies 'shamway client capture'. An X11
+                     host that already ran --with-authoring has ImageMagick's
+                     'import' and needs neither.
+
 WITH --with-research
   dotnet (8 SDK)     Hosts ilspycmd; installed as a global dotnet tool into
                      ~/.dotnet/tools, which must be on PATH
@@ -75,6 +85,7 @@ while (($#)); do
 		--with-authoring) WITH_AUTHORING=1; shift ;;
 		--with-unity-prereqs) WITH_UNITY_PREREQS=1; shift ;;
 		--with-research) WITH_RESEARCH=1; shift ;;
+		--with-desktop-capture) WITH_DESKTOP_CAPTURE=1; shift ;;
 		--check) CHECK_ONLY=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) echo "ERROR: unknown option $1" >&2; usage >&2; exit 1 ;;
@@ -110,6 +121,16 @@ report() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Any one of these satisfies 'shamway client capture'; the capability registry
+# in capabilities.py probes the same list.
+has_screenshot_tool() {
+	local tool
+	for tool in grim spectacle gnome-screenshot maim scrot import; do
+		have "$tool" && return 0
+	done
+	return 1
+}
+
 has_dotnet_8_sdk() {
 	have dotnet && dotnet --list-sdks 2>/dev/null | grep -q '^8\.'
 }
@@ -143,6 +164,9 @@ run_check() {
 			report "$tool" "Unity editor install" have "$tool"
 		done
 		report libxml2.so.2 "Unity editor runtime" has_libxml2_so2
+	fi
+	if ((WITH_DESKTOP_CAPTURE)); then
+		report screenshot "visual sign-off (shamway client capture)" has_screenshot_tool
 	fi
 	if ((WITH_RESEARCH)); then
 		report dotnet "8.x SDK, hosts ilspycmd" has_dotnet_8_sdk
@@ -191,6 +215,10 @@ collect_pacman() {
 		have flatpak || PACKAGES+=(flatpak)
 		has_libxml2_so2 || PACKAGES+=(libxml2-legacy)
 	fi
+	if ((WITH_DESKTOP_CAPTURE)); then
+		have grim || PACKAGES+=(grim)
+		have maim || PACKAGES+=(maim)
+	fi
 	if ((WITH_RESEARCH)); then
 		has_dotnet_8_sdk || PACKAGES+=(dotnet-sdk-8.0 dotnet-runtime-8.0)
 		have monodis || PACKAGES+=(mono)
@@ -217,6 +245,10 @@ collect_apt() {
 		have bsdtar || PACKAGES+=(libarchive-tools)
 		have flatpak || PACKAGES+=(flatpak)
 		has_libxml2_so2 || PACKAGES+=(libxml2)
+	fi
+	if ((WITH_DESKTOP_CAPTURE)); then
+		have grim || PACKAGES+=(grim)
+		have maim || PACKAGES+=(maim)
 	fi
 	if ((WITH_RESEARCH)); then
 		has_dotnet_8_sdk || PACKAGES+=(dotnet-sdk-8.0)
@@ -245,6 +277,10 @@ collect_dnf() {
 		have flatpak || PACKAGES+=(flatpak)
 		has_libxml2_so2 || PACKAGES+=(libxml2)
 	fi
+	if ((WITH_DESKTOP_CAPTURE)); then
+		have grim || PACKAGES+=(grim)
+		have maim || PACKAGES+=(maim)
+	fi
 	if ((WITH_RESEARCH)); then
 		has_dotnet_8_sdk || PACKAGES+=(dotnet-sdk-8.0)
 		have monodis || PACKAGES+=(mono-devel)
@@ -271,6 +307,10 @@ collect_zypper() {
 		have bsdtar || PACKAGES+=(bsdtar)
 		have flatpak || PACKAGES+=(flatpak)
 		has_libxml2_so2 || PACKAGES+=(libxml2-2)
+	fi
+	if ((WITH_DESKTOP_CAPTURE)); then
+		have grim || PACKAGES+=(grim)
+		have maim || PACKAGES+=(maim)
 	fi
 	if ((WITH_RESEARCH)); then
 		has_dotnet_8_sdk || PACKAGES+=(dotnet-sdk-8.0)

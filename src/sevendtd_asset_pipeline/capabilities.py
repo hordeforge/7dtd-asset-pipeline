@@ -30,7 +30,8 @@ class Capability:
 
     name: str
     kind: str
-    """Either "command" (an executable on PATH) or "module" (an importable)."""
+    """"command" (an executable on PATH), "module" (an importable), or
+    "any-command" (satisfied by any one of several interchangeable tools)."""
     unlocks: tuple[str, ...]
     """The `shamway` commands or generator scripts this makes usable."""
     purpose: str
@@ -158,6 +159,15 @@ REGISTRY: tuple[_Spec, ...] = (
         install="shamway script install-tools --with-authoring",
     ),
     _Spec(
+        name="desktop-capture",
+        kind="any-command",
+        probe="grim spectacle gnome-screenshot maim scrot import",
+        unlocks=("shamway client capture",),
+        purpose="a screenshot tool for the current desktop session, so a human "
+        "visual sign-off leaves a citable frame instead of only a claim",
+        install="shamway script install-tools --with-desktop-capture",
+    ),
+    _Spec(
         name="ffmpeg",
         kind="command",
         probe="ffmpeg",
@@ -197,6 +207,17 @@ def _module_version(module: str) -> str | None:
 
 
 def _resolve(spec: _Spec, probe_versions: bool) -> Capability:
+    if spec.kind == "any-command":
+        # Interchangeable tools: the first one present satisfies the capability,
+        # and which one it is matters to the report, so `path` names it.
+        path = next(
+            (found for name in spec.probe.split() if (found := shutil.which(name))), None
+        )
+        return Capability(
+            name=spec.name, kind=spec.kind, unlocks=spec.unlocks, purpose=spec.purpose,
+            install=spec.install, available=path is not None, path=path,
+            version=_command_version(path) if (path and probe_versions) else None,
+        )
     if spec.kind == "command":
         path = shutil.which(spec.probe)
         return Capability(

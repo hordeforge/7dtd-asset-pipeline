@@ -166,6 +166,9 @@ For a release candidate preserve:
 - screenshots/turntables/listening notes, each capture named for the
   observable it records (`held-mesh-scale`, `placed-bounds`,
   `detonation-audio-near`) with the stated expectation beside it, so a later
-  reader knows what a picture was meant to prove;
+  reader knows what a picture was meant to prove. `shamway client capture
+  LABEL --observable "..."` writes exactly that pairing into
+  `.local/acceptance/manifest.json`, with the frame's own hash, and leaves the
+  verdict field empty for the person who looked;
 - the audio state of the run (muted or listening);
 - negative-control result where graceful fallback matters.

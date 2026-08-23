@@ -104,7 +104,7 @@ Commit: `.shamway.toml`, `Makefile.assets`, `assets-src/`, the Unity
 project (including every `.meta`), the built bundle, and its tracked manifest.
 
 Do not ship in the released modlet: `.shamway.toml`, `tools/`,
-`assets-src/`, `.shamway/`, or the Unity project. The deployable modlet
+`assets-src/`, `.shamway/`, `.local/`, or the Unity project. The deployable modlet
 is `ModInfo.xml`, `Config/` (with `Localization.csv` inside it), `Resources/`, and `UIAtlases/`
 — see [game-integration.md](game-integration.md).
 
@@ -112,11 +112,18 @@ Add to the mod's `.gitignore`:
 
 ```gitignore
 .shamway/
+.local/
 tools/shamway/UnityProject/Library/
 tools/shamway/UnityProject/Temp/
 tools/shamway/UnityProject/Logs/
 tools/shamway/UnityProject/UserSettings/
 ```
+
+`.local/` is where `shamway client capture` writes acceptance screenshots and
+their manifest. Whether those belong in git is the mod's call — they are
+evidence, and evidence that is only ever local is evidence nobody else can
+check — but they are never part of the deployable modlet either way. If you do
+commit them, commit them somewhere other than `.local/`.
 
 ## Adopting a mod that already has a Unity project
 

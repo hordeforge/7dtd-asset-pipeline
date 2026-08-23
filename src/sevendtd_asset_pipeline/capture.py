@@ -47,27 +47,18 @@ class Backend:
     an error — `import` under Wayland returns a black or garbage frame with a
     zero exit code. So the session type selects the candidates rather than
     merely ordering them.
+
+    Every invocation is a fixed argv plus the output path, and full screen only,
+    deliberately. The client under acceptance is fullscreen, and every
+    per-window variant needs a compositor-specific way to name the window; one
+    that picked the wrong window would capture a terminal and file it as
+    evidence.
     """
 
     name: str
     sessions: tuple[str, ...]
     """"wayland", "x11", or both."""
-
-    def command(self, output: Path) -> list[str]:
-        raise NotImplementedError
-
-
-@dataclass(frozen=True)
-class _Simple(Backend):
-    """A backend whose whole invocation is a fixed argv plus the output path.
-
-    Full screen only, deliberately. The client under acceptance is fullscreen,
-    and every per-window variant needs a compositor-specific way to name the
-    window; one that picked the wrong window would capture a terminal and file
-    it as evidence.
-    """
-
-    argv: tuple[str, ...] = ()
+    argv: tuple[str, ...]
 
     def command(self, output: Path) -> list[str]:
         return [*self.argv, str(output)]
@@ -76,13 +67,13 @@ class _Simple(Backend):
 # Ordered by preference within a session type. `import` is last on X11 because
 # ImageMagick's delegate can be slower than a purpose-built grabber, but it is
 # the one most likely to already be installed for the icon lane.
-BACKENDS: tuple[_Simple, ...] = (
-    _Simple("grim", ("wayland",), argv=("grim",)),
-    _Simple("spectacle", ("wayland", "x11"), argv=("spectacle", "-b", "-n", "-f", "-o")),
-    _Simple("gnome-screenshot", ("wayland", "x11"), argv=("gnome-screenshot", "-f")),
-    _Simple("maim", ("x11",), argv=("maim",)),
-    _Simple("scrot", ("x11",), argv=("scrot", "-o")),
-    _Simple("import", ("x11",), argv=("import", "-window", "root")),
+BACKENDS: tuple[Backend, ...] = (
+    Backend("grim", ("wayland",), argv=("grim",)),
+    Backend("spectacle", ("wayland", "x11"), argv=("spectacle", "-b", "-n", "-f", "-o")),
+    Backend("gnome-screenshot", ("wayland", "x11"), argv=("gnome-screenshot", "-f")),
+    Backend("maim", ("x11",), argv=("maim",)),
+    Backend("scrot", ("x11",), argv=("scrot", "-o")),
+    Backend("import", ("x11",), argv=("import", "-window", "root")),
 )
 
 
@@ -99,7 +90,7 @@ def session_type(env: dict[str, str] | None = None) -> str:
     return "none"
 
 
-def available_backends(env: dict[str, str] | None = None) -> list[_Simple]:
+def available_backends(env: dict[str, str] | None = None) -> list[Backend]:
     """The installed backends that can serve the current session, in order."""
     session = session_type(env)
     if session == "none":
@@ -111,7 +102,7 @@ def available_backends(env: dict[str, str] | None = None) -> list[_Simple]:
     ]
 
 
-def _require_backend(env: dict[str, str] | None = None) -> _Simple:
+def _require_backend(env: dict[str, str] | None = None) -> Backend:
     session = session_type(env)
     if session == "none":
         raise PipelineError(

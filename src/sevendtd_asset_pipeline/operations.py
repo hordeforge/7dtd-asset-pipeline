@@ -25,7 +25,7 @@ from ._version import __version__
 from .config import BUNDLE_SOURCES
 from .docs import topics
 from .errors import PipelineError
-from .generators import GeneratorInfo, describe
+from .generators import describe
 from .prompts import KEYS, KINDS, kinds
 
 # Cost classes, so a caller can decide what to run in a tight loop.
@@ -495,25 +495,10 @@ def manifest() -> dict[str, Any]:
         # Not operations: they are argv-passthrough commands rather than
         # JSON-in/JSON-out calls. Published here so a consumer can discover the
         # whole surface from one document instead of scraping help text.
-        "generators": _generators(),
-        "documentation": _documentation(),
-        "prompt_kinds": _prompt_kinds(),
+        "generators": describe(),
+        "documentation": topics(),
+        "prompt_kinds": kinds(),
     }
-
-
-def _generators() -> list[GeneratorInfo]:
-    """The packaged asset generators, callable as `shamway generate NAME`."""
-    return describe()
-
-
-def _prompt_kinds() -> list[dict[str, str]]:
-    """The house-style prompt shapes, rendered by the 'prompt' operation."""
-    return kinds()
-
-
-def _documentation() -> list[dict[str, str]]:
-    """The packaged documentation, readable as `shamway docs TOPIC`."""
-    return topics()
 
 
 def get(name: str) -> Operation:

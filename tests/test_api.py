@@ -46,6 +46,29 @@ class ManifestTests(unittest.TestCase):
         )
 
 
+class CommandLineTests(unittest.TestCase):
+    """Run the CLI the way a user does.
+
+    `shamway schema` shipped broken once: a local variable in `run()` shadowed
+    the module-level `manifest` import for the whole function, which no test
+    that called the API could see. Exercising the entry point is what catches
+    that class of mistake.
+    """
+
+    def test_schema_prints_the_operation_manifest(self) -> None:
+        import io
+        from contextlib import redirect_stdout
+
+        from sevendtd_asset_pipeline.cli import main
+
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            code = main(["schema"])
+        self.assertEqual(0, code)
+        published = json.loads(stream.getvalue())
+        self.assertEqual(set(OPERATIONS), {item["name"] for item in published["operations"]})
+
+
 class DispatchTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()

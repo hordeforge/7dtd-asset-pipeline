@@ -7,7 +7,7 @@ from pathlib import Path
 from fixtures import unityfs_bundle
 
 from sevendtd_asset_pipeline.build import reject_disabled_modules
-from sevendtd_asset_pipeline.config import CONFIG_NAME, load_config
+from sevendtd_asset_pipeline.config import CONFIG_NAME, PipelineConfig, load_config
 from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.scaffold import initialize
 from sevendtd_asset_pipeline.validation import reject_ambiguous_stems, validate_mod
@@ -362,7 +362,8 @@ class UnityOptionalTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def _external_mod(self) -> tuple[object, Path, Path]:
+    def _external_mod(self) -> tuple[PipelineConfig, Path, Path]:
+        """A scaffolded `bundle_source = "external"` modlet with a bundle to stage."""
         initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="external")
         config = load_config(self.root / CONFIG_NAME)
         built = self.root / "elsewhere"

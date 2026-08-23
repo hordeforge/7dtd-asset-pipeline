@@ -198,7 +198,7 @@ class ServeTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def _run(self, *requests: object, allow_writes: bool = False) -> list[dict]:
+    def _run(self, *requests: object, allow_writes: bool = False) -> list[dict[str, object]]:
         payload = "".join(json.dumps(request) + "\n" for request in requests)
         output = io.StringIO()
         serve(lambda: self.pipeline, allow_writes, io.StringIO(payload), output)
@@ -287,7 +287,8 @@ class ImportHygieneTests(unittest.TestCase):
                         )
                     )
                     if bad:
-                        self.fail(f"{path.relative_to(root)}:{sub.lineno}: "
+                        line = getattr(sub, "lineno", "?")
+                        self.fail(f"{path.relative_to(root)}:{line}: "
                                   f"intra-package import inside {node.name}()")
 
     def test_registry_reads_the_version_without_importing_upward(self) -> None:

@@ -277,6 +277,26 @@ _DEFINITIONS: tuple[Operation, ...] = (
         needs_config=True,
     ),
     Operation(
+        name="acceptance_provider",
+        summary="Generate the 7dtd-playtest scenario provider that loads every bundle member "
+        "through the game's own DataLoader, inside a live client. One case per manifest "
+        "entry, plus an absent stem that must stay null. Building it needs the .NET SDK and "
+        "the harness assembly; running it belongs to hordeforge/7dtd-playtest.",
+        parameters=_schema(
+            {
+                "harness_dll": {**PATH_PARAM, "description": "7dtd-playtest.dll; the provider "
+                "is only rendered, not built, when this is omitted"},
+                "install": {"type": "boolean", "description": "copy the built provider into "
+                "the client's Mods folder"},
+                "mods_dir": {**PATH_PARAM, "description": "override the client Mods folder"},
+            }
+        ),
+        returns="{directory, assembly, suite, cases[{stem, kind}], written[], built, installed}",
+        cost=FAST,
+        writes=True,
+        needs_config=True,
+    ),
+    Operation(
         name="stage",
         summary="Gate a bundle an editor elsewhere built and stage it into the modlet: the "
         "same revision, class-142, stem-collision and staging path as 'build', without a "

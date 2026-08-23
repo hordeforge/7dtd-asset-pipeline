@@ -26,6 +26,7 @@ from .errors import PipelineError
 # reader meets them rather than alphabetically.
 TOPICS: dict[str, tuple[str, str]] = {
     "mod-repo-layout": ("mod-repo-layout.md", "what lives in the mod repo and what lives here"),
+    "sibling-repos": ("sibling-repos.md", "the other HordeForge repositories, and the client lock this one shares"),
     "quickstart": ("quickstart.md", "bare machine to a validated bundle"),
     "setup": ("setup.md", "Python, game path, Unity, licensing, Windows module"),
     "no-unity": ("no-unity.md", "the four answers to where the bundle comes from, three of them editorless"),

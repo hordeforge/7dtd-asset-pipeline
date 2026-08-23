@@ -163,6 +163,28 @@ repository that this repository did not also author. It is not acceptance: it
 proves the container and object graph survive a runtime of that revision, not
 that 7DTD loads it or that the asset is right.
 
+### Why a Unity runtime is not the game
+
+The gap between the two is three pieces of engine code that only the game runs,
+all decompiled from V 3.1.0 b14 (see
+[research-provenance.md](research-provenance.md)):
+
+| Step | What it does | What a runtime load skips |
+|---|---|---|
+| `ModManager.PatchModPathString` | rewrites `@modfolder(Name):` to the loaded mod's path | the mod-name lookup, and its `[MODS] Mod reference for a mod that is not loaded` failure |
+| `AssetBundleManager.LoadAssetBundle` | opens the archive and caches it per path for the process | the game's own opener, and the session-lifetime cache behind the fresh-client rule |
+| `AssetBundleManager._get` | reduces the request to its file-name stem | the class-142 `m_Container` table, which is the only thing a stem lookup reads |
+
+`AssetBundle.LoadFromFile` in a bare runtime touches none of them. That is why
+the fresh client is the acceptance for a synthesized bundle and not a
+confirmation of it, and why `shamway acceptance-provider` exists: it generates
+a `7dtd-playtest` scenario provider whose cases call
+`DataLoader.LoadAsset<T>` — the entry point the whole chain hangs off — once
+per manifest entry, inside the live client, plus one stem the bundle does not
+contain that must come back null. Running it is
+`scripts/playtest-acceptance.sh`. Even a full pass is not a verdict on the
+asset: it says the game read the bytes, never that they are the right bytes.
+
 ## Phased plan
 
 - **Phase 0 — this page.** Research recorded; nothing implemented.

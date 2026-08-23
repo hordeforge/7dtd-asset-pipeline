@@ -217,7 +217,7 @@ copying its content:
 
 ```markdown
 For asset-bundle work, follow @tools/shamway/AGENTS.md.
-Generators and full documentation: `shamway generate --list`, `shamway docs`.
+Generators, prompts and full documentation: `shamway generate --list`, `shamway prompt --list`, `shamway docs`.
 ```
 
 An agent that starts from those two lines can discover the whole surface
@@ -227,13 +227,23 @@ without being told any of it in advance:
 - `shamway schema` — every operation, its cost, whether it writes
 - `shamway capabilities --json` — which optional tools work, and how to install them
 - `shamway docs` — every rule this pipeline knows
+- `shamway generate --list` and `shamway prompt --list` — how each asset gets made
+- `shamway script --list` — the host installers, served from the package
 
 ```bash
 shamway status --json
 shamway schema
 shamway capabilities --json
 shamway docs
+shamway generate --list
+shamway prompt --list
+shamway script --list
 ```
+
+Those seven answer the four questions an agent arriving cold actually has —
+what state is this mod in, what may I run, what does it cost, and how is each
+asset class made — without a checkout of this repository, a network, or any
+content copied into the mod.
 
 ## When a mod outgrows a generator
 

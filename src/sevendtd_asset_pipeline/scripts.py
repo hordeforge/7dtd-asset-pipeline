@@ -24,7 +24,7 @@ from pathlib import Path
 from .errors import PipelineError
 
 SCRIPTS: dict[str, tuple[str, str]] = {
-    "install-tools": ("install-tools.sh", "host packages: base, --with-authoring, --with-unity-prereqs, --with-research"),
+    "install-tools": ("install-tools.sh", "host packages: base, --with-authoring, --with-unity-prereqs, --with-desktop-capture, --with-research"),
     "install-unity-editor": ("install-unity-editor.sh", "the game-matched Unity editor and Windows Build Support, checksum-verified"),
     "compile-editor-scripts": ("compile-editor-scripts.sh", "compile editor C# against a real editor's assemblies, no editor started"),
 }

@@ -157,6 +157,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     generate.add_argument("--list", action="store_true", help="list the generators and exit")
 
+    prompt_parser = commands.add_parser(
+        "prompt",
+        help="render a house-style image-generation prompt and the lane that follows it",
+        add_help=False,
+    )
+    prompt_parser.add_argument(
+        "arguments",
+        nargs=argparse.REMAINDER,
+        help="KIND --subject \"...\"; `shamway prompt --list` names the kinds",
+    )
+
     script_parser = commands.add_parser(
         "script", help="run a packaged host script: install-tools, install-unity-editor, compile-editor-scripts"
     )
@@ -164,7 +175,7 @@ def _parser() -> argparse.ArgumentParser:
 
     client_parser = commands.add_parser(
         "client",
-        help="fresh-client acceptance: where, deploy, launch, log, mute, unmute, disable-discord",
+        help="fresh-client acceptance: where, deploy, launch, log, capture, mute, unmute, disable-discord",
         add_help=False,
     )
     client_parser.add_argument(
@@ -309,6 +320,10 @@ def run(args: argparse.Namespace) -> int:
             print("Run one with: shamway generate NAME [ARGS...]  (--help works per generator)")
             return 0
         return run_generator(args.generator, args.arguments)
+    if args.command == "prompt":
+        from .prompts import main as prompt_main  # noqa: PLC0415
+
+        return prompt_main(args.arguments or ["--list"])
     if args.command == "client":
         from .client import main as client_main
 
@@ -474,6 +489,14 @@ def main(argv: list[str] | None = None) -> int:
             return script_main(arguments[1:])
         except PipelineError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+    if arguments[:1] == ["prompt"]:
+        from .prompts import main as prompt_main  # noqa: PLC0415
+
+        try:
+            return prompt_main(arguments[1:] or ["--list"])
+        except PipelineError as error:
+            print(f"ERROR: {error}", file=sys.stderr)
             return 1
     if arguments[:1] == ["client"]:
         from .client import main as client_main  # noqa: PLC0415

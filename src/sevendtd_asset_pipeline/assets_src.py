@@ -53,7 +53,9 @@ cannot be regenerated from what is written here is not finished.
 For generated art, record the model or tool, the **exact prompt**, the
 references used, which candidate was selected and why, and the licence basis.
 A prompt is provenance, not acceptance evidence — it says where the pixels came
-from, never that they are good.
+from, never that they are good. `shamway prompt KIND --subject "..."` renders
+the house pattern to start from; record what you actually sent, not the
+template, because the subject and the negatives are what you changed.
 
 For generated audio, meshes, and textures, the generator script *is* the
 provenance: record the command and its `--seed`. Re-running it must reproduce
@@ -65,12 +67,14 @@ Nothing here is a copy of the pipeline. Author with its generators and read its
 rules through the command itself — there is no checkout of it to point at:
 
 - `shamway generate --list` — the generators, and what each needs
+- `shamway prompt --list` — the house-style image prompts, rendered ready to use
 - `shamway docs art-direction` — the style contract and prompt patterns
 - `shamway docs audio` — the sound lane
 - `shamway docs mod-repo-layout` — what belongs here vs in the pipeline
 
 ```bash
 shamway generate --list
+shamway prompt --list
 shamway docs art-direction
 shamway docs audio
 shamway docs mod-repo-layout

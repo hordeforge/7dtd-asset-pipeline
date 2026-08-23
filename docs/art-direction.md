@@ -11,8 +11,16 @@ clean, tonally wrong, and obviously not part of the game.
 
 ## Quick start
 
-Generate a source at high resolution against a flat key colour, cut it out,
-reduce it to the atlas cell, and check it:
+Get the prompt for the asset you are making. It arrives with the key colour,
+the negative list, and the commands that consume the model's output:
+
+```bash
+shamway prompt item-icon --subject "a squat charcoal welded-steel control box" \
+    --stem myModThing
+```
+
+Then generate a source at high resolution against the flat key colour it names,
+cut it out, reduce it to the atlas cell, and check it:
 
 ```bash
 shamway generate cutout key assets-src/icons/thing-src.png \
@@ -160,6 +168,22 @@ gate, and a look in the inventory for the verdict.
 
 ## Writing the prompt
 
+`shamway prompt` assembles the skeleton below for you, filled in for one of
+five asset kinds:
+
+```bash
+shamway prompt --list
+```
+
+Read the rest of this section anyway. The command supplies everything that is
+the same for every asset of a kind; what it cannot supply is the part that
+decides whether the result is usable — the subject clause, and the specific
+wrong answer this subject attracts:
+
+```bash
+shamway prompt item-icon --subject "..." --role "..." --avoid "carry handle"
+```
+
 A prompt that produces a usable asset has six parts and a long negative list.
 The negative list is not padding: generative models default to cinematic
 product renders, and every clause below exists because its absence produced a
@@ -212,6 +236,12 @@ Notes that matter more than they look:
 | `#ff00ff` magenta | the default: olive, steel, charcoal, earth, yellow subjects |
 | `#00ff00` green | the subject contains magenta, pink, or hot red |
 | `#000000` black | **only** for a grayscale opacity mask (see particle cards) |
+
+`shamway prompt` picks the default for the kind and refuses a wrong one: an
+opacity mask is forced onto black, because brightness *is* its alpha channel,
+and a tileable albedo gets no key line at all because it is never cut out.
+Override with `--key green` when the subject contains magenta, pink, or hot
+red.
 
 The key must be a colour the subject cannot contain, because the cutout works
 by colour distance. A magenta key behind a magenta warning light removes the

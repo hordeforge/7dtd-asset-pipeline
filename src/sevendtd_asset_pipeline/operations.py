@@ -309,6 +309,42 @@ _DEFINITIONS: tuple[Operation, ...] = (
         needs_config=False,
     ),
     Operation(
+        name="prompt",
+        summary="Render a house-style image-generation prompt for one asset kind, "
+        "with the key colour, the negative list, and the commands that consume "
+        "the image the model returns.",
+        parameters=_schema(
+            {
+                "kind": {
+                    "type": "string",
+                    "description": "item-icon, block-concept, material-albedo, "
+                    "particle-card, or opacity-mask",
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "the shapes, materials and components, in order of importance",
+                },
+                "role": {"type": "string", "description": "what it is for, in one clause"},
+                "palette": {"type": "string", "description": "three to five named colours"},
+                "key": {
+                    "type": "string",
+                    "description": "magenta, green, or black; defaults per kind",
+                },
+                "avoid": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "specific wrong answers the last candidate produced",
+                },
+                "stem": {"type": "string", "default": "myModThing"},
+            },
+            required=["kind", "subject"],
+        ),
+        returns="{kind, subject, key, key_hex, prompt, next: [commands], notes}",
+        cost=INSTANT,
+        writes=False,
+        needs_config=False,
+    ),
+    Operation(
         name="init",
         summary="Scaffold the pipeline into an existing modlet, or adopt the Unity project "
         "the mod already has. Refuses to overwrite.",
@@ -370,6 +406,7 @@ def manifest() -> dict[str, Any]:
         # whole surface from one document instead of scraping help text.
         "generators": _generators(),
         "documentation": _documentation(),
+        "prompt_kinds": _prompt_kinds(),
     }
 
 
@@ -378,6 +415,13 @@ def _generators() -> list[dict[str, Any]]:
     from .generators import describe
 
     return describe()
+
+
+def _prompt_kinds() -> list[dict[str, str]]:
+    """The house-style prompt shapes, rendered by the 'prompt' operation."""
+    from .prompts import kinds
+
+    return kinds()
 
 
 def _documentation() -> list[dict[str, str]]:

@@ -36,6 +36,7 @@ from .icon_check import IconReport, check_icons
 from .icon_render import RenderResult, render_icon
 from .mesh_check import MeshReport, check_mesh
 from .operations import get as get_operation
+from .prompts import render as render_prompt
 from .references import AssetReference, discover_references
 from .scaffold import initialize
 from .sound_check import SoundReport, check_sound
@@ -219,6 +220,23 @@ class Pipeline:
         """
         return run_build(self.config, probe)
 
+    def prompt(
+        self,
+        kind: str,
+        subject: str,
+        role: str = "",
+        palette: str = "",
+        key: str = "",
+        avoid: tuple[str, ...] = (),
+        stem: str = "myModThing",
+    ) -> dict[str, Any]:
+        """One house-style image-generation prompt, and the lane that follows it.
+
+        Needs no config and no mod: an agent can render a prompt before the
+        modlet exists. The style contract behind it is `docs/art-direction.md`.
+        """
+        return render_prompt(kind, subject, role, palette, key, tuple(avoid), stem)
+
     # -- dispatch ----------------------------------------------------------
 
     def call(self, name: str, params: dict[str, Any] | None = None) -> Any:
@@ -327,6 +345,10 @@ _DISPATCH: dict[str, Any] = {
         p.get("log_dir"),
     ),
     "client_log": lambda self, p: self.client_log(p.get("path"), p.get("log_dir"), p.get("mod_name")),
+    "prompt": lambda self, p: self.prompt(
+        p["kind"], p["subject"], p.get("role", ""), p.get("palette", ""),
+        p.get("key", ""), tuple(p.get("avoid", ())), p.get("stem", "myModThing"),
+    ),
 }
 
 
@@ -391,6 +413,11 @@ def _init(params: dict[str, Any]) -> dict[str, Any]:
 # Operations that work without a mod configuration.
 _STATELESS: dict[str, Any] = {
     "capabilities": lambda p: capabilities(p.get("probe_versions", False)),
+    # A prompt is rendered before the modlet exists as often as after it.
+    "prompt": lambda p: render_prompt(
+        p["kind"], p["subject"], p.get("role", ""), p.get("palette", ""),
+        p.get("key", ""), tuple(p.get("avoid", ())), p.get("stem", "myModThing"),
+    ),
     "check_mesh": lambda p: check_mesh(
         Path(p["mesh"]), p.get("max_extent", 16.0), p.get("strict", False)
     ),

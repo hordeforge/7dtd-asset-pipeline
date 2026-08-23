@@ -61,6 +61,8 @@ jobs:
       - run: ./scripts/bootstrap
       - run: .venv/bin/shamway capabilities --json
       - run: .venv/bin/shamway capabilities --missing
+      # make check needs ruff resolvable by name, as in the test jobs.
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: uv pip install ruff==0.16.4
       - run: make check test
 

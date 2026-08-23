@@ -23,6 +23,7 @@ out-of-process API cannot drift apart.
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -164,16 +165,23 @@ class Pipeline:
         """
         install_dir = None
         if install:
-            client.refuse_while_held("install into the shared Mods folder")
             install_dir = (
                 Path(mods_dir) if mods_dir else client.user_mods_dir(self.config.game_dir)
             )
-        return generate_acceptance_provider(
-            self.config,
-            self.config.game_dir,
-            Path(harness_dll) if harness_dll else None,
-            install_dir,
-        )
+        # The install copy into the shared Mods folder happens under the held
+        # client lock, like every other writer there: refuse-then-copy left an
+        # acquirer a window to launch between the two steps.
+        with (
+            client.hold_for_write("install into the shared Mods folder")
+            if install
+            else nullcontext()
+        ):
+            return generate_acceptance_provider(
+                self.config,
+                self.config.game_dir,
+                Path(harness_dll) if harness_dll else None,
+                install_dir,
+            )
 
     def verify_bundle(self, bundle: Path | str | None = None) -> VerifyReport:
         """Load a bundle in a real Unity runtime and report what came back.
@@ -242,10 +250,15 @@ class Pipeline:
     def client_deploy(
         self, mods_dir: Path | str | None = None, mod_name: str | None = None, replace: bool = True
     ) -> dict[str, Any]:
-        """Copy the deployable modlet into the client's per-user Mods/ folder."""
+        """Copy the deployable modlet into the client's per-user Mods/ folder.
+
+        The write happens under the shared client lock, so a deployment can
+        never land between another session's acquire and launch.
+        """
         name = mod_name or self.config.mod_name
         target = Path(mods_dir) if mods_dir else client.user_mods_dir(self.config.game_dir)
-        copied = client.deploy_mod(self.config.mod_root, target, name, replace)
+        with client.hold_for_write("deploy into the shared Mods folder"):
+            copied = client.deploy_mod(self.config.mod_root, target, name, replace)
         return {"destination": str(target / name), "copied": copied}
 
     def client_launch(

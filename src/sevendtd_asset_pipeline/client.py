@@ -363,6 +363,29 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
             pass
 
 
+@contextmanager
+def hold_for_write(action: str, env: Mapping[str, str] | None = None) -> Iterator[None]:
+    """Hold the shared client lock across a write into the shared Mods/ folder.
+
+    Refuse-then-copy is check-then-act across processes: between the refusal
+    and the copy finishing, another session can acquire the lock and launch,
+    and the deployment lands in that run — exactly the incident the lock
+    exists to prevent. Holding makes the refusal atomic with the write, so
+    every writer into the shared Mods folder serializes through the same
+    flock the launcher uses. On a host without flock there is no protocol to
+    hold, so it degrades to today's refuse-only check instead of taking the
+    write away from a native Windows client.
+    """
+    environment = os.environ if env is None else env
+    if find_spec("fcntl") is None:
+        refuse_while_held(action, environment)
+        yield
+        return
+    session = environment.get(LOCK_SESSION_ENV) or new_session_id()
+    with held_lock(session, lock_path(environment)):
+        yield
+
+
 def new_session_id(prefix: str = "shamway") -> str:
     """A lock session id in the protocol's `<agent>-<UTC stamp>-<hex>` shape."""
     return f"{prefix}-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(6)}"
@@ -966,12 +989,14 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
     if args.command == "deploy":
         name = args.name or read_mod_name(args.mod_root / "ModInfo.xml")
         mods_dir = args.mods_dir or user_mods_dir(game_dir)
-        # Checked here rather than on entry: the lock guards the *write*, and a
+        # Guarded here rather than on entry: the lock guards the *write*, and a
         # malformed modlet should say so whoever happens to hold the client.
-        # The Mods/ folder is shared with that holder, and a mod dropped in
-        # during their run is loaded by their next launch.
-        refuse_while_held("deploy into the shared Mods folder")
-        copied = deploy_mod(args.mod_root, mods_dir, name, replace=not args.keep_existing)
+        # The Mods/ folder is shared with that holder, so the write happens
+        # under the held lock — refusing and copying as two separate steps
+        # leaves a window where an acquirer slips between them and loads this
+        # deployment into their next launch.
+        with hold_for_write("deploy into the shared Mods folder"):
+            copied = deploy_mod(args.mod_root, mods_dir, name, replace=not args.keep_existing)
         print(f"deployed {name} to {mods_dir / name}: {', '.join(copied)}")
         return 0
     if args.command == "launch":

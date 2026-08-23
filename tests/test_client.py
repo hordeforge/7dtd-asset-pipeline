@@ -372,6 +372,67 @@ class LockTests(unittest.TestCase):
                 del os.environ[client.LOCK_ENV]
             self.assertEqual(status, 0)
             self.assertTrue((Path(tmp) / "Mods/ExampleMod/Config/items.xml").is_file())
+            self.assertIsNone(client.lock_holder(free))
+
+    def test_deploy_holds_the_lock_across_the_copy(self) -> None:
+        """Refuse-then-copy was check-then-act: the hold must cover the write.
+
+        Between the old refusal and the copy finishing, another session could
+        acquire and launch, and the deployment landed in that run. The copy
+        now runs inside the held lock, so the record is ours for the whole
+        write and released after it.
+        """
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mod"
+            root.mkdir()
+            (root / "ModInfo.xml").write_text(
+                '<?xml version="1.0"?><xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+            )
+            path = Path(tmp) / "playtest_running"
+            seen: list[str | None] = []
+
+            def spy(*args: object, **kwargs: object) -> list[str]:
+                seen.append(client.lock_holder(path))
+                return []
+
+            os.environ[client.LOCK_ENV] = str(path)
+            try:
+                with patch.object(client, "deploy_mod", spy):
+                    client.main(["deploy", str(root), "--mods-dir", str(Path(tmp) / "Mods")])
+            finally:
+                del os.environ[client.LOCK_ENV]
+            self.assertEqual(len(seen), 1, "the copy never ran")
+            self.assertIsNotNone(seen[0], "the copy ran while no session held the lock")
+            self.assertTrue(seen[0].startswith("shamway-"))
+            self.assertIsNone(client.lock_holder(path), "the lock leaked after the deploy")
+
+    def test_hold_for_write_refuses_over_a_fresh_holder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(Path(tmp), running="yes", session="other-1", heartbeat=self._stamp(5))
+            env = {client.LOCK_ENV: str(path)}
+            with self.assertRaises(PipelineError) as raised:
+                with client.hold_for_write("deploy into the shared Mods folder", env=env):
+                    pass
+            self.assertIn("other-1", str(raised.exception))
+            # The refusal must not have clobbered the holder's record.
+            self.assertEqual(client.lock_holder(path), "other-1")
+
+    def test_the_holding_session_can_write_through_hold_for_write(self) -> None:
+        """PLAYTEST_SESSION_ID names this run's holder, so the write proceeds.
+
+        Taking over under our own id must hold, run the body, and leave a
+        released record behind — not refuse against ourselves.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(Path(tmp), running="yes", session="mine-1", heartbeat=self._stamp(5))
+            env = {client.LOCK_ENV: str(path), client.LOCK_SESSION_ENV: "mine-1"}
+            inside: list[str | None] = []
+            with client.hold_for_write("deploy into the shared Mods folder", env=env):
+                inside.append(client.lock_holder(path))
+            self.assertEqual(inside, ["mine-1"], "the body ran while nobody held the lock")
+            self.assertIsNone(client.lock_holder(path), "the hold leaked past the write")
 
     def test_holding_refuses_over_another_fresh_holder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -526,6 +587,41 @@ class PortabilityTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("PIPELINE-ERROR:", result.stdout)
         self.assertNotIn("NO-ERROR", result.stdout)
+
+    def test_writes_degrade_to_refuse_only_without_fcntl(self) -> None:
+        """A native Windows client keeps its deploy; it just cannot hold.
+
+        With no flock there is no protocol to serialize through, so the write
+        guard falls back to the refuse-only check instead of taking the
+        deployment away from that host entirely.
+        """
+        result = self._run_blocked(
+            "import tempfile\n"
+            "from pathlib import Path\n"
+            "from sevendtd_asset_pipeline import client\n"
+            "with tempfile.TemporaryDirectory() as tmp:\n"
+            "    lock = Path(tmp) / 'lock'\n"
+            "    lock.write_text('running=no\\n', encoding='utf-8')\n"
+            "    env = {client.LOCK_ENV: str(lock)}\n"
+            "    with client.hold_for_write('deploy into the shared Mods folder', env=env):\n"
+            "        print('WROTE-FREE:', client.read_lock(lock))\n"
+            "    lock.write_text(\n"
+            "        'running=yes\\nsession=other-1\\nheartbeat='\n"
+            "        + __import__('datetime').datetime.now(\n"
+            "            __import__('datetime').UTC\n"
+            "        ).strftime('%Y-%m-%dT%H:%M:%SZ') + '\\n',\n"
+            "        encoding='utf-8',\n"
+            "    )\n"
+            "    try:\n"
+            "        with client.hold_for_write('deploy into the shared Mods folder', env=env):\n"
+            "            print('WROTE-HELD')\n"
+            "    except client.PipelineError as exc:\n"
+            "        print('REFUSED:', exc)\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("WROTE-FREE:", result.stdout)
+        self.assertIn("REFUSED: another session holds", result.stdout)
+        self.assertNotIn("WROTE-HELD", result.stdout)
 
 
 class CliTests(unittest.TestCase):

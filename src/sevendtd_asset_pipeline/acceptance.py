@@ -41,11 +41,12 @@ import re
 import shutil
 import subprocess
 import sys
+from contextlib import nullcontext
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
-from .client import refuse_while_held, user_mods_dir
+from .client import hold_for_write, user_mods_dir
 from .config import PipelineConfig, load_config
 from .errors import PipelineError
 from .references import manifest_assets, read_mod_name
@@ -380,9 +381,12 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(args.config)
     install_dir = None
     if args.install:
-        refuse_while_held("install into the shared Mods folder")
         install_dir = args.mods_dir or user_mods_dir(config.game_dir)
-    result = generate(config, config.game_dir, args.harness_dll, install_dir)
+    # The install copy into the shared Mods folder happens under the held
+    # client lock: refusing first and copying after left an acquirer a window
+    # to launch between the two and load a half-installed provider.
+    with hold_for_write("install into the shared Mods folder") if args.install else nullcontext():
+        result = generate(config, config.game_dir, args.harness_dll, install_dir)
     if args.json:
         print(json.dumps(result, indent=2))
         return 0

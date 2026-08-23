@@ -75,11 +75,16 @@ prevent.
 
 What `shamway` does with it:
 
-- `client deploy` refuses while another session holds it fresh, because a mod
-  dropped into the shared `Mods/` folder is loaded by the holder's next launch,
-  not only their current one.
-- `client launch` refuses the same way, then holds the lock and heartbeats it
-  for the duration of its run, releasing it at the end.
+- Every write into the shared `Mods/` folder — `client deploy`, and
+  `acceptance-provider --install` — happens **while holding the lock**, not
+  merely after checking it. Refusing first and copying after was
+  check-then-act across processes: an acquirer could take the lock in the gap,
+  launch, and load a deployment made mid-run or into their next one. Holding
+  makes the refusal atomic with the write; where flock does not exist (a
+  native Windows client) there is no protocol to hold, so those hosts keep a
+  refuse-only check.
+- `client launch` refuses while another session holds it fresh, then holds the
+  lock and heartbeats it for the duration of its run, releasing it at the end.
 - Every write this repository makes to the record — acquire, heartbeat,
   release alike — happens inside that same flock, against a writer-unique
   temporary file published by rename. The heartbeat re-reads the holder under

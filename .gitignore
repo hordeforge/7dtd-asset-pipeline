@@ -32,3 +32,4 @@ dist/
 
 .claude
 .agents
+.gauntlet.lock

@@ -193,6 +193,25 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaises(PipelineError):
             record_existing(self.root / "absent.png", "x", "", self.evidence)
 
+    def test_a_failed_manifest_write_leaves_no_temporary_behind(self) -> None:
+        """An interrupted publish must not strand its half-written body as state.
+
+        The manifest's temporary file carries this process's pid plus a random
+        suffix and is unlinked on every exit path, like every other atomic
+        writer here; a stray fixed-name `.tmp` would survive the run forever.
+        """
+        self.evidence.mkdir(parents=True)
+
+        def exploding(self: Path, target: object) -> Path:
+            raise OSError(28, "No space left on device")
+
+        with mock.patch.object(Path, "replace", exploding), self.assertRaises(OSError):
+            record_existing(self.image, "held-nuke", "", self.evidence)
+        self.assertEqual(
+            ["held-nuke.png"],
+            sorted(path.name for path in self.evidence.iterdir()),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

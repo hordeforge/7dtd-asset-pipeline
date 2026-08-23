@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import time
@@ -175,11 +176,21 @@ def read_manifest(root: Path) -> list[dict[str, object]]:
 
 
 def _write_manifest(root: Path, entries: list[dict[str, object]]) -> Path:
-    """Replace the manifest atomically, so an interrupted run cannot truncate it."""
+    """Replace the manifest atomically, so an interrupted run cannot truncate it.
+
+    The temporary name carries this process's pid plus a random suffix and is
+    unlinked on every exit path, like every other atomic writer in this
+    package (`client._write_lock`, `build._atomic_copy`, the generators): a
+    fixed `<name>.tmp` is shared by two concurrent writers truncating one file,
+    and a body half-written when a run dies must never survive as state.
+    """
     path = Path(root) / MANIFEST_NAME
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(entries, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
+    try:
+        temporary.write_text(json.dumps(entries, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
     return path
 
 

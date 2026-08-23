@@ -32,6 +32,8 @@ it against both a light and a dark background — a fringe is invisible on one.
 from __future__ import annotations
 
 import argparse
+import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -185,9 +187,16 @@ def finish(image: Image.Image, args: argparse.Namespace) -> Image.Image:
 
 def save(image: Image.Image, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.tmp.png")
-    image.save(temporary)
-    temporary.replace(destination)
+    temporary = destination.with_name(
+        f".{destination.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}.png"
+    )
+    try:
+        image.save(temporary)
+        temporary.replace(destination)
+    finally:
+        # A body half-written when the run dies must never survive as a stray
+        # dotfile in the atlas directory (the package's atomic-write pattern).
+        temporary.unlink(missing_ok=True)
 
 
 def main(argv: list[str] | None = None) -> int:

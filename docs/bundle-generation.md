@@ -266,7 +266,7 @@ client load, and no missing asset. Human rendering review remains mandatory.
 
 The Python suite cannot see a C# mistake, and Unity reports one only as
 "Scripts have compiler errors". `scripts/compile-editor-scripts.sh` compiles
-the four vendored editor scripts with Mono's `mcs` against the installed
+the five vendored editor scripts with Mono's `mcs` against the installed
 editor's own `Managed/UnityEngine/*.dll` and netstandard 2.1 reference —
 about ten seconds, no editor started — and `make check` runs it whenever
 `mcs` and an editor are present. It proves the scripts compile for that

@@ -15,7 +15,7 @@ runs it both ways.
 
 `make check` compiles the package, syntax-checks every shell script, runs
 `shellcheck` when it is installed, and — when Mono's `mcs` and a Unity 2022.3
-editor are on the host — compiles the four vendored editor scripts against
+editor are on the host — compiles the five vendored editor scripts against
 that editor's assemblies (`scripts/compile-editor-scripts.sh`). `make check
 test` needs no network, no Unity *running*, and no game install; the editor
 compile is opportunistic and skips with a note when it cannot run.

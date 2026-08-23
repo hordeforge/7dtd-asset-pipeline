@@ -42,7 +42,7 @@ returns, and three fields a caller needs before running anything:
 | Field | Meaning |
 |---|---|
 | `cost` | `instant`, `fast`, `seconds`, or `minutes` — `minutes` starts Unity |
-| `writes` | whether it modifies files; `build`, `pack`, `stage`, `init`, `render_icon`, `client_deploy`, and `client_launch` do |
+| `writes` | whether it modifies files; `build`, `pack`, `stage`, `init`, `render_icon`, `acceptance_provider`, `client_deploy`, and `client_launch` do |
 | `needs_config` | whether it must run inside a scaffolded modlet |
 | `capabilities` | optional tools it requires, e.g. `["UnityPy"]` |
 
@@ -107,7 +107,7 @@ def call(op, **params):
 print(call("status")["valid"])
 ```
 
-## 1. What `init` puts in your mod
+## 3. What `init` puts in your mod
 
 `shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"` writes:
 
@@ -135,7 +135,7 @@ breakage when ignored, and the URI form. Point your repository's own
 For asset-bundle work, follow @tools/shamway/AGENTS.md.
 ```
 
-## 2. The CLI contract
+## 4. The CLI contract
 
 Every command exits `0` on success and non-zero on failure, printing one
 `ERROR: ...` line to stderr. Prefer exit codes over parsing prose.
@@ -164,7 +164,7 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `prompt KIND --subject …` | no | no | no | render a house-style image prompt and its lane |
 | `docs [TOPIC]` | no | no | no | print packaged documentation |
 | `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance) |
-| `client where\|deploy\|launch\|log\|mute\|unmute\|capture\|disable-discord` | no | no | **deploy/launch/capture** write outside the modlet | fresh-client acceptance plumbing |
+| `client where\|deploy\|launch\|log\|mute\|unmute\|capture\|disable-discord` | no | no | **deploy/launch** write outside the modlet; **capture** writes `.local/acceptance/` inside it | fresh-client acceptance plumbing |
 | `schema` / `call NAME` / `serve` | no | no | per operation | the machine-readable surface |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |
 
@@ -200,7 +200,10 @@ collected into the structure so one broken thing does not hide the rest.
      "asset_stem": "myModThing"}
   ],
   "valid": true,
-  "problems": []
+  "problems": [],
+  "capabilities": {"UnityPy": true, "trimesh": false, "gltf_validator": false,
+                   "blender": false, "openscad": false, "pillow": false, "numpy": false,
+                   "magick": false, "xvfb": false, "desktop-capture": false}
 }
 ```
 

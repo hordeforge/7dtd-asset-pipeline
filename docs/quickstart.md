@@ -91,6 +91,7 @@ MyMod/
     └── UnityProject/                       # the Unity project the mod owns
         ├── Assets/ModAssets/Bundle/        # put selected source assets here
         ├── Assets/SevenDaysToDieAssetPipeline/Editor/BundleBuilder.cs
+        ├── Assets/SevenDaysToDieAssetPipeline/Editor/BundleVerifier.cs
         ├── Assets/SevenDaysToDieAssetPipeline/Editor/GeneratedAsset.cs
         ├── Assets/SevenDaysToDieAssetPipeline/Editor/IconRenderer.cs
         ├── Assets/SevenDaysToDieAssetPipeline/Editor/ShamwayPreBuild.cs

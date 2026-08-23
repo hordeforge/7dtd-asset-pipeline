@@ -51,8 +51,8 @@ namespace SevenDaysToDie.AssetPipeline
                 {
                     // Hand the generators the configured folder, so a mod never
                     // has to hardcode a path that already lives in .shamway.toml.
-                    ShamwayPreBuild.SourceRoot = sourceRoot;
-                    ShamwayPreBuild.RunAll();
+                    Shamway.SourceRoot = sourceRoot;
+                    Shamway.RunPreBuild();
                 }
                 var assets = CollectAssets(sourceRoot);
                 if (assets.Length == 0)

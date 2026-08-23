@@ -66,7 +66,7 @@ Two deliberate behaviours:
   a method the compiler never saw.
 
 A generator that writes into the bundle folder should read the path from
-`ShamwayPreBuild.SourceRoot` rather than hardcoding it — otherwise the same
+`Shamway.SourceRoot` rather than hardcoding it — otherwise the same
 value lives in both `.shamway.toml` and the C#, and drifts the first time
 either moves.
 

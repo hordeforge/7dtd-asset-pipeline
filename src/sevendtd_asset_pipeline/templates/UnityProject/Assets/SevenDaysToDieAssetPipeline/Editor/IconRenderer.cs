@@ -54,8 +54,8 @@ namespace SevenDaysToDie.AssetPipeline
                 // Regenerate first. An icon rendered from a stale prefab is the
                 // specific way this lane fails: the render succeeds, the image
                 // looks fine, and it shows the geometry from before the edit.
-                ShamwayPreBuild.SourceRoot = Argument("-sapSourceRoot");
-                ShamwayPreBuild.RunAll();
+                Shamway.SourceRoot = Argument("-sapSourceRoot");
+                Shamway.RunPreBuild();
                 AssetDatabase.Refresh();
                 Render(prefabPath, output, pixels, yaw, pitch, padding);
             }

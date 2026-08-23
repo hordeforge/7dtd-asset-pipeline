@@ -41,8 +41,15 @@ namespace SevenDaysToDie.AssetPipeline
         public int Order { get; set; }
     }
 
-    /// <summary>Discovers and runs the mod's <see cref="ShamwayPreBuildAttribute"/> methods.</summary>
-    public static class ShamwayPreBuild
+    /// <summary>
+    /// Discovers and runs the mod's <see cref="ShamwayPreBuildAttribute"/> methods.
+    ///
+    /// <para>Deliberately not called <c>ShamwayPreBuild</c>: C# resolves
+    /// <c>[ShamwayPreBuild]</c> against both that name and
+    /// <c>ShamwayPreBuildAttribute</c>, and a non-attribute class holding the
+    /// short name makes every use of the attribute ambiguous (CS1614).</para>
+    /// </summary>
+    public static class Shamway
     {
         /// <summary>
         /// The bundle-membership folder this build is collecting, as configured
@@ -63,7 +70,7 @@ namespace SevenDaysToDie.AssetPipeline
         /// in the log is the difference between a mod that has none and a mod
         /// whose attribute is on a method the compiler never saw.
         /// </summary>
-        public static int RunAll()
+        public static int RunPreBuild()
         {
             var methods = Discover();
             Debug.Log("[shamway] pre-build: " + methods.Count + " generator(s)");

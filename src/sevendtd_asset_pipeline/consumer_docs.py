@@ -262,6 +262,48 @@ shamway client deploy .
 shamway client launch --mod-name {mod_name} --run-seconds 120 --mute
 ```
 
+### "It works" is this repository's job, not the pipeline's
+
+`shamway acceptance-provider` generates a
+[hordeforge/7dtd-playtest](https://github.com/hordeforge/7dtd-playtest)
+scenario provider from your tracked manifest: one case per bundle member, each
+loading it through the game's own `DataLoader.LoadAsset<T>` in a live client,
+plus a stem the bundle does not contain that must return null.
+
+```bash
+shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
+shamway script playtest-acceptance
+```
+
+That is the boundary. The pipeline knows what is *in* the bundle, so it can
+prove the engine reads every member. It has no idea what any of it is *for* —
+so every generated case passes on a texture that loads upside down, a clip at
+the wrong pitch, a mesh at ten times scale, an icon whose alpha is inverted.
+
+**Whether it works is yours to prove, because only this repository knows what
+"right" means here.** Write your own `IScenarioProvider` alongside the
+generated one — a separate mod, your own suite id, not an edit to the
+generated file, which is rewritten on every run — and assert the things your
+content promises:
+
+- the item spawns, is held, and its mesh sits in the hand at the right scale
+  and orientation;
+- the block places, its collider is where the model is, and it takes damage;
+- the sound *group* a `ClipName` belongs to actually plays when the event
+  fires, and carries past the distance you designed for;
+- the icon resolves for the item that names it;
+- the particle system emits, and stops.
+
+`Helpers.TryGiveItem`, `TryEquipItemType` and the barrier lines in
+7dtd-playtest's README are what those cases are built from. Everything the
+generated provider proves is a precondition for yours: if `load_<stem>` fails,
+no behaviour case above it means anything.
+
+And the last step is still a person. A suite that passes every case above
+proves the game read your bytes and ran your logic; it does not prove the art
+reads well at inventory scale or that the sound is not three decibels too hot.
+File that judgement with `client capture`, below.
+
 `deploy` copies `ModInfo.xml`, `Config/`, `Resources/`, `UIAtlases/`,
 `Prefabs/` and root DLLs into the folder the client actually reads — on a
 Proton host its per-user `Mods/` under `compatdata/251570/`, not the install's

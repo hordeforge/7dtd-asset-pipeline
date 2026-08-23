@@ -207,7 +207,7 @@ class Pipeline:
 
     def client_where(self, game_dir: Path | str | None = None) -> dict[str, Any]:
         """The Proton client's per-user paths, derived from the game directory."""
-        return _client_where(Path(game_dir) if game_dir else self.config.game_dir)
+        return client.where_info(Path(game_dir) if game_dir else self.config.game_dir)
 
     def client_log(
         self, path: Path | str | None = None, log_dir: Path | str | None = None, mod_name: str | None = None
@@ -442,26 +442,6 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
 }
 
 
-def _client_where(game_dir: Path | None) -> dict[str, Any]:
-    def maybe(fn: Any) -> str | None:
-        if game_dir is None:
-            return None
-        try:
-            value = fn(game_dir)
-        except PipelineError:
-            return None
-        return None if value is None else str(value)
-
-    return {
-        "game_dir": str(game_dir) if game_dir else None,
-        "compatdata": maybe(client.compatdata_dir),
-        "user_data": maybe(client.proton_user_data_dir),
-        "mods_dir": maybe(client.user_mods_dir),
-        "log_dir": maybe(client.client_log_dir),
-        "launch": client.launch_command(),
-    }
-
-
 def _client_log(
     path: Path | str | None, log_dir: Path | str | None, mod_name: str | None, game_dir: Path | None
 ) -> LogReport:
@@ -581,7 +561,7 @@ _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
     ),
     "init": _init,
     "pack": lambda p: _pack(p, None),
-    "client_where": lambda p: _client_where(
+    "client_where": lambda p: client.where_info(
         Path(p["game_dir"]) if p.get("game_dir") else client.game_dir_from_env()
     ),
     "client_launch": lambda p: client.fresh_client_run(

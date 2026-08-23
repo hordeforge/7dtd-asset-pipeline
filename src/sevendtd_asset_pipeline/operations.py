@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from ._version import __version__
+from .config import BUNDLE_SOURCES
 from .docs import topics
 from .errors import PipelineError
 from .generators import describe
@@ -446,10 +447,12 @@ _DEFINITIONS: tuple[Operation, ...] = (
                 },
                 "bundle_source": {
                     "type": "string",
-                    "enum": ["unity", "external", "none"],
+                    # Derived from BUNDLE_SOURCES so the published schema cannot
+                    # drift from what load_config and `init --bundle-source` accept.
+                    "enum": sorted(BUNDLE_SOURCES),
                     "default": "unity",
-                    "description": "where the bundle comes from: a local editor, an editor "
-                    "elsewhere, or nowhere because the mod ships none",
+                    "description": "where the bundle comes from: "
+                    + ", ".join(f"{name} ({why})" for name, why in BUNDLE_SOURCES.items()),
                 },
             },
             required=["mod_root"],

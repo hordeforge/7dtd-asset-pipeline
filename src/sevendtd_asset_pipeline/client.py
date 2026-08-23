@@ -836,6 +836,23 @@ def game_dir_from_env(env: dict[str, str] | None = None) -> Path | None:
     return Path(value) if value else None
 
 
+def where_info(game_dir: Path | None) -> dict[str, object]:
+    """The per-user paths and launch line a consumer asks `client where` for.
+
+    One shape serves both the CLI's `where` command and the API/operation of
+    the same name; a derivation that raises because the game directory is not
+    below a Steam library is reported as None rather than failing the report.
+    """
+    return {
+        "game_dir": str(game_dir) if game_dir else None,
+        "compatdata": _maybe(compatdata_dir, game_dir),
+        "user_data": _maybe(proton_user_data_dir, game_dir),
+        "mods_dir": _maybe(user_mods_dir, game_dir),
+        "log_dir": _maybe(client_log_dir, game_dir),
+        "launch": launch_command(),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="shamway client",
@@ -908,14 +925,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
     if args.command == "where":
-        info = {
-            "game_dir": str(game_dir) if game_dir else None,
-            "compatdata": _maybe(compatdata_dir, game_dir),
-            "user_data": _maybe(proton_user_data_dir, game_dir),
-            "mods_dir": _maybe(user_mods_dir, game_dir),
-            "log_dir": _maybe(client_log_dir, game_dir),
-            "launch": launch_command(),
-        }
+        info = where_info(game_dir)
         if args.json:
             print(json.dumps(info, indent=2))
         else:

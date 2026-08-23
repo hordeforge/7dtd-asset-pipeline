@@ -68,6 +68,19 @@ ASSET_CASES: dict[str, tuple[str, str]] = {
     ".fbx": ("GameObject", "loaded.transform != null"),
     ".mat": ("Material", "loaded.shader != null"),
 }
+
+# Every extension mapped to a kind must assert the same property of it, so the
+# case body can look the assertion up by kind instead of re-deriving it per
+# bundle member. A disagreement inside ASSET_CASES is an authoring error here,
+# not something a provider should resolve by picking one.
+KIND_ASSERTIONS: dict[str, str] = {}
+for _entry in ASSET_CASES.values():
+    agreed = KIND_ASSERTIONS.setdefault(_entry[0], _entry[1])
+    if agreed != _entry[1]:
+        raise PipelineError(
+            f"ASSET_CASES gives {_entry[0]} two different assertions: {agreed!r} and {_entry[1]!r}"
+        )
+
 # What each kind prints into the client log, so a pass is citable rather than
 # merely green. `Report.Info` lines land under the harness's stable prefix.
 ASSET_DETAILS: dict[str, str] = {
@@ -198,7 +211,7 @@ def plan(config: PipelineConfig) -> ProviderPlan:
 
 def _case(stem: str, kind: str) -> str:
     detail = ASSET_DETAILS.get(kind, '""')
-    assertion = next(check for suffix, (k, check) in ASSET_CASES.items() if k == kind)
+    assertion = KIND_ASSERTIONS[kind]
     name = _cs_body(stem)
     # The local variable must be a C# identifier even when the stem is not
     # ("blast-loop" would otherwise emit `blast-loopLoaded`): each case's

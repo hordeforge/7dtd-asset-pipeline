@@ -28,7 +28,7 @@ class Status:
     mod_name: str
     mod_root: str
     bundle_source: str
-    """Where the bundle comes from: "unity", "external", or "none"."""
+    """Where the bundle comes from: one of config.BUNDLE_SOURCES."""
     bundle_name: str | None
     bundle_path: str | None
     bundle_present: bool

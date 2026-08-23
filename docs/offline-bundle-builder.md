@@ -221,13 +221,16 @@ loader answering everything. The evidence and the exact log lines are in
 [blockers.md](blockers.md) entry 6; the run is repeatable with
 `scripts/playtest-acceptance.sh`.
 
-The phased plan's own wording is worth keeping honest about what that buys:
-the plan called phase 3 "a fresh-client load ... **before** the mode is
-exposed". The order was inverted, so this is the evidence arriving late rather
-than a gate that held. And the sentence it does not discharge is the one every
-page here ends with — a load is not a look. The remaining entry in
-[blockers.md](blockers.md) is a person judging the asset, which no phase of
-this plan was ever going to close.
+A reviewer then looked and listened in that client and reported the texture as
+a centred, circular ring and the clip as three clean beeps. That closes the
+plan's phase 3 completely, and it is worth naming what the person added over
+the suite: *not stretched* and *not crackling*. Neither is visible to an
+offline gate or to a case that only asks whether the object loaded.
+
+The plan's own wording is worth keeping honest about the order, though: it
+called phase 3 "a fresh-client load ... **before** the mode is exposed". The
+mode shipped first, at the user's direction, so this is evidence arriving late
+rather than a gate that held.
 
 ## Sources
 

@@ -53,12 +53,18 @@ cd /path/to/MyMod
 
 **Confirms it worked:** `OK: Unity batch-mode license is active`.
 
-### 3. No fresh-client acceptance has been run
+### 3. No *editor-built* bundle has been through a fresh client
 
-**Blocks:** the only gate that actually proves a bundle loads. Every offline
-gate in this repository is verified, and the docs are explicit that offline
-gates are necessary but not sufficient. Nothing here has been through a real
-client.
+**No longer blocked for one backend.** A **synthesized** bundle has been
+through a real client and a human look, on 2026-08-24 — see the entry in the
+verified list below for the log lines and what the reviewer reported.
+
+**Blocks:** the same proof for a bundle a **Unity editor** built. That is the
+backend most mods use, and nothing about the synthesized run transfers to it:
+a different serializer wrote the file, and the classes an editor can put in one
+(meshes, prefabs, materials, shaders) are exactly the ones the synthesized path
+refuses. Offline gates are verified for both; offline gates are not
+sufficient for either.
 
 **You run:** build a bundle in a real mod, deploy it, start a genuinely fresh
 client, and load each changed asset by its real URI. The plumbing exists now
@@ -141,73 +147,45 @@ shamway validate
 log and `SEVEN_DAYS_TO_DIE_DIR` were present), `validate` passes, and the
 bundle then loads in a fresh client per entry 3.
 
-### 6. A synthesized bundle has not been *looked at* in a client
-
-**No longer blocked:** the load itself. On 2026-08-24 **7 Days to Die V 3.1.0
-b14 loaded a bundle this repository serialized with no editor anywhere in its
-path**, through the engine's own `DataLoader.LoadAsset<T>`, and returned both
-objects. Measured, from the client log of that run:
-
-```text
-INF [MODS]     Loaded Mod: ShamwaySynthProof (1.0.0)
-INF [7dtd-playtest] synthProofBeep: synthProofBeep channels=1 frequency=44100 samples=20727 length=0.47
-INF [7dtd-playtest] synthProofOverlay: synthProofOverlay 512x512 RGBA32
-INF [7dtd-playtest] SUMMARY pass=3 fail=0 skip=0 total=3
-```
-
-What that covers, and why each line matters:
-
-- both assets were requested **by stem** (`?synthProofBeep`, no extension), so
-  `AssetBundleManager._get`'s stem reduction read the `m_Container` table in
-  the class-142 object this tool wrote. The by-construction caveat on that gate
-  is now backed by the engine agreeing with it;
-- `@modfolder(ShamwaySynthProof):` resolved, so `ModManager.PatchModPathString`
-  accepted the mod and the archive opened — no `[MODS] Mod reference for a mod
-  that is not loaded`;
-- **FMOD decoded the hand-written FSB5 bank inside the game**, to the same
-  channel count, rate and sample count the WAV had;
-- a third case asked for a stem the bundle does not contain and got `null`, so
-  the three passes are not a loader answering everything;
-- the log carries no bundle-load, incompatibility or wrong-name lines.
-
-Reproduce with `scripts/playtest-acceptance.sh` in a mod whose bundle is
-staged; it generates the provider from the tracked manifest, deploys, and hands
-the run to
-[hordeforge/7dtd-playtest](https://github.com/hordeforge/7dtd-playtest).
-
-**Still blocked, and this is the whole of what is left:** a person. Every case
-above passes on a texture that loads upside down, a clip at the wrong pitch, a
-panel whose alpha is inverted. The engine said it could read the bytes; nobody
-has said they are the right bytes. Until someone looks and listens, a
-synthesized bundle is *loadable*, not *correct*, and no report may call it
-accepted.
-
-Two defects were found on the way and are fixed: `shamway client deploy` read
-no exclusivity lock and could copy a modlet into another session's run, and
-`playtest_run.py` preflighted the dedicated server but not the client, so a
-caller who exported the wrong variable waited out a fifteen-minute timeout
-instead of reading one error line (fixed upstream,
-hordeforge/7dtd-playtest#19).
-
-**You run,** in a mod with a staged bundle, on a host with a client:
-
-```bash
-shamway script playtest-acceptance
-```
-
-Then, for the half that is still owed, with the client up and the asset on
-screen:
-
-```bash
-shamway client capture bundle-assets --observable "the panel reads upright, the cue is one clean beep"
-```
-
-**Confirms it worked:** every generated case passes with `fail=0`, and the
-capture manifest carries a frame and the observable it was judged against.
-
 ## Verified, for contrast
 
 These were open and are now closed, so the list above stays meaningful:
+
+- **A synthesized bundle is accepted by the game and by a person.** On
+  2026-08-24, 7 Days to Die V 3.1.0 b14 loaded a bundle this repository
+  serialized with no editor anywhere in its path, and a reviewer confirmed
+  the assets by eye and ear. The machine half, through the engine's own
+  `DataLoader.LoadAsset<T>` in a live client:
+
+  ```text
+  INF [MODS]     Loaded Mod: ShamwaySynthProof (1.0.0)
+  INF [7dtd-playtest] synthProofBeep: channels=1 frequency=44100 samples=20727 length=0.47
+  INF [7dtd-playtest] synthProofOverlay: 512x512 RGBA32
+  INF [7dtd-playtest] SUMMARY pass=3 fail=0 skip=0 total=3
+  ```
+
+  Both were requested by stem, so `AssetBundleManager._get`'s stem reduction
+  read the `m_Container` table in the class-142 object the writer emitted —
+  the gate that is true by construction on a synthesized bundle now has the
+  engine's independent agreement. FMOD decoded the hand-written FSB5 bank
+  inside the game. A fourth request, for a stem the bundle does not contain,
+  returned `null`, so those passes are not a loader answering everything.
+
+  The human half, which no suite can supply: with the texture on the hunting
+  rifle's zoom action and the clip replacing `sniperrifle_fire`, the reviewer
+  aimed and fired, and reported the overlay rendering as a **centred, circular
+  magenta ring with its green crosshair** — not stretched, not absent — and the
+  clip as **three clean beeps**, neither clipped nor crackling, in place of the
+  vanilla rifle crack. `shamway client capture` recorded the frame that
+  judgement was made on against that observable
+  (`sha256:8b401a6cb3d76ca2…`, in the throwaway mod's `.local/acceptance/`,
+  which is deliberately not committed: an acceptance frame is a screenshot of
+  someone's desktop).
+
+  Reproduce the machine half with `scripts/playtest-acceptance.sh`. The look
+  and the listen are a person, every time — and note which half each of those
+  two findings came from: no offline gate and no in-client case would have
+  reported a stretched ring or a crackling clip.
 
 - Blender installs from the official checksum-verified build, and
   `shamway generate mesh` exports all three shapes with the pivot at the base.

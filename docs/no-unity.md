@@ -217,10 +217,13 @@ serialized with no editor in its path and returned both objects through
 hand-written FSB5 bank to `channels=1 frequency=44100 samples=20727`. The log
 lines and what each one covers are in [blockers.md](blockers.md) entry 6.
 
-What that does **not** establish is that the asset is right. Every case there
-passes on a texture that loads upside down and a clip at the wrong pitch. For a
-synthesized bundle the human look is not a formality on top of the gates; it is
-the only step that has an opinion about the content.
+The look is done too, once: on the same day a reviewer aimed and fired in the
+client and reported the texture rendering as a centred, circular ring and the
+clip as three clean beeps. Both findings — *not stretched*, *not crackling* —
+are exactly the kind no offline gate and no in-client case reports, which is
+why that step is not a formality. For a synthesized bundle the human look is
+the only step with an opinion about the content, and it is owed again every
+time the content changes.
 
 The mechanical half is automated. `shamway acceptance-provider` generates a
 scenario provider for

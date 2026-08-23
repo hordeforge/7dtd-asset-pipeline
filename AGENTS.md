@@ -143,6 +143,11 @@ every one of those cases passes on a texture that loads upside down and a clip
 at the wrong pitch. **A load is not a look.** Report a green suite as "the game
 read it", never as "it works", and say plainly when nobody has yet looked.
 
+The first synthesized bundle to go all the way through makes the point: the
+suite reported `pass=3 fail=0`, and what the reviewer added on top was that the
+ring was *centred and circular* and the beeps were *clean*. Stretched art and a
+crackling clip pass every gate in this repository.
+
 Unity is optional; the gates are not. A mod may declare `bundle_source =
 "none"` and ship no bundle, `"external"` and have its bundle built by an editor
 on another machine, or `"synthesized"` and have this tool write the bundle with

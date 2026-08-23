@@ -23,9 +23,13 @@
 | `capabilities.py` | which optional tools are usable, what they unlock, how to install them |
 | Unity project template | editor revision, package modules, source membership boundary |
 | `BundleBuilder.cs` | actual serialization, graphics APIs, options, collision rejection, probe |
-| `GeneratedAsset.cs` | asset-as-code prefab/material helpers that encode the batch-mode traps |
+| `GeneratedAsset.cs` | asset-as-code prefab/material/import/particle/audio helpers that encode the batch-mode traps |
+| `IconRenderer.cs` | renders a bundle prefab into an atlas cell, so an icon cannot drift from its mesh |
+| `icon_check.py` | the atlas gate: cell geometry, alpha, and every `CustomIcon` key |
+| `sound_check.py` | the clip gate: channels, rate, level, clipping, DC offset |
+| `assets_src.py` | the editable-source tree and the provenance contract written into the mod |
 | `scripts/install-*.sh` | host packages and the checksum-verified game-matched editor |
-| `scripts/generators/` | reproducible audio, icon, texture, and mesh generation |
+| `scripts/generators/` | reproducible sound, audio, cutout, icon, texture, and mesh generation |
 | consumer `AGENTS.md` | the agent contract, written into the mod by `init` |
 | UnityFS reader | signature, revision, block decompression, serialized type table |
 | tracked `.manifest` | complete build membership for offline exact-stem validation |
@@ -42,6 +46,15 @@ The UnityFS reader is intentionally not a general Unity deserializer. A small
 auditable parser has a narrower attack and maintenance surface for the two
 facts the gate needs. UnityPy and AssetsTools.NET remain optional independent
 diagnostics.
+
+The icon and clip gates follow the same rule: the PNG check reads the IHDR
+chunk with the standard library and the clip check uses `wave`, so both run on
+a bare host. Pillow only ever *adds* a measurement (alpha coverage), and its
+absence degrades to a note rather than to a pass.
+
+`build` and `render-icon` are the only operations that write into the modlet,
+and the registry marks both `writes: true` so a caller — `serve` included — can
+refuse them before anything starts.
 
 ## Why a tracked manifest
 

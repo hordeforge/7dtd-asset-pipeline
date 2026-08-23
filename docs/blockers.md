@@ -65,12 +65,36 @@ client, and load each changed asset by its real URI. See
 **Confirms it worked:** the asset renders or sounds correct, and the client log
 has no bundle-load, incompatibility, wrong-name, shader, or particle errors.
 
+### 4. The icon renderer has not been run in a real editor
+
+**Blocks:** any claim that `7dtd-assets render-icon` works. Its Python side is
+exercised — prefab resolution, the missing-editor and missing-Pillow errors,
+the coverage gate, and the atlas-cell check — but `IconRenderer.cs` itself has
+never been compiled or executed by Unity, and neither have the newer
+`GeneratedAsset` helpers (`ImportNormalMap`, `ImportLinearMap`,
+`ImportColorMap`, `ParticleMaterial`, `ZeroCurve`, `BudgetParticles`,
+`ImportAudioClip`, `AudioSourcePrefab`). The Python suite cannot cover editor
+C#.
+
+**You run:** in a scaffolded mod with a prefab in the bundle folder, on a host
+with a display (or under `xvfb-run -a`):
+
+```bash
+7dtd-assets render-icon myModThing
+7dtd-assets check-icons
+```
+
+**Confirms it worked:** a 160 x 160 RGBA PNG appears under
+`UIAtlases/ItemIconAtlas/`, showing the prefab lit from three sides on a
+transparent background, and `check-icons` accepts it. A uniform transparent
+square means the render had no graphics device.
+
 ## Verified, for contrast
 
 These were open and are now closed, so the list above stays meaningful:
 
 - Blender installs from the official checksum-verified build, and
-  `make-mesh.py` exports all three shapes with the pivot at the base.
+  `7dtd-assets generate mesh` exports all three shapes with the pivot at the base.
 - The Khronos glTF validator installs and catches a corrupt GLB.
 - UnityPy deep inspection reports 547 objects in the shipped Atomic Doomsday
   bundle, including `ParticleSystem=6` on the detonation VFX prefab.

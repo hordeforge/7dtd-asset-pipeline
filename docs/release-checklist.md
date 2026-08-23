@@ -8,6 +8,9 @@
 - [ ] Unity project revision equals the installed game's shipped bundle revision.
 - [ ] Required `com.unity.modules.*` dependencies cover every component type.
 - [ ] Bundle asset stems are mod-prefixed and globally unique.
+- [ ] Every variant owns its own icon, held mesh, and placed model; no player-facing
+      variant inherits another's art, and `Extends` `param1` excludes what it must.
+- [ ] `assets-src/README.md` has a provenance row for every shipped asset.
 
 ## Build and offline gates
 
@@ -15,6 +18,9 @@
 - [ ] `7dtd-assets build --probe` passes on the authoring host.
 - [ ] `7dtd-assets build` passes and stages bundle plus manifest.
 - [ ] `7dtd-assets validate` passes every recursive XML reference.
+- [ ] `7dtd-assets check-icons` passes, and every external `CustomIcon` key is deliberate.
+- [ ] `7dtd-assets check-sound` passes for every shipped clip.
+- [ ] `7dtd-assets check-mesh` passes for every authored mesh.
 - [ ] `7dtd-assets inspect --json` records correct revision and class 142.
 - [ ] Unity log contains no disabled-module, shader, particle, compiler, or serialization error.
 - [ ] A second unchanged build is byte-identical, or nondeterminism is explained.
@@ -32,6 +38,8 @@
 - [ ] Check VFX LOD, repeated effects, caps, cleanup, frame time, and accessibility.
 - [ ] Test presentation failure fallback when gameplay must remain functional.
 - [ ] Preserve bundle hash, logs/reports, and screenshots/listening notes.
+- [ ] Name explicitly which acceptance items a human actually looked at or listened to,
+      and which remain open. A green offline run closes none of them.
 
 ## Cross-platform/server scope
 

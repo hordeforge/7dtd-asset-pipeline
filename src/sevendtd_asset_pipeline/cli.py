@@ -13,13 +13,18 @@ from .capabilities import capabilities
 from .config import load_config
 from .deep_inspect import deep_inspect
 from .doctor import failed, run_doctor
+from .docs import read as read_doc, topics as doc_topics
 from .errors import PipelineError
+from .generators import describe as describe_generators, run as run_generator
 from .game import game_unity_version, project_unity_version
+from .icon_check import check_icons
+from .icon_render import render_icon
 from .mesh_check import check_mesh
 from .references import discover_references
 from .operations import manifest
 from .scaffold import initialize
 from .serve import serve
+from .sound_check import check_sound
 from .status import collect_status
 from .unity_release import fetch_release
 from .unityfs import inspect_bundle
@@ -82,12 +87,64 @@ def _parser() -> argparse.ArgumentParser:
     mesh.add_argument("--strict", action="store_true", help="treat glTF warnings as failures")
     mesh.add_argument("--json", action="store_true")
 
+    sound = commands.add_parser(
+        "check-sound", help="measure a WAV clip and reject unshippable formats"
+    )
+    sound.add_argument("clip", type=Path)
+    sound.add_argument("--max-seconds", type=float, default=30.0)
+    sound.add_argument(
+        "--allow-stereo",
+        dest="require_mono",
+        action="store_false",
+        help="permit a multi-channel clip (a deliberate 2D UI or music cue)",
+    )
+    sound.add_argument("--json", action="store_true")
+
+    icons = commands.add_parser(
+        "check-icons", help="check UIAtlases PNGs and every CustomIcon key under Config/"
+    )
+    icons.add_argument("--atlas-root", default="UIAtlases")
+    icons.add_argument("--cell", type=int, default=160, help="expected atlas cell size in pixels")
+    icons.add_argument("--json", action="store_true")
+
+    render = commands.add_parser(
+        "render-icon", help="render a bundle prefab into an atlas icon with the editor"
+    )
+    render.add_argument("prefab", help="bundle stem, or a project-relative Assets/... path")
+    render.add_argument("--output", type=Path, help="default: UIAtlases/<atlas>/<stem>.png")
+    render.add_argument("--size", type=int, default=160)
+    render.add_argument("--atlas", default="ItemIconAtlas")
+    render.add_argument("--yaw", type=float, default=208.0, help="camera yaw in degrees")
+    render.add_argument("--pitch", type=float, default=8.0, help="camera pitch in degrees")
+    render.add_argument("--padding", type=float, default=1.22, help="framing headroom factor")
+    render.add_argument("--json", action="store_true")
+
     capability = commands.add_parser(
         "capabilities", help="list optional capabilities, what they unlock, and how to install them"
     )
     capability.add_argument("--json", action="store_true")
     capability.add_argument("--versions", action="store_true", help="also probe installed versions")
     capability.add_argument("--missing", action="store_true", help="list only unavailable ones")
+
+    generate = commands.add_parser(
+        "generate",
+        help="run a packaged asset generator (no checkout of this repo needed)",
+    )
+    generate.add_argument(
+        "generator", nargs="?", help="sound, audio, cutout, icon, texture-maps, or mesh"
+    )
+    generate.add_argument(
+        "arguments",
+        nargs=argparse.REMAINDER,
+        help="passed through unchanged; add --help to see a generator's own options",
+    )
+    generate.add_argument("--list", action="store_true", help="list the generators and exit")
+
+    documentation = commands.add_parser(
+        "docs", help="print this pipeline's documentation, from the installed package"
+    )
+    documentation.add_argument("topic", nargs="?", help="omit to list the topics")
+    documentation.add_argument("--json", action="store_true", help="machine-readable topic list")
 
     schema = commands.add_parser(
         "schema", help="print the machine-readable operation contract"
@@ -185,9 +242,49 @@ def run(args: argparse.Namespace) -> int:
                 print(f"problem: {problem}")
             print("OK" if report.ok else "FAILED")
         return 0 if report.ok else 1
+    if args.command == "check-sound":
+        report = check_sound(args.clip, args.max_seconds, args.require_mono)
+        if args.json:
+            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+        else:
+            data = report.as_dict()
+            for key in ("path", "channels", "sample_rate", "duration_seconds", "peak",
+                        "peak_dbfs", "rms", "dc_offset", "clipped_samples",
+                        "leading_silence_seconds", "trailing_silence_seconds"):
+                print(f"{key}: {data[key]}")
+            for note in report.notes:
+                print(f"note: {note}")
+            for problem in report.problems:
+                print(f"problem: {problem}")
+            print("OK" if report.ok else "FAILED")
+        return 0 if report.ok else 1
     if args.command == "check-log":
         reject_disabled_modules(args.log)
         print(f"OK: no disabled-module warnings in {args.log}")
+        return 0
+    if args.command == "generate":
+        if args.list or not args.generator:
+            for entry in describe_generators():
+                needs = ", ".join(entry["capabilities"]) or "nothing beyond the standard library"
+                print(f"{entry['name']:14} {entry['summary']}")
+                print(f"{'':14} needs: {needs}")
+            print()
+            print("Run one with: 7dtd-assets generate NAME [ARGS...]  (--help works per generator)")
+            return 0
+        return run_generator(args.generator, args.arguments)
+    if args.command == "docs":
+        if not args.topic:
+            entries = doc_topics()
+            if args.json:
+                print(json.dumps(entries, indent=2, sort_keys=True))
+            else:
+                for entry in entries:
+                    mark = " " if entry["available"] == "true" else "!"
+                    print(f"{mark} {entry['topic']:20} {entry['summary']}")
+                print()
+                print("Read one with: 7dtd-assets docs TOPIC")
+            return 0
+        print(read_doc(args.topic), end="")
         return 0
     if args.command == "schema":
         print(json.dumps(manifest(), indent=2, sort_keys=True))
@@ -291,6 +388,33 @@ def run(args: argparse.Namespace) -> int:
             for problem in report.problems:
                 print(f"problem: {problem}")
         return 0 if report.valid else 1
+    if args.command == "check-icons":
+        report = check_icons(config.mod_root, config.config_dir, args.atlas_root, args.cell)
+        if args.json:
+            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+        else:
+            for icon in report.icons:
+                coverage = "" if icon.alpha_coverage is None else f" {icon.alpha_coverage:.0%} opaque"
+                print(f"{icon.atlas}/{icon.stem}: {icon.width}x{icon.height} {icon.colour_type}{coverage}")
+            print(f"resolved: {len(report.resolved)}  external: {len(report.external)}")
+            for note in report.notes:
+                print(f"note: {note}")
+            for problem in report.problems:
+                print(f"problem: {problem}")
+            print("OK" if report.ok else "FAILED")
+        return 0 if report.ok else 1
+    if args.command == "render-icon":
+        result = render_icon(
+            config, args.prefab, args.output, args.size, args.atlas,
+            args.yaw, args.pitch, args.padding,
+        )
+        if args.json:
+            print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
+        else:
+            print(f"OK: {result.output} ({result.size}px from {result.rendered_pixels}px, "
+                  f"{result.alpha_coverage:.0%} opaque)")
+            print("An icon is accepted in the inventory, not in a file browser.")
+        return 0
     if args.command == "refs":
         for reference in discover_references(config.config_dir):
             print(f"{reference.source.relative_to(config.mod_root)}: {reference.uri}")

@@ -18,6 +18,8 @@ freely to add mod-specific rules.
 - Bundle: `Resources/{bundle_name}`
 - Unity project: `tools/7dtd-assets/UnityProject`
 - Bundle membership: `tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/`
+- Editable sources and provenance: `assets-src/` (never ships)
+- Item icons: `UIAtlases/ItemIconAtlas/` — **not** bundle assets
 
 ## Orient before doing anything
 
@@ -42,12 +44,18 @@ Exit code 0 means valid. Start here rather than reading files.
 | `7dtd-assets inspect --json PATH` | fast | one bundle's revision and class IDs |
 | `7dtd-assets inspect --deep PATH` | fast | every object and per-prefab components (UnityPy) |
 | `7dtd-assets check-mesh FILE` | fast | authored-mesh extents and glTF conformance |
+| `7dtd-assets check-sound FILE` | fast | clip format, level, clipping, DC offset |
+| `7dtd-assets check-icons` | instant | atlas cells and every `CustomIcon` key |
 | `7dtd-assets validate` | fast | bundle + every XML reference |
 | `7dtd-assets build --probe` | minutes | proves the environment; stages nothing |
-| `7dtd-assets build` | minutes | **the only command that writes into this mod** |
+| `7dtd-assets build` | minutes | builds, gates, and stages the bundle |
+| `7dtd-assets render-icon STEM` | minutes | renders a prefab into its atlas cell |
 
-Diagnose with the fast read-only commands. Reach for `build` only when an asset
-actually changed.
+Diagnose with the fast read-only commands. `build` and `render-icon` are the
+only two that write into this mod; reach for them only when an asset actually
+changed. `render-icon` needs a graphics device — run it under `xvfb-run -a` on
+a headless host, because with `-nographics` Unity writes a blank image instead
+of failing.
 
 ## Driving it programmatically
 
@@ -76,6 +84,29 @@ if not pipeline.status().valid:
     pipeline.validate()
 ```
 
+## The generators and the docs live in the tool, not in this mod
+
+Never copy a script out of the pipeline into this repository, and never write a
+relative path into a checkout of it. Everything generalized is reachable from
+the command this mod already depends on:
+
+```bash
+7dtd-assets generate --list                  # sound, audio, cutout, icon, texture-maps, mesh
+7dtd-assets generate sound --help            # each one explains itself
+7dtd-assets generate sound blast assets-src/audio/blast.wav --seed 7
+7dtd-assets docs                             # every rule the pipeline knows
+7dtd-assets docs art-direction               # the style contract, in full
+```
+
+What belongs in *this* repository is the content: `Config/`, `UIAtlases/`, the
+Unity assets and their `.meta` files, the built bundle and its manifest, and
+everything under `assets-src/` — the prompts, seeds, and commands that produced
+the art. `7dtd-assets docs mod-repo-layout` is the full split.
+
+If a generator here is not enough, write a mod-specific one in `assets-src/`
+following the same contract (explicit paths, recorded seed, printed numbers,
+atomic writes). Keep it in this mod.
+
 ## Optional capabilities
 
 Some features need a tool the core does not require. Never guess whether one is
@@ -92,7 +123,13 @@ the pipeline's `scripts/install-tools.sh --with-authoring`.
 
 ## Making the assets
 
-Two mesh lanes, both first-class — pick by what the shape needs:
+Author sources in `assets-src/`, then copy only the **selected** output into the
+Unity bundle folder. Read `assets-src/README.md` — it says what provenance each
+asset owes. The pipeline's own docs carry the lane detail: `docs/art-direction.md`
+for anything generated or drawn, `docs/audio.md` for sound, `docs/vfx.md` for
+particle effects.
+
+**Meshes — two lanes, both first-class.** Pick by what the shape needs:
 
 - **authored**: Blender or OpenSCAD to `.glb`, checked with
   `7dtd-assets check-mesh` before import. Use for organic, rigged, or sculpted
@@ -101,8 +138,21 @@ Two mesh lanes, both first-class — pick by what the shape needs:
   `GeneratedAsset.Primitive(...)`. Use for hard-surface props. Emits no mesh
   asset at all, so the geometry stays a reviewable diff of numbers.
 
-`GeneratedAsset` also builds materials with the shader keywords and transparent
-blend state that a batch script otherwise silently omits.
+**Icons — two lanes, both first-class.** Generated or drawn art when the icon
+should show something the mesh does not; `7dtd-assets render-icon STEM` when the
+icon should *be* the item, which is the only way it cannot drift from the mesh.
+Icons are 160 x 160 RGBA cells in `UIAtlases/ItemIconAtlas/`, keyed by filename
+stem, packed at runtime — they never enter the bundle, so `validate` cannot see
+them and `check-icons` exists for them.
+
+**Sound.** `7dtd-assets generate sound` synthesizes designed voices from a
+recorded seed and prints the matching `sounds.xml` entry;
+`check-sound` gates the file. A clip that loads can still be inaudible — an
+AudioSource prefab's `maxDistance` decides that — so read `docs/audio.md` before
+wiring a long-range sound.
+
+`GeneratedAsset` also builds materials, texture imports, particle blend state,
+and audio imports with the settings a batch script otherwise silently omits.
 
 ## Rules
 
@@ -118,9 +168,14 @@ blend state that a batch script otherwise silently omits.
    `tools/7dtd-assets/UnityProject/Packages/manifest.json` are build inputs. An
    absent module makes Unity strip those classes while still reporting success.
    The pipeline refuses to stage such a build, but the fix is always here.
-5. **Never write to the 7 Days to Die install.** It is read-only evidence.
-6. **Never handle Unity credentials or licenses.** Sign-in is a human action.
-7. **Offline gates are necessary, not sufficient.** Never report an asset as
+5. **Exclude inherited properties, do not just omit them.** `ItemClassesFromXml`
+   and `BlocksFromXml` copy every parent property the `Extends` `param1` list
+   does not name, so deleting a `TintColor`, `Meshfile`, `Model`, or
+   `CustomIcon` line does not stop the parent's value applying. Name it in
+   `param1` on anything that owns its own art.
+6. **Never write to the 7 Days to Die install.** It is read-only evidence.
+7. **Never handle Unity credentials or licenses.** Sign-in is a human action.
+8. **Offline gates are necessary, not sufficient.** Never report an asset as
    working, verified, or done on `build`/`validate` output alone. Acceptance
    is a fresh client that loads the asset by its real URI plus a human look or
    listen. Say plainly which of the two you did.
@@ -147,6 +202,12 @@ Read the error; each one names its own fix. Then:
 7dtd-assets inspect --deep Resources/{bundle_name}   # did the component survive?
 7dtd-assets check-log .asset-pipeline/build/bundle/unity-build.log
 ```
+
+Silent failures worth knowing before you chase one: a missing icon draws
+whatever else answers to its key, a missing model draws a fallback mesh, an
+unknown sound group simply never plays, a script-built material renders flat or
+opaque when its shader keyword or blend state was never set, and an inherited
+`TintColor` quietly recolours authored paint. None of them produce an error.
 
 Do not change compression, graphics APIs, or exporter shape speculatively. If
 class 142 is missing, the cause is an engine module, not a build option.

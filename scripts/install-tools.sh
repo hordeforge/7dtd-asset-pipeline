@@ -22,7 +22,7 @@ USAGE
 
 OPTIONS
   --with-authoring       Also install the optional asset-authoring tools
-                         (Blender, OpenSCAD, ImageMagick, FFmpeg)
+                         (Blender, OpenSCAD, ImageMagick, FFmpeg, Xvfb)
   --with-unity-prereqs   Also install what scripts/install-unity-editor.sh
                          needs (curl, tar, libarchive, flatpak, libxml2.so.2)
   --check                Report what is present or missing and install nothing
@@ -38,6 +38,9 @@ WITH --with-authoring
   openscad           Parametric hard-surface geometry
   imagemagick        Icons, masks, channel packing, contact sheets
   ffmpeg             Audio conversion, normalization, and synthesis
+  xvfb               A virtual display for 7dtd-assets render-icon, which
+                     needs a real graphics device and silently renders a
+                     blank image without one
 
 WITH --with-unity-prereqs
   curl, tar, xz      Downloading and unpacking the official editor archive
@@ -99,6 +102,7 @@ run_check() {
 		report openscad "parametric geometry" have openscad
 		report magick "icons and textures" have magick
 		report ffmpeg "audio" have ffmpeg
+		report xvfb-run "icon rendering on a headless host" have xvfb-run
 		report gltf_validator "glTF conformance" have gltf_validator
 		report UnityPy "deep bundle inspection" python3 -c "import UnityPy"
 		report Pillow "icon and texture lanes" python3 -c "import PIL"
@@ -142,6 +146,7 @@ collect_pacman() {
 		have openscad || PACKAGES+=(openscad)
 		have magick || PACKAGES+=(imagemagick)
 		have ffmpeg || PACKAGES+=(ffmpeg)
+		have xvfb-run || PACKAGES+=(xorg-server-xvfb)
 	fi
 	if ((WITH_UNITY_PREREQS)); then
 		have curl || PACKAGES+=(curl)
@@ -162,6 +167,7 @@ collect_apt() {
 		have openscad || PACKAGES+=(openscad)
 		have magick || PACKAGES+=(imagemagick)
 		have ffmpeg || PACKAGES+=(ffmpeg)
+		have xvfb-run || PACKAGES+=(xvfb)
 	fi
 	if ((WITH_UNITY_PREREQS)); then
 		have curl || PACKAGES+=(curl)
@@ -182,6 +188,7 @@ collect_dnf() {
 		have openscad || PACKAGES+=(openscad)
 		have magick || PACKAGES+=(ImageMagick)
 		have ffmpeg || PACKAGES+=(ffmpeg)
+		have xvfb-run || PACKAGES+=(xorg-x11-server-Xvfb)
 	fi
 	if ((WITH_UNITY_PREREQS)); then
 		have curl || PACKAGES+=(curl)
@@ -192,26 +199,6 @@ collect_dnf() {
 		has_libxml2_so2 || PACKAGES+=(libxml2)
 	fi
 }
-
-install_uv
-
-if command -v pacman >/dev/null 2>&1; then
-	collect_pacman
-	((${#PACKAGES[@]})) && $SUDO pacman -S --needed --noconfirm "${PACKAGES[@]}"
-elif command -v apt-get >/dev/null 2>&1; then
-	collect_apt
-	if ((${#PACKAGES[@]})); then
-		$SUDO apt-get update
-		$SUDO apt-get install -y "${PACKAGES[@]}"
-	fi
-elif command -v dnf >/dev/null 2>&1; then
-	collect_dnf
-	((${#PACKAGES[@]})) && $SUDO dnf install -y "${PACKAGES[@]}"
-else
-	echo "ERROR: no supported package manager (pacman, apt-get, dnf) was found." >&2
-	echo "       Install the tools listed by 'scripts/install-tools.sh --check' by hand." >&2
-	exit 1
-fi
 
 install_uv() {
 	local url sha_url archive staging expected actual destination
@@ -278,6 +265,26 @@ for asset in release.get("assets", []):
 		echo "note: uv archive did not contain the expected binary; skipped"
 	fi
 }
+
+install_uv
+
+if command -v pacman >/dev/null 2>&1; then
+	collect_pacman
+	((${#PACKAGES[@]})) && $SUDO pacman -S --needed --noconfirm "${PACKAGES[@]}"
+elif command -v apt-get >/dev/null 2>&1; then
+	collect_apt
+	if ((${#PACKAGES[@]})); then
+		$SUDO apt-get update
+		$SUDO apt-get install -y "${PACKAGES[@]}"
+	fi
+elif command -v dnf >/dev/null 2>&1; then
+	collect_dnf
+	((${#PACKAGES[@]})) && $SUDO dnf install -y "${PACKAGES[@]}"
+else
+	echo "ERROR: no supported package manager (pacman, apt-get, dnf) was found." >&2
+	echo "       Install the tools listed by 'scripts/install-tools.sh --check' by hand." >&2
+	exit 1
+fi
 
 install_blender() {
 	local series version base url archive staging destination expected actual

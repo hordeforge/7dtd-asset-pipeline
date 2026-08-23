@@ -1,0 +1,14 @@
+<configs>
+	<!-- Enable only after building a bundle containing this exact clip stem.
+	     `7dtd-assets validate` checks a ClipName exactly as it checks a Model,
+	     because Audio.Manager.LoadAudio resolves both through DataLoader. -->
+	<!--
+	<append xpath="/Sounds">
+		<SoundDataNode name="exampleModThud">
+			<AudioSource name="Sounds/AudioSource_Explosion" />
+			<AudioClip ClipName="#@modfolder(ExampleMod):Resources/examplemod.unity3d?exampleModThud.wav" />
+			<Noise ID="exampleModThud" range="40" volumeScale="1" heardBy="Enemy" />
+		</SoundDataNode>
+	</append>
+	-->
+</configs>

@@ -29,9 +29,12 @@ from .doctor import Check, failed, run_doctor
 from .mesh_check import MeshReport, check_mesh
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
+from .icon_check import IconReport, check_icons
+from .icon_render import RenderResult, render_icon
 from .references import AssetReference, discover_references, manifest_assets
 from .operations import OPERATIONS, Operation, manifest
 from .scaffold import initialize
+from .sound_check import SoundReport, check_sound
 from .status import Status, collect_status
 from .unity_release import Release, fetch_release
 from .unityfs import BundleInfo, inspect_bundle
@@ -45,6 +48,7 @@ __all__ = [
     "Capability",
     "Check",
     "DeepReport",
+    "IconReport",
     "MeshReport",
     "OPERATIONS",
     "Operation",
@@ -52,12 +56,16 @@ __all__ = [
     "PipelineConfig",
     "PipelineError",
     "Release",
+    "RenderResult",
+    "SoundReport",
     "Status",
     "ValidationReport",
     "__version__",
     "call_json",
     "capabilities",
+    "check_icons",
     "check_mesh",
+    "check_sound",
     "collect_status",
     "deep_inspect",
     "discover_references",
@@ -72,6 +80,7 @@ __all__ = [
     "manifest_assets",
     "project_unity_version",
     "reject_disabled_modules",
+    "render_icon",
     "require_capability",
     "run_build",
     "run_doctor",

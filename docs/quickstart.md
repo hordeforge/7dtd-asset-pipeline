@@ -76,11 +76,18 @@ wiki page, then writes:
 MyMod/
 ├── .7dtd-assets.toml                       # configuration; commit it
 ├── Makefile.assets                         # assets / assets-probe / ... targets
-└── tools/7dtd-assets/UnityProject/         # the Unity project the mod owns
-    ├── Assets/ModAssets/Bundle/            # put source assets here
-    ├── Assets/SevenDaysToDieAssetPipeline/Editor/BundleBuilder.cs
-    ├── Packages/manifest.json              # engine modules; these are build inputs
-    └── ProjectSettings/ProjectVersion.txt  # the game-matched revision
+├── assets-src/                             # editable sources + provenance; never ships
+│   ├── README.md                           # what each lane holds and must record
+│   └── icons/ textures/ meshes/ audio/ vfx/
+└── tools/7dtd-assets/
+    ├── AGENTS.md                           # the agent contract, in your repo
+    └── UnityProject/                       # the Unity project the mod owns
+        ├── Assets/ModAssets/Bundle/        # put selected source assets here
+        ├── Assets/SevenDaysToDieAssetPipeline/Editor/BundleBuilder.cs
+        ├── Assets/SevenDaysToDieAssetPipeline/Editor/GeneratedAsset.cs
+        ├── Assets/SevenDaysToDieAssetPipeline/Editor/IconRenderer.cs
+        ├── Packages/manifest.json          # engine modules; these are build inputs
+        └── ProjectSettings/ProjectVersion.txt  # the game-matched revision
 ```
 
 It refuses to overwrite any of those if they already exist. Every path is
@@ -155,8 +162,17 @@ Reference it from XML using the mod's `ModInfo.xml` name:
 ```
 
 `validate` proves the mod name, bundle path, manifest membership, exact case,
-and stem uniqueness. See [Game integration](game-integration.md) for icons,
-audio, and server behavior.
+and stem uniqueness — for a `Model`, an item `Meshfile`, and a `sounds.xml`
+`ClipName` alike. See [Game integration](game-integration.md) for the URI form
+and server behaviour.
+
+Two deployable asset classes are **not** bundle members and have their own
+gates:
+
+```bash
+7dtd-assets check-icons                        # UIAtlases cells + every CustomIcon key
+7dtd-assets check-sound assets-src/audio/x.wav # format, level, clipping, DC offset
+```
 
 ## 7. Driving it from a script or an agent
 
@@ -186,10 +202,28 @@ prove; [Release checklist](release-checklist.md) is the full list.
 
 ## Creating the assets themselves
 
-[scripts/generators/](../scripts/generators/) ships reproducible generators for
-the audio, icon, texture, and mesh lanes; the scaffolded Unity project ships
-`GeneratedAsset.cs` for building prefabs and materials from code.
-[Agent workflows](agent-workflows.md) defines the lane each asset type follows.
+`7dtd-assets generate` ships reproducible generators for
+the sound, cutout, icon, texture, and mesh lanes; the scaffolded Unity project
+ships `GeneratedAsset.cs` for building prefabs, materials, imports, particle
+state, and audio from code, and `IconRenderer.cs` for photographing a prefab
+into an atlas cell.
+
+```bash
+7dtd-assets generate sound blast assets-src/audio/blast.wav --seed 7
+7dtd-assets generate cutout key assets-src/icons/thing-src.png \
+    UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
+7dtd-assets render-icon myModThing        # or render the item itself
+```
+
+Read these before authoring:
+
+- [Art direction](art-direction.md) — the house style and the prompt patterns
+  that produce an asset which looks native rather than merely clean;
+- [Sound](audio.md) — synthesis, `sounds.xml`, and why a loaded clip can be
+  silent;
+- [Visual effects](vfx.md) — budgets, LOD tiers, and two silent material
+  failures;
+- [Agent workflows](agent-workflows.md) — the lane each asset type follows.
 
 ## When something fails
 

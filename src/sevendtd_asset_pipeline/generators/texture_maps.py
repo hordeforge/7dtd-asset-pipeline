@@ -27,15 +27,23 @@ import sys
 import tempfile
 from pathlib import Path
 
+MISSING = None
 try:
     import numpy as np
     from PIL import Image
-except ImportError:  # pragma: no cover - depends on host packages
-    print(
-        "ERROR: this lane needs Pillow and NumPy: uv pip install pillow numpy",
-        file=sys.stderr,
-    )
-    raise SystemExit(1)
+except ImportError as error:  # pragma: no cover - depends on host packages
+    # Deferred, not fatal: --help must work on a bare host, so someone can read
+    # what this needs before installing anything.
+    MISSING = str(error)
+
+
+def require_imaging() -> None:
+    """Fail with the install command, at the point the dependency is used."""
+    if MISSING is not None:
+        raise SystemExit(
+            "ERROR: the texture lane needs Pillow and NumPy ({}).\n"
+            "  Install it with: uv pip install 'sevendtd-asset-pipeline[authoring]'".format(MISSING)
+        )
 
 
 def save_atomically(array: "np.ndarray", path: Path, mode: str) -> None:
@@ -82,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--spread", type=float, default=0.18, help="maximum swing around each mean")
     parser.add_argument("--flip-green", action="store_true", help="emit a DirectX-convention normal")
     args = parser.parse_args(argv)
+    require_imaging()
 
     if not args.albedo.is_file():
         raise SystemExit(f"ERROR: no such albedo: {args.albedo}")

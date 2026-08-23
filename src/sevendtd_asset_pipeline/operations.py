@@ -155,6 +155,62 @@ _DEFINITIONS: tuple[Operation, ...] = (
         capabilities=("trimesh",),
     ),
     Operation(
+        name="check_sound",
+        summary="Measure a WAV clip and reject the format mistakes a listener cannot fix: "
+        "channels, sample rate, level, clipping, DC offset, and edge silence.",
+        parameters=_schema(
+            {
+                "clip": PATH_PARAM,
+                "max_seconds": {"type": "number", "default": 30.0},
+                "require_mono": {"type": "boolean", "default": True},
+            },
+            required=["clip"],
+        ),
+        returns="SoundReport: channels, sample_rate, duration_seconds, peak, peak_dbfs, rms, "
+        "dc_offset, clipped_samples, leading/trailing silence, problems, notes, ok",
+        cost=FAST,
+        writes=False,
+        needs_config=False,
+    ),
+    Operation(
+        name="check_icons",
+        summary="Check this mod's UIAtlases PNGs as atlas cells and reconcile them with every "
+        "CustomIcon key under Config/. Icons are not bundle members, so 'validate' cannot "
+        "see them.",
+        parameters=_schema(
+            {
+                "atlas_root": {"type": "string", "default": "UIAtlases"},
+                "cell": {"type": "integer", "default": 160},
+            }
+        ),
+        returns="IconReport: atlas_dir, icons[], resolved, external, problems, notes, ok",
+        cost=INSTANT,
+        writes=False,
+        needs_config=True,
+    ),
+    Operation(
+        name="render_icon",
+        summary="Photograph a bundle prefab into an atlas icon with the editor, so the icon "
+        "cannot drift from the mesh. Needs a graphics device; never uses -nographics.",
+        parameters=_schema(
+            {
+                "prefab": {"type": "string", "description": "bundle stem or Assets/... path"},
+                "output": PATH_PARAM,
+                "size": {"type": "integer", "default": 160},
+                "atlas": {"type": "string", "default": "ItemIconAtlas"},
+                "yaw": {"type": "number", "default": 208.0},
+                "pitch": {"type": "number", "default": 8.0},
+                "padding": {"type": "number", "default": 1.22},
+            },
+            required=["prefab"],
+        ),
+        returns="RenderResult: prefab, output, size, rendered_pixels, alpha_coverage, log",
+        cost=MINUTES,
+        writes=True,
+        needs_config=True,
+        capabilities=("pillow",),
+    ),
+    Operation(
         name="check_log",
         summary="Reject a Unity build log that reports success while stripping engine "
         "modules.",
@@ -232,7 +288,26 @@ def manifest() -> dict[str, Any]:
             "paths": "Relative paths resolve against the mod root.",
         },
         "operations": [item.describe() for item in _DEFINITIONS],
+        # Not operations: they are argv-passthrough commands rather than
+        # JSON-in/JSON-out calls. Published here so a consumer can discover the
+        # whole surface from one document instead of scraping help text.
+        "generators": _generators(),
+        "documentation": _documentation(),
     }
+
+
+def _generators() -> list[dict[str, Any]]:
+    """The packaged asset generators, callable as `7dtd-assets generate NAME`."""
+    from .generators import describe
+
+    return describe()
+
+
+def _documentation() -> list[dict[str, str]]:
+    """The packaged documentation, readable as `7dtd-assets docs TOPIC`."""
+    from .docs import topics
+
+    return topics()
 
 
 def get(name: str) -> Operation:

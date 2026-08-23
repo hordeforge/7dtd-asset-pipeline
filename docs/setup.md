@@ -13,7 +13,14 @@ scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
 install through `pacman`, `apt-get`, or `dnf`. Only Python is required for the
 CLI itself; `--with-unity-prereqs` covers the editor installer's needs and
 `--with-authoring` the optional art tooling in
-[Authoring tools](authoring-tools.md).
+[Authoring tools](authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
+and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy).
+
+Xvfb is there for one specific reason: `7dtd-assets render-icon` needs a real
+graphics device, and Unity run with `-nographics` renders a blank image instead
+of failing. On a headless host, run that one command under `xvfb-run -a`.
+Nothing else in the pipeline needs a display — `build` uses `-nographics`
+deliberately.
 
 ## 1. Install the pipeline CLI
 

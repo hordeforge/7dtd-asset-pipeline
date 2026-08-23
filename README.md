@@ -22,14 +22,26 @@ repository layout.
 - installed-game Unity-version discovery instead of a permanently hardcoded
   version, and checksum-verified editor resolution from Unity's release
   service instead of a hardcoded changeset;
-- recursive `Config/**/*.xml` reference discovery;
+- recursive `Config/**/*.xml` reference discovery, covering models, item
+  meshes, and `sounds.xml` clips alike;
 - validation of mod names, bundle paths, manifest membership, exact case, and
   bundle-wide file-stem uniqueness;
 - atomic staging of the bundle and its tracked manifest;
 - setup, integration, troubleshooting, authoring, agent-workflow, and release
   documentation, plus an `AGENTS.md` contract for coding agents;
-- reproducible generators for the audio, icon, texture, and mesh lanes, plus a
-  Unity-side `GeneratedAsset` library for asset-as-code prefabs and materials;
+- reproducible generators for the sound, icon, cutout, texture, and mesh lanes,
+  plus a Unity-side `GeneratedAsset` library for asset-as-code prefabs,
+  materials, texture imports, particle blend state, and audio;
+- offline gates for the asset classes a bundle check cannot see: atlas icons
+  against every `CustomIcon` key, and clips against format, level, and DC
+  offset;
+- an editor-side icon renderer, so an icon that should *be* the item cannot
+  drift from the mesh;
+- an art-direction contract with prompt patterns, so generated 2D assets match
+  the game rather than merely being clean;
+- generators and documentation served from the installed package
+  (`7dtd-assets generate`, `7dtd-assets docs`), so a consuming mod owns only its
+  own content and never a path into this repository;
 - programmatic interfaces built on one operation registry: a self-describing
   `schema`, a `call` endpoint for any language, a `serve` stdio loop about 17x
   faster for repeated calls, a `Pipeline` Python facade, and a capability
@@ -110,6 +122,22 @@ validate:
 7dtd-assets validate
 ```
 
+Author sources in the `assets-src/` tree `init` creates, gate each lane before
+importing, and render an icon from the prefab when the icon should be the item.
+The generators and the documentation ship **inside the installed package**, so
+a mod calls them without a checkout of this repository or any relative path:
+
+```bash
+7dtd-assets generate --list
+7dtd-assets generate sound blast assets-src/audio/blast.wav --seed 7
+7dtd-assets generate cutout key assets-src/icons/thing-src.png \
+    UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
+7dtd-assets check-sound assets-src/audio/blast.wav
+7dtd-assets check-icons
+7dtd-assets render-icon myModThing
+7dtd-assets docs art-direction
+```
+
 Orient in an unfamiliar mod, or drive the pipeline from a script or agent, with
 one non-raising call:
 
@@ -121,8 +149,9 @@ one non-raising call:
 7dtd-assets serve                # many operations over one stdio session
 ```
 
-See [Consumer interfaces](docs/consumer-api.md) for the full contract and
-[scripts/generators/](scripts/generators/) for the asset-creation lanes.
+See [Mod repo layout](docs/mod-repo-layout.md) for the ownership split between
+this repository and a mod, and [Consumer interfaces](docs/consumer-api.md) for
+the full programmatic contract.
 
 The offline gates are necessary, not sufficient. Acceptance always ends with
 a fresh-client load and a visual/audio check appropriate to the changed asset.
@@ -130,6 +159,7 @@ a fresh-client load and a visual/audio check appropriate to the changed asset.
 ## Documentation
 
 - [Quickstart](docs/quickstart.md) — bare machine to a validated bundle
+- [Mod repo layout](docs/mod-repo-layout.md) — what lives in the mod, what lives here
 - [Setup](docs/setup.md) — Python, game path, Unity, licensing, Windows module
 - [Bundle generation](docs/bundle-generation.md) — the complete build path
 - [Configuration](docs/configuration.md) — every `.7dtd-assets.toml` key
@@ -138,6 +168,9 @@ a fresh-client load and a visual/audio check appropriate to the changed asset.
 - [Blockers](docs/blockers.md) — what still needs a human, a licence, or a client
 - [Contributing](CONTRIBUTING.md) — proof boundaries and the uv toolchain
 - [Validation](docs/validation.md) — each gate and its proof boundary
+- [Art direction](docs/art-direction.md) — the house style, prompt patterns, and the two icon lanes
+- [Sound](docs/audio.md) — synthesis, `sounds.xml`, and why a loaded clip can be silent
+- [Visual effects](docs/vfx.md) — budgets, LOD tiers, and the two silent material failures
 - [Authoring tools](docs/authoring-tools.md) — researched OSS tools for humans and agents
 - [Agent workflows](docs/agent-workflows.md) — reproducible asset-as-code patterns
 - [Troubleshooting](docs/troubleshooting.md) — failure messages and root causes

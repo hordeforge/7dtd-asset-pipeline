@@ -37,9 +37,10 @@ class ManifestTests(unittest.TestCase):
         stateless = {name for name, op in OPERATIONS.items() if not op.needs_config}
         self.assertEqual(stateless, set(_STATELESS))
 
-    def test_only_build_and_init_declare_writes(self) -> None:
+    def test_the_writing_operations_are_exactly_the_expected_three(self) -> None:
+        """A caller decides what is safe to run from `writes`, so guard the set."""
         writers = {name for name, op in OPERATIONS.items() if op.writes}
-        self.assertEqual({"build", "init"}, writers)
+        self.assertEqual({"build", "init", "render_icon"}, writers)
 
 
 class DispatchTests(unittest.TestCase):

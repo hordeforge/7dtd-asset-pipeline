@@ -6,21 +6,17 @@ derivative without guessing which GUI state produced it.
 
 ## Repository pattern
 
+`7dtd-assets init` creates this, with a README that says what a provenance row
+must carry:
+
 ```text
 assets-src/
 ├── README.md                 # art direction, licenses, provenance, commands
-├── models/
-│   ├── generator.py          # or .blend/.scad source
-│   └── exported/example.glb
-├── textures/
-│   ├── material.ptex         # or seeded Python generator
-│   └── generated/*.png
-├── icons/
-│   ├── source/*.png
-│   └── make-icons.py
-└── audio/
-    ├── source/*.wav
-    └── make-audio.sh
+├── icons/                    # generated or drawn sources, and cut-out RGBA
+├── textures/                 # albedo, normal, packed mask sources
+├── meshes/                   # Blender/OpenSCAD scripts and exported .glb
+├── audio/                    # sound generators and their .wav
+└── vfx/                      # particle card sources and opacity masks
 
 tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/
 └── selected Unity inputs + every .meta file
@@ -29,6 +25,9 @@ tools/7dtd-assets/UnityProject/Assets/ModAssets/Bundle/
 Keep source-generation work outside the Unity bundle membership directory.
 Copy only selected outputs into the Unity project. This prevents concepts,
 turntables, masks, and unused alternatives from shipping accidentally.
+
+The style contract for anything generated is [art-direction.md](art-direction.md);
+the sound lane is [audio.md](audio.md); effects are [vfx.md](vfx.md).
 
 ## Reproducible generator contract
 
@@ -71,22 +70,41 @@ not acceptance evidence.
 
 ## Icon lane
 
-1. Keep a high-resolution source and transparent background.
-2. Derive the exact deployed size with ImageMagick/Pillow.
-3. Create a contact sheet at native and 2x/4x zoom.
-4. Place the PNG in `UIAtlases/ItemIconAtlas/`, not the bundle.
-5. Test atlas lookup by stem and inspect in inventory/perk/recipe contexts.
+Two lanes, both first-class: generated or drawn art when the icon should show
+something the mesh does not, and a render of the prefab when the icon should
+*be* the item. See [art-direction.md](art-direction.md) for the choice, the
+prompt pattern, and the key-colour convention.
+
+1. Keep a high-resolution source; generate against a flat key colour rather
+   than asking for transparency.
+2. Cut the background out with partial alpha and de-spill
+   (`7dtd-assets generate cutout key`), or render the prefab (`7dtd-assets render-icon`).
+3. Derive the exact deployed cell — 160 x 160 for `ItemIconAtlas`.
+4. Create a contact sheet at native and 2x/4x zoom, and check it on a light
+   *and* a dark background.
+5. Place the PNG in `UIAtlases/ItemIconAtlas/`, not the bundle.
+6. Run `7dtd-assets check-icons`: cell shape, alpha, and every `CustomIcon` key.
+7. Test atlas lookup by stem and inspect in inventory/perk/recipe contexts.
 
 ## Audio lane
 
-1. Keep lossless source and a transformation script.
-2. Report duration, channels, sample rate, peak, and loudness.
-3. Import the clip and, when range matters, a deliberate AudioSource prefab.
-4. Configure `sounds.xml` near/distant behavior and voice limits.
+Full lane, with the engine facts that decide audibility: [audio.md](audio.md).
+
+1. Synthesize with `7dtd-assets generate sound` (a designed voice and a recorded seed) or
+   keep a lossless source and a transformation script.
+2. Gate it with `7dtd-assets check-sound`: mono, rate, level, clipping, DC
+   offset, edge silence.
+3. Import the clip and, when range matters, a deliberate AudioSource prefab —
+   `GeneratedAsset.AudioSourcePrefab(...)`.
+4. Configure `sounds.xml` near/distant behavior and voice limits;
+   `7dtd-assets generate sound sounds-xml` prints the entry.
 5. Validate load, then listen near, across fade, at maximum range, and under
    simultaneous events.
 
 ## VFX lane
+
+Full lane, with budgets, tiers, and the two silent material failures:
+[vfx.md](vfx.md).
 
 1. Define presentation-only scope, duration, maximum live particles, LODs,
    distance culling, concurrency policy, and fallback.
@@ -96,6 +114,26 @@ not acceptance evidence.
 5. Test repeated effects for frame time, allocations, orphans, obstruction,
    flicker, and accessibility.
 
+## Keep an asset inventory
+
+One table, in the mod's own docs, with a row per gameplay object rather than
+per file. It is the only artifact that answers "what is left" without reading
+the whole repository:
+
+| Gameplay object | Assets it owes | Current state | Reviewed by a human? |
+|---|---|---|---|
+| `myModWorkbench` | placed model, icon | bundle prefab + 160 px atlas cell | no — placement and bounds unchecked |
+
+Three rules keep it honest:
+
+- **A new gameplay object is a new row**, added when it is added to `Config/`.
+- **Say what is a stand-in.** Reusing a vanilla asset is a legitimate
+  prototype decision; an inventory that does not distinguish a stand-in from
+  finished art will eventually ship one as the other.
+- **"Reviewed" means a person looked or listened.** A green offline run is not
+  a review, and writing it in that column is how a mod ends up believing its
+  art was checked.
+
 ## Evidence packet
 
 For a release candidate preserve:
@@ -104,7 +142,7 @@ For a release candidate preserve:
 - tool/editor/game versions;
 - bundle and manifest SHA-256;
 - `7dtd-assets inspect --json` output;
-- `7dtd-assets validate` output;
+- `7dtd-assets validate`, `check-icons`, and `check-sound` output;
 - client/server logs for the exact run;
 - screenshots/turntables/listening notes;
 - negative-control result where graceful fallback matters.

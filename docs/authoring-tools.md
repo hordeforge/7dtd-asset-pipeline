@@ -9,10 +9,12 @@ tool from the distribution when it packages one, and falls back to the official
 checksum-verified build for Blender and the Khronos glTF validator, which
 several distributions omit or ship well behind upstream. Ask what is usable
 right now with `7dtd-assets capabilities --json`.
-[scripts/generators/](../scripts/generators/) already ships working generators
-built on this stack — audio (standard library only), icons (Pillow), texture
-maps (Pillow + NumPy), and meshes (Blender) — and the scaffolded Unity project
-ships `GeneratedAsset.cs` for prefabs and materials. Start from those.
+`7dtd-assets generate` already ships working generators
+built on this stack — sound synthesis and audio conversion (standard library
+only), background cutout and icons (Pillow), texture maps (Pillow + NumPy), and
+meshes (Blender) — and the scaffolded Unity project ships `GeneratedAsset.cs`
+for prefabs, materials, imports, particles, and audio, plus `IconRenderer.cs`
+for rendering a prefab into an atlas icon. Start from those.
 
 ## Geometry
 
@@ -25,7 +27,7 @@ or a generator script as source, apply transforms deliberately, and export a
 Unity-supported interchange format.
 
 `scripts/install-tools.sh --with-authoring` installs it, and
-[scripts/generators/make-mesh.py](../scripts/generators/make-mesh.py) is a
+`7dtd-assets generate mesh` is a
 working `--background --python` template to extend. Validate what it exports
 with `7dtd-assets check-mesh` before importing.
 
@@ -103,9 +105,13 @@ or script.
 - Official documentation: <https://ffmpeg.org/documentation.html>
 - Audio filters: <https://ffmpeg.org/ffmpeg-filters.html#Audio-Filters>
 
-Python's standard `wave` module plus seeded NumPy is also effective for wholly
-procedural tones and effects. Always listen to the result; deterministic does
-not mean good.
+Python's standard `wave` module is also effective for wholly procedural sound,
+and needs no third-party package at all:
+`7dtd-assets generate sound` builds
+explosions, ticks, whooshes, hums, and cues from seeded noise and one-pole
+filters, and prints the matching `sounds.xml` entry. Gate the result with
+`7dtd-assets check-sound`, then always listen to it; deterministic does not
+mean good.
 
 ## Unity and bundle diagnostics
 
@@ -133,6 +139,15 @@ confirmation.
 - Official repository: <https://github.com/nesrak1/AssetsTools.NET>
 - Official wiki: <https://github.com/nesrak1/AssetsTools.NET/wiki>
 
+### AssetStudio and UABE
+
+Interactive Unity asset browsers, widely used in the 7DTD community for looking
+at the game's own art — which is the reference for
+[art direction](art-direction.md). Both track Unity's serialization format
+closely, so pin a version that matches the game's Unity revision rather than
+taking the newest. Read-only use against the installed game only: never write
+to it, and never copy its assets into a mod.
+
 ### Unity Asset Bundle Browser
 
 Unity's open-source browser can inspect and debug bundle contents in the
@@ -158,6 +173,6 @@ or live-client gates.
 | hard-surface mesh | OpenSCAD or Blender Python | trimesh + glTF Validator | Unity import + bundle + in-game view |
 | organic/rigged mesh | Blender | glTF Validator + render turntable | bundle + animation/in-game view |
 | PBR maps | Material Maker or seeded Python | channel/range checks + montage | `.mat` keywords/import + in-game light sweep |
-| item icon | Pillow/ImageMagick | size, alpha, downscaled montage | client atlas lookup + human readability |
+| item icon | `7dtd-assets generate cutout`, `7dtd-assets render-icon`, Pillow/ImageMagick | `7dtd-assets check-icons` + downscaled montage | client atlas lookup + human readability |
 | particle card | Pillow/NumPy/Blender | alpha-edge montage | particle material state + live VFX |
-| sound | FFmpeg or NumPy/wave | codec/rate/peak report | sound group lookup + listening at range |
+| sound | `7dtd-assets generate sound`, FFmpeg | `7dtd-assets check-sound` | sound group lookup + listening at range |

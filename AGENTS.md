@@ -37,13 +37,23 @@ no Unity, and no game install.
 - Changes to bundle generation (`build.py`, `BundleBuilder.cs`) require
   `make check test` plus a game-matched `7dtd-assets build --probe` when Unity
   is available on the host.
+- Changes to the editor-side C# (`GeneratedAsset.cs`, `IconRenderer.cs`) are not
+  covered by the Python suite. State plainly whether an editor actually ran
+  them, and never describe an untested editor change as verified.
 - New engine facts need a named source: `Data/Config/*.xml` in the installed
   game, `ilspycmd`/`monodis` on `Assembly-CSharp.dll`, or `maci0/7dtd-research`.
   Record which tool produced the fact. "It seemed to work in game" is not a
   source and the next session cannot re-verify it.
 - Keep the consumer scaffold standalone. A modlet built with this pipeline
   must never need a relative checkout of this repository, another mod, or a
-  sibling project at build time.
+  sibling project at build time. That is why the generators and the
+  documentation are packaged and reachable as `7dtd-assets generate` and
+  `7dtd-assets docs`: a mod calls them, never copies them. Anything general
+  belongs here; anything mod-specific belongs in the mod. See
+  [docs/mod-repo-layout.md](docs/mod-repo-layout.md).
+- Adding a generator means adding it to `generators.GENERATORS`; adding a doc
+  page means adding it to `docs.TOPICS`. The tests fail when either drifts, and
+  both are published in `7dtd-assets schema`.
 
 ## Gates you must not weaken
 
@@ -57,6 +67,8 @@ stronger evidence than the evidence that introduced it, recorded in
 | disabled-module log rejection | Unity reporting success while stripping engine classes |
 | game-matched Unity revision | an editor that silently produces an unloadable bundle |
 | file-stem collision rejection | assets made unreachable by 7DTD's stem-only lookup |
+| atlas-cell and `CustomIcon` checks | icons the bundle gates cannot see at all |
+| clip format checks | a clip that is stereo, silent, clipping, or DC-offset |
 | fresh-client acceptance | everything an offline parse cannot prove |
 
 The offline gates are necessary, not sufficient. Never describe a bundle as
@@ -107,6 +119,11 @@ Machine-readable output for agents and CI:
 | `7dtd-assets capabilities --json` | optional capabilities, what they unlock, install commands |
 | `7dtd-assets inspect --deep --json` | every serialized object and per-prefab components |
 | `7dtd-assets check-mesh --json` | authored-mesh extents and glTF conformance |
+| `7dtd-assets check-sound --json` | clip format, level, clipping, DC offset |
+| `7dtd-assets check-icons --json` | atlas cells and every `CustomIcon` key |
+| `7dtd-assets render-icon STEM` | render a prefab into its atlas cell (needs a display) |
+| `7dtd-assets generate --list` | the packaged asset generators, callable from any mod |
+| `7dtd-assets docs [TOPIC]` | this repository's documentation, served from the package |
 
 Every command exits non-zero with a single `ERROR: ...` line on stderr when a
 gate fails. Prefer the exit code over parsing prose.
@@ -160,10 +177,16 @@ asset-as-code patterns (mesh, texture, icon, audio, VFX lanes) and the evidence
 packet a release candidate must carry.
 [docs/authoring-tools.md](docs/authoring-tools.md) lists the researched
 open-source tools and which gate each one belongs to.
+[docs/art-direction.md](docs/art-direction.md) is the style contract for
+generated and drawn 2D assets — read it before writing any generation prompt.
+[docs/audio.md](docs/audio.md) and [docs/vfx.md](docs/vfx.md) own the sound and
+particle lanes, including the runtime behaviours that make a correctly built
+asset silent or invisible.
 
-[scripts/generators/](scripts/generators/) ships working generators for the
-audio, icon, texture, and mesh lanes, and the scaffolded Unity project ships
-`GeneratedAsset.cs` for asset-as-code prefabs and materials. Extend those
+`7dtd-assets generate` ships working generators for the
+sound, audio-conversion, cutout, icon, texture, and mesh lanes, and the
+scaffolded Unity project ships `GeneratedAsset.cs` for asset-as-code prefabs,
+materials, imports, particles, and audio, plus `IconRenderer.cs`. Extend those
 rather than starting a new pattern.
 
 There are **two mesh lanes and both are first-class**: an authored mesh from

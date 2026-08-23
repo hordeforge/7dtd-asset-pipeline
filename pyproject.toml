@@ -45,7 +45,9 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-sevendtd_asset_pipeline = ["templates/**/*"]
+# templates/ is the Unity project init copies into a mod; docs/ is staged into
+# the package by setup.py so `7dtd-assets docs` works without a checkout.
+sevendtd_asset_pipeline = ["templates/**/*", "docs/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

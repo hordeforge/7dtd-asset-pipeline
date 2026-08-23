@@ -1,4 +1,4 @@
-.PHONY: assets assets-probe assets-validate assets-doctor assets-status
+.PHONY: assets assets-probe assets-validate assets-doctor assets-status assets-icons
 
 assets:
 	7dtd-assets build
@@ -8,6 +8,10 @@ assets-probe:
 
 assets-validate:
 	7dtd-assets validate
+	7dtd-assets check-icons
+
+assets-icons:
+	7dtd-assets check-icons
 
 assets-doctor:
 	7dtd-assets doctor

@@ -115,6 +115,8 @@ print(call("status")["valid"])
 MyMod/
 ├── .7dtd-assets.toml                   # configuration; commit it
 ├── Makefile.assets                     # make -f Makefile.assets assets
+├── assets-src/                         # editable sources + provenance; never ships
+│   └── README.md                       # what each lane holds, what a row must record
 └── tools/7dtd-assets/
     ├── AGENTS.md                       # the agent contract, in your repo
     ├── manifests/                      # tracked build membership
@@ -152,10 +154,17 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `capabilities [--json]` | no | no | no | optional capabilities and how to install them |
 | `inspect --deep [--json]` | no | no | no | every serialized object (needs UnityPy) |
 | `check-mesh [--json] FILE` | no | no | no | mesh extents and glTF conformance |
+| `check-sound [--json] FILE` | no | no | no | clip format, level, clipping, DC offset |
+| `check-icons [--json]` | no | no | no | atlas cells and every `CustomIcon` key |
+| `render-icon STEM` | no | yes | **yes** | photograph a prefab into its atlas cell |
+| `generate NAME [ARGS]` | no | Blender for `mesh` | **yes** (writes what you ask for) | run a packaged asset generator |
+| `docs [TOPIC]` | no | no | no | print packaged documentation |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |
 
-`build` is the only command that writes into the modlet, and only after every
-offline gate passes.
+`build` and `render-icon` are the only commands that write into the modlet, and
+`build` only after every offline gate passes. `render-icon` needs a **graphics
+device** — it never passes `-nographics`, because that combination silently
+produces a blank image; run it under `xvfb-run -a` on a headless host.
 
 ### `status --json`
 
@@ -242,6 +251,46 @@ counts (trimesh) plus glTF conformance (Khronos validator), exiting non-zero on
 a problem. Its most common catch is a mesh authored in centimetres, which
 arrives a hundred times too large.
 
+### `check-sound`
+
+For the audio lane, and dependency-free. Reports channels, sample rate,
+duration, peak, RMS, DC offset, clipped samples, and edge silence, exiting
+non-zero on a format mistake a listener cannot fix. It runs outside a mod, so
+CI can gate a clip before it is ever imported.
+
+### `check-icons`
+
+Icons are the one deployable asset class `validate` cannot see, because
+`UIAtlases/<Atlas>/*.png` is packed at runtime and never enters the bundle.
+This reports each cell's geometry and alpha, which `CustomIcon` keys this mod
+resolves, and which are external — a key the mod does not provide is normal
+(vanilla keys) and is reported, never failed. It fails on a cell that is not
+square, not the expected size, has no alpha channel, is essentially empty, was
+never cut out of its background, or whose case does not match its key.
+
+### `generate` and `docs`
+
+These two are argv-passthrough commands rather than JSON operations, and they
+exist so a consuming mod needs nothing from this repository's filesystem:
+
+```bash
+7dtd-assets generate --list                 # sound, audio, cutout, icon, texture-maps, mesh
+7dtd-assets generate sound --help           # each generator's own options
+7dtd-assets docs                            # the topics
+7dtd-assets docs art-direction              # one page, in full
+```
+
+Both are published in `7dtd-assets schema` under `generators` and
+`documentation`, so a consumer discovers them from the same document as the
+operations. A generator writes exactly the output path it is given; none of
+them touches the modlet on its own.
+
+### `render-icon`
+
+Renders a bundle prefab into an atlas cell so the icon cannot drift from the
+mesh, supersampled 4x and downscaled with Lanczos. Fails when the render is
+under 2% covered, which is what a missing graphics device produces.
+
 `doctor --json` emits `[{"status": "OK"|"WARN"|"INFO"|"FAIL", "name": …,
 "detail": …}]`. `inspect --json` emits `path`, `unity_version`,
 `archive_format`, `class_ids`, `has_assetbundle_object`.
@@ -278,6 +327,9 @@ pipeline.call("inspect_deep")             # same dispatch as `call` and `serve`
 | `.inspect_deep(bundle=None)` | `DeepReport` (needs UnityPy) |
 | `.validate(bundle=None)` | `ValidationReport` |
 | `.check_mesh(path, max_extent, strict)` | `MeshReport` (needs trimesh) |
+| `.check_sound(path, max_seconds, require_mono)` | `SoundReport` |
+| `.check_icons(atlas_root, cell)` | `IconReport` |
+| `.render_icon(prefab, output=None, size=160, …)` | `RenderResult` (needs Unity + Pillow) |
 | `.check_log(path)` | raises if the log shows stripped modules |
 | `.unity_release(version=None)` | `Release` (uses the network) |
 | `.build(probe=False)` | staged bundle `Path` |
@@ -327,6 +379,8 @@ if has_capability("UnityPy"):
 | `has_capability(name)` / `require_capability(name)` | branch on, or demand, a capability |
 | `deep_inspect(path)` | `DeepReport`: objects and per-prefab components |
 | `check_mesh(path, max_extent, strict)` | `MeshReport` for an authored mesh |
+| `check_sound(path, max_seconds, require_mono)` | `SoundReport` for a clip |
+| `check_icons(mod_root, config_dir, atlas_root, cell)` | `IconReport` for the atlas |
 
 ## Continuous integration
 

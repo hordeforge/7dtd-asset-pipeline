@@ -66,6 +66,58 @@ Read the first error in the client log. Modules such as velocity-over-lifetime
 can require X/Y/Z curves to use the same mode. A constant on one axis and a
 curve on another can serialize cleanly and fail only at runtime.
 
+## A sound loads and resolves, but nobody hears it
+
+`validate` proves the clip is in the bundle under the right stem. Three engine
+behaviours can still silence it, and all three pass every offline gate:
+
+- `Audio.Manager.LoadAudio` plays **nothing** past the AudioSource prefab's
+  `maxDistance`, so a long-range event on a vanilla short-range source is
+  silent out there;
+- a node's `DistantClip` is used only past `DistantFadeStart`, which defaults
+  to `-1` — never;
+- an unknown sound-group name does not error; it simply never plays.
+
+See [audio.md](audio.md). Check the clip itself first with
+`7dtd-assets check-sound`, which rejects silence, near-silence, clipping, and
+DC offset.
+
+## A rendered icon is a uniform transparent square
+
+The render ran without a graphics device. `7dtd-assets render-icon` never
+passes `-nographics` for this reason — with that flag Unity executes the editor
+method happily, `Camera.Render()` draws nothing, and the output looks like a
+framing bug rather than a missing device. On a headless host, run the command
+under `xvfb-run -a`.
+
+The command fails when coverage is below 2%, so this state is reported rather
+than shipped. If coverage is low but non-zero, the prefab may genuinely have no
+renderers, or the camera yaw may be photographing an empty side of it.
+
+## An icon has a coloured halo, or its whole cell is opaque
+
+The background was removed with a hard threshold, or not at all. Use
+`7dtd-assets generate cutout key`, which keeps partial alpha through the
+transition band and de-spills the residual key tint, and inspect the result
+against **both** a light and a dark background — a fringe is invisible against
+one of them. `7dtd-assets check-icons` fails a cell whose alpha is entirely
+opaque, because that means the cutout never happened.
+
+## A property you deleted is still applied
+
+`ItemClassesFromXml` and `BlocksFromXml` copy every parent property that the
+`Extends` `param1` exclusion list does not name. Removing a `TintColor`,
+`Meshfile`, `Model`, or `CustomIcon` line from your own definition therefore
+does **not** stop the parent's value being inherited — it has to be *excluded*:
+
+```xml
+<property name="Extends" value="thrownGrenadeContact" param1="Meshfile,TintColor" />
+```
+
+The symptom is silent: an authored palette multiplied by an inherited tint, or
+a new variant wearing another variant's mesh. Nothing in a bundle gate can see
+it, because the bundle is correct.
+
 ## `doctor` cannot find game or editor
 
 Use absolute machine-local environment variables:

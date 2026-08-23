@@ -22,3 +22,8 @@ build/
 **/Recordings/
 **/*.csproj
 **/*.sln
+
+# Staged by setup.py so `7dtd-assets docs` works from a wheel; not a source of truth.
+src/sevendtd_asset_pipeline/docs/
+build/
+dist/

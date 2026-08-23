@@ -70,13 +70,33 @@ design silently recolours the new art.
 ## Audio
 
 Audio clips and AudioSource prefabs can live in the bundle. A `sounds.xml`
-entry can point `ClipName` at a mod-folder bundle URI, because
+entry points `ClipName` at a mod-folder bundle URI, because
 `Audio.Manager.LoadAudio` resolves it through the same
-`DataLoader.LoadAsset<AudioClip>` path as meshes. Validate in the actual
-game because an AudioSource's `maxDistance`, sound-group fade ranges, looping,
-voice limits, and distant clip decide whether a correctly loaded clip is
-heard. A long-range event usually needs a deliberately authored source rather
-than a grenade-scale vanilla source.
+`DataLoader.LoadAsset<AudioClip>` path as meshes — so `7dtd-assets validate`
+checks a `ClipName` exactly as it checks a `Model`:
+
+```xml
+<configs>
+	<append xpath="/Sounds">
+		<SoundDataNode name="myModBlast">
+			<AudioSource name="Sounds/AudioSource_Explosion" />
+			<AudioClip ClipName="#@modfolder(MyMod):Resources/mymod.unity3d?myModBlastNear.wav" />
+			<DistantClip ClipName="#@modfolder(MyMod):Resources/mymod.unity3d?myModBlastDistant.wav" />
+			<Noise ID="myModBlast" range="40" volumeScale="1" heardBy="Enemy" />
+		</SoundDataNode>
+	</append>
+</configs>
+```
+
+Generate that block with
+`7dtd-assets generate sound sounds-xml <stem>`.
+
+A correctly loaded clip can still be inaudible: `LoadAudio` plays nothing past
+the AudioSource prefab's `maxDistance`, and `DistantFadeStart` defaults to `-1`
+(never), so a `DistantClip` authored without setting it never plays. A
+long-range event needs a deliberately authored source rather than a
+grenade-scale vanilla one. The whole lane, with the gates and the listening
+checklist, is in [audio.md](audio.md).
 
 ## Models and item state
 
@@ -97,10 +117,33 @@ loading, so the prefab root must stay at identity and let them apply:
 Test held, dropped, and placed forms separately; they are three different code
 paths over the same asset.
 
+### Inherited properties are the quiet failure here
+
+`ItemClassesFromXml` and `BlocksFromXml` copy every parent property that the
+`Extends` `param1` list does not name. **Not restating a property does not stop
+it being inherited** — it has to be excluded:
+
+```xml
+<property name="Extends" value="thrownGrenadeContact" param1="Meshfile,TintColor" />
+```
+
+That is how a mod item with an authored olive palette ends up multiplied by
+vanilla's red grenade tint after the tint line was "removed", and how a new
+variant ends up wearing another variant's mesh. Exclude `Meshfile`, `Model`,
+`CustomIcon`, and `TintColor` on anything that owns its own art.
+
+An `ActivationTransformToHide` child (a lamp, an indicator) is authored
+**active**: `ItemClassTimeBomb.setActivationTransformsActive` uses
+`FindInChilds`, which finds inactive children too, and the engine hides the
+child when holding starts.
+
 ## Clients and servers
 
 Asset-bearing mods must be installed on every client; servers do not transfer
-bundles or icons as a substitute for client installation. A headless server
+bundles or icons as a substitute for client installation. Most mods that are
+not purely cosmetic also need EasyAntiCheat disabled in the launcher, which is
+part of the install instructions a released mod owes its players and part of
+setting up a fresh client for acceptance. A headless server
 may still traverse an asset reference, so “cosmetic” does not imply that a
 broken URI is harmless server-side.
 
@@ -117,11 +160,27 @@ Deploy:
 ```text
 MyMod/
 ├── ModInfo.xml
-├── Config/
+├── Config/                     # XPath patches: items, blocks, recipes, sounds
+├── Localization.csv            # 3.x, not .txt
 ├── Resources/examplemod.unity3d
-└── UIAtlases/                  # when used
+├── UIAtlases/
+│   └── ItemIconAtlas/
+├── Prefabs/                    # POIs and world prefabs, when the mod ships any
+└── UI/                         # custom XUi windows/styles, when the mod ships any
 ```
 
-Do not deploy `.7dtd-assets.toml`, `tools/`, editable sources, Unity project
-state, manifests, build logs, scripts, or documentation unless the mod's
-release policy explicitly includes authoring material.
+Every folder is optional; include only what the mod needs. `Prefabs/` and `UI/`
+are outside this pipeline's scope — it builds and validates the bundle, the
+atlas, and their XML references — but they belong in the picture, because a mod
+that ships them still packages them alongside what this pipeline produces.
+
+`Localization.csv` (3.x — not `.txt`) belongs in the mod root, with keys
+prefixed by the mod id. It is not an asset this pipeline builds, but every
+custom item, block, and control needs a string there, and a missing one shows
+in game as the raw key.
+
+Do not deploy `.7dtd-assets.toml`, `tools/`, `assets-src/`, editable sources,
+Unity project state, manifests, build logs, scripts, or documentation unless
+the mod's release policy explicitly includes authoring material. Zip so that
+extracting into `Mods/` yields `Mods/MyMod/ModInfo.xml` immediately — no nested
+`MyMod/MyMod/`.

@@ -21,9 +21,36 @@ decompiling the installed `Assembly-CSharp.dll` with `ilspycmd` and/or
 - `Audio.Manager.LoadAudio` resolves a `sounds.xml` `ClipName` bundle URI
   through that same path, and plays nothing beyond the AudioSource prefab's
   `maxDistance`, so a long-range sound needs a mod-owned AudioSource;
+- `Audio.Manager.Play` switches to a sound node's `DistantClip` only past
+  `DistantFadeStart` metres and stops the near clip past `DistantFadeEnd`;
+  `DistantFadeStart` defaults to `-1`, meaning never, so a distant variant
+  authored without setting it is never heard;
+- `SoundsFromXml.ParseNode` reads each `SoundDataNode`'s `AudioSource`,
+  `AudioClip`, and `DistantClip` — which is why a bundle URI works in all three
+  — plus `Loop`, `AltSound`, `Noise`, `MaxVoices`, `MaxVoicesPerEntity`,
+  `MaxRepeatRate`, `LowestPitch`, `HighestPitch`, `Channel`, `Priority`, and
+  the crouch/noise scales, all matched case-insensitively from each element's
+  first attribute; it also calls `DataLoader.PreloadBundle` on those names at
+  parse time;
+- `ItemClass.Init` parses `SoundTick` as `"<group>[,<delaySeconds>]"` with a
+  one-second default, and `ItemClassTimeBomb.OnDroppedUpdate` plays it through
+  `Entity.PlayOneShot` once per `SoundTickDelay` while `Meta` is above zero;
+- `ItemClassesFromXml` and `BlocksFromXml` copy **every** parent property that
+  the `Extends` `param1` exclusion list does not name. Deleting a property from
+  a child definition therefore does not stop it being inherited — it must be
+  excluded by name. Found live: a mod item's own `TintColor` line was removed
+  and vanilla's red grenade tint kept multiplying the new olive paint, with a
+  clean log, a loading bundle, and a resolving prefab;
+- `ItemClassTimeBomb.setActivationTransformsActive` uses `FindInChilds`, which
+  also finds inactive children, so an `ActivationTransformToHide` child is
+  authored **active** and the engine hides it when holding starts;
 - `ModManager.LoadUiAtlases` loads each immediate subfolder of a mod's
   `UIAtlases/` as a runtime-packed atlas, keyed by folder name, with each PNG
-  keyed by its filename stem;
+  keyed by its filename stem. The V3 item atlas cell measured **160 x 160**,
+  read from the installed game's own
+  `Data/Addressables/Standalone/automatic_assets_generic/itemicons.bundle`;
+  `CustomIconTint` multiplies the icon's colour, so a leftover tint silently
+  recolours new art;
 - `BlockShapeModelEntity.getPrefab` substitutes `block_missingPrefab`, and
   items fall back to `@:Other/Items/Crafting/leather.fbx`, so a failed load
   still draws something and cannot be ruled out by eye;

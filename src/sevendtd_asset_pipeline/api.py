@@ -30,10 +30,13 @@ from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, run_doctor
 from .errors import PipelineError
 from .game import game_unity_version
+from .icon_check import IconReport, check_icons
+from .icon_render import RenderResult, render_icon
 from .mesh_check import MeshReport, check_mesh
 from .operations import get as get_operation
 from .references import AssetReference, discover_references
 from .scaffold import initialize
+from .sound_check import SoundReport, check_sound
 from .status import Status, collect_status
 from .unity_release import Release, fetch_release
 from .unityfs import BundleInfo, inspect_bundle
@@ -128,6 +131,16 @@ class Pipeline:
         """Check an authored mesh before Unity import. Needs trimesh."""
         return check_mesh(Path(mesh), max_extent, strict)
 
+    def check_sound(
+        self, clip: Path | str, max_seconds: float = 30.0, require_mono: bool = True
+    ) -> SoundReport:
+        """Measure a WAV clip and reject unshippable formats. No dependencies."""
+        return check_sound(Path(clip), max_seconds, require_mono)
+
+    def check_icons(self, atlas_root: str = "UIAtlases", cell: int = 160) -> IconReport:
+        """Check the mod's atlas PNGs and its CustomIcon keys. Icons are not bundle members."""
+        return check_icons(self.config.mod_root, self.config.config_dir, atlas_root, cell)
+
     def unity_release(self, version: str | None = None, platform: str = "LINUX") -> Release:
         """Resolve the official editor download for a revision. Uses the network."""
         from .game import project_unity_version
@@ -135,6 +148,19 @@ class Pipeline:
         return fetch_release(version or project_unity_version(self.config.unity_project), platform)
 
     # -- writes ------------------------------------------------------------
+
+    def render_icon(
+        self,
+        prefab: str,
+        output: Path | str | None = None,
+        size: int = 160,
+        atlas: str = "ItemIconAtlas",
+        yaw: float = 208.0,
+        pitch: float = 8.0,
+        padding: float = 1.22,
+    ) -> RenderResult:
+        """Render a bundle prefab into an atlas icon. Starts a real editor."""
+        return render_icon(self.config, prefab, output, size, atlas, yaw, pitch, padding)
 
     def build(self, probe: bool = False) -> Path:
         """Build, gate, and stage. The only method that writes into the modlet.
@@ -230,6 +256,16 @@ _DISPATCH: dict[str, Any] = {
         p["mesh"], p.get("max_extent", 16.0), p.get("strict", False)
     ),
     "check_log": lambda self, p: (self.check_log(p["log"]), {"ok": True})[1],
+    "check_sound": lambda self, p: self.check_sound(
+        p["clip"], p.get("max_seconds", 30.0), p.get("require_mono", True)
+    ),
+    "check_icons": lambda self, p: self.check_icons(
+        p.get("atlas_root", "UIAtlases"), p.get("cell", 160)
+    ),
+    "render_icon": lambda self, p: self.render_icon(
+        p["prefab"], p.get("output"), p.get("size", 160), p.get("atlas", "ItemIconAtlas"),
+        p.get("yaw", 208.0), p.get("pitch", 8.0), p.get("padding", 1.22),
+    ),
     "unity_release": lambda self, p: self.unity_release(p.get("version"), p.get("platform", "LINUX")),
     "build": lambda self, p: {"bundle": str(self.build(p.get("probe", False)))},
     "init": lambda self, p: _init(p),
@@ -262,6 +298,9 @@ _STATELESS: dict[str, Any] = {
         Path(p["mesh"]), p.get("max_extent", 16.0), p.get("strict", False)
     ),
     "check_log": lambda p: (reject_disabled_modules(Path(p["log"])), {"ok": True})[1],
+    "check_sound": lambda p: check_sound(
+        Path(p["clip"]), p.get("max_seconds", 30.0), p.get("require_mono", True)
+    ),
     "unity_release": lambda p: fetch_release(
         p["version"] if p.get("version") else _needs_version(), p.get("platform", "LINUX")
     ),

@@ -9,6 +9,9 @@
 7dtd-assets check-log .asset-pipeline/build/bundle/unity-build.log
 7dtd-assets refs
 7dtd-assets validate
+7dtd-assets check-icons
+7dtd-assets check-sound assets-src/audio/clip.wav
+7dtd-assets check-mesh assets-src/meshes/thing.glb
 ```
 
 `inspect --json` and `doctor --json` are suitable for CI and agent workflows.
@@ -29,6 +32,15 @@ stderr. Prefer exit codes over parsing prose.
 | URI mod identity | wrong `@modfolder` name, or a URI targeting game bundles | `ModInfo.xml` and recursive XML scan |
 | Bundle path | missing, wrong, or escaped file | case-insensitive resolution below mod root |
 | Asset case/membership | typo, case mismatch, or absent stem | URI and tracked manifest |
+| Atlas cell shape | an icon that is not square, not the cell size, has no alpha, or was never cut out of its background | PNG IHDR chunk, plus alpha coverage when Pillow is present |
+| Icon key case | a `CustomIcon` whose case differs from the filename stem it ships | recursive XML scan against `UIAtlases/` |
+| Clip format | stereo, unexpected sample rate, silence, near-silence, clipping, DC offset | WAV frames |
+| Mesh extents/conformance | a mesh authored in the wrong unit, or invalid glTF | trimesh and the Khronos validator |
+
+Icons are **not** bundle members — `ModManager.LoadUiAtlases` packs
+`UIAtlases/<Atlas>/*.png` at runtime — so `validate` cannot see them and
+`check-icons` exists to cover them. A `CustomIcon` key this mod does not
+provide is reported, never failed: referencing a vanilla key is normal.
 
 The UnityFS parser is dependency-free and bounded: it reads archive metadata,
 decompresses uncompressed/LZ4 blocks, and reads serialized class IDs. It does
@@ -59,8 +71,11 @@ It does not prove that:
 - a prefab's scale, axes, bounds, collider, material, animation, or attachment
   point is correct;
 - shader keywords/blending/import color space render correctly;
-- an AudioClip is audible at the desired range or mix;
-- an icon is readable at its deployed size;
+- an AudioClip is audible at the desired range or mix — `maxDistance` on the
+  AudioSource prefab and a sound group's fade ranges decide that, and both are
+  runtime behaviour;
+- a sound-group name a block or item references actually exists;
+- an icon is readable at its deployed size, or that the art matches the mesh;
 - custom shaders contain the right platform variants;
 - client and dedicated-server runtime paths both accept the asset;
 - gameplay gracefully falls back when presentation assets are missing.

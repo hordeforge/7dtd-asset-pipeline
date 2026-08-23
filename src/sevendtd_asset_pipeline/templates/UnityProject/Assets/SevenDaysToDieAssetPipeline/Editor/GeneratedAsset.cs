@@ -237,6 +237,221 @@ namespace SevenDaysToDie.AssetPipeline
                     "Bundle stem '" + stem + "' is too short to be unique; prefix it with the mod name.");
         }
 
+        // ------------------------------------------------------------------
+        // Texture imports
+        //
+        // A map has two ways to be wrong that produce no error, no warning and
+        // no log line: the shader keyword (handled in the material helpers
+        // above) and the *import type*. A normal map imported as a Default
+        // texture reaches the shader as raw colour, and a mask imported as sRGB
+        // has every metallic and smoothness value bent by the colour
+        // transform. Both render something plausible, which is what makes them
+        // expensive.
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Import a texture as a tangent-space normal map.
+        ///
+        /// Note that <c>convertToNormalMap</c> lives on
+        /// <see cref="TextureImporterSettings"/>, reached through
+        /// ReadTextureSettings/SetTextureSettings — it is not a property of
+        /// TextureImporter in 2022.3, and assuming it is costs a failed batch
+        /// build whose only shell symptom is "Scripts have compiler errors".
+        /// </summary>
+        public static Texture2D ImportNormalMap(string assetPath, int maxSize = 1024)
+        {
+            var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+            if (importer == null) throw new FileNotFoundException("No texture at " + assetPath);
+            var settings = new TextureImporterSettings();
+            importer.ReadTextureSettings(settings);
+            settings.textureType = TextureImporterType.NormalMap;
+            settings.convertToNormalMap = false;   // the file already IS a normal map
+            settings.sRGBTexture = false;
+            importer.SetTextureSettings(settings);
+            importer.maxTextureSize = maxSize;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
+        }
+
+        /// <summary>
+        /// Import a texture as linear data: a packed metallic/occlusion/
+        /// smoothness mask, a height map, anything whose channels are
+        /// measurements rather than colour.
+        /// </summary>
+        public static Texture2D ImportLinearMap(string assetPath, int maxSize = 512)
+        {
+            var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+            if (importer == null) throw new FileNotFoundException("No texture at " + assetPath);
+            importer.textureType = TextureImporterType.Default;
+            importer.sRGBTexture = false;
+            importer.maxTextureSize = maxSize;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
+        }
+
+        /// <summary>Import a colour texture: albedo, an emissive map, a particle card.</summary>
+        public static Texture2D ImportColorMap(string assetPath, int maxSize = 1024, bool alpha = true)
+        {
+            var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+            if (importer == null) throw new FileNotFoundException("No texture at " + assetPath);
+            importer.textureType = TextureImporterType.Default;
+            importer.sRGBTexture = true;
+            importer.alphaIsTransparency = alpha;
+            importer.maxTextureSize = maxSize;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
+        }
+
+        // ------------------------------------------------------------------
+        // Particles
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Create or replace a Particles/Standard Unlit material in a real
+        /// blend state.
+        ///
+        /// <para>Setting <c>_Mode</c> is not enough, and this is the single
+        /// most expensive material trap in the pipeline. <c>_Mode</c> is read by
+        /// the shader's <i>inspector GUI</i>, which is what normally applies the
+        /// blend factors, depth write, keywords, and render queue — and no GUI
+        /// runs in a batch build. A card built by a script therefore stays in
+        /// the shader's default <b>opaque</b> state and renders as a flat
+        /// polygon with hard black edges, while every offline check passes.
+        /// This mirrors Unity's own
+        /// StandardParticleShaderGUI.SetupMaterialWithBlendMode.</para>
+        ///
+        /// <para>The mode numbers matter too: that shader enumerates
+        /// <c>Opaque, Cutout, Fade, Transparent, Additive, Subtractive,
+        /// Modulate</c>, so a plausible-looking <c>additive ? 2 : 0</c> actually
+        /// asks for Fade and Opaque.</para>
+        ///
+        /// <para>Verify by reading the built .mat rather than by trusting the
+        /// assignment: additive is _SrcBlend 5 / _DstBlend 1, fade is 5 / 10,
+        /// and both want _ZWrite 0 and render queue 3000.</para>
+        /// </summary>
+        public static Material ParticleMaterial(
+            string assetPath, Color tint, Texture2D card, bool additive = false)
+        {
+            var shader = Shader.Find("Particles/Standard Unlit");
+            if (shader == null)
+                throw new Exception(
+                    "Particles/Standard Unlit is missing. Declare "
+                    + "com.unity.modules.particlesystem in Packages/manifest.json.");
+            var material = new Material(shader);
+            material.SetColor("_Color", tint);
+            if (card != null) material.SetTexture("_MainTex", card);
+            material.SetFloat("_Mode", additive ? 4f : 2f);   // Additive : Fade
+            material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            material.SetInt("_DstBlend", (int)(additive
+                ? UnityEngine.Rendering.BlendMode.One
+                : UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha));
+            material.SetInt("_ZWrite", 0);
+            material.SetFloat("_Cutoff", 0f);
+            material.DisableKeyword("_ALPHATEST_ON");
+            material.EnableKeyword("_ALPHABLEND_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            material.DisableKeyword("_ALPHAMODULATE_ON");
+            material.EnableKeyword("_ALPHAOVERLAY_ON");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            return Save(material, assetPath);
+        }
+
+        /// <summary>
+        /// A zero-valued curve, for an axis of a module that must not move.
+        ///
+        /// <c>velocityOverLifetime</c> requires all three axes to share one
+        /// MinMaxCurve mode. Assigning a plain float to x or z while y is a
+        /// curve makes them Constant against a Curve, and Unity logs
+        /// "Particle Velocity curves must all be in the same mode" on <i>every
+        /// update</i> — thousands of lines a second in the client, and nothing
+        /// at all offline.
+        /// </summary>
+        public static ParticleSystem.MinMaxCurve ZeroCurve()
+        {
+            return new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Constant(0f, 1f, 0f));
+        }
+
+        /// <summary>
+        /// Sum every system's maxParticles and reject a prefab over budget.
+        ///
+        /// A cap belongs in the prefab, not only in the runtime code that picks
+        /// which prefab to spawn: a distance LOD that selects the cheap tier is
+        /// no protection if the cheap tier was never actually cheap. Call this
+        /// before saving, so an over-budget effect fails the build rather than
+        /// a player's frame time.
+        /// </summary>
+        public static int BudgetParticles(GameObject root, int allowance)
+        {
+            var total = 0;
+            foreach (var system in root.GetComponentsInChildren<ParticleSystem>(true))
+                total += system.main.maxParticles;
+            if (total > allowance)
+                throw new Exception(
+                    root.name + " allows " + total + " live particles, over its budget of "
+                    + allowance + ". Lower maxParticles, or raise the budget deliberately.");
+            return total;
+        }
+
+        // ------------------------------------------------------------------
+        // Audio
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Import an AudioClip for the bundle.
+        ///
+        /// <c>preloadAudioData</c> is off and loading is streamed for anything
+        /// long, because a bundle opens lazily and a multi-megabyte clip
+        /// decompressed at load stalls the frame it lands on.
+        /// </summary>
+        public static AudioClip ImportAudioClip(string assetPath, bool stream = false)
+        {
+            var importer = AssetImporter.GetAtPath(assetPath) as AudioImporter;
+            if (importer == null) throw new FileNotFoundException("No audio clip at " + assetPath);
+            var settings = importer.defaultSampleSettings;
+            settings.loadType = stream
+                ? AudioClipLoadType.Streaming
+                : AudioClipLoadType.DecompressOnLoad;
+            settings.compressionFormat = AudioCompressionFormat.Vorbis;
+            settings.quality = 0.7f;
+            importer.defaultSampleSettings = settings;
+            importer.forceToMono = true;   // 7DTD positions sounds in 3D itself
+            importer.preloadAudioData = false;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<AudioClip>(assetPath);
+        }
+
+        /// <summary>
+        /// A mod-owned AudioSource prefab, for a sound that must carry further
+        /// than a vanilla one.
+        ///
+        /// <c>Audio.Manager.LoadAudio</c> plays nothing at all beyond the
+        /// AudioSource prefab's <c>maxDistance</c>, so a kilometre-scale event
+        /// referencing a grenade-scale vanilla source is simply silent out
+        /// there — before any DistantClip or fade setting gets a say. Build one
+        /// of these, put it in the bundle, and name it in the sound group's
+        /// AudioSource element.
+        ///
+        /// Logarithmic rolloff is the default because linear rolloff over a
+        /// kilometre is audible as a fade rather than as distance.
+        /// </summary>
+        public static GameObject AudioSourcePrefab(
+            string folder,
+            string stem,
+            float maxDistance = 1200f,
+            float minDistance = 12f,
+            AudioRolloffMode rolloff = AudioRolloffMode.Logarithmic)
+        {
+            var root = Root(stem);
+            var source = root.AddComponent<AudioSource>();
+            source.playOnAwake = false;
+            source.spatialBlend = 1f;          // fully 3D; 0 would ignore position
+            source.dopplerLevel = 0f;
+            source.rolloffMode = rolloff;
+            source.minDistance = minDistance;
+            source.maxDistance = maxDistance;
+            return SavePrefab(root, folder, stem);
+        }
+
         private static Material Save(Material material, string assetPath)
         {
             var folder = Path.GetDirectoryName(assetPath)?.Replace('\\', '/');

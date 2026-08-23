@@ -22,14 +22,22 @@ import sys
 import tempfile
 from pathlib import Path
 
+MISSING = None
 try:
     from PIL import Image
-except ImportError:  # pragma: no cover - depends on host packages
-    print(
-        "ERROR: Pillow is required for the icon lane. Install it with 'uv pip install pillow'.",
-        file=sys.stderr,
-    )
-    raise SystemExit(1)
+except ImportError as error:  # pragma: no cover - depends on host packages
+    # Deferred, not fatal: --help must work on a bare host, so someone can read
+    # what this needs before installing anything.
+    MISSING = str(error)
+
+
+def require_imaging() -> None:
+    """Fail with the install command, at the point the dependency is used."""
+    if MISSING is not None:
+        raise SystemExit(
+            "ERROR: the icon lane needs Pillow ({}).\n"
+            "  Install it with: uv pip install 'sevendtd-asset-pipeline[authoring]'".format(MISSING)
+        )
 
 
 def save_atomically(image: "Image.Image", path: Path) -> None:
@@ -81,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-trim", dest="trim", action="store_false", help="keep source margins")
     parser.add_argument("--contact-sheet", type=Path, help="also write a 1x/2x/4x review sheet")
     args = parser.parse_args(argv)
+    require_imaging()
 
     if not args.source.is_file():
         raise SystemExit(f"ERROR: no such source image: {args.source}")

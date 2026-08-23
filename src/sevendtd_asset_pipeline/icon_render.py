@@ -11,6 +11,9 @@ Two mistakes are designed out here rather than documented:
   square. The build path uses `-nographics` deliberately; this path must not,
   so the flag is simply never passed and a headless host is told to put an X
   server (`xvfb-run`) in front of the command.
+* **A stale prefab renders perfectly.** The mod's `[ShamwayPreBuild]`
+  generators run before the camera does, so an icon cannot be a photograph of
+  the geometry from before the last edit.
 * **A blank render looks like a framing bug.** The coverage check below fails
   the command when almost nothing was drawn, which turns a silent bad icon into
   an actionable message.
@@ -127,6 +130,11 @@ def render_icon(
         "SevenDaysToDie.AssetPipeline.IconRenderer.RenderFromCommandLine",
         "-logFile",
         str(log),
+        # The mod's [ShamwayPreBuild] generators run before the render, so a
+        # regenerated mesh is what gets photographed; they need the same folder
+        # a build would give them.
+        "-sapSourceRoot",
+        config.source_root,
         "-sapIconPrefab",
         project_path,
         "-sapIconOutput",

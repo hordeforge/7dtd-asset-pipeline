@@ -51,6 +51,11 @@ namespace SevenDaysToDie.AssetPipeline
                 float pitch = float.Parse(Argument("-sapIconPitch") ?? "8");
                 float padding = float.Parse(Argument("-sapIconPadding") ?? "1.22");
 
+                // Regenerate first. An icon rendered from a stale prefab is the
+                // specific way this lane fails: the render succeeds, the image
+                // looks fine, and it shows the geometry from before the edit.
+                ShamwayPreBuild.SourceRoot = Argument("-sapSourceRoot");
+                ShamwayPreBuild.RunAll();
                 AssetDatabase.Refresh();
                 Render(prefabPath, output, pixels, yaw, pitch, padding);
             }

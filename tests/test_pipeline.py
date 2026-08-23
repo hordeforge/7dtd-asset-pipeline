@@ -174,12 +174,12 @@ class PipelineTests(unittest.TestCase):
         """
         from unittest import mock
 
-        captured: dict[str, str | None] = {}
+        captured: dict[str, object] = {}
         real_write_text = Path.write_text
 
         def spy(self: Path, data: str, *args: object, **kwargs: object) -> int:
             if self.name == "Makefile.assets":
-                captured["newline"] = kwargs.get("newline")  # type: ignore[arg-type]
+                captured["newline"] = kwargs.get("newline")
             return real_write_text(self, data, *args, **kwargs)  # type: ignore[arg-type]
 
         with mock.patch.object(Path, "write_text", spy):

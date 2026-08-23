@@ -72,9 +72,7 @@ class TypeTreeTests(BundleCase):
     def test_a_truncated_type_tree_is_a_bounded_error(self) -> None:
         payload = serialized_file([142], has_type_tree=True)
         short = payload[:-8]
-        bundle = build_bundle(
-            [(short, len(short), 0)], node_size=len(short)
-        )
+        bundle = build_bundle([(short, len(short), 0)], node_size=len(short))
         with self.assertRaisesRegex(PipelineError, "truncated Unity bundle"):
             inspect_bundle(self.write(bundle))
 
@@ -140,7 +138,9 @@ class Lz4Tests(BundleCase):
             remaining -= 255
         literal_parts.append(remaining)
         block = bytes(literal_parts) + head + struct.pack("<H", 1)
-        info = inspect_bundle(self.write(build_bundle([(block, len(payload), 2)], node_size=len(payload))))
+        info = inspect_bundle(
+            self.write(build_bundle([(block, len(payload), 2)], node_size=len(payload)))
+        )
         self.assertEqual((142,), info.class_ids)
 
     def test_rejects_an_invalid_match_offset(self) -> None:
@@ -172,13 +172,17 @@ class HeaderTests(BundleCase):
     def test_lzma_metadata_is_named_not_swallowed(self) -> None:
         payload = serialized_file([142])
         with self.assertRaisesRegex(PipelineError, "build with LZ4"):
-            inspect_bundle(self.write(build_bundle([(payload[:5], len(payload), 1)], node_size=len(payload))))
+            inspect_bundle(
+                self.write(build_bundle([(payload[:5], len(payload), 1)], node_size=len(payload)))
+            )
 
     def test_unknown_compression_mode_is_named(self) -> None:
         payload = serialized_file([142])
         with self.assertRaisesRegex(PipelineError, "compression mode 60"):
             inspect_bundle(
-                self.write(build_bundle([(payload[:5], len(payload), 0x3C)], node_size=len(payload)))
+                self.write(
+                    build_bundle([(payload[:5], len(payload), 0x3C)], node_size=len(payload))
+                )
             )
 
     def test_uncompressed_block_with_the_wrong_declared_size_fails(self) -> None:

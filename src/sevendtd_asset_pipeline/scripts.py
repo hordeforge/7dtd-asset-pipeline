@@ -25,10 +25,22 @@ from pathlib import Path
 from .errors import PipelineError
 
 SCRIPTS: dict[str, tuple[str, str]] = {
-    "install-tools": ("install-tools.sh", "host packages: base, --with-authoring, --with-unity-prereqs, --with-desktop-capture, --with-research"),
-    "install-unity-editor": ("install-unity-editor.sh", "the game-matched Unity editor and Windows Build Support, checksum-verified"),
-    "compile-editor-scripts": ("compile-editor-scripts.sh", "compile editor C# against a real editor's assemblies, no editor started"),
-    "playtest-acceptance": ("playtest-acceptance.sh", "run the mod's bundle-acceptance suite in a live client, via hordeforge/7dtd-playtest"),
+    "install-tools": (
+        "install-tools.sh",
+        "host packages: base, --with-authoring, --with-unity-prereqs, --with-desktop-capture, --with-research",
+    ),
+    "install-unity-editor": (
+        "install-unity-editor.sh",
+        "the game-matched Unity editor and Windows Build Support, checksum-verified",
+    ),
+    "compile-editor-scripts": (
+        "compile-editor-scripts.sh",
+        "compile editor C# against a real editor's assemblies, no editor started",
+    ),
+    "playtest-acceptance": (
+        "playtest-acceptance.sh",
+        "run the mod's bundle-acceptance suite in a live client, via hordeforge/7dtd-playtest",
+    ),
 }
 
 
@@ -46,7 +58,9 @@ def path(name: str) -> Path:
     try:
         filename = SCRIPTS[name][0]
     except KeyError:
-        raise PipelineError(f"unknown script {name!r}; expected one of: {', '.join(SCRIPTS)}") from None
+        raise PipelineError(
+            f"unknown script {name!r}; expected one of: {', '.join(SCRIPTS)}"
+        ) from None
     script = _root() / filename
     if not script.is_file():
         raise PipelineError(f"packaged script is missing: {script}")
@@ -54,7 +68,10 @@ def path(name: str) -> Path:
 
 
 def describe() -> list[dict[str, str]]:
-    return [{"name": name, "file": filename, "summary": summary} for name, (filename, summary) in SCRIPTS.items()]
+    return [
+        {"name": name, "file": filename, "summary": summary}
+        for name, (filename, summary) in SCRIPTS.items()
+    ]
 
 
 def run(name: str, argv: list[str]) -> int:

@@ -115,8 +115,8 @@ class PipelineConfig:
     def require_bundle(self) -> None:
         if not self.has_bundle:
             raise PipelineError(
-                f"{self.config_file.name} sets bundle_source = \"none\", so this mod has no "
-                "bundle. Set it to \"unity\" or \"external\" and give it a bundle_name to add one."
+                f'{self.config_file.name} sets bundle_source = "none", so this mod has no '
+                'bundle. Set it to "unity" or "external" and give it a bundle_name to add one.'
             )
 
     @property
@@ -178,9 +178,7 @@ def find_config(start: Path | None = None) -> Path:
         candidate = directory / CONFIG_NAME
         if candidate.is_file():
             return candidate
-    raise PipelineError(
-        f"could not find {CONFIG_NAME} from {current}; run 'shamway init MOD_ROOT'"
-    )
+    raise PipelineError(f"could not find {CONFIG_NAME} from {current}; run 'shamway init MOD_ROOT'")
 
 
 def load_config(path: Path | None = None) -> PipelineConfig:
@@ -234,10 +232,14 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         mod_root=mod_root,
         mod_name=mod_name,
         bundle_name=bundle_name,
-        unity_project=_path(base, data.get("unity_project", "tools/shamway/UnityProject"), "unity_project"),
+        unity_project=_path(
+            base, data.get("unity_project", "tools/shamway/UnityProject"), "unity_project"
+        ),
         source_root=str(data.get("source_root", "Assets/ModAssets/Bundle")),
         build_dir=_path(base, data.get("build_dir", ".shamway/build"), "build_dir"),
-        manifest_dir=_path(base, data.get("manifest_dir", "tools/shamway/manifests"), "manifest_dir"),
+        manifest_dir=_path(
+            base, data.get("manifest_dir", "tools/shamway/manifests"), "manifest_dir"
+        ),
         resources_dir=_path(mod_root, data.get("resources_dir", "Resources"), "resources_dir"),
         config_dir=_path(mod_root, data.get("config_dir", "Config"), "config_dir"),
         target=str(data.get("target", "StandaloneWindows64")),
@@ -280,7 +282,7 @@ def render_config(
     from ModInfo.xml and command lines, which are untrusted here.
     """
     if bundle_source == "none":
-        return f'''# Paths are relative to this file unless absolute.
+        return f"""# Paths are relative to this file unless absolute.
 schema_version = 1
 mod_root = "."
 mod_name = {_toml_string(mod_name)}
@@ -297,9 +299,9 @@ config_dir = "Config"
 [game]
 # Prefer SEVEN_DAYS_TO_DIE_DIR. The installed game is read-only reference.
 directory = ""
-'''
+"""
     if bundle_source == "synthesized":
-        return f'''# Paths are relative to this file unless absolute.
+        return f"""# Paths are relative to this file unless absolute.
 schema_version = 1
 mod_root = "."
 mod_name = {_toml_string(mod_name)}
@@ -331,7 +333,7 @@ version = {_toml_string(unity_version)}
 [game]
 # Prefer SEVEN_DAYS_TO_DIE_DIR. The installed game is read-only reference.
 directory = ""
-'''
+"""
     external = bundle_source == "external"
     editor_note = (
         "# Built by an editor elsewhere (CI, another machine) and staged here with\n"

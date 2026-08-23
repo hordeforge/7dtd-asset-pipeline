@@ -600,6 +600,7 @@ def set_client_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
         if indexes:
             for index in indexes:
                 subprocess.run(
+                    # PATH lookup deliberate, as in client_sink_inputs above.
                     ["pactl", "set-sink-input-mute", str(index), "1" if muted else "0"],  # noqa: S607
                     check=False,
                 )
@@ -644,7 +645,9 @@ class Marker:
 def markers_for(mod_name: str | None) -> tuple[Marker, ...]:
     name = re.escape(mod_name) if mod_name else r"[^\s]+"
     return (
-        Marker("mod_loaded", rf"Loaded Mod: {name}", "the mod folder was discovered and loaded", True),
+        Marker(
+            "mod_loaded", rf"Loaded Mod: {name}", "the mod folder was discovered and loaded", True
+        ),
         Marker(
             "localization_loaded",
             rf"\[MODS\] Loading localization from mod: {name}",
@@ -773,9 +776,11 @@ def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogRe
                 if marker.positive:
                     continue
                 (warnings if marker.warning else problems).append(f"{marker.key}: {stripped}")
-    missing = tuple(
-        marker.key for marker in markers if marker.positive and marker.key not in found
-    ) if mod_name else ()
+    missing = (
+        tuple(marker.key for marker in markers if marker.positive and marker.key not in found)
+        if mod_name
+        else ()
+    )
     return LogReport(
         log=log_path,
         mod_name=mod_name,
@@ -923,21 +928,33 @@ def main(argv: list[str] | None = None) -> int:
         prog="shamway client",
         description="fresh-client acceptance: deploy, launch, mute, scan the client log, and capture what a person saw",
     )
-    parser.add_argument("--game-dir", type=Path, default=None, help="defaults to SEVEN_DAYS_TO_DIE_DIR")
+    parser.add_argument(
+        "--game-dir", type=Path, default=None, help="defaults to SEVEN_DAYS_TO_DIE_DIR"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     where = sub.add_parser("where", help="print the per-user Mods/ and logs/ paths the client uses")
     where.add_argument("--json", action="store_true")
 
-    deploy = sub.add_parser("deploy", help="copy the deployable modlet into the client's Mods/ folder")
+    deploy = sub.add_parser(
+        "deploy", help="copy the deployable modlet into the client's Mods/ folder"
+    )
     deploy.add_argument("mod_root", type=Path)
-    deploy.add_argument("--name", default=None, help="folder name; defaults to the ModInfo.xml Name")
+    deploy.add_argument(
+        "--name", default=None, help="folder name; defaults to the ModInfo.xml Name"
+    )
     deploy.add_argument("--mods-dir", type=Path, default=None)
     deploy.add_argument("--keep-existing", action="store_true", help="fail instead of replacing")
 
-    launch = sub.add_parser("launch", help="start a fresh client through Steam (refuses if one runs)")
-    launch.add_argument("--mute", action="store_true", help="mute at the OS audio layer; never for a listening run")
-    launch.add_argument("--run-seconds", type=int, default=None, help="stop the client after this long")
+    launch = sub.add_parser(
+        "launch", help="start a fresh client through Steam (refuses if one runs)"
+    )
+    launch.add_argument(
+        "--mute", action="store_true", help="mute at the OS audio layer; never for a listening run"
+    )
+    launch.add_argument(
+        "--run-seconds", type=int, default=None, help="stop the client after this long"
+    )
     launch.add_argument("--mod-name", default=None, help="require 'Loaded Mod: NAME' in the log")
     launch.add_argument("--steam-bin", default="steam")
     launch.add_argument("--log-dir", type=Path, default=None)
@@ -960,18 +977,24 @@ def main(argv: list[str] | None = None) -> int:
         help="record one screenshot and its observable, for the human visual sign-off",
     )
     shot.add_argument("label", nargs="?", help="how this frame is cited later, e.g. held-nuke")
+    shot.add_argument("--observable", default="", help="what the reviewer is being asked to check")
     shot.add_argument(
-        "--observable", default="", help="what the reviewer is being asked to check"
-    )
-    shot.add_argument(
-        "--wait", type=float, default=0.0, metavar="SECONDS",
+        "--wait",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
         help="setup time before the shutter, to frame the shot in the client",
     )
-    shot.add_argument("--out", type=Path, default=None, help="evidence directory (default .local/acceptance)")
-    shot.add_argument("--file", type=Path, default=None, help="record an image already taken instead of capturing")
+    shot.add_argument(
+        "--out", type=Path, default=None, help="evidence directory (default .local/acceptance)"
+    )
+    shot.add_argument(
+        "--file", type=Path, default=None, help="record an image already taken instead of capturing"
+    )
     shot.add_argument("--list", action="store_true", help="print the manifest recorded so far")
     shot.add_argument(
-        "--allow-no-client", action="store_true",
+        "--allow-no-client",
+        action="store_true",
         help="capture even though no client is running; a frame of a menu proves nothing about an asset",
     )
     shot.add_argument("--json", action="store_true")
@@ -1024,7 +1047,9 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
             print(json.dumps(run.as_dict(), indent=2))
         else:
             _print_log_report(run.log)
-            print(f"AUDIO {'muted at the OS layer (not a listening run)' if run.muted else 'unmuted'}")
+            print(
+                f"AUDIO {'muted at the OS layer (not a listening run)' if run.muted else 'unmuted'}"
+            )
         return 0 if run.log.ok else 1
     if args.command == "log":
         path = args.path or latest_client_log(args.log_dir or client_log_dir(game_dir))
@@ -1063,7 +1088,9 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
         if disable_discord_integration(user_reg):
             print(f"DiscordDisabled set in {user_reg}")
             return 0
-        print(f"no DiscordDisabled entry in {user_reg}; launch the game once first", file=sys.stderr)
+        print(
+            f"no DiscordDisabled entry in {user_reg}; launch the game once first", file=sys.stderr
+        )
         return 1
     raise PipelineError(f"unknown command {args.command}")
 
@@ -1118,9 +1145,7 @@ def _capture(args: argparse.Namespace) -> int:
     return 0
 
 
-def _maybe(
-    fn: Callable[[Path], Path | None], game_dir: Path | None
-) -> str | None:
+def _maybe(fn: Callable[[Path], Path | None], game_dir: Path | None) -> str | None:
     if game_dir is None:
         return None
     try:

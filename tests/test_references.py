@@ -26,7 +26,7 @@ class ReferenceTests(unittest.TestCase):
         nested = self.root / "Config" / "XUi"
         nested.mkdir(parents=True)
         (nested / "windows.xml").write_text(
-            "<x value=\"#@modfolder(MyMod):Resources/my.unity3d?first.prefab\" "
+            '<x value="#@modfolder(MyMod):Resources/my.unity3d?first.prefab" '
             "other='#@modfolder(MyMod):Resources/my.unity3d?second.wav'/>",
             encoding="utf-8",
         )
@@ -45,9 +45,7 @@ class ReferenceTests(unittest.TestCase):
         # 7DTD accepts '@modfolder:' as well as '@modfolder(Name):'
         # (hordeforge/7dtd-engine-research docs/mod-loading.md; Assembly-CSharp
         # string table).
-        ref = parse_reference(
-            Path("blocks.xml"), "#@modfolder:Resources/my.unity3d?Thing.prefab"
-        )
+        ref = parse_reference(Path("blocks.xml"), "#@modfolder:Resources/my.unity3d?Thing.prefab")
         self.assertTrue(ref.is_modfolder)
         self.assertIsNone(ref.mod_name)
         self.assertEqual("Resources/my.unity3d", ref.bundle_path)
@@ -67,7 +65,9 @@ class ReferenceTests(unittest.TestCase):
             parse_reference(Path("blocks.xml"), "#")
 
     def test_stems_are_taken_from_either_separator(self) -> None:
-        back = parse_reference(Path("b.xml"), "#@modfolder:Resources\\my.unity3d?Props\\Thing.prefab")
+        back = parse_reference(
+            Path("b.xml"), "#@modfolder:Resources\\my.unity3d?Props\\Thing.prefab"
+        )
         self.assertEqual("Thing", back.asset_stem)
 
     def test_modinfo_without_a_name_element_is_rejected(self) -> None:
@@ -84,7 +84,9 @@ class ReferenceTests(unittest.TestCase):
 
     def test_manifest_assets_accepts_indentation(self) -> None:
         manifest = self.root / "bundle.manifest"
-        manifest.write_text("ManifestFileVersion: 0\nAssets:\n- Assets/A.prefab\n- Assets/B.wav\nDependencies: {}\n")
+        manifest.write_text(
+            "ManifestFileVersion: 0\nAssets:\n- Assets/A.prefab\n- Assets/B.wav\nDependencies: {}\n"
+        )
         self.assertEqual(["Assets/A.prefab", "Assets/B.wav"], manifest_assets(manifest))
 
     def test_a_manifest_listing_no_assets_is_rejected(self) -> None:

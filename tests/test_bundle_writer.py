@@ -96,8 +96,7 @@ class WriterTests(unittest.TestCase):
             )
         )
         objects = {
-            int(obj.type.value): obj.read_typetree()
-            for obj in UnityPy.load(str(bundle)).objects
+            int(obj.type.value): obj.read_typetree() for obj in UnityPy.load(str(bundle)).objects
         }
         self.assertEqual("hello from shamway", objects[49]["m_Script"])
         self.assertEqual((4, 2), (objects[28]["m_Width"], objects[28]["m_Height"]))
@@ -120,9 +119,7 @@ class WriterTests(unittest.TestCase):
             )
         )
         environment = UnityPy.load(str(bundle))
-        clip = next(
-            obj.read_typetree() for obj in environment.objects if obj.type.value == 83
-        )
+        clip = next(obj.read_typetree() for obj in environment.objects if obj.type.value == 83)
         streams = {
             name: bytes(reader.bytes)
             for file in environment.files.values()
@@ -139,9 +136,7 @@ class WriterTests(unittest.TestCase):
         # A rebuild that moves bytes makes every review of the artifact useless.
         objects = [text_asset("myModNote", "hello")]
         first = build_bundle(objects, REVISION, "same.unity3d")
-        second = build_bundle(
-            [text_asset("myModNote", "hello")], REVISION, "same.unity3d"
-        )
+        second = build_bundle([text_asset("myModNote", "hello")], REVISION, "same.unity3d")
         self.assertEqual(first, second)
 
     def test_two_assets_may_not_answer_to_the_same_name(self) -> None:
@@ -215,9 +210,7 @@ class SourceDirectoryTests(unittest.TestCase):
         (self.sources / ".gitkeep").write_text("", encoding="utf-8")
         (self.sources / "myModNote.txt").write_text("hello", encoding="utf-8")
         (self.sources / "myModNote.txt.meta").write_text("guid: 1", encoding="utf-8")
-        self.assertEqual(
-            ["myModNote.txt"], [path.name for path in collect_sources(self.sources)]
-        )
+        self.assertEqual(["myModNote.txt"], [path.name for path in collect_sources(self.sources)])
 
     def test_an_empty_source_directory_is_refused(self) -> None:
         with self.assertRaisesRegex(PipelineError, "no assets"):

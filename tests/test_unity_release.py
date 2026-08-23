@@ -117,10 +117,13 @@ class FetchReleaseTests(unittest.TestCase):
         self.assertEqual("7dffabdd28d7f2e5d5f2f1f8f2323d21", release.editor.md5)
 
     def test_an_unreachable_service_is_a_pipeline_error_with_the_next_step(self) -> None:
-        with mock.patch(
-            "urllib.request.urlopen",
-            side_effect=urllib.error.URLError("no route to host"),
-        ), self.assertRaisesRegex(PipelineError, "cannot reach Unity's release service"):
+        with (
+            mock.patch(
+                "urllib.request.urlopen",
+                side_effect=urllib.error.URLError("no route to host"),
+            ),
+            self.assertRaisesRegex(PipelineError, "cannot reach Unity's release service"),
+        ):
             fetch_release("2022.3.62f2")
 
 

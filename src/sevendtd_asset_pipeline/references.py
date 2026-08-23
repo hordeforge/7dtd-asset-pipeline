@@ -42,7 +42,7 @@ def read_mod_name(mod_info: Path) -> str:
     for element in root.iter():
         if element.tag.lower() == "name" and element.get("value"):
             return element.get("value", "")
-    raise PipelineError(f"{mod_info} has no <Name value=\"...\"> element")
+    raise PipelineError(f'{mod_info} has no <Name value="..."> element')
 
 
 def parse_reference(source: Path, uri: str) -> AssetReference:
@@ -67,7 +67,9 @@ def discover_references(config_dir: Path) -> list[AssetReference]:
             text = xml_file.read_text(encoding="utf-8-sig")
         except OSError as exc:
             raise PipelineError(f"cannot read {xml_file}: {exc}") from exc
-        references.extend(parse_reference(xml_file, match.group(0)) for match in BUNDLE_URI.finditer(text))
+        references.extend(
+            parse_reference(xml_file, match.group(0)) for match in BUNDLE_URI.finditer(text)
+        )
     return references
 
 

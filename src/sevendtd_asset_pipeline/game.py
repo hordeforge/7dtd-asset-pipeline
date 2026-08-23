@@ -25,7 +25,9 @@ def game_unity_version(game_dir: Path) -> tuple[str, Path]:
     bundles = game_dir / "Data" / "Bundles"
     if bundles.is_dir():
         candidates.extend(
-            path for path in sorted(bundles.rglob("*")) if path.is_file() and path.suffix != ".manifest"
+            path
+            for path in sorted(bundles.rglob("*"))
+            if path.is_file() and path.suffix != ".manifest"
         )
     seen: set[Path] = set()
     for candidate in candidates:

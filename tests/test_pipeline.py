@@ -76,11 +76,7 @@ class PipelineTests(unittest.TestCase):
         """
         hostile = 'Ex"ample\\Mod\nnext "line\ttab'
         escaped = hostile.replace("&", "&amp;")
-        escaped = (
-            escaped.replace('"', "&quot;")
-            .replace("\n", "&#10;")
-            .replace("\t", "&#9;")
-        )
+        escaped = escaped.replace('"', "&quot;").replace("\n", "&#10;").replace("\t", "&#9;")
         (self.root / "ModInfo.xml").write_text(
             f'<xml><Name value="{escaped}" /></xml>', encoding="utf-8"
         )
@@ -150,8 +146,10 @@ class PipelineTests(unittest.TestCase):
         # The install speaks 2022.3.62f2; the staged bundle claims something else.
         (entities / "Entities").write_bytes(unityfs_bundle([142], "2022.3.62f2"))
         self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
-        body = (self.root / CONFIG_NAME).read_text(encoding="utf-8").replace(
-            'directory = ""', 'directory = "game"', 1
+        body = (
+            (self.root / CONFIG_NAME)
+            .read_text(encoding="utf-8")
+            .replace('directory = ""', 'directory = "game"', 1)
         )
         (self.root / CONFIG_NAME).write_text(body, encoding="utf-8")
         self.config = load_config(self.root / CONFIG_NAME)
@@ -174,7 +172,9 @@ class PipelineTests(unittest.TestCase):
     def _add_code_references(self, *stems: str) -> None:
         path = self.root / CONFIG_NAME
         listed = ", ".join(f'"{stem}"' for stem in stems)
-        body = path.read_text(encoding="utf-8").replace("code_references = []", f"code_references = [{listed}]")
+        body = path.read_text(encoding="utf-8").replace(
+            "code_references = []", f"code_references = [{listed}]"
+        )
         path.write_text(body, encoding="utf-8")
         self.config = load_config(path)
 
@@ -231,7 +231,9 @@ class PipelineTests(unittest.TestCase):
 
     def test_disabled_module_warning_fails(self) -> None:
         log = self.root / "unity.log"
-        log.write_text("'AssetBundle' is not supported because the module AssetBundle is disabled in the build.\n")
+        log.write_text(
+            "'AssetBundle' is not supported because the module AssetBundle is disabled in the build.\n"
+        )
         with self.assertRaisesRegex(PipelineError, "stripped"):
             reject_disabled_modules(log)
 
@@ -258,8 +260,12 @@ class PipelineTests(unittest.TestCase):
     def test_scaffold_pins_the_changeset_when_it_is_known(self) -> None:
         initialize(self.root, None, "example.unity3d", "2022.3.62f2", "7670c08855a9")
         version_file = (
-            self.root / "tools" / "shamway" / "UnityProject"
-            / "ProjectSettings" / "ProjectVersion.txt"
+            self.root
+            / "tools"
+            / "shamway"
+            / "UnityProject"
+            / "ProjectSettings"
+            / "ProjectVersion.txt"
         )
         text = version_file.read_text()
         self.assertIn("m_EditorVersion: 2022.3.62f2", text)
@@ -270,8 +276,12 @@ class PipelineTests(unittest.TestCase):
         # release service must not fail the scaffold.
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
         version_file = (
-            self.root / "tools" / "shamway" / "UnityProject"
-            / "ProjectSettings" / "ProjectVersion.txt"
+            self.root
+            / "tools"
+            / "shamway"
+            / "UnityProject"
+            / "ProjectSettings"
+            / "ProjectVersion.txt"
         )
         text = version_file.read_text()
         self.assertIn("m_EditorVersion: 2022.3.62f2", text)
@@ -345,7 +355,9 @@ class PipelineTests(unittest.TestCase):
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
         config_file = self.root / ".shamway.toml"
         config_file.write_text(
-            config_file.read_text().replace('resources_dir = "Resources"', 'resources_dir = "../outside"')
+            config_file.read_text().replace(
+                'resources_dir = "Resources"', 'resources_dir = "../outside"'
+            )
         )
         with self.assertRaisesRegex(PipelineError, "must stay below"):
             load_config(config_file)
@@ -366,7 +378,7 @@ class PipelineTests(unittest.TestCase):
         config_file = self.root / CONFIG_NAME
         config_file.write_text(
             config_file.read_text().replace(
-                "mod_root = \".\"", "code_references = [\"exampleThing\"]\nmod_root = \".\""
+                'mod_root = "."', 'code_references = ["exampleThing"]\nmod_root = "."'
             )
         )
         with self.assertRaisesRegex(PipelineError, 'bundle_source = "none"'):
@@ -456,7 +468,8 @@ class BuildPreflightTests(unittest.TestCase):
         from unittest import mock
 
         clean = {
-            k: v for k, v in os.environ.items()
+            k: v
+            for k, v in os.environ.items()
             if k not in ("UNITY_EDITOR", "SEVEN_DAYS_TO_DIE_DIR")
         }
         clean.update(overrides)
@@ -495,13 +508,19 @@ class BuildPreflightTests(unittest.TestCase):
         editor.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         editor.chmod(0o755)
         version_file = (
-            self.root / "tools" / "shamway" / "UnityProject"
-            / "ProjectSettings" / "ProjectVersion.txt"
+            self.root
+            / "tools"
+            / "shamway"
+            / "UnityProject"
+            / "ProjectSettings"
+            / "ProjectVersion.txt"
         )
         version_file.write_text("m_EditorVersion: 2021.3.1f1\n", encoding="utf-8")
         config_file = self.root / CONFIG_NAME
         config_file.write_text(
-            config_file.read_text(encoding="utf-8").replace('directory = ""', f'directory = "{game.as_posix()}"', 1),
+            config_file.read_text(encoding="utf-8").replace(
+                'directory = ""', f'directory = "{game.as_posix()}"', 1
+            ),
             encoding="utf-8",
         )
         config = self._config_without_host_environment(UNITY_EDITOR=str(editor))
@@ -539,7 +558,7 @@ class ConfigRejectionTests(unittest.TestCase):
 
     def test_a_non_string_mod_name_is_rejected(self) -> None:
         with self.assertRaisesRegex(PipelineError, "mod_name"):
-            self._load("schema_version = 1\nmod_name = 7\nbundle_source = \"none\"\n")
+            self._load('schema_version = 1\nmod_name = 7\nbundle_source = "none"\n')
 
     def test_scalar_unity_and_game_sections_are_rejected(self) -> None:
         head = 'schema_version = 1\nmod_name = "M"\nbundle_source = "none"\n'
@@ -564,10 +583,7 @@ class ConfigRejectionTests(unittest.TestCase):
                 self._load(body)
 
     def test_an_empty_path_value_is_rejected(self) -> None:
-        body = (
-            'schema_version = 1\nmod_name = "M"\nbundle_source = "none"\n'
-            'resources_dir = ""\n'
-        )
+        body = 'schema_version = 1\nmod_name = "M"\nbundle_source = "none"\nresources_dir = ""\n'
         with self.assertRaisesRegex(PipelineError, "resources_dir.*non-empty path string"):
             self._load(body)
 
@@ -588,7 +604,9 @@ class ConfigRejectionTests(unittest.TestCase):
                 (root / "ModInfo.xml").write_text(
                     '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
                 )
-                initialize(root, None, "example.unity3d", "2022.3.62f2", bundle_source=bundle_source)
+                initialize(
+                    root, None, "example.unity3d", "2022.3.62f2", bundle_source=bundle_source
+                )
                 config = load_config(root / CONFIG_NAME)
                 expected_base = getattr(config, base)
                 self.assertEqual(expected_base / config.source_root, config.bundle_source_dir)
@@ -598,6 +616,7 @@ needs_unitypy = unittest.skipUnless(
     has_capability("UnityPy"),
     "the synthesized backend needs UnityPy for the engine's type trees",
 )
+
 
 @needs_unitypy
 class SynthesisStagingTests(unittest.TestCase):
@@ -645,14 +664,10 @@ class SynthesisStagingTests(unittest.TestCase):
         info = inspect_bundle(staged)
         self.assertTrue(info.has_assetbundle_object)
         self.assertEqual("2022.3.62f2", info.unity_version)
-        self.assertEqual(
-            ["bundle/myModNote.txt"], manifest_assets(self.config.tracked_manifest)
-        )
+        self.assertEqual(["bundle/myModNote.txt"], manifest_assets(self.config.tracked_manifest))
 
 
-MANIFEST = (
-    "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n"
-)
+MANIFEST = "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n"
 
 
 class UnityOptionalTests(unittest.TestCase):
@@ -739,9 +754,7 @@ class UnityOptionalTests(unittest.TestCase):
         from sevendtd_asset_pipeline.doctor import failed, run_doctor
 
         created = initialize(self.root, None, None, "", bundle_source="none")
-        self.assertNotIn(
-            "UnityProject", " ".join(str(path) for path in created)
-        )
+        self.assertNotIn("UnityProject", " ".join(str(path) for path in created))
         self.assertFalse((self.root / "tools" / "shamway" / "UnityProject").exists())
         config = load_config(self.root / CONFIG_NAME)
         self.assertFalse(config.has_bundle)
@@ -824,9 +837,7 @@ class UnityOptionalTests(unittest.TestCase):
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
         config_file = self.root / CONFIG_NAME
         config_file.write_text(
-            config_file.read_text().replace(
-                'bundle_source = "unity"', 'bundle_source = "somehow"'
-            ),
+            config_file.read_text().replace('bundle_source = "unity"', 'bundle_source = "somehow"'),
             encoding="utf-8",
         )
         with self.assertRaisesRegex(PipelineError, "bundle_source must be one of"):

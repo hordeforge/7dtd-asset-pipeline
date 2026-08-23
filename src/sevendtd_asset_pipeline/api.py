@@ -104,8 +104,15 @@ class Pipeline:
             )
         root = Path(mod_root)
         created = initialize(
-            root, mod_name, bundle_name, unity_version or "", changeset,
-            adopt_project, source_root, manifest_dir, bundle_source,
+            root,
+            mod_name,
+            bundle_name,
+            unity_version or "",
+            changeset,
+            adopt_project,
+            source_root,
+            manifest_dir,
+            bundle_source,
         )
         return cls.discover(root), created
 
@@ -165,9 +172,7 @@ class Pipeline:
         """
         install_dir = None
         if install:
-            install_dir = (
-                Path(mods_dir) if mods_dir else client.user_mods_dir(self.config.game_dir)
-            )
+            install_dir = Path(mods_dir) if mods_dir else client.user_mods_dir(self.config.game_dir)
         # The install copy into the shared Mods folder happens under the held
         # client lock, like every other writer there: refuse-then-copy left an
         # acquirer a window to launch between the two steps.
@@ -221,16 +226,17 @@ class Pipeline:
         return client.where_info(Path(game_dir) if game_dir else self.config.game_dir)
 
     def client_log(
-        self, path: Path | str | None = None, log_dir: Path | str | None = None, mod_name: str | None = None
+        self,
+        path: Path | str | None = None,
+        log_dir: Path | str | None = None,
+        mod_name: str | None = None,
     ) -> LogReport:
         """Classify the newest client log (or a given one)."""
         return _client_log(path, log_dir, mod_name, self.config.game_dir)
 
     def unity_release(self, version: str | None = None, platform: str = "LINUX") -> Release:
         """Resolve the official editor download for a revision. Uses the network."""
-        return fetch_release(
-            version or project_unity_version(self.config.unity_project), platform
-        )
+        return fetch_release(version or project_unity_version(self.config.unity_project), platform)
 
     # -- writes ------------------------------------------------------------
 
@@ -372,9 +378,7 @@ def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str,
         )
     for required in operation.parameters.get("required", []):
         if required not in arguments:
-            raise PipelineError(
-                f"operation {operation.name!r} requires parameter {required!r}"
-            )
+            raise PipelineError(f"operation {operation.name!r} requires parameter {required!r}")
     for name, value in arguments.items():
         allowed = properties[name].get("enum")
         if allowed and value not in allowed:
@@ -438,10 +442,17 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
         p.get("atlas_root", "UIAtlases"), p.get("cell", 160)
     ),
     "render_icon": lambda self, p: self.render_icon(
-        p["prefab"], p.get("output"), p.get("size", 160), p.get("atlas", "ItemIconAtlas"),
-        p.get("yaw", 208.0), p.get("pitch", 8.0), p.get("padding", 1.22),
+        p["prefab"],
+        p.get("output"),
+        p.get("size", 160),
+        p.get("atlas", "ItemIconAtlas"),
+        p.get("yaw", 208.0),
+        p.get("pitch", 8.0),
+        p.get("padding", 1.22),
     ),
-    "unity_release": lambda self, p: self.unity_release(p.get("version"), p.get("platform", "LINUX")),
+    "unity_release": lambda self, p: self.unity_release(
+        p.get("version"), p.get("platform", "LINUX")
+    ),
     "build": lambda self, p: {"bundle": str(self.build(p.get("probe", False)))},
     "pack": lambda self, p: _pack(p, self.config.game_dir),
     "verify_bundle": lambda self, p: self.verify_bundle(p.get("bundle")),
@@ -457,10 +468,15 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
         p.get("mods_dir"), p.get("mod_name"), p.get("replace", True)
     ),
     "client_launch": lambda self, p: self.client_launch(
-        p.get("run_seconds"), p.get("mute", False), p.get("mod_name"), p.get("steam_bin", "steam"),
+        p.get("run_seconds"),
+        p.get("mute", False),
+        p.get("mod_name"),
+        p.get("steam_bin", "steam"),
         p.get("log_dir"),
     ),
-    "client_log": lambda self, p: self.client_log(p.get("path"), p.get("log_dir"), p.get("mod_name")),
+    "client_log": lambda self, p: self.client_log(
+        p.get("path"), p.get("log_dir"), p.get("mod_name")
+    ),
     "prompt": lambda self, p: self.prompt(**_prompt_params(p)),
 }
 
@@ -588,8 +604,11 @@ _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
         Path(p["game_dir"]) if p.get("game_dir") else client.game_dir_from_env()
     ),
     "client_launch": lambda p: client.fresh_client_run(
-        client.game_dir_from_env(), p.get("mod_name"), run_seconds=p.get("run_seconds"),
-        mute=p.get("mute", False), steam_bin=p.get("steam_bin", "steam"),
+        client.game_dir_from_env(),
+        p.get("mod_name"),
+        run_seconds=p.get("run_seconds"),
+        mute=p.get("mute", False),
+        steam_bin=p.get("steam_bin", "steam"),
         log_dir=Path(p["log_dir"]) if p.get("log_dir") else None,
     ),
     "client_log": lambda p: _client_log(

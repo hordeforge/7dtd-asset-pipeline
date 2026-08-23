@@ -40,7 +40,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-BLENDER_SCRIPT = '''
+BLENDER_SCRIPT = """
 import sys, bpy
 argv = sys.argv[sys.argv.index("--") + 1:]
 shape, name, out = argv[0], argv[1], argv[2]
@@ -72,7 +72,7 @@ bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_selection=False
 dims = obj.dimensions
 print("BLENDER_EXTENTS %.6f %.6f %.6f" % (dims.x, dims.y, dims.z))
 print("BLENDER_VERTS %d" % len(obj.data.vertices))
-'''
+"""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,7 +80,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("output", type=Path, help="destination .glb")
     parser.add_argument("--shape", choices=("box", "cylinder", "sphere"), default="box")
     parser.add_argument(
-        "--size", nargs=3, type=float, metavar=("WIDTH", "DEPTH", "HEIGHT"),
+        "--size",
+        nargs=3,
+        type=float,
+        metavar=("WIDTH", "DEPTH", "HEIGHT"),
         default=[1.0, 1.0, 1.0],
         help="real-world metres; height arrives as Y after the Y-up conversion",
     )
@@ -106,10 +109,21 @@ def main(argv: list[str] | None = None) -> int:
         staged = Path(directory) / "out.glb"
         result = subprocess.run(
             [
-                blender, "--background", "--factory-startup", "--python", str(script), "--",
-                args.shape, args.name, str(staged), *(str(value) for value in args.size),
+                blender,
+                "--background",
+                "--factory-startup",
+                "--python",
+                str(script),
+                "--",
+                args.shape,
+                args.name,
+                str(staged),
+                *(str(value) for value in args.size),
             ],
-            check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
         )
         if result.returncode != 0 or not staged.is_file():
             print(result.stdout, file=sys.stderr)

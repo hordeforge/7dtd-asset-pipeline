@@ -218,8 +218,7 @@ _DEFINITIONS: tuple[Operation, ...] = (
     ),
     Operation(
         name="check_log",
-        summary="Reject a Unity build log that reports success while stripping engine "
-        "modules.",
+        summary="Reject a Unity build log that reports success while stripping engine modules.",
         parameters=_schema({"log": PATH_PARAM}, required=["log"]),
         returns="{ok: true} or an error naming every offending log line",
         cost=INSTANT,
@@ -242,9 +241,9 @@ _DEFINITIONS: tuple[Operation, ...] = (
     ),
     Operation(
         name="build",
-        summary="Produce, gate and stage the bundle. With bundle_source \"unity\" a local "
+        summary='Produce, gate and stage the bundle. With bundle_source "unity" a local '
         "editor builds it and probe=true proves the environment with a throwaway cube; with "
-        "\"synthesized\" this tool writes it directly, no editor. Refused for \"external\" "
+        '"synthesized" this tool writes it directly, no editor. Refused for "external" '
         "and \"none\"; use 'stage' there.",
         parameters=_schema({"probe": {"type": "boolean", "default": False}}),
         returns="{bundle: path}",
@@ -292,10 +291,15 @@ _DEFINITIONS: tuple[Operation, ...] = (
         "the harness assembly; running it belongs to hordeforge/7dtd-playtest.",
         parameters=_schema(
             {
-                "harness_dll": {**PATH_PARAM, "description": "7dtd-playtest.dll; the provider "
-                "is only rendered, not built, when this is omitted"},
-                "install": {"type": "boolean", "description": "copy the built provider into "
-                "the client's Mods folder"},
+                "harness_dll": {
+                    **PATH_PARAM,
+                    "description": "7dtd-playtest.dll; the provider "
+                    "is only rendered, not built, when this is omitted",
+                },
+                "install": {
+                    "type": "boolean",
+                    "description": "copy the built provider into the client's Mods folder",
+                },
                 "mods_dir": {**PATH_PARAM, "description": "override the client Mods folder"},
             }
         ),
@@ -312,10 +316,16 @@ _DEFINITIONS: tuple[Operation, ...] = (
         parameters=_schema(
             {
                 "bundle": {**PATH_PARAM, "description": "the built .unity3d to gate and stage"},
-                "manifest": {**PATH_PARAM, "description": "Unity's build manifest; "
-                "defaults to BUNDLE.manifest beside the bundle"},
-                "log": {**PATH_PARAM, "description": "the Unity log that built it; without "
-                "one the disabled-module gate cannot run"},
+                "manifest": {
+                    **PATH_PARAM,
+                    "description": "Unity's build manifest; "
+                    "defaults to BUNDLE.manifest beside the bundle",
+                },
+                "log": {
+                    **PATH_PARAM,
+                    "description": "the Unity log that built it; without "
+                    "one the disabled-module gate cannot run",
+                },
             },
             required=["bundle"],
         ),
@@ -342,7 +352,10 @@ _DEFINITIONS: tuple[Operation, ...] = (
         parameters=_schema(
             {
                 "mods_dir": {**PATH_PARAM, "description": "defaults to the Proton per-user Mods/"},
-                "mod_name": {"type": "string", "description": "folder name; defaults to ModInfo Name"},
+                "mod_name": {
+                    "type": "string",
+                    "description": "folder name; defaults to ModInfo Name",
+                },
                 "replace": {"type": "boolean", "default": True},
             }
         ),
@@ -358,7 +371,10 @@ _DEFINITIONS: tuple[Operation, ...] = (
         "Refuses while a client is running, because a reused client keeps the old bundle cached.",
         parameters=_schema(
             {
-                "run_seconds": {"type": "integer", "description": "stop the client after this long"},
+                "run_seconds": {
+                    "type": "integer",
+                    "description": "stop the client after this long",
+                },
                 "mute": {"type": "boolean", "default": False},
                 "mod_name": {"type": "string", "description": "require 'Loaded Mod: NAME'"},
                 "steam_bin": {"type": "string", "default": "steam"},

@@ -26,21 +26,42 @@ from .errors import PipelineError
 # reader meets them rather than alphabetically.
 TOPICS: dict[str, tuple[str, str]] = {
     "mod-repo-layout": ("mod-repo-layout.md", "what lives in the mod repo and what lives here"),
-    "sibling-repos": ("sibling-repos.md", "the other HordeForge repositories, and the client lock this one shares"),
+    "sibling-repos": (
+        "sibling-repos.md",
+        "the other HordeForge repositories, and the client lock this one shares",
+    ),
     "quickstart": ("quickstart.md", "bare machine to a validated bundle"),
     "setup": ("setup.md", "Python, game path, Unity, licensing, Windows module"),
-    "no-unity": ("no-unity.md", "the four answers to where the bundle comes from, three of them editorless"),
-    "offline-bundle-builder": ("offline-bundle-builder.md", "the editorless writer: format research, what shipped, and the shader wall"),
+    "no-unity": (
+        "no-unity.md",
+        "the four answers to where the bundle comes from, three of them editorless",
+    ),
+    "offline-bundle-builder": (
+        "offline-bundle-builder.md",
+        "the editorless writer: format research, what shipped, and the shader wall",
+    ),
     "consumer-api": ("consumer-api.md", "schema, call, serve, and the Python facade"),
     "game-integration": ("game-integration.md", "XML URIs, icons, audio, inheritance, packaging"),
-    "art-direction": ("art-direction.md", "the house style, prompt patterns, and the two icon lanes"),
+    "art-direction": (
+        "art-direction.md",
+        "the house style, prompt patterns, and the two icon lanes",
+    ),
     "audio": ("audio.md", "sound synthesis, sounds.xml, and why a loaded clip can be silent"),
     "vfx": ("vfx.md", "particle budgets, LOD tiers, and two silent material failures"),
-    "agent-workflows": ("agent-workflows.md", "the lane each asset type follows, and the evidence packet"),
-    "authoring-tools": ("authoring-tools.md", "the researched OSS tools and which gate each belongs to"),
+    "agent-workflows": (
+        "agent-workflows.md",
+        "the lane each asset type follows, and the evidence packet",
+    ),
+    "authoring-tools": (
+        "authoring-tools.md",
+        "the researched OSS tools and which gate each belongs to",
+    ),
     "bundle-generation": ("bundle-generation.md", "the complete build path"),
     "validation": ("validation.md", "each gate and its proof boundary"),
-    "improvements": ("improvements.md", "known gaps, what closes them, and the OSS tools that belong to each"),
+    "improvements": (
+        "improvements.md",
+        "known gaps, what closes them, and the OSS tools that belong to each",
+    ),
     "troubleshooting": ("troubleshooting.md", "failure messages and their root causes"),
     "configuration": ("configuration.md", "every .shamway.toml key"),
     "architecture": ("architecture.md", "design, boundaries, and the trust model"),
@@ -60,8 +81,7 @@ def _root() -> Path:
     if source.is_dir():
         return source
     raise PipelineError(
-        "the packaged documentation is missing; reinstall the pipeline "
-        "(uv sync from a checkout)"
+        "the packaged documentation is missing; reinstall the pipeline (uv sync from a checkout)"
     )
 
 
@@ -84,7 +104,9 @@ def read(topic: str) -> str:
         filename = TOPICS[topic][0]
     except KeyError:
         known = ", ".join(TOPICS)
-        raise PipelineError(f"unknown documentation topic {topic!r}; expected one of: {known}") from None
+        raise PipelineError(
+            f"unknown documentation topic {topic!r}; expected one of: {known}"
+        ) from None
     path = _root() / filename
     try:
         return path.read_text(encoding="utf-8")

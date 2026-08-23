@@ -53,8 +53,9 @@ def require_imaging() -> None:
     """Fail with the install command, at the point the dependency is used."""
     if MISSING is not None:
         raise SystemExit(
-            "ERROR: the cutout lane needs Pillow ({}).\n"
-            "  Install it with: {}".format(MISSING, extra_install("authoring"))
+            "ERROR: the cutout lane needs Pillow ({}).\n  Install it with: {}".format(
+                MISSING, extra_install("authoring")
+            )
         )
 
 
@@ -143,7 +144,9 @@ def key_out(
     return output, opaque_pixels / float(width * height)
 
 
-def luma_to_alpha(image: Image.Image, black_point: float, white_rgb: bool) -> tuple[Image.Image, float]:
+def luma_to_alpha(
+    image: Image.Image, black_point: float, white_rgb: bool
+) -> tuple[Image.Image, float]:
     """Turn a grayscale-on-black mask into a white RGBA particle card."""
     grey = image.convert("L")
     width, height = grey.size
@@ -228,11 +231,15 @@ def main(argv: list[str] | None = None) -> int:
             default=None,
             help="fraction of --size the subject may fill (0.9 leaves a margin)",
         )
-        sub.add_argument("--trim", action="store_true", help="crop to the opaque bounding box first")
+        sub.add_argument(
+            "--trim", action="store_true", help="crop to the opaque bounding box first"
+        )
 
     key_parser = commands.add_parser("key", help="remove a flat chroma-key background")
     common(key_parser)
-    key_parser.add_argument("--key", help="#rrggbb key colour; auto-detected from the border if absent")
+    key_parser.add_argument(
+        "--key", help="#rrggbb key colour; auto-detected from the border if absent"
+    )
     key_parser.add_argument(
         "--transparent-threshold",
         type=float,

@@ -43,7 +43,9 @@ def _log_lines(log: Path) -> list[str]:
 
 def disabled_module_lines(log: Path) -> list[str]:
     return [
-        line for line in _log_lines(log) if DISABLED_MODULE_TEXT in line and DISABLED_MODULE_SUFFIX in line
+        line
+        for line in _log_lines(log)
+        if DISABLED_MODULE_TEXT in line and DISABLED_MODULE_SUFFIX in line
     ]
 
 
@@ -125,14 +127,17 @@ def run_build(config: PipelineConfig, probe: bool = False) -> Path:
     if not config.unity_editor.is_file() or not os.access(config.unity_editor, os.X_OK):
         raise PipelineError(f"Unity editor is not executable: {config.unity_editor}")
     project_version = project_unity_version(config.unity_project)
-    expected_version = game_unity_version(config.game_dir)[0] if config.game_dir else project_version
+    expected_version = (
+        game_unity_version(config.game_dir)[0] if config.game_dir else project_version
+    )
     if project_version != expected_version:
         raise PipelineError(
             f"Unity project is {project_version}; installed game uses {expected_version}. "
             "Upgrade the project and editor before building."
         )
     windows_module = (
-        config.unity_editor.parent / "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
+        config.unity_editor.parent
+        / "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
     )
     if config.target == "StandaloneWindows64" and not windows_module.is_file():
         raise PipelineError(f"Unity Windows Build Support (Mono) is missing: {windows_module}")
@@ -257,8 +262,7 @@ def stage_bundle(
 SYNTHESIZED_CAVEATS = (
     "the class-142 container gate ran against this tool's own output, so here it "
     "is structural, not independent evidence that the engine accepts the container",
-    "the stem-collision gate read the membership record this build wrote, for the "
-    "same reason",
+    "the stem-collision gate read the membership record this build wrote, for the same reason",
     "the build-log gate cannot run: there is no editor to report stripping an "
     "engine module while claiming success",
     "a fresh client is therefore the acceptance for a synthesized bundle rather "

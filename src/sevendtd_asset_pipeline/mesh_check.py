@@ -63,6 +63,7 @@ def _measure(path: Path, report: MeshReport, max_extent: float) -> None:
         )
         return
     import trimesh
+
     try:
         loaded = trimesh.load(str(path), force=None)
     except Exception as exc:  # noqa: BLE001 - trimesh raises many unrelated types
@@ -108,7 +109,10 @@ def _validate_gltf(path: Path, report: MeshReport, strict: bool) -> None:
     try:
         result = subprocess.run(
             [validator, "--stdout", "--validate-resources", str(path)],
-            check=False, capture_output=True, text=True, timeout=120,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         report.problems.append(f"could not run the glTF validator: {exc}")

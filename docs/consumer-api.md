@@ -96,6 +96,7 @@ server = subprocess.Popen(
     ["shamway", "serve"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
 )
 
+
 def call(op, **params):
     server.stdin.write(json.dumps({"id": 1, "op": op, "params": params}) + "\n")
     server.stdin.flush()
@@ -103,6 +104,7 @@ def call(op, **params):
     if not reply["ok"]:
         raise RuntimeError(reply["error"]["message"])
     return reply["result"]
+
 
 print(call("status")["valid"])
 ```
@@ -370,17 +372,17 @@ piece. Only names re-exported from the package root are supported.
 ```python
 from sevendtd_asset_pipeline import Pipeline
 
-pipeline = Pipeline.discover()            # resolve .shamway.toml upward
-pipeline, created = Pipeline.scaffold(    # or create one in an existing modlet
+pipeline = Pipeline.discover()  # resolve .shamway.toml upward
+pipeline, created = Pipeline.scaffold(  # or create one in an existing modlet
     "/path/to/MyMod", game_dir="/path/to/7 Days To Die"
 )
 
-status = pipeline.status()                # never raises for a mod-state problem
+status = pipeline.status()  # never raises for a mod-state problem
 if not status.valid:
     pipeline.build()
     pipeline.validate()
 
-pipeline.call("inspect_deep")             # same dispatch as `call` and `serve`
+pipeline.call("inspect_deep")  # same dispatch as `call` and `serve`
 ```
 
 | Method | Returns |
@@ -415,21 +417,26 @@ pipeline.call("inspect_deep")             # same dispatch as `call` and `serve`
 
 ```python
 from sevendtd_asset_pipeline import (
-    PipelineError, collect_status, deep_inspect, has_capability,
-    load_config, run_build, validate_mod,
+    PipelineError,
+    collect_status,
+    deep_inspect,
+    has_capability,
+    load_config,
+    run_build,
+    validate_mod,
 )
 
-config = load_config()               # finds .shamway.toml upward from cwd
-status = collect_status(config)      # never raises for a mod-state problem
+config = load_config()  # finds .shamway.toml upward from cwd
+status = collect_status(config)  # never raises for a mod-state problem
 if not status.valid:
     for problem in status.problems:
         print(problem)
 
 try:
-    bundle = run_build(config)       # returns the staged bundle path
+    bundle = run_build(config)  # returns the staged bundle path
     report = validate_mod(config)
 except PipelineError as exc:
-    ...                              # one user-actionable message
+    ...  # one user-actionable message
 
 # Branch on an optional capability instead of guessing or catching ImportError
 if has_capability("UnityPy"):

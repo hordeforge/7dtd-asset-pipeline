@@ -74,13 +74,19 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
         # A None here already appended its FAIL check via _guard.
         if actual_name != config.mod_name:
             checks.append(
-                Check("FAIL", "modlet", f"ModInfo name {actual_name!r} does not match {config.mod_name!r}")
+                Check(
+                    "FAIL",
+                    "modlet",
+                    f"ModInfo name {actual_name!r} does not match {config.mod_name!r}",
+                )
             )
         else:
             checks.append(Check("OK", "modlet", f"{config.mod_root} ({actual_name})"))
 
     checks.append(
-        Check("OK", "bundle source", f"{config.bundle_source}: {BUNDLE_SOURCES[config.bundle_source]}")
+        Check(
+            "OK", "bundle source", f"{config.bundle_source}: {BUNDLE_SOURCES[config.bundle_source]}"
+        )
     )
     # Everything below this line is about Unity, and a mod that ships no bundle
     # has no use for any of it. Reporting a missing editor there would be a
@@ -117,7 +123,9 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
             checks, "Unity project", lambda: project_unity_version(config.unity_project)
         )
         if project_version is not None:
-            checks.append(Check("OK", "Unity project", f"{config.unity_project} ({project_version})"))
+            checks.append(
+                Check("OK", "Unity project", f"{config.unity_project} ({project_version})")
+            )
         dependencies = _guard(checks, "engine modules", lambda: _modules(config.unity_project))
     if dependencies is not None:
         missing = [name for name in REQUIRED_MODULES if name not in dependencies]
@@ -136,7 +144,9 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
             checks.append(Check("WARN", "optional modules", "add when used: " + ", ".join(omitted)))
         else:
             checks.append(
-                Check("OK", "optional modules", "common audio/image/particle/physics modules enabled")
+                Check(
+                    "OK", "optional modules", "common audio/image/particle/physics modules enabled"
+                )
             )
 
     checks.extend(_game_checks(config, project_version))
@@ -144,7 +154,9 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
     if config.unity_editor:
         checks.extend(_editor_checks(config))
     elif config.builds_locally:
-        checks.append(Check("WARN", "Unity editor", "set UNITY_EDITOR to build; inspection still works"))
+        checks.append(
+            Check("WARN", "Unity editor", "set UNITY_EDITOR to build; inspection still works")
+        )
     else:
         # An external build host owns the editor. Its absence here is the
         # configured state, not a defect, so it is reported as information and
@@ -193,9 +205,7 @@ def _synthesized_checks(config: PipelineConfig) -> list[Check]:
 
     source = config.bundle_source_dir
     if not source.is_dir():
-        checks.append(
-            Check("FAIL", "bundle sources", f"no source directory at {source}")
-        )
+        checks.append(Check("FAIL", "bundle sources", f"no source directory at {source}"))
     else:
         found = _guard(checks, "bundle sources", lambda: collect_sources(source))
         if found is not None:
@@ -206,7 +216,9 @@ def _synthesized_checks(config: PipelineConfig) -> list[Check]:
 
     if has_capability("UnityPy"):
         checks.append(
-            Check("OK", "writer", "UnityPy is installed; type trees for this revision are available")
+            Check(
+                "OK", "writer", "UnityPy is installed; type trees for this revision are available"
+            )
         )
     else:
         checks.append(
@@ -303,7 +315,9 @@ def _editor_checks(config: PipelineConfig) -> list[Check]:
         return [Check("FAIL", "Unity editor", "Unity -version did not finish within 30 seconds")]
     reported = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "unknown"
     if result.returncode != 0:
-        return [Check("FAIL", "Unity editor", f"Unity -version exited {result.returncode}: {reported}")]
+        return [
+            Check("FAIL", "Unity editor", f"Unity -version exited {result.returncode}: {reported}")
+        ]
     checks = [
         Check("OK", "Unity editor", f"{editor} ({reported})"),
         Check("OK", "Windows support", str(windows)),

@@ -1,5 +1,10 @@
 .PHONY: check lint typecheck test coverage all
 
+# scripts/bootstrap installs the pinned analyzers into .venv/bin without
+# putting them on PATH; prefer them so a bootstrapped checkout always runs
+# exactly what CI runs instead of silently skipping gates CI enforces.
+export PATH := $(CURDIR)/.venv/bin:$(PATH)
+
 # uv runs the suite when it is available so contributors share one toolchain;
 # the plain interpreter still works, because the core has no dependencies.
 PYTHON := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project python3" || echo python3)
@@ -13,7 +18,7 @@ check: lint typecheck
 	$(PYTHON) -m compileall -q src tests
 	bash -n $(SHELL_SCRIPTS)
 	@if command -v shellcheck >/dev/null 2>&1; then \
-		shellcheck -S warning $(SHELL_SCRIPTS); \
+		shellcheck -S style $(SHELL_SCRIPTS); \
 	elif [ -n "$${CI:-}" ]; then \
 		echo "ERROR: CI requires shellcheck; install it with scripts/install-tools.sh" >&2; \
 		exit 1; \
@@ -27,6 +32,7 @@ check: lint typecheck
 lint:
 	@if command -v ruff >/dev/null 2>&1; then \
 		ruff check .; \
+		ruff format --check .; \
 	elif [ -n "$${CI:-}" ]; then \
 		echo "ERROR: CI requires ruff; e.g. uv tool install ruff" >&2; \
 		exit 1; \

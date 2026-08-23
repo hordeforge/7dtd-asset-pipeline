@@ -37,14 +37,17 @@ def require_imaging() -> None:
     """Fail with the install command, at the point the dependency is used."""
     if MISSING is not None:
         raise SystemExit(
-            "ERROR: the icon lane needs Pillow ({}).\n"
-            "  Install it with: {}".format(MISSING, extra_install("authoring"))
+            "ERROR: the icon lane needs Pillow ({}).\n  Install it with: {}".format(
+                MISSING, extra_install("authoring")
+            )
         )
 
 
 def save_atomically(image: Image.Image, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".png", dir=path.parent)
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".png", dir=path.parent
+    )
     os.close(descriptor)
     temporary_path = Path(temporary)
     try:
@@ -107,14 +110,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--size", type=int, default=160, help="atlas cell size (default 160)")
-    parser.add_argument("--padding", type=float, default=0.05, help="fraction of the cell, per side")
+    parser.add_argument(
+        "--padding", type=float, default=0.05, help="fraction of the cell, per side"
+    )
     parser.add_argument("--no-trim", dest="trim", action="store_false", help="keep source margins")
     parser.add_argument("--contact-sheet", type=Path, help="also write a 1x/2x/4x review sheet")
     parser.add_argument(
-        "--fill", type=float, default=1.0, help="scale the subject within the padded cell (0.7 for a smaller tier)"
+        "--fill",
+        type=float,
+        default=1.0,
+        help="scale the subject within the padded cell (0.7 for a smaller tier)",
     )
     parser.add_argument(
-        "--saturation", type=float, default=1.0, help="colour saturation multiplier (0.45 for a greyer tier)"
+        "--saturation",
+        type=float,
+        default=1.0,
+        help="colour saturation multiplier (0.45 for a greyer tier)",
     )
     args = parser.parse_args(argv)
     require_imaging()
@@ -140,7 +151,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"stem:    {args.output.stem}   (this is the CustomIcon key)")
     print(f"opaque:  {100 * opaque / (icon.width * icon.height):.1f}% of the cell")
     if args.fill != 1.0 or args.saturation != 1.0:
-        print(f"variant: fill {args.fill}  saturation {args.saturation}   (record these with the source)")
+        print(
+            f"variant: fill {args.fill}  saturation {args.saturation}   (record these with the source)"
+        )
     if args.contact_sheet:
         contact_sheet(icon, args.contact_sheet)
         print(f"sheet:   {args.contact_sheet}")

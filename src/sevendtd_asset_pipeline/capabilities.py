@@ -188,8 +188,12 @@ def _command_version(executable: str) -> str | None:
     for flag in ("--version", "-version"):
         try:
             result = subprocess.run(
-                [executable, flag], check=False, stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, text=True, timeout=10,
+                [executable, flag],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=10,
             )
         except (OSError, subprocess.SubprocessError):
             return None
@@ -215,25 +219,38 @@ def _resolve(spec: _Spec, probe_versions: bool) -> Capability:
     if spec.kind == "any-command":
         # Interchangeable tools: the first one present satisfies the capability,
         # and which one it is matters to the report, so `path` names it.
-        path = next(
-            (found for name in spec.probe.split() if (found := shutil.which(name))), None
-        )
+        path = next((found for name in spec.probe.split() if (found := shutil.which(name))), None)
         return Capability(
-            name=spec.name, kind=spec.kind, unlocks=spec.unlocks, purpose=spec.purpose,
-            install=spec.install, available=path is not None, path=path,
+            name=spec.name,
+            kind=spec.kind,
+            unlocks=spec.unlocks,
+            purpose=spec.purpose,
+            install=spec.install,
+            available=path is not None,
+            path=path,
             version=_command_version(path) if (path and probe_versions) else None,
         )
     if spec.kind == "command":
         path = shutil.which(spec.probe)
         return Capability(
-            name=spec.name, kind=spec.kind, unlocks=spec.unlocks, purpose=spec.purpose,
-            install=spec.install, available=path is not None, path=path,
+            name=spec.name,
+            kind=spec.kind,
+            unlocks=spec.unlocks,
+            purpose=spec.purpose,
+            install=spec.install,
+            available=path is not None,
+            path=path,
             version=_command_version(path) if (path and probe_versions) else None,
         )
     available = importlib.util.find_spec(spec.probe) is not None
     return Capability(
-        name=spec.name, kind=spec.kind, unlocks=spec.unlocks, purpose=spec.purpose,
-        install=spec.install, available=available, path=None,
+        name=spec.name,
+        kind=spec.kind,
+        unlocks=spec.unlocks,
+        purpose=spec.purpose,
+        install=spec.install,
+        available=available,
+        path=None,
         version=_module_version(spec.probe) if (available and probe_versions) else None,
     )
 

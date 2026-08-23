@@ -62,18 +62,14 @@ def _stem_index(assets: list[str]) -> dict[str, list[str]]:
     return index
 
 
-def _check_stem(
-    where: str, stem: str, index: dict[str, list[str]], manifest: Path
-) -> None:
+def _check_stem(where: str, stem: str, index: dict[str, list[str]], manifest: Path) -> None:
     matches = index.get(stem.casefold(), [])
     if not matches:
         raise PipelineError(f"{where}: asset stem {stem!r} is absent from {manifest}")
     if len(matches) != 1:
         raise PipelineError(f"{where}: asset stem {stem!r} is ambiguous")
     if matches[0] != stem:
-        raise PipelineError(
-            f"{where}: asset case is {stem!r}, manifest has {matches[0]!r}"
-        )
+        raise PipelineError(f"{where}: asset case is {stem!r}, manifest has {matches[0]!r}")
 
 
 def _check_reference(
@@ -112,9 +108,7 @@ def _check_reference(
     # The staged bundle was already gated at the top of validate_mod, and the
     # ownership check above proved every reference aims at that same file, so
     # there is nothing left to parse here.
-    _check_stem(
-        str(relative_source), reference.asset_stem, stems, config.tracked_manifest
-    )
+    _check_stem(str(relative_source), reference.asset_stem, stems, config.tracked_manifest)
     return f"OK {relative_source}: {reference.asset_stem}"
 
 
@@ -140,7 +134,7 @@ def _validate_bundle_free(config: PipelineConfig) -> ValidationReport:
             for reference in references[:5]
         )
         raise PipelineError(
-            f"{config.config_file.name} sets bundle_source = \"none\", but "
+            f'{config.config_file.name} sets bundle_source = "none", but '
             f"{len(references)} XML reference(s) load assets from a bundle: {detail}. "
             "Either remove the references or give the mod a bundle."
         )
@@ -190,8 +184,6 @@ def validate_mod(
         references = discover_references(config.config_dir)
     owned = config.bundle_output.resolve()
     resolved: dict[str, Path | None] = {}
-    messages = [
-        _check_reference(config, ref, stems, resolved, owned) for ref in references
-    ]
+    messages = [_check_reference(config, ref, stems, resolved, owned) for ref in references]
     messages += [_check_code_reference(config, stem, stems) for stem in config.code_references]
     return ValidationReport(tuple(messages), len(references) + len(config.code_references))

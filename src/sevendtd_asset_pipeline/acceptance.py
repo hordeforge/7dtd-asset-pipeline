@@ -126,10 +126,7 @@ def _comment_text(text: str) -> str:
 def _xml_attr(text: str) -> str:
     """Escape a value for a double-quoted XML attribute."""
     return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 
@@ -258,7 +255,7 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
         f'\t<Name value="{_xml_attr(plan_.assembly)}" />\n'
         f'\t<DisplayName value="{_xml_attr(plan_.mod_name + " bundle acceptance")}" />\n'
         '\t<Description value="Generated 7dtd-playtest scenario provider: loads every '
-        'bundle member through the game\'s own DataLoader." />\n'
+        "bundle member through the game's own DataLoader.\" />\n"
         '\t<Author value="shamway" />\n\t<Version value="1.0.0" />\n</xml>\n'
     )
     return {

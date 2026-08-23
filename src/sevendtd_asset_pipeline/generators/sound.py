@@ -62,7 +62,9 @@ def noise(size: int, generator: random.Random) -> list[float]:
     return [generator.random() * 2.0 - 1.0 for _ in range(size)]
 
 
-def lowpass(samples: list[float], cutoff_hz: float, rate: int = RATE, passes: int = 1) -> list[float]:
+def lowpass(
+    samples: list[float], cutoff_hz: float, rate: int = RATE, passes: int = 1
+) -> list[float]:
     """One-pole IIR low-pass, applied `passes` times for a steeper roll-off.
 
     Deliberately the simplest filter that does the job: an explosion's rumble
@@ -187,17 +189,31 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
         peak = max((abs(value) for value in rumble), default=1.0) or 1.0
         onset = envelope(times, 0.6, duration * 0.37, power=0.8)
         rumble = [
-            value / peak * shape * (1.0 + 0.45 * math.sin(2 * math.pi * 0.35 * time)
-                                    * math.sin(2 * math.pi * 0.11 * time + 0.7))
+            value
+            / peak
+            * shape
+            * (
+                1.0
+                + 0.45
+                * math.sin(2 * math.pi * 0.35 * time)
+                * math.sin(2 * math.pi * 0.11 * time + 0.7)
+            )
             for value, shape, time in zip(rumble, onset, times, strict=True)
         ]
         # A faint delayed thud, so there is *some* transient at distance.
         thud_shape = envelope([max(time - 0.45, 0.0) for time in times], 0.01, 0.12)
-        thud = [value * shape for value, shape in zip(lowpass(white, 400.0), thud_shape, strict=True)]
+        thud = [
+            value * shape for value, shape in zip(lowpass(white, 400.0), thud_shape, strict=True)
+        ]
         return normalize(remove_dc(fade_tail(mix((1.0, rumble), (0.35, thud)), 2.5)), -2.0)
 
-    crack = [value * shape for value, shape in zip(white, envelope(times, 0.002, 0.02), strict=True)]
-    rip = [value * shape for value, shape in zip(lowpass(white, 1800.0), envelope(times, 0.01, 0.18), strict=True)]
+    crack = [
+        value * shape for value, shape in zip(white, envelope(times, 0.002, 0.02), strict=True)
+    ]
+    rip = [
+        value * shape
+        for value, shape in zip(lowpass(white, 1800.0), envelope(times, 0.01, 0.18), strict=True)
+    ]
 
     # Pressure wave: an exponential sweep from 70 Hz to 22 Hz over three
     # seconds. Below about 25 Hz it is felt more than heard, which is the point.
@@ -214,9 +230,16 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
     rumble = lowpass(brown, 110.0, passes=2)
     peak = max((abs(value) for value in rumble), default=1.0) or 1.0
     rumble = [
-        value / peak * shape * (1.0 + 0.35 * math.sin(2 * math.pi * 0.7 * time + 1.0)
-                                * math.sin(2 * math.pi * 0.23 * time))
-        for value, shape, time in zip(rumble, envelope(times, 0.12, duration * 0.33, power=0.9), times, strict=True)
+        value
+        / peak
+        * shape
+        * (
+            1.0
+            + 0.35 * math.sin(2 * math.pi * 0.7 * time + 1.0) * math.sin(2 * math.pi * 0.23 * time)
+        )
+        for value, shape, time in zip(
+            rumble, envelope(times, 0.12, duration * 0.33, power=0.9), times, strict=True
+        )
     ]
     band = lowpass(highpass(white, 900.0), 5000.0)
     gate = lowpass([1.0 if generator.random() < 0.08 else 0.0 for _ in times], 60.0)
@@ -226,7 +249,9 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
     ]
     return normalize(
         remove_dc(
-            fade_tail(mix((1.0, crack), (0.55, rip), (0.9, sweep), (0.95, rumble), (1.0, debris)), 1.5)
+            fade_tail(
+                mix((1.0, crack), (0.55, rip), (0.9, sweep), (0.95, rumble), (1.0, debris)), 1.5
+            )
         )
     )
 
@@ -239,7 +264,10 @@ def tick(generator: random.Random) -> list[float]:
     """
     times = seconds(0.09)
     transient = [
-        value * shape for value, shape in zip(noise(len(times), generator), envelope(times, 0.0005, 0.0025), strict=True)
+        value * shape
+        for value, shape in zip(
+            noise(len(times), generator), envelope(times, 0.0005, 0.0025), strict=True
+        )
     ]
     ring = [
         0.60 * math.sin(2 * math.pi * 2350 * time) * a
@@ -277,7 +305,12 @@ def whoosh(duration: float, generator: random.Random) -> list[float]:
         # Sine hump: closest at the middle of the clip.
         nearness = math.sin(math.pi * position) ** 1.5
         output.append(bright[index] * nearness + dark[index] * (1.0 - nearness) * 0.6)
-    shaped = [value * shape for value, shape in zip(output, [math.sin(math.pi * t / duration) ** 1.2 for t in times], strict=True)]
+    shaped = [
+        value * shape
+        for value, shape in zip(
+            output, [math.sin(math.pi * t / duration) ** 1.2 for t in times], strict=True
+        )
+    ]
     return normalize(remove_dc(fade_tail(shaped, min(0.15, duration * 0.2))), -3.0)
 
 
@@ -441,8 +474,12 @@ def main(argv: list[str] | None = None) -> int:
     def voice(name: str, help_text: str) -> argparse.ArgumentParser:
         sub = commands.add_parser(name, help=help_text)
         sub.add_argument("output", type=Path)
-        sub.add_argument("--seed", type=int, default=0, help="recorded seed; keeps output reproducible")
-        sub.add_argument("--peak", type=float, default=None, help="override the normalized peak (0..1)")
+        sub.add_argument(
+            "--seed", type=int, default=0, help="recorded seed; keeps output reproducible"
+        )
+        sub.add_argument(
+            "--peak", type=float, default=None, help="override the normalized peak (0..1)"
+        )
         sub.add_argument(
             "--promote",
             type=Path,
@@ -452,7 +489,9 @@ def main(argv: list[str] | None = None) -> int:
         return sub
 
     blast_parser = voice("blast", "large explosion, near-field or distant")
-    blast_parser.add_argument("--seconds", type=float, default=None, help="default 11 near, 15 distant")
+    blast_parser.add_argument(
+        "--seconds", type=float, default=None, help="default 11 near, 15 distant"
+    )
     blast_parser.add_argument(
         "--distant", action="store_true", help="the same event heard kilometres away"
     )
@@ -480,17 +519,24 @@ def main(argv: list[str] | None = None) -> int:
     xml.add_argument("--bundle", default="mymod.unity3d", help="bundle filename")
     xml.add_argument("--distant", help="stem of the distant variant, if any")
     xml.add_argument(
-        "--fade-start", type=int, default=120,
+        "--fade-start",
+        type=int,
+        default=120,
         help="metres past which the distant clip plays (default -1 in game means never)",
     )
     xml.add_argument(
         "--fade-end", type=int, default=200, help="metres past which the near clip stops"
     )
-    xml.add_argument("--source", default="Explosion", help="vanilla AudioSource prefab suffix, e.g. Explosion, Impact, UseAction, UI_Item, Interact")
     xml.add_argument(
-        "--noise", action="store_true",
+        "--source",
+        default="Explosion",
+        help="vanilla AudioSource prefab suffix, e.g. Explosion, Impact, UseAction, UI_Item, Interact",
+    )
+    xml.add_argument(
+        "--noise",
+        action="store_true",
         help="also report this sound to the AI director; omit when layering on a vanilla "
-             "event that already reports its own",
+        "event that already reports its own",
     )
     xml.add_argument("--range", type=int, default=40, help="AI noise range in metres")
 

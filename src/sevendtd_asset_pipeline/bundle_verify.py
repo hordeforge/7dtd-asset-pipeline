@@ -152,9 +152,7 @@ def _classify(bundle: Path, log: Path, exit_code: int) -> VerifyReport:
         line = raw_line.strip()
         match = ASSET_LINE.match(line)
         if match:
-            report.assets.append(
-                LoadedAsset(match["key"], match["type"], match["name"])
-            )
+            report.assets.append(LoadedAsset(match["key"], match["type"], match["name"]))
             continue
         detail = DETAIL_LINE.match(line)
         if detail and report.assets:
@@ -166,8 +164,6 @@ def _classify(bundle: Path, log: Path, exit_code: int) -> VerifyReport:
             f"the editor exited {exit_code} without loading the bundle; read {log}"
         )
     if not report.assets and not report.problems:
-        report.problems.append(
-            "the runtime loaded the bundle but it contains no assets to read"
-        )
+        report.problems.append("the runtime loaded the bundle but it contains no assets to read")
     report.ok = not report.problems
     return report

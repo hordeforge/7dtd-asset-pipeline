@@ -131,9 +131,7 @@ def initialize(
     synthesized = bundle_source == "synthesized"
     adopting = adopt_project is not None
     if adopting and (bundle_free or synthesized):
-        reason = (
-            "ships no bundle" if bundle_free else "writes its bundle without an editor"
-        )
+        reason = "ships no bundle" if bundle_free else "writes its bundle without an editor"
         raise PipelineError(
             f'bundle_source "{bundle_source}" means the mod {reason}, so there is no '
             "Unity project to adopt"
@@ -264,9 +262,7 @@ def _check_adoptable(project: Path, mod_root: Path, source_root: str | None) -> 
     if not project.is_dir():
         raise PipelineError(f"no Unity project at {project}")
     if not (project / "Assets").is_dir():
-        raise PipelineError(
-            f"{project} has no Assets/ directory, so it is not a Unity project"
-        )
+        raise PipelineError(f"{project} has no Assets/ directory, so it is not a Unity project")
     _relative(project, mod_root, "the Unity project")
     if source_root:
         bundle_source_dir = project / source_root

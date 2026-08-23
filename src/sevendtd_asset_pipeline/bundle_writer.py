@@ -277,9 +277,7 @@ def _cab_name(bundle_name: str) -> str:
     return "CAB-" + hashlib.md5(bundle_name.encode("utf-8")).hexdigest()  # noqa: S324
 
 
-def _container(
-    revision: str, nodes: list[tuple[str, bytes]]
-) -> bytes:
+def _container(revision: str, nodes: list[tuple[str, bytes]]) -> bytes:
     """Assemble the UnityFS archive around one or more directory nodes."""
     payload = bytearray()
     directory: list[tuple[int, int, int, str]] = []
@@ -307,8 +305,13 @@ def _container(
     header.extend(b"\x00" * ((-len(header)) % 16))
     # Flags 0x40: the block table sits at the head of the archive, uncompressed.
     struct.pack_into(
-        ">QIII", header, size_offset,
-        len(header) + len(table) + len(payload), len(table), len(table), 0x40,
+        ">QIII",
+        header,
+        size_offset,
+        len(header) + len(table) + len(payload),
+        len(table),
+        len(table),
+        0x40,
     )
     return bytes(header) + bytes(table) + bytes(payload)
 
@@ -388,8 +391,16 @@ def build_bundle(
 # outside it needs a frequency chunk; the pipeline rejects it instead and says
 # how to resample, because a silently retuned clip is worse than a refusal.
 FSB5_FREQUENCIES = {
-    8000: 1, 11000: 2, 11025: 3, 16000: 4, 22050: 5,
-    24000: 6, 32000: 7, 44100: 8, 48000: 9, 96000: 10,
+    8000: 1,
+    11000: 2,
+    11025: 3,
+    16000: 4,
+    22050: 5,
+    24000: 6,
+    32000: 7,
+    44100: 8,
+    48000: 9,
+    96000: 10,
 }
 FSB5_PCM16 = 2
 AUDIO_PCM = 0
@@ -483,21 +494,15 @@ def _fsb5_pcm16(pcm: bytes, channels: int, rate: int) -> bytes:
             "ffmpeg -i in.wav -ar 44100 out.wav"
         )
     if channels not in (1, 2):
-        raise PipelineError(
-            f"{channels}-channel audio needs a channel chunk; write mono or stereo"
-        )
+        raise PipelineError(f"{channels}-channel audio needs a channel chunk; write mono or stereo")
     samples = len(pcm) // (2 * channels)
-    sample_header = struct.pack(
-        "<Q", (index << 1) | ((channels - 1) << 5) | (samples << 34)
-    )
+    sample_header = struct.pack("<Q", (index << 1) | ((channels - 1) << 5) | (samples << 34))
     # FMOD reads the data section at 60 + sampleHeadersSize + nameTableSize;
     # Unity pads that start to 32, so the same padding is applied here.
     padding = (-(60 + len(sample_header))) % 32
     headers_size = len(sample_header) + padding
     data = pcm + b"\x00" * ((-len(pcm)) % 32)
-    header = b"FSB5" + struct.pack(
-        "<IIIIII", 1, 1, headers_size, 0, len(data), FSB5_PCM16
-    )
+    header = b"FSB5" + struct.pack("<IIIIII", 1, 1, headers_size, 0, len(data), FSB5_PCM16)
     header += struct.pack("<I", 1) + bytes(4) + bytes(16) + bytes(8)
     return header + sample_header + bytes(padding) + data
 

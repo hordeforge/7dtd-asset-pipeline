@@ -84,14 +84,17 @@ def require_imaging() -> None:
     """Fail with the install command, at the point the dependency is used."""
     if MISSING is not None:
         raise SystemExit(
-            "ERROR: the texture lane needs Pillow and NumPy ({}).\n"
-            "  Install it with: {}".format(MISSING, extra_install("authoring"))
+            "ERROR: the texture lane needs Pillow and NumPy ({}).\n  Install it with: {}".format(
+                MISSING, extra_install("authoring")
+            )
         )
 
 
 def save_atomically(array: np.ndarray, path: Path, mode: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".png", dir=path.parent)
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".png", dir=path.parent
+    )
     os.close(descriptor)
     temporary_path = Path(temporary)
     try:
@@ -134,7 +137,9 @@ def height_from_albedo(rgb: np.ndarray, detail_radius: float = DEFAULT_DETAIL_RA
     return lum - blur(lum, detail_radius)
 
 
-def normal_map(height: np.ndarray, slope_p99: float = DEFAULT_SLOPE_P99, flip_green: bool = False) -> np.ndarray:
+def normal_map(
+    height: np.ndarray, slope_p99: float = DEFAULT_SLOPE_P99, flip_green: bool = False
+) -> np.ndarray:
     """Tangent-space normal map, +X right, +Y up, +Z out of the surface.
 
     Gradients are wrapped central differences, so a tileable height field stays
@@ -212,7 +217,9 @@ def mask_map(
     return np.stack([np.clip(c * 255.0, 0, 255).astype(np.uint8) for c in channels], axis=-1)
 
 
-def tileable_noise(size: int, rng: np.random.Generator, exponent: float, anisotropy: float) -> np.ndarray:
+def tileable_noise(
+    size: int, rng: np.random.Generator, exponent: float, anisotropy: float
+) -> np.ndarray:
     """Periodic noise: white noise shaped in the frequency domain.
 
     Filtering an FFT and transforming back yields a field that wraps exactly.
@@ -236,10 +243,17 @@ def tileable_noise(size: int, rng: np.random.Generator, exponent: float, anisotr
 def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--stem", required=True, help="output stem; files get Normal/Mask suffixes")
-    parser.add_argument("--also", type=Path, default=None, help="write a byte-identical copy here too")
-    parser.add_argument("--flip-green", action="store_true", help="emit a DirectX-convention normal")
     parser.add_argument(
-        "--slope", type=float, default=DEFAULT_SLOPE_P99, help="99th-percentile tangent slope of the normal"
+        "--also", type=Path, default=None, help="write a byte-identical copy here too"
+    )
+    parser.add_argument(
+        "--flip-green", action="store_true", help="emit a DirectX-convention normal"
+    )
+    parser.add_argument(
+        "--slope",
+        type=float,
+        default=DEFAULT_SLOPE_P99,
+        help="99th-percentile tangent slope of the normal",
     )
 
 
@@ -255,19 +269,29 @@ def build_parser() -> argparse.ArgumentParser:
     albedo.add_argument("--metallic-swing", type=float, default=0.34)
     albedo.add_argument("--smoothness-swing", type=float, default=0.20)
     albedo.add_argument(
-        "--detail-radius", type=float, default=DEFAULT_DETAIL_RADIUS,
+        "--detail-radius",
+        type=float,
+        default=DEFAULT_DETAIL_RADIUS,
         help="blur radius in source pixels; detail finer than this becomes relief",
     )
     albedo.add_argument("--no-mask", action="store_true", help="emit the normal only")
 
     detail = sub.add_parser("detail", help="generate a tileable detail normal from seeded noise")
     _add_common(detail)
-    detail.add_argument("--size", type=int, default=512, help="512 for steel, 256 for rubber are proven")
-    detail.add_argument("--seed", type=int, required=True)
-    detail.add_argument("--exponent", type=float, default=-1.05, help="spectral slope; -1.5 is coarser")
-    detail.add_argument("--anisotropy", type=float, default=1.0, help=">1 brushes along V; 2.6 reads as machined")
     detail.add_argument(
-        "--grit", type=float, default=0.0,
+        "--size", type=int, default=512, help="512 for steel, 256 for rubber are proven"
+    )
+    detail.add_argument("--seed", type=int, required=True)
+    detail.add_argument(
+        "--exponent", type=float, default=-1.05, help="spectral slope; -1.5 is coarser"
+    )
+    detail.add_argument(
+        "--anisotropy", type=float, default=1.0, help=">1 brushes along V; 2.6 reads as machined"
+    )
+    detail.add_argument(
+        "--grit",
+        type=float,
+        default=0.0,
         help="add this much finer isotropic noise on top (0.35 gives pitted steel)",
     )
     return parser
@@ -299,13 +323,20 @@ def _run_albedo(args: argparse.Namespace) -> int:
     save_atomically(normal, normal_path, "RGB")
     copied = promote(normal_path, args.also)
     print(f"albedo:     {args.albedo} ({width}x{height})")
-    print(f"normal:     {normal_path}  ({'DirectX' if args.flip_green else 'OpenGL'} green)  sha256 {sha256(normal_path)}")
+    print(
+        f"normal:     {normal_path}  ({'DirectX' if args.flip_green else 'OpenGL'} green)  sha256 {sha256(normal_path)}"
+    )
     if copied:
         print(f"also:       {copied}")
 
     if not args.no_mask:
         mask = mask_map(
-            rgb, args.metallic, args.smoothness, args.metallic_swing, args.smoothness_swing, args.detail_radius
+            rgb,
+            args.metallic,
+            args.smoothness,
+            args.metallic_swing,
+            args.smoothness_swing,
+            args.detail_radius,
         )
         mask_path = args.out_dir / f"{args.stem}Mask.png"
         save_atomically(mask, mask_path, "RGBA")
@@ -313,11 +344,17 @@ def _run_albedo(args: argparse.Namespace) -> int:
         metallic = mask[..., 0] / 255.0
         smoothness = mask[..., 3] / 255.0
         occlusion = mask[..., 1] / 255.0
-        print(f"mask:       {mask_path}  (R metallic, G occlusion, A smoothness)  sha256 {sha256(mask_path)}")
+        print(
+            f"mask:       {mask_path}  (R metallic, G occlusion, A smoothness)  sha256 {sha256(mask_path)}"
+        )
         if copied:
             print(f"also:       {copied}")
-        print(f"metallic:   mean {metallic.mean():.4f}  range {metallic.min():.3f}..{metallic.max():.3f}")
-        print(f"smoothness: mean {smoothness.mean():.4f}  range {smoothness.min():.3f}..{smoothness.max():.3f}")
+        print(
+            f"metallic:   mean {metallic.mean():.4f}  range {metallic.min():.3f}..{metallic.max():.3f}"
+        )
+        print(
+            f"smoothness: mean {smoothness.mean():.4f}  range {smoothness.min():.3f}..{smoothness.max():.3f}"
+        )
         print(f"occlusion:  mean {occlusion.mean():.4f}  min {occlusion.min():.3f} (cavity only)")
     print("import:     normal as 'Normal map'; mask as linear (sRGBTexture = false);")
     print("            assign the mask to BOTH _MetallicGlossMap and _OcclusionMap")
@@ -335,11 +372,17 @@ def _run_detail(args: argparse.Namespace) -> int:
     normal_path = args.out_dir / f"{args.stem}Normal.png"
     save_atomically(normal, normal_path, "RGB")
     copied = promote(normal_path, args.also)
-    print(f"detail:     {normal_path}  {args.size}x{args.size}  tileable  sha256 {sha256(normal_path)}")
-    print(f"recipe:     seed {args.seed}  exponent {args.exponent}  anisotropy {args.anisotropy}  grit {args.grit}  slope {args.slope}")
+    print(
+        f"detail:     {normal_path}  {args.size}x{args.size}  tileable  sha256 {sha256(normal_path)}"
+    )
+    print(
+        f"recipe:     seed {args.seed}  exponent {args.exponent}  anisotropy {args.anisotropy}  grit {args.grit}  slope {args.slope}"
+    )
     if copied:
         print(f"also:       {copied}")
-    print("import:     as 'Normal map'; assign as _BumpMap with a tiling scale on a flat-colour material")
+    print(
+        "import:     as 'Normal map'; assign as _BumpMap with a tiling scale on a flat-colour material"
+    )
     return 0
 
 

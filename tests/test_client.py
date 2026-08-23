@@ -34,7 +34,10 @@ class LocationTests(unittest.TestCase):
         self.assertEqual(client.user_mods_dir(game, env={}), user_data / "Mods")
 
     def test_environment_overrides_win(self) -> None:
-        env = {"SEVEN_DAYS_TO_DIE_LOG_DIR": "/elsewhere/logs", "SEVEN_DAYS_TO_DIE_MODS_DIR": "/elsewhere/Mods"}
+        env = {
+            "SEVEN_DAYS_TO_DIE_LOG_DIR": "/elsewhere/logs",
+            "SEVEN_DAYS_TO_DIE_MODS_DIR": "/elsewhere/Mods",
+        }
         self.assertEqual(client.client_log_dir(None, env=env), Path("/elsewhere/logs"))
         self.assertEqual(client.user_mods_dir(None, env=env), Path("/elsewhere/Mods"))
 
@@ -154,9 +157,7 @@ Awake IsFocused: True
     def test_a_clean_log_with_every_positive_marker_passes(self) -> None:
         report = client.scan_log_text(self.CLEAN, "MyMod")
         self.assertTrue(report.ok, report.as_dict())
-        self.assertEqual(
-            set(report.found), {"mod_loaded", "localization_loaded", "atlas_packed"}
-        )
+        self.assertEqual(set(report.found), {"mod_loaded", "localization_loaded", "atlas_packed"})
 
     def test_missing_positive_markers_fail_when_a_mod_is_named(self) -> None:
         report = client.scan_log_text("Loaded Mod: MyMod (1.0)\n", "MyMod")
@@ -173,7 +174,9 @@ Awake IsFocused: True
         self.assertIn("mod_loaded", report.missing_positive)
 
     def test_negative_markers_are_problems(self) -> None:
-        text = self.CLEAN + """
+        text = (
+            self.CLEAN
+            + """
 [MODS] Mod reference for a mod that is not loaded: MyMood
 Model has a wrong name: expected myModThing
 Loading AssetBundle /x/y.unity3d failed
@@ -181,6 +184,7 @@ Loading AssetBundle /x/y.unity3d failed
 Particle Velocity curves must all be in the same mode
 WRN Entity FallingBlock_3 (EntityFallingBlock) fell off the world, pos=1,2,3
 """
+        )
         report = client.scan_log_text(text, "MyMod")
         self.assertFalse(report.ok)
         keys = {line.split(":", 1)[0] for line in report.problems}
@@ -284,7 +288,9 @@ class ProcessAndAudioTests(unittest.TestCase):
     def test_discord_pref_is_rewritten_in_place(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             reg = Path(temp) / "user.reg"
-            reg.write_text('[Software\\The Fun Pimps]\n"DiscordDisabled_h123"=dword:00000000\n"Other"=dword:1\n')
+            reg.write_text(
+                '[Software\\The Fun Pimps]\n"DiscordDisabled_h123"=dword:00000000\n"Other"=dword:1\n'
+            )
             self.assertTrue(client.disable_discord_integration(reg))
             self.assertIn('"DiscordDisabled_h123"=dword:00000001', reg.read_text())
             self.assertIn('"Other"=dword:1', reg.read_text())
@@ -314,14 +320,20 @@ class LockTests(unittest.TestCase):
     def test_a_fresh_holder_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._lock(
-                Path(tmp), running="yes", session="other-20260823-120000-abc", heartbeat=self._stamp(5)
+                Path(tmp),
+                running="yes",
+                session="other-20260823-120000-abc",
+                heartbeat=self._stamp(5),
             )
             self.assertEqual(client.lock_holder(path), "other-20260823-120000-abc")
 
     def test_a_stale_holder_reads_free(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._lock(
-                Path(tmp), running="yes", session="other-20260823-120000-abc", heartbeat=self._stamp(600)
+                Path(tmp),
+                running="yes",
+                session="other-20260823-120000-abc",
+                heartbeat=self._stamp(600),
             )
             self.assertIsNone(client.lock_holder(path))
 
@@ -333,7 +345,10 @@ class LockTests(unittest.TestCase):
     def test_deploy_and_launch_refuse_while_another_session_holds_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._lock(
-                Path(tmp), running="yes", session="other-20260823-120000-abc", heartbeat=self._stamp(5)
+                Path(tmp),
+                running="yes",
+                session="other-20260823-120000-abc",
+                heartbeat=self._stamp(5),
             )
             env = {client.LOCK_ENV: str(path)}
             with self.assertRaises(PipelineError) as raised:
@@ -404,17 +419,20 @@ class LockTests(unittest.TestCase):
             finally:
                 del os.environ[client.LOCK_ENV]
             self.assertEqual(len(seen), 1, "the copy never ran")
-            self.assertIsNotNone(seen[0], "the copy ran while no session held the lock")
-            self.assertTrue(seen[0].startswith("shamway-"))
+            holder = seen[0]
+            assert holder is not None, "the copy ran while no session held the lock"
+            self.assertTrue(holder.startswith("shamway-"))
             self.assertIsNone(client.lock_holder(path), "the lock leaked after the deploy")
 
     def test_hold_for_write_refuses_over_a_fresh_holder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._lock(Path(tmp), running="yes", session="other-1", heartbeat=self._stamp(5))
             env = {client.LOCK_ENV: str(path)}
-            with self.assertRaises(PipelineError) as raised:
-                with client.hold_for_write("deploy into the shared Mods folder", env=env):
-                    pass
+            with (
+                self.assertRaises(PipelineError) as raised,
+                client.hold_for_write("deploy into the shared Mods folder", env=env),
+            ):
+                pass
             self.assertIn("other-1", str(raised.exception))
             # The refusal must not have clobbered the holder's record.
             self.assertEqual(client.lock_holder(path), "other-1")
@@ -451,9 +469,7 @@ class LockTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "playtest_running"
             with client.held_lock("mine-1", path):
-                self._lock(
-                    Path(tmp), running="yes", session="other-2", heartbeat=self._stamp(600)
-                )
+                self._lock(Path(tmp), running="yes", session="other-2", heartbeat=self._stamp(600))
             fields = dict(client.read_lock(path))
             self.assertEqual(fields.get("running"), "yes")
             self.assertEqual(fields.get("session"), "other-2")
@@ -468,21 +484,21 @@ class LockTests(unittest.TestCase):
                 patch.object(client, "LOCK_HEARTBEAT_SECONDS", 0.02),
                 client.held_lock("mine-1", path),
             ):
-                    # The documented reclaim: our record aged out and another
-                    # session took over while we were suspended.
-                    self._lock(
-                        Path(tmp),
-                        running="yes",
-                        session="other-2",
-                        acquired=self._stamp(600),
-                        heartbeat=self._stamp(0),
-                    )
-                    deadline = time.monotonic() + 2.0
-                    while time.monotonic() < deadline:
-                        if dict(client.read_lock(path)).get("session") != "other-2":
-                            self.fail("the heartbeat clobbered the reclaiming session's record")
-                        time.sleep(0.01)
-                    time.sleep(0.1)
+                # The documented reclaim: our record aged out and another
+                # session took over while we were suspended.
+                self._lock(
+                    Path(tmp),
+                    running="yes",
+                    session="other-2",
+                    acquired=self._stamp(600),
+                    heartbeat=self._stamp(0),
+                )
+                deadline = time.monotonic() + 2.0
+                while time.monotonic() < deadline:
+                    if dict(client.read_lock(path)).get("session") != "other-2":
+                        self.fail("the heartbeat clobbered the reclaiming session's record")
+                    time.sleep(0.01)
+                time.sleep(0.1)
             self.assertEqual(dict(client.read_lock(path)).get("session"), "other-2")
 
     def test_concurrent_writers_publish_whole_records_and_leave_no_temporaries(self) -> None:
@@ -514,8 +530,7 @@ class LockTests(unittest.TestCase):
                     failures.append(exc)
 
             threads = [
-                threading_module.Thread(target=write, args=(tag,))
-                for tag in ("alpha", "beta")
+                threading_module.Thread(target=write, args=(tag,)) for tag in ("alpha", "beta")
             ]
             for thread in threads:
                 thread.start()
@@ -556,7 +571,9 @@ class PortabilityTests(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         env = dict(os.environ)
         source = str(root / "src")
-        env["PYTHONPATH"] = f"{source}{os.pathsep}{env['PYTHONPATH']}" if env.get("PYTHONPATH") else source
+        env["PYTHONPATH"] = (
+            f"{source}{os.pathsep}{env['PYTHONPATH']}" if env.get("PYTHONPATH") else source
+        )
         return subprocess.run(
             [sys.executable, "-c", script], capture_output=True, text=True, env=env, check=False
         )

@@ -34,6 +34,7 @@ class GeneratorInfo(TypedDict):
     summary: str
     capabilities: list[str]
 
+
 # name -> (module, one-line summary, optional capabilities it needs)
 GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "sound": (

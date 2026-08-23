@@ -81,7 +81,9 @@ class IconKeyTests(unittest.TestCase):
         self._write("items.xml", '<configs><item name="myModVariant"></item></configs>')
         report = check_icons(self.root, self.config)
         self.assertTrue(report.ok, report.problems)
-        self.assertTrue(any("myModVariant" in note and "inherited" in note for note in report.notes))
+        self.assertTrue(
+            any("myModVariant" in note and "inherited" in note for note in report.notes)
+        )
 
     def test_report_dict_carries_implicit(self) -> None:
         report = check_icons(self.root, self.config)

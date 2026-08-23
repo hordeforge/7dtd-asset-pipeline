@@ -28,7 +28,9 @@ from sevendtd_asset_pipeline.icon_check import (
 from sevendtd_asset_pipeline.sound_check import check_sound
 
 
-def write_png(path: Path, width: int, height: int, colour_type: int = 6, cut_out: bool = True) -> None:
+def write_png(
+    path: Path, width: int, height: int, colour_type: int = 6, cut_out: bool = True
+) -> None:
     """Write a minimal valid PNG, so the checks run without Pillow.
 
     `cut_out` gives the image a transparent margin around an opaque centre,
@@ -45,7 +47,9 @@ def write_png(path: Path, width: int, height: int, colour_type: int = 6, cut_out
             )
             alpha = 255 if inside else 0
             row += bytes(
-                {0: [128], 2: [128, 128, 128], 4: [128, alpha], 6: [128, 128, 128, alpha]}[colour_type]
+                {0: [128], 2: [128, 128, 128], 4: [128, alpha], 6: [128, 128, 128, alpha]}[
+                    colour_type
+                ]
             )
         rows.append(bytes(row))
     raw = b"".join(rows)
@@ -100,17 +104,10 @@ def write_raw_clip(path: Path, rate: int, channels: int) -> None:
     data = b"\x00\x00" * 100
     body = struct.pack("<HHIIHH", 1, channels, 0, rate, 2 * channels, 16)
     payload = (
-        b"WAVEfmt "
-        + struct.pack("<I", 16)
-        + body
-        + b"data"
-        + struct.pack("<I", len(data))
-        + data
+        b"WAVEfmt " + struct.pack("<I", 16) + body + b"data" + struct.pack("<I", len(data)) + data
     )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(
-        b"RIFF" + struct.pack("<I", len(payload)) + payload
-    )
+    path.write_bytes(b"RIFF" + struct.pack("<I", len(payload)) + payload)
 
 
 class IconTests(unittest.TestCase):
@@ -178,7 +175,7 @@ class IconTests(unittest.TestCase):
 
     def test_discovers_keys_in_either_attribute_order(self) -> None:
         config = self._config(
-            '<configs>'
+            "<configs>"
             '<property name="CustomIcon" value="first" />'
             '<property value="second" name="CustomIcon" />'
             "</configs>"

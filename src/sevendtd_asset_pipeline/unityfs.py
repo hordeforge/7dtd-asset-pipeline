@@ -90,9 +90,7 @@ def _lz4_decompress(source: bytes, expected_size: int) -> bytes:
         if len(output) > expected_size:
             raise PipelineError("LZ4 block expands beyond its declared size")
     if len(output) != expected_size:
-        raise PipelineError(
-            f"LZ4 block size mismatch: expected {expected_size}, got {len(output)}"
-        )
+        raise PipelineError(f"LZ4 block size mismatch: expected {expected_size}, got {len(output)}")
     return bytes(output)
 
 
@@ -239,9 +237,7 @@ def inspect_bundle(path: Path) -> BundleInfo:
                     if len(payload) >= limit:
                         break
                 if len(payload) < min(limit, needed):
-                    raise PipelineError(
-                        "UnityFS payload does not contain the first directory node"
-                    )
+                    raise PipelineError("UnityFS payload does not contain the first directory node")
                 return bytes(payload[node_offset : min(len(payload), needed)])
 
             prefix_limit = min(needed, node_offset + TYPE_TABLE_PREFIX)

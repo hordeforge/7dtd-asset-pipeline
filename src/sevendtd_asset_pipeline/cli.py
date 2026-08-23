@@ -115,9 +115,7 @@ def _parser() -> argparse.ArgumentParser:
         "verify-bundle",
         help="load a bundle in a real Unity runtime and report every asset it returns",
     )
-    verify.add_argument(
-        "bundle", type=Path, nargs="?", help="default: the mod's staged bundle"
-    )
+    verify.add_argument("bundle", type=Path, nargs="?", help="default: the mod's staged bundle")
     verify.add_argument("--json", action="store_true")
 
     stage = commands.add_parser(
@@ -132,7 +130,9 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="the Unity log that built it; without one the disabled-module gate cannot run",
     )
-    validate = commands.add_parser("validate", help="validate the staged bundle and all XML references")
+    validate = commands.add_parser(
+        "validate", help="validate the staged bundle and all XML references"
+    )
     validate.add_argument("--bundle", type=Path, help="inspect one bundle instead of the mod")
     inspect = commands.add_parser("inspect", help="print UnityFS metadata for one bundle")
     inspect.add_argument("bundle", type=Path)
@@ -160,7 +160,9 @@ def _parser() -> argparse.ArgumentParser:
         "check-mesh", help="check an authored mesh before Unity import (trimesh, glTF validator)"
     )
     mesh.add_argument("mesh", type=Path)
-    mesh.add_argument("--max-extent", type=float, default=16.0, help="largest allowed size in metres")
+    mesh.add_argument(
+        "--max-extent", type=float, default=16.0, help="largest allowed size in metres"
+    )
     mesh.add_argument("--strict", action="store_true", help="treat glTF warnings as failures")
     mesh.add_argument("--json", action="store_true")
 
@@ -225,13 +227,16 @@ def _parser() -> argparse.ArgumentParser:
     prompt_parser.add_argument(
         "arguments",
         nargs=argparse.REMAINDER,
-        help="KIND --subject \"...\"; `shamway prompt --list` names the kinds",
+        help='KIND --subject "..."; `shamway prompt --list` names the kinds',
     )
 
     script_parser = commands.add_parser(
-        "script", help="run a packaged host script: install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance"
+        "script",
+        help="run a packaged host script: install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance",
     )
-    script_parser.add_argument("arguments", nargs=argparse.REMAINDER, help="`shamway script --list` names them")
+    script_parser.add_argument(
+        "arguments", nargs=argparse.REMAINDER, help="`shamway script --list` names them"
+    )
 
     client_parser = commands.add_parser(
         "client",
@@ -239,7 +244,9 @@ def _parser() -> argparse.ArgumentParser:
         add_help=False,
     )
     client_parser.add_argument(
-        "arguments", nargs=argparse.REMAINDER, help="passed through; `shamway client --help` lists them"
+        "arguments",
+        nargs=argparse.REMAINDER,
+        help="passed through; `shamway client --help` lists them",
     )
 
     documentation = commands.add_parser(
@@ -248,9 +255,7 @@ def _parser() -> argparse.ArgumentParser:
     documentation.add_argument("topic", nargs="?", help="omit to list the topics")
     documentation.add_argument("--json", action="store_true", help="machine-readable topic list")
 
-    schema = commands.add_parser(
-        "schema", help="print the machine-readable operation contract"
-    )
+    schema = commands.add_parser("schema", help="print the machine-readable operation contract")
     schema.add_argument("--json", action="store_true", default=True, help=argparse.SUPPRESS)
 
     call = commands.add_parser("call", help="run one operation by name with JSON parameters")
@@ -319,8 +324,15 @@ def run(args: argparse.Namespace) -> int:
             except PipelineError:
                 print("Could not resolve the changeset; Unity will add it on first open")
         created = initialize(
-            args.mod_root, args.mod_name, args.bundle_name, version, changeset,
-            args.adopt, args.source_root, args.manifest_dir, args.bundle_source,
+            args.mod_root,
+            args.mod_name,
+            args.bundle_name,
+            version,
+            changeset,
+            args.adopt,
+            args.source_root,
+            args.manifest_dir,
+            args.bundle_source,
         )
         for path in created:
             print(f"created {path}")
@@ -365,8 +377,16 @@ def run(args: argparse.Namespace) -> int:
             print(json.dumps(mesh.as_dict(), indent=2, sort_keys=True))
         else:
             data = mesh.as_dict()
-            for key in ("path", "extents", "geometry_count", "vertex_count", "face_count",
-                        "watertight", "gltf_errors", "gltf_warnings"):
+            for key in (
+                "path",
+                "extents",
+                "geometry_count",
+                "vertex_count",
+                "face_count",
+                "watertight",
+                "gltf_errors",
+                "gltf_warnings",
+            ):
                 if data[key] is not None:
                     print(f"{key}: {data[key]}")
             for note in mesh.skipped:
@@ -381,9 +401,19 @@ def run(args: argparse.Namespace) -> int:
             print(json.dumps(sound.as_dict(), indent=2, sort_keys=True))
         else:
             data = sound.as_dict()
-            for key in ("path", "channels", "sample_rate", "duration_seconds", "peak",
-                        "peak_dbfs", "rms", "dc_offset", "clipped_samples",
-                        "leading_silence_seconds", "trailing_silence_seconds"):
+            for key in (
+                "path",
+                "channels",
+                "sample_rate",
+                "duration_seconds",
+                "peak",
+                "peak_dbfs",
+                "rms",
+                "dc_offset",
+                "clipped_samples",
+                "leading_silence_seconds",
+                "trailing_silence_seconds",
+            ):
                 print(f"{key}: {data[key]}")
             for note in sound.notes:
                 print(f"note: {note}")
@@ -421,7 +451,10 @@ def run(args: argparse.Namespace) -> int:
     if args.command == "generate":
         if args.list or not args.generator:
             for generator_entry in describe_generators():
-                needs = ", ".join(generator_entry["capabilities"]) or "nothing beyond the standard library"
+                needs = (
+                    ", ".join(generator_entry["capabilities"])
+                    or "nothing beyond the standard library"
+                )
                 print(f"{generator_entry['name']:14} {generator_entry['summary']}")
                 print(f"{'':14} needs: {needs}")
             print()
@@ -451,6 +484,7 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     if args.command in ("call", "serve"):
+
         def resolve() -> Pipeline | None:
             try:
                 return Pipeline(load_config(args.config))
@@ -557,7 +591,9 @@ def run(args: argparse.Namespace) -> int:
         else:
             validation = validate_mod(config)
             print(*validation.messages, sep="\n")
-            print(f"OK: bundle and {validation.reference_count} reference(s) validated (XML and code_references)")
+            print(
+                f"OK: bundle and {validation.reference_count} reference(s) validated (XML and code_references)"
+            )
         return 0
     if args.command == "unity-release":
         data = fetch_release(project_unity_version(config.unity_project), args.platform).as_dict()
@@ -573,9 +609,17 @@ def run(args: argparse.Namespace) -> int:
         else:
             data = status_report.as_dict()
             for key in (
-                "mod_name", "bundle_source", "bundle_path", "bundle_present", "bundle_unity_version",
-                "game_unity_version", "version_matches_game",
-                "bundle_has_assetbundle_object", "asset_count", "reference_count", "valid",
+                "mod_name",
+                "bundle_source",
+                "bundle_path",
+                "bundle_present",
+                "bundle_unity_version",
+                "game_unity_version",
+                "version_matches_game",
+                "bundle_has_assetbundle_object",
+                "asset_count",
+                "reference_count",
+                "valid",
             ):
                 print(f"{key}: {data[key]}")
             for problem in status_report.problems:
@@ -587,8 +631,12 @@ def run(args: argparse.Namespace) -> int:
             print(json.dumps(icons.as_dict(), indent=2, sort_keys=True))
         else:
             for icon in icons.icons:
-                coverage = "" if icon.alpha_coverage is None else f" {icon.alpha_coverage:.0%} opaque"
-                print(f"{icon.atlas}/{icon.stem}: {icon.width}x{icon.height} {icon.colour_type}{coverage}")
+                coverage = (
+                    "" if icon.alpha_coverage is None else f" {icon.alpha_coverage:.0%} opaque"
+                )
+                print(
+                    f"{icon.atlas}/{icon.stem}: {icon.width}x{icon.height} {icon.colour_type}{coverage}"
+                )
             print(f"resolved: {len(icons.resolved)}  external: {len(icons.external)}")
             for note in icons.notes:
                 print(f"note: {note}")
@@ -598,14 +646,22 @@ def run(args: argparse.Namespace) -> int:
         return 0 if icons.ok else 1
     if args.command == "render-icon":
         result = render_icon(
-            config, args.prefab, args.output, args.size, args.atlas,
-            args.yaw, args.pitch, args.padding,
+            config,
+            args.prefab,
+            args.output,
+            args.size,
+            args.atlas,
+            args.yaw,
+            args.pitch,
+            args.padding,
         )
         if args.json:
             print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
         else:
-            print(f"OK: {result.output} ({result.size}px from {result.rendered_pixels}px, "
-                  f"{result.alpha_coverage:.0%} opaque)")
+            print(
+                f"OK: {result.output} ({result.size}px from {result.rendered_pixels}px, "
+                f"{result.alpha_coverage:.0%} opaque)"
+            )
             print("An icon is accepted in the inventory, not in a file browser.")
         return 0
     if args.command == "refs":

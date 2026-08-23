@@ -201,7 +201,9 @@ class EntryPointTests(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(0, main(["--config", str(root / ".shamway.toml"), "refs"]))
         self.assertEqual(
-            ["Config/blocks.xml: #@modfolder(ExampleMod):Resources/example.unity3d?exampleThing.prefab"],
+            [
+                "Config/blocks.xml: #@modfolder(ExampleMod):Resources/example.unity3d?exampleThing.prefab"
+            ],
             out.getvalue().splitlines(),
         )
 
@@ -278,9 +280,7 @@ class DispatchTests(unittest.TestCase):
 
     def test_a_stateless_prompt_dispatches_like_the_bound_one(self) -> None:
         """`prompt` runs before a modlet exists, so it must work without config."""
-        stateless = call_json(
-            None, "prompt", {"kind": "item-icon", "subject": "a nuke"}
-        )
+        stateless = call_json(None, "prompt", {"kind": "item-icon", "subject": "a nuke"})
         bound = self.pipeline.call("prompt", {"kind": "item-icon", "subject": "a nuke"})
         self.assertEqual(stateless, bound)
         self.assertIn("Asset type:", stateless["prompt"])
@@ -396,14 +396,15 @@ class ImportHygieneTests(unittest.TestCase):
                     bad = (isinstance(sub, ast.ImportFrom) and sub.level > 0) or (
                         isinstance(sub, ast.Import)
                         and any(
-                            alias.name.startswith("sevendtd_asset_pipeline")
-                            for alias in sub.names
+                            alias.name.startswith("sevendtd_asset_pipeline") for alias in sub.names
                         )
                     )
                     if bad:
                         line = getattr(sub, "lineno", "?")
-                        self.fail(f"{path.relative_to(root)}:{line}: "
-                                  f"intra-package import inside {node.name}()")
+                        self.fail(
+                            f"{path.relative_to(root)}:{line}: "
+                            f"intra-package import inside {node.name}()"
+                        )
 
     def test_registry_reads_the_version_without_importing_upward(self) -> None:
         from sevendtd_asset_pipeline import operations

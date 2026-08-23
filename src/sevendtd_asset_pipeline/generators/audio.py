@@ -140,7 +140,9 @@ def main(argv: list[str] | None = None) -> int:
     convert.add_argument("--rate", type=int, default=44100)
     convert.add_argument("--mono", action="store_true", default=True)
     convert.add_argument("--stereo", dest="mono", action="store_false")
-    convert.add_argument("--peak", type=float, default=0.89, help="normalize to this peak (0 disables)")
+    convert.add_argument(
+        "--peak", type=float, default=0.89, help="normalize to this peak (0 disables)"
+    )
 
     tone = commands.add_parser("tone", help="synthesize a seeded tone/noise placeholder")
     tone.add_argument("output", type=Path)

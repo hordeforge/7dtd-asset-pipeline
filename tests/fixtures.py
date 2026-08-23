@@ -82,8 +82,7 @@ def lz4_block(data: bytes) -> bytes:
         for start in range(max(0, position - 65535), position):
             length = 0
             while (
-                position + length < match_limit
-                and data[start + length] == data[position + length]
+                position + length < match_limit and data[start + length] == data[position + length]
             ):
                 length += 1
             if length > best_length:
@@ -151,8 +150,13 @@ def build_bundle(
         body = table + bytes(pad_to_block) + bytes(payload)
     kept = len(body) - truncate_table
     struct.pack_into(
-        ">QIII", prefix, size_offset,
-        len(prefix) + kept, len(table), len(table), header_flags,
+        ">QIII",
+        prefix,
+        size_offset,
+        len(prefix) + kept,
+        len(table),
+        len(table),
+        header_flags,
     )
     return bytes(prefix + body[:kept])
 

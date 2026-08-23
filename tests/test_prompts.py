@@ -15,8 +15,16 @@ class PromptTests(unittest.TestCase):
             with self.subTest(kind=name):
                 result = render(name, subject="a thing")
                 prompt = result["prompt"]
-                for label in ("Asset type", "Create", "Style", "Composition",
-                              "Lighting", "Palette", "Readability", "Constraints"):
+                for label in (
+                    "Asset type",
+                    "Create",
+                    "Style",
+                    "Composition",
+                    "Lighting",
+                    "Palette",
+                    "Readability",
+                    "Constraints",
+                ):
                     self.assertIn(f"{label}:", prompt)
                 # The constraint line is wrapped for the terminal, so a
                 # multi-word negative is split across lines in the rendering.

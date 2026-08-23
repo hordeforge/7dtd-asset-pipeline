@@ -109,9 +109,7 @@ def collect_status(config: PipelineConfig) -> Status:
             status.bundle_unity_version = bundle_info.unity_version
             status.bundle_has_assetbundle_object = bundle_info.has_assetbundle_object
             if status.game_unity_version:
-                status.version_matches_game = (
-                    bundle_info.unity_version == status.game_unity_version
-                )
+                status.version_matches_game = bundle_info.unity_version == status.game_unity_version
 
     assets_read: list[str] | None = None
     if status.manifest_present and manifest is not None:

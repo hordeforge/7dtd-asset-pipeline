@@ -78,7 +78,7 @@ BACKENDS: tuple[Backend, ...] = (
 
 
 def session_type(env: dict[str, str] | None = None) -> str:
-    """"wayland", "x11", or "none" — which decides the usable backends."""
+    """ "wayland", "x11", or "none" — which decides the usable backends."""
     environment = os.environ if env is None else env
     declared = (environment.get("XDG_SESSION_TYPE") or "").strip().lower()
     if declared in ("wayland", "x11"):
@@ -113,9 +113,7 @@ def _require_backend(env: dict[str, str] | None = None) -> Backend:
     usable = available_backends(env)
     if usable:
         return usable[0]
-    names = ", ".join(
-        backend.name for backend in BACKENDS if session in backend.sessions
-    )
+    names = ", ".join(backend.name for backend in BACKENDS if session in backend.sessions)
     raise PipelineError(
         f"no screenshot tool for this {session} session; expected one of: {names}. "
         "Install one with: shamway script install-tools --with-desktop-capture"
@@ -229,8 +227,7 @@ def capture(
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip().splitlines()
         raise PipelineError(
-            f"{backend.name} failed ({result.returncode})"
-            + (f": {detail[-1]}" if detail else "")
+            f"{backend.name} failed ({result.returncode})" + (f": {detail[-1]}" if detail else "")
         )
     if not output.is_file() or output.stat().st_size == 0:
         raise PipelineError(
@@ -239,7 +236,9 @@ def capture(
             "backend, or capture by hand and record it with --file."
         )
 
-    return _record(output, label.strip(), observable.strip(), backend.name, session_type(env), directory)
+    return _record(
+        output, label.strip(), observable.strip(), backend.name, session_type(env), directory
+    )
 
 
 def record_existing(
@@ -261,7 +260,9 @@ def record_existing(
     destination = directory / f"{_safe_stem(label.strip())}{source.suffix or '.png'}"
     if source.resolve() != destination.resolve():
         shutil.copy2(source, destination)
-    return _record(destination, label.strip(), observable.strip(), "provided", session_type(), directory)
+    return _record(
+        destination, label.strip(), observable.strip(), "provided", session_type(), directory
+    )
 
 
 def _record(

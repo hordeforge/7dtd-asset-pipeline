@@ -272,6 +272,7 @@ functions:
 
 ```python
 from sevendtd_asset_pipeline import Pipeline
+
 pipeline = Pipeline.discover()
 ```
 

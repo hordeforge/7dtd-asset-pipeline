@@ -116,10 +116,14 @@ def check_sound(
         raise PipelineError(f"{clip} contains no audio frames")
 
     frames = len(samples) // max(channels, 1)
-    mono = samples if channels == 1 else [
-        int(sum(samples[index : index + channels]) / channels)
-        for index in range(0, len(samples), channels)
-    ]
+    mono = (
+        samples
+        if channels == 1
+        else [
+            int(sum(samples[index : index + channels]) / channels)
+            for index in range(0, len(samples), channels)
+        ]
+    )
     peak = max(abs(value) for value in mono)
     clipped = sum(1 for value in mono if value >= 32767 or value <= -32767)
     energy = math.sqrt(sum(value * value for value in mono) / len(mono))

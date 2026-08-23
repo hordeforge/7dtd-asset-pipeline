@@ -144,8 +144,7 @@ KINDS: dict[str, Kind] = {
         ),
         lighting="dramatic neutral studio lighting; dangerous industrial mood",
         readability=(
-            "must read clearly as a knee-high ground-placed prop at normal in-world "
-            "distance"
+            "must read clearly as a knee-high ground-placed prop at normal in-world distance"
         ),
         default_key="magenta",
         negatives=(
@@ -171,17 +170,12 @@ KINDS: dict[str, Kind] = {
     "material-albedo": Kind(
         asset_type="7 Days to Die tileable PBR albedo",
         summary="a flat, tileable material sheet, not a picture of an object",
-        composition=(
-            "perfectly flat orthographic 2D material sheet, square, seamlessly "
-            "tileable"
-        ),
+        composition=("perfectly flat orthographic 2D material sheet, square, seamlessly tileable"),
         lighting=(
             "perfectly even flat lighting, baked into no direction; the surface's own "
             "wear supplies all contrast"
         ),
-        readability=(
-            "must stay readable on a compact ground-placed prop at normal game distance"
-        ),
+        readability=("must stay readable on a compact ground-placed prop at normal game distance"),
         default_key="",
         style=(
             "deliberately authored, slightly hand-painted survival-game surface; "
@@ -221,9 +215,7 @@ KINDS: dict[str, Kind] = {
         ),
         lighting="the sprite emits its own light; no external light source",
         style="chunky, camera-facing, slightly hand-painted game-particle forms",
-        readability=(
-            "must read as one restrained game particle, not as a rendered scene"
-        ),
+        readability=("must read as one restrained game particle, not as a rendered scene"),
         default_key="magenta",
         negatives=(
             "ground plane",
@@ -258,9 +250,7 @@ KINDS: dict[str, Kind] = {
             "dense soft centre, varied rounded puffs, a naturally broken lower edge, "
             "a few sparse wisps"
         ),
-        lighting=(
-            "no lighting; brightness is opacity, ranging from soft mid-grey to white"
-        ),
+        lighting=("no lighting; brightness is opacity, ranging from soft mid-grey to white"),
         style="deliberately chunky, slightly hand-painted survival-game texture",
         readability="this is an opacity mask, not a scene",
         default_key="black",
@@ -432,7 +422,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--role", default="", help="what it is for, in one clause")
     parser.add_argument("--palette", default="", help="three to five named colours")
-    parser.add_argument("--key", default="", choices=["", *KEYS], help="key colour to cut out against")
+    parser.add_argument(
+        "--key", default="", choices=["", *KEYS], help="key colour to cut out against"
+    )
     parser.add_argument(
         "--avoid",
         action="append",
@@ -440,7 +432,9 @@ def main(argv: list[str] | None = None) -> int:
         metavar="ARTEFACT",
         help="a specific wrong answer the last candidate produced; repeatable",
     )
-    parser.add_argument("--stem", default="myModThing", help="asset stem, used in the follow-up commands")
+    parser.add_argument(
+        "--stem", default="myModThing", help="asset stem, used in the follow-up commands"
+    )
     parser.add_argument("--json", action="store_true", help="machine-readable result")
     args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
 

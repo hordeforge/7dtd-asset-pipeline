@@ -42,7 +42,11 @@ import wave
 from pathlib import Path
 
 RATE = 44100
-FULL_SCALE = 32767
+
+# The largest magnitude a 16-bit sample can hold, so clamped writes never
+# overflow 'h'. Not the dBFS full-scale reference `check-sound` divides by
+# (32768.0); the two differ by one LSB on purpose and must not be unified.
+PCM_PEAK = 32767
 
 
 # ---------------------------------------------------------------- primitives
@@ -330,7 +334,7 @@ def write_wav(path: Path, samples: list[float], rate: int = RATE) -> None:
     """Write through a temporary file so a failed run leaves no half-written clip."""
     path.parent.mkdir(parents=True, exist_ok=True)
     pcm = array.array(
-        "h", (max(-FULL_SCALE, min(FULL_SCALE, int(value * FULL_SCALE))) for value in samples)
+        "h", (max(-PCM_PEAK, min(PCM_PEAK, int(value * PCM_PEAK))) for value in samples)
     )
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     os.close(descriptor)

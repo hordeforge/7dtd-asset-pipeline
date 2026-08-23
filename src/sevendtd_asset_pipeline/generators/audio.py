@@ -27,7 +27,10 @@ import tempfile
 import wave
 from pathlib import Path
 
-FULL_SCALE = 32767
+# The largest magnitude a 16-bit sample can hold, so clamped writes never
+# overflow 'h'. Not the dBFS full-scale reference `check-sound` divides by
+# (32768.0); the two differ by one LSB on purpose and must not be unified.
+PCM_PEAK = 32767
 
 
 def read_wav(path: Path) -> tuple[array.array[int], int, int]:
@@ -67,13 +70,13 @@ def write_wav(path: Path, samples: array.array[int], rate: int, channels: int = 
 
 def describe(path: Path, samples: array.array[int], channels: int, rate: int) -> None:
     frames = len(samples) // channels
-    peak = max((abs(value) for value in samples), default=0) / FULL_SCALE
+    peak = max((abs(value) for value in samples), default=0) / PCM_PEAK
     energy = math.sqrt(sum(value * value for value in samples) / len(samples)) if samples else 0.0
     print(f"path:     {path}")
     print(f"duration: {frames / rate:.3f} s ({frames} frames)")
     print(f"format:   {channels} ch, {rate} Hz, 16-bit PCM")
     print(f"peak:     {peak:.4f} ({20 * math.log10(peak) if peak else -math.inf:.1f} dBFS)")
-    print(f"rms:      {energy / FULL_SCALE:.4f}")
+    print(f"rms:      {energy / PCM_PEAK:.4f}")
     if peak >= 1.0:
         print("WARN: the clip is clipping at full scale", file=sys.stderr)
     if peak < 0.05:
@@ -110,8 +113,8 @@ def normalize(samples: array.array[int], peak: float) -> array.array[int]:
     current = max((abs(value) for value in samples), default=0)
     if current == 0:
         return samples
-    scale = (peak * FULL_SCALE) / current
-    return array.array[int]("h", (max(-FULL_SCALE, min(FULL_SCALE, int(v * scale))) for v in samples))
+    scale = (peak * PCM_PEAK) / current
+    return array.array[int]("h", (max(-PCM_PEAK, min(PCM_PEAK, int(v * scale))) for v in samples))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -168,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
         value = math.sin(2 * math.pi * args.hz * index / args.rate)
         if args.noise:
             value = (1 - args.noise) * value + args.noise * (generator.random() * 2 - 1)
-        samples[index] = int(0.8 * FULL_SCALE * envelope * value)
+        samples[index] = int(0.8 * PCM_PEAK * envelope * value)
     write_wav(args.output, samples, args.rate)
     print(f"seed: {args.seed}")
     describe(args.output, samples, 1, args.rate)

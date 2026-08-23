@@ -56,6 +56,37 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse((self.root / CONFIG_NAME).exists(), "nothing may be written")
         self.assertFalse((self.root / "tools").exists())
 
+    def test_scaffold_rejects_a_malformed_bundle_name_before_writing(self) -> None:
+        """An explicit --bundle-name held to the same rule load_config applies."""
+        with self.assertRaisesRegex(PipelineError, "bundle_name"):
+            initialize(self.root, None, 'evil"\n[unity]\neditor = "/tmp/x"', "2022.3.62f2")
+        self.assertFalse((self.root / CONFIG_NAME).exists(), "nothing may be written")
+        self.assertFalse((self.root / "tools").exists())
+
+    def test_scaffold_survives_hostile_modinfo_characters(self) -> None:
+        """A ModInfo Name with TOML metacharacters must still load back exactly.
+
+        The name comes from an XML file that can be built on another machine,
+        so quotes, backslashes, and character-referenced control characters in
+        it are untrusted input at this boundary. Rendered raw into
+        .shamway.toml they wrote a configuration nothing could parse.
+        (Raw newlines in an XML attribute normalize to spaces; &#10;/&#9;
+        character references survive parsing, which is why they are used here.)
+        """
+        hostile = 'Ex"ample\\Mod\nnext "line\ttab'
+        escaped = hostile.replace("&", "&amp;")
+        escaped = (
+            escaped.replace('"', "&quot;")
+            .replace("\n", "&#10;")
+            .replace("\t", "&#9;")
+        )
+        (self.root / "ModInfo.xml").write_text(
+            f'<xml><Name value="{escaped}" /></xml>', encoding="utf-8"
+        )
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        config = load_config(self.root / CONFIG_NAME)
+        self.assertEqual(hostile, config.mod_name)
+
     def _stage_mod(self, uri: str) -> None:
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
         config = load_config(self.root / CONFIG_NAME)

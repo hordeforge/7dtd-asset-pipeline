@@ -17,7 +17,7 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from .assets_src import create as create_assets_src
-from .config import BUNDLE_SOURCES, CONFIG_NAME, render_config
+from .config import BUNDLE_SOURCES, CONFIG_NAME, VALID_BUNDLE, render_config
 from .consumer_docs import render_agent_guide
 from .errors import PipelineError
 from .references import read_mod_name
@@ -158,6 +158,15 @@ def initialize(
     if mod_name is None:
         mod_name = read_mod_name(mod_root / "ModInfo.xml")
     bundle_name = "" if bundle_free else (bundle_name or default_bundle_name(mod_name))
+    # Same check before anything is written as the bundle_source one above: an
+    # explicit --bundle-name that load_config would reject must fail now, not
+    # after a whole Unity project tree has been copied. `default_bundle_name`
+    # sanitizes, so only a caller-supplied name can get here.
+    if bundle_name and not VALID_BUNDLE.fullmatch(bundle_name):
+        raise PipelineError(
+            f"bundle_name {bundle_name!r} is not a lowercase filesystem-safe name "
+            "ending in .unity3d"
+        )
     # Without a Unity project there is nothing for source_root to be relative
     # to, so it names a folder in the mod itself.
     if synthesized and not source_root:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import tomllib
@@ -12,6 +13,20 @@ from .errors import PipelineError
 
 CONFIG_NAME = ".shamway.toml"
 VALID_BUNDLE = re.compile(r"^[a-z0-9][a-z0-9._-]*\.unity3d$")
+
+
+def _toml_string(value: str) -> str:
+    """A value as a quoted TOML basic string, safe for any input.
+
+    `mod_name` arrives from ModInfo.xml and the rest from command lines, so a
+    name carrying a quote, a backslash, or a control character must terminate
+    nothing: rendered raw it would write a configuration that fails to parse,
+    or silently truncate at the first quote. JSON string escaping is valid TOML
+    basic-string escaping (`\\"`, `\\\\`, `\\n`, `\\uXXXX`), and `tomllib`
+    decodes it to exactly the original value.
+    """
+    return json.dumps(value)
+
 
 # Where the mod's bundle comes from. This is the one key that decides whether a
 # Unity editor has to exist on this machine at all, so every Unity-touching
@@ -260,12 +275,15 @@ def render_config(
     `bundle_source` decides whether the rendered configuration describes a mod
     that builds its own bundle, stages one built elsewhere, or has none — the
     only key that decides whether this machine needs a Unity editor.
+
+    Every interpolated value goes through `_toml_string`: these strings come
+    from ModInfo.xml and command lines, which are untrusted here.
     """
     if bundle_source == "none":
         return f'''# Paths are relative to this file unless absolute.
 schema_version = 1
 mod_root = "."
-mod_name = "{mod_name}"
+mod_name = {_toml_string(mod_name)}
 
 # This mod ships no Unity asset bundle: XML, loose UIAtlases/ PNGs, and DLLs
 # only. No Unity editor is needed to build, validate or ship it. Adding a
@@ -284,18 +302,18 @@ directory = ""
         return f'''# Paths are relative to this file unless absolute.
 schema_version = 1
 mod_root = "."
-mod_name = "{mod_name}"
-bundle_name = "{bundle_name}"
+mod_name = {_toml_string(mod_name)}
+bundle_name = {_toml_string(bundle_name)}
 
 # This mod's bundle is written by shamway itself: no Unity editor, no Unity
 # project. `source_root` is the folder whose contents become the bundle, and it
 # is read against this file rather than against a project that does not exist.
 # What can be synthesized and what still needs an editor: `shamway docs no-unity`.
 bundle_source = "synthesized"
-source_root = "{source_root}"
+source_root = {_toml_string(source_root)}
 
 build_dir = ".shamway/build"
-manifest_dir = "{manifest_dir}"
+manifest_dir = {_toml_string(manifest_dir)}
 resources_dir = "Resources"
 config_dir = "Config"
 target = "StandaloneWindows64"
@@ -308,7 +326,7 @@ code_references = []
 # No editor is used. The revision is still recorded, because a bundle carries
 # the revision it claims to be for; SEVEN_DAYS_TO_DIE_DIR overrides it with the
 # installed game's own answer, which is the better evidence.
-version = "{unity_version}"
+version = {_toml_string(unity_version)}
 
 [game]
 # Prefer SEVEN_DAYS_TO_DIE_DIR. The installed game is read-only reference.
@@ -325,18 +343,18 @@ directory = ""
     return f'''# Paths are relative to this file unless absolute.
 schema_version = 1
 mod_root = "."
-mod_name = "{mod_name}"
-bundle_name = "{bundle_name}"
+mod_name = {_toml_string(mod_name)}
+bundle_name = {_toml_string(bundle_name)}
 
 # Where the bundle comes from: "unity" (a local editor builds it), "external"
 # (an editor elsewhere builds it and `shamway stage` gates it here), or "none"
 # (the mod ships no bundle). See `shamway docs no-unity`.
 bundle_source = "{bundle_source}"
 
-unity_project = "{unity_project}"
-source_root = "{source_root}"
+unity_project = {_toml_string(unity_project)}
+source_root = {_toml_string(source_root)}
 build_dir = ".shamway/build"
-manifest_dir = "{manifest_dir}"
+manifest_dir = {_toml_string(manifest_dir)}
 resources_dir = "Resources"
 config_dir = "Config"
 target = "StandaloneWindows64"
@@ -349,7 +367,7 @@ code_references = []
 [unity]
 {editor_note}
 editor = ""
-version = "{unity_version}"
+version = {_toml_string(unity_version)}
 
 [game]
 # Prefer SEVEN_DAYS_TO_DIE_DIR. The installed game is read-only reference.

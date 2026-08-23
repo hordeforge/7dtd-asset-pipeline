@@ -165,6 +165,27 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "asset case"):
             validate_mod(self.config)
 
+    def test_init_writes_the_makefile_lf_only(self) -> None:
+        """GNU make rejects CRLF recipes, which Windows text mode would write.
+
+        The scaffold must therefore request LF explicitly rather than rely on
+        the platform's default translation. The spy pins the `newline` argument
+        because a Linux host cannot observe the difference by reading the file.
+        """
+        from unittest import mock
+
+        captured: dict[str, str | None] = {}
+        real_write_text = Path.write_text
+
+        def spy(self: Path, data: str, *args: object, **kwargs: object) -> int:
+            if self.name == "Makefile.assets":
+                captured["newline"] = kwargs.get("newline")  # type: ignore[arg-type]
+            return real_write_text(self, data, *args, **kwargs)  # type: ignore[arg-type]
+
+        with mock.patch.object(Path, "write_text", spy):
+            initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        self.assertEqual("\n", captured.get("newline"))
+
     def test_init_refuses_to_clobber_an_existing_makefile(self) -> None:
         makefile = self.root / "Makefile.assets"
         makefile.write_text("assets:\n\techo mine\n", encoding="utf-8")

@@ -275,6 +275,22 @@ class SoundTests(unittest.TestCase):
         with self.assertRaises(PipelineError):
             check_sound(clip)
 
+    def test_a_big_endian_host_measures_the_same_clip_the_same(self) -> None:
+        """WAV samples are little-endian; `array.array("h")` is native order.
+
+        Forcing `sys.byteorder` to "big" lets a little-endian CI prove the
+        byte swap happens; on a real big-endian host the unpatched tests above
+        already exercise the same path.
+        """
+        from unittest import mock
+
+        clip = self.root / "ok.wav"
+        write_clip(clip)
+        native = check_sound(clip).as_dict()
+        with mock.patch("sys.byteorder", "big"):
+            swapped = check_sound(clip).as_dict()
+        self.assertEqual(native, swapped)
+
     def test_report_is_json_serializable_even_for_silence(self) -> None:
         import json
 
@@ -332,6 +348,31 @@ class GeneratorTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as raised:
                 load("audio").read_wav(clip)
             self.assertIn("damaged", str(raised.exception))
+
+    def test_audio_writes_stay_little_endian_on_a_big_endian_host(self) -> None:
+        """WAV is little-endian on disk whatever the host's byte order is.
+
+        The same bytes must come out with `sys.byteorder` forced to "big" as
+        with it native; the swap must also leave the caller's array in host
+        order, because conversion keeps computing on it.
+        """
+        from unittest import mock
+
+        from sevendtd_asset_pipeline.generators import load
+
+        audio = load("audio")
+        samples = array.array("h", [0, 1000, -1000, 32767, -32768])
+        original = list(samples)
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            native, swapped = root / "native.wav", root / "swapped.wav"
+            audio.write_wav(native, samples, 44100)
+            with mock.patch("sys.byteorder", "big"):
+                audio.write_wav(swapped, samples, 44100)
+                self.assertEqual(original, list(audio.read_wav(native)[0]), "host order preserved")
+            self.assertEqual(native.read_bytes(), swapped.read_bytes())
+            self.assertEqual(original, list(samples), "writing must not swap the caller's array")
+
     def test_sound_synthesis_is_reproducible_and_passes_its_own_gate(self) -> None:
         """A seeded generator whose output the pipeline would reject is a bug."""
         import contextlib

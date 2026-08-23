@@ -336,6 +336,10 @@ def write_wav(path: Path, samples: list[float], rate: int = RATE) -> None:
     pcm = array.array(
         "h", (max(-PCM_PEAK, min(PCM_PEAK, int(value * PCM_PEAK))) for value in samples)
     )
+    # WAV holds little-endian samples; 'h' is native order, so a big-endian
+    # host would write byte-swapped samples without this.
+    if sys.byteorder == "big":
+        pcm.byteswap()
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     os.close(descriptor)
     temporary_path = Path(temporary)

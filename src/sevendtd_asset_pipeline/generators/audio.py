@@ -49,6 +49,10 @@ def read_wav(path: Path) -> tuple[array.array[int], int, int]:
         frames = handle.readframes(handle.getnframes())
         samples = array.array("h")
         samples.frombytes(frames)
+        # WAV holds little-endian samples; 'h' is native order, so a big-endian
+        # host would convert byte-swapped values without this.
+        if sys.byteorder == "big":
+            samples.byteswap()
         return samples, channels, rate
 
 
@@ -62,7 +66,13 @@ def write_wav(path: Path, samples: array.array[int], rate: int, channels: int = 
             handle.setnchannels(channels)
             handle.setsampwidth(2)
             handle.setframerate(rate)
-            handle.writeframes(samples.tobytes())
+            # WAV holds little-endian samples; 'h' is native order. Swap a copy,
+            # never the caller's array: it stays in host order for arithmetic.
+            payload = samples
+            if sys.byteorder == "big":
+                payload = array.array("h", samples)
+                payload.byteswap()
+            handle.writeframes(payload.tobytes())
         temporary_path.replace(path)
     finally:
         temporary_path.unlink(missing_ok=True)

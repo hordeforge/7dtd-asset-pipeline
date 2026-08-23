@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import array
 import math
+import sys
 import wave
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -82,6 +83,10 @@ def _read(path: Path) -> tuple[list[int], int, int, int]:
         )
     samples = array.array("h")
     samples.frombytes(frames)
+    # WAV holds little-endian samples; 'h' is native order, so a big-endian
+    # host reads every measurement from byte-swapped values without this.
+    if sys.byteorder == "big":
+        samples.byteswap()
     return list(samples), channels, rate, width * 8
 
 

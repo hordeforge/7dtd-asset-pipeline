@@ -200,8 +200,12 @@ def initialize(
         version_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
         created_scripts = []
 
+    # newline="\n": GNU make rejects CRLF recipes, which is what Windows
+    # text-mode translation would write without this.
     makefile.write_text(
-        BUNDLE_FREE_MAKEFILE_TARGETS if bundle_free else MAKEFILE_TARGETS, encoding="utf-8"
+        BUNDLE_FREE_MAKEFILE_TARGETS if bundle_free else MAKEFILE_TARGETS,
+        encoding="utf-8",
+        newline="\n",
     )
     if synthesized:
         # The folder the writer reads. Created now, with a note in it, because

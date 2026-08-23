@@ -45,6 +45,28 @@ jobs:
       - run: shamway schema
       - run: make check test
 
+  macos:
+    # docs/quickstart.md claims the CLI itself is portable beyond Linux; this
+    # job is that claim's only mechanical evidence. Lint, typecheck, and the
+    # shell-script gates stay on Linux: they pin analyzer versions once, and
+    # shellcheck is not part of the macOS runner image. One Python version,
+    # because the Linux matrix already covers the supported range.
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv sync --locked --python 3.13
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - run: shamway --help
+      - run: shamway schema
+      - run: uv run --no-project python -m unittest discover -s tests
+        env:
+          PYTHONPATH: src
+
   capabilities:
     # The optional capabilities must also work, and must not be required.
     runs-on: ubuntu-latest

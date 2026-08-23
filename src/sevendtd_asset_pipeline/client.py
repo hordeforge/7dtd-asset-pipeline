@@ -248,11 +248,36 @@ def refuse_while_held(action: str, env: dict[str, str] | None = None) -> None:
 
 
 def _write_lock(path: Path, fields: dict[str, str]) -> None:
+    """Publish one lock-file body through an atomic rename.
+
+    The temporary name carries this process's pid plus a random suffix, like
+    7dtd-playtest's own writer. A fixed `<lock>.tmp` is a second race: this
+    module's heartbeat thread writes without holding the flock for long, and
+    another session's acquirer can be inside its own flock at that moment —
+    two writers then truncate one temp file together and publish interleaved
+    bytes, or the second `os.replace` renames a file the first already moved
+    and dies, taking the heartbeat down with it.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     body = "".join(f"{key}={value}\n" for key, value in fields.items())
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(body, encoding="utf-8")
-    os.replace(temporary, path)
+    temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
+    try:
+        temporary.write_text(body, encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        with contextlib.suppress(OSError):
+            temporary.unlink()
+
+
+@contextmanager
+def _flocked(path: Path) -> Iterator[None]:
+    """Hold the protocol's sidecar flock around a critical section."""
+    with open(str(path) + ".flock", "a+", encoding="utf-8") as sidecar:
+        fcntl.flock(sidecar.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(sidecar.fileno(), fcntl.LOCK_UN)
 
 
 @contextmanager
@@ -261,37 +286,46 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
 
     Acquire is serialized with `flock` on the same `<lock>.flock` sidecar
     7dtd-playtest uses, so the two implementations exclude each other rather
-    than racing. The heartbeat thread is a daemon: a crash leaves a stale
-    record, which the protocol already defines as reclaimable.
+    than racing. Every write of the record happens inside that flock — the
+    heartbeat's and the release's included — because a writer outside it does
+    not serialize with an acquirer mid-critical-section. The heartbeat also
+    re-reads the holder before each refresh: if this process sat frozen past
+    the stale window, another session may have taken the documented reclaim,
+    and blindly restamping our id over their fresh claim would hand two
+    sessions the same client. When that happens the heartbeat stops touching
+    the file; exclusivity is lost, never faked. The thread is a daemon that
+    retries transient `OSError`s — dying silently would stale the record
+    while the client it guards is still running.
     """
     target = path if path is not None else lock_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with open(str(target) + ".flock", "a+", encoding="utf-8") as sidecar:
-        fcntl.flock(sidecar.fileno(), fcntl.LOCK_EX)
-        try:
-            holder = lock_holder(target)
-            if holder is not None and holder != session:
-                raise PipelineError(f"another session holds the shared client lock ({holder})")
-            _write_lock(
-                target,
-                {"running": "yes", "session": session, "acquired": stamp, "heartbeat": stamp},
-            )
-        finally:
-            fcntl.flock(sidecar.fileno(), fcntl.LOCK_UN)
+    with _flocked(target):
+        holder = lock_holder(target)
+        if holder is not None and holder != session:
+            raise PipelineError(f"another session holds the shared client lock ({holder})")
+        _write_lock(
+            target,
+            {"running": "yes", "session": session, "acquired": stamp, "heartbeat": stamp},
+        )
     stop = threading.Event()
 
     def beat() -> None:
         while not stop.wait(LOCK_HEARTBEAT_SECONDS):
-            _write_lock(
-                target,
-                {
-                    "running": "yes",
-                    "session": session,
-                    "acquired": stamp,
-                    "heartbeat": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                },
-            )
+            try:
+                with _flocked(target):
+                    if lock_holder(target) == session:
+                        _write_lock(
+                            target,
+                            {
+                                "running": "yes",
+                                "session": session,
+                                "acquired": stamp,
+                                "heartbeat": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            },
+                        )
+            except OSError:
+                continue
 
     thread = threading.Thread(target=beat, name="playtest-lock-heartbeat", daemon=True)
     thread.start()
@@ -300,8 +334,18 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
     finally:
         stop.set()
         thread.join(timeout=LOCK_HEARTBEAT_SECONDS)
-        if lock_holder(target) in (session, None):
-            _write_lock(target, {"running": "no"})
+        try:
+            # Read, decide, and clear inside one critical section: split
+            # across processes, a scheduling pause between the check and the
+            # write lets a reclaim land in the gap and gets wiped by the
+            # stale exit. And like 7dtd-playtest's own release, only a record
+            # that names us is ours to clear — publishing running=no over a
+            # free, foreign, or unreadable record erases someone's live claim.
+            with _flocked(target):
+                if lock_holder(target) == session:
+                    _write_lock(target, {"running": "no"})
+        except OSError:
+            pass
 
 
 def new_session_id(prefix: str = "shamway") -> str:
@@ -389,27 +433,35 @@ def running_client_pids(proc: Path = Path("/proc")) -> list[int]:
     return sorted(pids)
 
 
-def stop_client(pids: list[int], grace_seconds: float = 5.0) -> None:
+def _is_client_pid(pid: int, proc: Path = Path("/proc")) -> bool:
+    """True while `/proc/<pid>` still names a game-client executable.
+
+    A bare `kill(pid, 0)` cannot tell the launched client from whatever process
+    later recycled its PID: between the SIGTERM grace loop and the SIGKILL
+    decision the client can exit, the kernel can hand the number to an
+    unrelated one, and the stale id would then receive our SIGKILL. Re-reading
+    the argv this module matched in the first place closes that window.
+    """
+    try:
+        cmdline = (proc / str(pid) / "cmdline").read_bytes()
+    except OSError:
+        return False
+    argv0 = cmdline.split(b"\0", 1)[0].decode("utf-8", "replace")
+    return any(argv0.endswith(name) for name in CLIENT_PROCESS_NAMES)
+
+
+def stop_client(pids: list[int], grace_seconds: float = 5.0, proc: Path = Path("/proc")) -> None:
     for pid in pids:
-        with contextlib.suppress(ProcessLookupError):
-            os.kill(pid, signal.SIGTERM)
+        if _is_client_pid(pid, proc):
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGTERM)
     deadline = time.monotonic() + grace_seconds
-    while time.monotonic() < deadline and any(_alive(pid) for pid in pids):
+    while time.monotonic() < deadline and any(_is_client_pid(pid, proc) for pid in pids):
         time.sleep(0.2)
     for pid in pids:
-        if _alive(pid):
+        if _is_client_pid(pid, proc):
             with contextlib.suppress(ProcessLookupError):
                 os.kill(pid, signal.SIGKILL)
-
-
-def _alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
 
 
 def launch_command(steam_bin: str = "steam", extra_args: tuple[str, ...] = ()) -> list[str]:

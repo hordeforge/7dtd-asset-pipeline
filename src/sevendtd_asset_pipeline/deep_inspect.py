@@ -103,10 +103,18 @@ def deep_inspect(path: Path) -> DeepReport:
     path = path.resolve()
     if not path.is_file():
         raise PipelineError(f"cannot read bundle {path}: no such file")
+    # Read the bundle here and hand UnityPy bytes. Loading from a path makes
+    # UnityPy hold the file descriptor in a reference-cyclic reader graph with
+    # no close() on the environment, so release would be delegated to the
+    # cyclic collector — an fd per load until it runs, on every inspect_deep
+    # call inside a long-lived serve session.
     try:
-        environment = unity_py.load(str(path))
+        payload = path.read_bytes()
+        environment = unity_py.load(payload)
         objects = list(environment.objects)
         container = dict(environment.container)
+    except OSError as exc:
+        raise PipelineError(f"cannot read bundle {path}: {exc}") from exc
     except PipelineError:
         raise
     except Exception as exc:

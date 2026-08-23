@@ -80,6 +80,13 @@ What `shamway` does with it:
   not only their current one.
 - `client launch` refuses the same way, then holds the lock and heartbeats it
   for the duration of its run, releasing it at the end.
+- Every write this repository makes to the record — acquire, heartbeat,
+  release alike — happens inside that same flock, against a writer-unique
+  temporary file published by rename. The heartbeat re-reads the holder under
+  the flock before restamping: a process frozen past the stale window has
+  legally lost its hold to whoever reclaimed it, and blindly writing its own
+  id back would hand two sessions one client. Release likewise clears only a
+  record that still names the releasing session.
 - Both still refuse when a client process is up, whatever the file says. The
   lock covers the gap between runs; the process check covers a lock nobody
   wrote.

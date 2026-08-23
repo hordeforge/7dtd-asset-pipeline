@@ -236,6 +236,31 @@ class ProcessAndAudioTests(unittest.TestCase):
             (proc / "self").mkdir()
             self.assertEqual(client.running_client_pids(proc), [100, 101])
 
+    def test_a_pid_that_stopped_naming_the_client_is_not_signalled(self) -> None:
+        """SIGKILL follows identity, not bare PID liveness.
+
+        Between the SIGTERM grace loop and the kill decision the client can
+        exit and the kernel can recycle its PID to an unrelated process; the
+        stale id must not receive our signals.
+        """
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as temp:
+            proc = Path(temp)
+            for pid, argv0 in ((300, "/games/7DaysToDie.exe"), (301, "/bin/bash")):
+                (proc / str(pid)).mkdir()
+                (proc / str(pid) / "cmdline").write_bytes(argv0.encode() + b"\0")
+            self.assertTrue(client._is_client_pid(300, proc))
+            self.assertFalse(client._is_client_pid(301, proc))
+            self.assertFalse(client._is_client_pid(999999, proc))
+            signalled: list[tuple[int, int]] = []
+            with patch.object(
+                client.os, "kill", side_effect=lambda pid, sig: signalled.append((pid, sig))
+            ):
+                client.stop_client([300, 301], grace_seconds=0.05, proc=proc)
+            self.assertNotIn(301, [pid for pid, _ in signalled])
+            self.assertIn(300, [pid for pid, _ in signalled])
+
     def test_sink_inputs_are_selected_by_application_name_or_binary(self) -> None:
         inputs = [
             {"index": 3, "properties": {"application.name": "Firefox"}},
@@ -351,6 +376,94 @@ class LockTests(unittest.TestCase):
             path = self._lock(Path(tmp), running="yes", session="other-1", heartbeat=self._stamp(5))
             with self.assertRaises(PipelineError), client.held_lock("mine-1", path):
                 pass
+
+    def test_release_leaves_a_reclaimed_record_alone(self) -> None:
+        """Release clears only a record that names us, never a foreign claim.
+
+        While this session sat frozen past the stale window, another session
+        may have taken the documented reclaim. Publishing running=no on the
+        way out — the old code did whenever the record did not read as ours —
+        erases their live hold and lets a third session start over their run.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "playtest_running"
+            with client.held_lock("mine-1", path):
+                self._lock(
+                    Path(tmp), running="yes", session="other-2", heartbeat=self._stamp(600)
+                )
+            fields = dict(client.read_lock(path))
+            self.assertEqual(fields.get("running"), "yes")
+            self.assertEqual(fields.get("session"), "other-2")
+
+    def test_heartbeat_does_not_restamp_over_a_reclaiming_session(self) -> None:
+        """The heartbeat re-validates ownership under the flock before writing."""
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "playtest_running"
+            with patch.object(client, "LOCK_HEARTBEAT_SECONDS", 0.02):
+                with client.held_lock("mine-1", path):
+                    # The documented reclaim: our record aged out and another
+                    # session took over while we were suspended.
+                    self._lock(
+                        Path(tmp),
+                        running="yes",
+                        session="other-2",
+                        acquired=self._stamp(600),
+                        heartbeat=self._stamp(0),
+                    )
+                    deadline = time.monotonic() + 2.0
+                    while time.monotonic() < deadline:
+                        if dict(client.read_lock(path)).get("session") != "other-2":
+                            self.fail("the heartbeat clobbered the reclaiming session's record")
+                        time.sleep(0.01)
+                    time.sleep(0.1)
+            self.assertEqual(dict(client.read_lock(path)).get("session"), "other-2")
+
+    def test_concurrent_writers_publish_whole_records_and_leave_no_temporaries(self) -> None:
+        """Two lock writers must never share a temp file.
+
+        A fixed `<lock>.tmp` let the heartbeat thread and an acquirer truncate
+        one temp file together: readers saw interleaved bytes, and the loser
+        of the rename pair died on FileNotFoundError mid-heartbeat.
+        """
+        import threading as threading_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "playtest_running"
+            failures: list[BaseException] = []
+
+            def write(tag: str) -> None:
+                try:
+                    for _ in range(40):
+                        client._write_lock(
+                            path,
+                            {
+                                "running": "yes",
+                                "session": f"{tag}-{client.new_session_id('w')}",
+                                "acquired": "2026-08-24T00:00:00Z",
+                                "heartbeat": "2026-08-24T00:00:00Z",
+                            },
+                        )
+                except BaseException as exc:  # noqa: BLE001 - collected below
+                    failures.append(exc)
+
+            threads = [
+                threading_module.Thread(target=write, args=(tag,))
+                for tag in ("alpha", "beta")
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            self.assertEqual(failures, [])
+            fields = client.read_lock(path)
+            self.assertIn(fields.get("session", "").split("-", 1)[0], {"alpha", "beta"})
+            self.assertEqual(
+                [entry.name for entry in Path(tmp).iterdir() if ".tmp." in entry.name],
+                [],
+                "a crashed or raced writer left its temporary behind",
+            )
 
 
 class CliTests(unittest.TestCase):

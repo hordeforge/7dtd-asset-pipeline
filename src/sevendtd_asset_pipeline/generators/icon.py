@@ -69,7 +69,8 @@ def build_icon(
     with less in it. 0.7 fill and 0.45 saturation is a proven pairing; pass
     them instead of generating a second source, and record them.
     """
-    image = Image.open(source).convert("RGBA")
+    with Image.open(source) as opened:
+        image = opened.convert("RGBA")
     if trim:
         box = image.getbbox()
         if box is None:

@@ -289,14 +289,15 @@ def _run_albedo(args: argparse.Namespace) -> int:
     for name, value in (("--metallic", args.metallic), ("--smoothness", args.smoothness)):
         if not 0.0 <= value <= 1.0:
             raise SystemExit(f"ERROR: {name} must be in [0, 1]")
-    image = Image.open(args.albedo)
-    rgb = np.asarray(image.convert("RGB"), dtype=np.float64) / 255.0
+    with Image.open(args.albedo) as source:
+        rgb = np.asarray(source.convert("RGB"), dtype=np.float64) / 255.0
+        width, height = source.size
 
     normal = normal_map(height_from_albedo(rgb, args.detail_radius), args.slope, args.flip_green)
     normal_path = args.out_dir / f"{args.stem}Normal.png"
     save_atomically(normal, normal_path, "RGB")
     copied = promote(normal_path, args.also)
-    print(f"albedo:     {args.albedo} ({image.width}x{image.height})")
+    print(f"albedo:     {args.albedo} ({width}x{height})")
     print(f"normal:     {normal_path}  ({'DirectX' if args.flip_green else 'OpenGL'} green)  sha256 {sha256(normal_path)}")
     if copied:
         print(f"also:       {copied}")

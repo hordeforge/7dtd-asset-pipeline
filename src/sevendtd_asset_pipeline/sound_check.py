@@ -73,6 +73,13 @@ def _read(path: Path) -> tuple[list[int], int, int, int]:
             f"{path} is {width * 8}-bit PCM; convert it to 16-bit first "
             f"(shamway generate audio convert)"
         )
+    # A header can declare either field zero (or negative, which reads back
+    # wrapped); every duration and silence measure below divides by them.
+    if channels < 1 or rate < 1:
+        raise PipelineError(
+            f"{path} declares {channels} channel(s) at {rate} Hz; the WAV header "
+            "is damaged beyond measurement"
+        )
     samples = array.array("h")
     samples.frombytes(frames)
     return list(samples), channels, rate, width * 8

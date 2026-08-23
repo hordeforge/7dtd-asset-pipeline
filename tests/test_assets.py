@@ -91,6 +91,28 @@ def write_clip(
         handle.writeframes(samples.tobytes())
 
 
+def write_raw_clip(path: Path, rate: int, channels: int) -> None:
+    """A 16-bit PCM WAV with arbitrary header fields, valid or not.
+
+    `wave`'s writer refuses nothing here, so the header is packed by hand; this
+    is how a file damaged by another tool reaches the gates.
+    """
+    data = b"\x00\x00" * 100
+    body = struct.pack("<HHIIHH", 1, channels, 0, rate, 2 * channels, 16)
+    payload = (
+        b"WAVEfmt "
+        + struct.pack("<I", 16)
+        + body
+        + b"data"
+        + struct.pack("<I", len(data))
+        + data
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(
+        b"RIFF" + struct.pack("<I", len(payload)) + payload
+    )
+
+
 class IconTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -238,6 +260,21 @@ class SoundTests(unittest.TestCase):
         with self.assertRaises(PipelineError):
             check_sound(self.root / "absent.wav")
 
+    def test_a_damaged_header_is_named_not_a_traceback(self) -> None:
+        """A zero rate reaches a duration division and must fail as one gate line."""
+        clip = self.root / "broken-rate.wav"
+        write_raw_clip(clip, rate=0, channels=1)
+        with self.assertRaises(PipelineError) as raised:
+            check_sound(clip)
+        self.assertIn("damaged", str(raised.exception))
+
+    def test_zero_channels_still_fails_as_a_gate_line(self) -> None:
+        """`wave` refuses this first; the gate must wrap it either way."""
+        clip = self.root / "broken-channels.wav"
+        write_raw_clip(clip, rate=44100, channels=0)
+        with self.assertRaises(PipelineError):
+            check_sound(clip)
+
     def test_report_is_json_serializable_even_for_silence(self) -> None:
         import json
 
@@ -285,6 +322,16 @@ class GeneratorTests(unittest.TestCase):
             run("nope", [])
         self.assertIn("sound", str(raised.exception))
 
+    def test_the_audio_converter_rejects_a_damaged_header_as_one_error_line(self) -> None:
+        """The generator lane fails with its ERROR line, not a division traceback."""
+        from sevendtd_asset_pipeline.generators import load
+
+        with tempfile.TemporaryDirectory() as name:
+            clip = Path(name) / "broken.wav"
+            write_raw_clip(clip, rate=0, channels=1)
+            with self.assertRaises(SystemExit) as raised:
+                load("audio").read_wav(clip)
+            self.assertIn("damaged", str(raised.exception))
     def test_sound_synthesis_is_reproducible_and_passes_its_own_gate(self) -> None:
         """A seeded generator whose output the pipeline would reject is a bug."""
         import contextlib

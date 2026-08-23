@@ -244,6 +244,94 @@ class ProcessAndAudioTests(unittest.TestCase):
             self.assertFalse(client.disable_discord_integration(reg))
 
 
+class LockTests(unittest.TestCase):
+    """The shared-client lock this repository reads but does not own.
+
+    Regression cover for a client deployed into someone else's run: the
+    process check is blind between two runs of an orchestrator that releases
+    and re-acquires, and the lock is the only thing that is not.
+    """
+
+    def _lock(self, root: Path, **fields: str) -> Path:
+        path = root / "playtest_running"
+        path.write_text("".join(f"{k}={v}\n" for k, v in fields.items()), encoding="utf-8")
+        return path
+
+    def _stamp(self, age_seconds: float) -> str:
+        from datetime import UTC, datetime, timedelta
+
+        moment = datetime.now(UTC) - timedelta(seconds=age_seconds)
+        return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def test_a_fresh_holder_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp), running="yes", session="other-20260823-120000-abc", heartbeat=self._stamp(5)
+            )
+            self.assertEqual(client.lock_holder(path), "other-20260823-120000-abc")
+
+    def test_a_stale_holder_reads_free(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp), running="yes", session="other-20260823-120000-abc", heartbeat=self._stamp(600)
+            )
+            self.assertIsNone(client.lock_holder(path))
+
+    def test_running_no_and_a_missing_file_both_read_free(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(client.lock_holder(self._lock(Path(tmp), running="no")))
+            self.assertIsNone(client.lock_holder(Path(tmp) / "absent"))
+
+    def test_deploy_and_launch_refuse_while_another_session_holds_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp), running="yes", session="other-20260823-120000-abc", heartbeat=self._stamp(5)
+            )
+            env = {client.LOCK_ENV: str(path)}
+            with self.assertRaises(PipelineError) as raised:
+                client.refuse_while_held("deploy into the shared Mods folder", env=env)
+            self.assertIn("other-20260823-120000-abc", str(raised.exception))
+
+    def test_the_holding_session_is_not_refused_against_itself(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(Path(tmp), running="yes", session="mine-1", heartbeat=self._stamp(5))
+            env = {client.LOCK_ENV: str(path), client.LOCK_SESSION_ENV: "mine-1"}
+            client.refuse_while_held("launch a client", env=env)
+
+    def test_holding_writes_a_record_and_releases_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "playtest_running"
+            with client.held_lock("mine-1", path):
+                self.assertEqual(client.lock_holder(path), "mine-1")
+            self.assertIsNone(client.lock_holder(path))
+            self.assertIn("running=no", path.read_text(encoding="utf-8"))
+
+    def test_deploy_writes_only_when_the_lock_is_free(self) -> None:
+        """The guard sits on the write, so a free lock still deploys."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mod"
+            (root / "Config").mkdir(parents=True)
+            (root / "ModInfo.xml").write_text(
+                '<?xml version="1.0"?><xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+            )
+            (root / "Config" / "items.xml").write_text("<configs />", encoding="utf-8")
+            free = Path(tmp) / "playtest_running"
+            free.write_text("running=no\n", encoding="utf-8")
+            os.environ[client.LOCK_ENV] = str(free)
+            try:
+                status = client.main(["deploy", str(root), "--mods-dir", str(Path(tmp) / "Mods")])
+            finally:
+                del os.environ[client.LOCK_ENV]
+            self.assertEqual(status, 0)
+            self.assertTrue((Path(tmp) / "Mods/ExampleMod/Config/items.xml").is_file())
+
+    def test_holding_refuses_over_another_fresh_holder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(Path(tmp), running="yes", session="other-1", heartbeat=self._stamp(5))
+            with self.assertRaises(PipelineError), client.held_lock("mine-1", path):
+                pass
+
+
 class CliTests(unittest.TestCase):
     def test_where_without_a_game_dir_prints_nulls(self) -> None:
         import contextlib

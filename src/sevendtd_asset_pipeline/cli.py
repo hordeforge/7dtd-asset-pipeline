@@ -623,6 +623,7 @@ def main(argv: list[str] | None = None) -> int:
         "script": ("scripts", []),
         "prompt": ("prompts", ["--list"]),
         "client": ("client", ["--help"]),
+        "acceptance-provider": ("acceptance", []),
     }
     head = arguments[:1]
     if head and head[0] in passthrough:

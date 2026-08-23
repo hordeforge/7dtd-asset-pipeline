@@ -40,16 +40,21 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import fcntl
 import json
 import os
 import re
+import secrets
 import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .capture import DEFAULT_ROOT, capture, read_manifest, record_existing
@@ -150,6 +155,158 @@ def user_mods_dir(game_dir: Path | None, env: dict[str, str] | None = None) -> P
             "library (steamapps/common/...). Set SEVEN_DAYS_TO_DIE_MODS_DIR explicitly."
         )
     return user_data / "Mods"
+
+
+# -------------------------------------------------------------- exclusivity
+
+# One machine has one client, and it is shared with hordeforge/7dtd-playtest
+# and every mod repository that drives it. That exclusivity is a lock file
+# owned by 7dtd-playtest (`scripts/playtest_lock.py`), the only implementation
+# of the protocol on a host; this module reads and holds that same file rather
+# than inventing a second one. A second path is not a second lock, it is a
+# holder nobody else can see: the process check below catches a client that is
+# already up, but it is blind in the seconds between two runs of an
+# orchestrator that releases and re-acquires, which is exactly when a deploy
+# into the shared Mods/ folder lands in someone else's next run.
+LOCK_ENV = "PLAYTEST_LOCK_FILE"
+LOCK_SESSION_ENV = "PLAYTEST_SESSION_ID"
+LOCK_STALE_ENV = "PLAYTEST_LOCK_STALE_SEC"
+DEFAULT_LOCK_RELATIVE = Path(".cache") / "7dtd-playtest" / "playtest_running"
+DEFAULT_LOCK_STALE_SECONDS = 120.0
+LOCK_HEARTBEAT_SECONDS = 30.0
+
+
+def lock_path(env: dict[str, str] | None = None) -> Path:
+    """The shared client lock: `PLAYTEST_LOCK_FILE`, else 7dtd-playtest's default."""
+    environment = os.environ if env is None else env
+    override = environment.get(LOCK_ENV, "").strip()
+    return Path(override).expanduser() if override else Path.home() / DEFAULT_LOCK_RELATIVE
+
+
+def read_lock(path: Path) -> dict[str, str]:
+    """The lock's `key=value` fields. A missing or unreadable file reads free."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    fields: dict[str, str] = {}
+    for line in text.splitlines():
+        key, separator, value = line.partition("=")
+        if separator:
+            fields[key.strip()] = value.strip()
+    return fields
+
+
+def _stale_seconds(env: dict[str, str] | None = None) -> float:
+    environment = os.environ if env is None else env
+    try:
+        return float(environment.get(LOCK_STALE_ENV, "") or DEFAULT_LOCK_STALE_SECONDS)
+    except ValueError:
+        return DEFAULT_LOCK_STALE_SECONDS
+
+
+def lock_holder(
+    path: Path | None = None,
+    env: dict[str, str] | None = None,
+    now: float | None = None,
+) -> str | None:
+    """The session id currently holding the client, or None when it is free.
+
+    Held means `running=yes` with a heartbeat inside the stale window. A stale
+    holder reads as free, because taking one over is the documented reclaim
+    path; the live-process check is what still refuses in that case.
+    """
+    fields = read_lock(path if path is not None else lock_path(env))
+    if fields.get("running") != "yes":
+        return None
+    session = fields.get("session") or "unknown"
+    stamp = fields.get("heartbeat") or fields.get("acquired")
+    if not stamp:
+        return None
+    try:
+        heartbeat = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if heartbeat.tzinfo is None:
+        heartbeat = heartbeat.replace(tzinfo=UTC)
+    moment = datetime.now(UTC) if now is None else datetime.fromtimestamp(now, UTC)
+    age = (moment - heartbeat).total_seconds()
+    return session if age <= _stale_seconds(env) else None
+
+
+def refuse_while_held(action: str, env: dict[str, str] | None = None) -> None:
+    """Refuse an exclusive-client action while another session holds the lock."""
+    environment = os.environ if env is None else env
+    holder = lock_holder(env=environment)
+    if holder is None or holder == environment.get(LOCK_SESSION_ENV, ""):
+        return
+    raise PipelineError(
+        f"another session holds the shared client lock ({holder}); refusing to {action}. "
+        f"The lock is {lock_path(environment)}; wait for it to release, or set "
+        f"{LOCK_SESSION_ENV} to that session if this run is part of it."
+    )
+
+
+def _write_lock(path: Path, fields: dict[str, str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = "".join(f"{key}={value}\n" for key, value in fields.items())
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(body, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+@contextmanager
+def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
+    """Hold the shared client lock for `session`, refreshing its heartbeat.
+
+    Acquire is serialized with `flock` on the same `<lock>.flock` sidecar
+    7dtd-playtest uses, so the two implementations exclude each other rather
+    than racing. The heartbeat thread is a daemon: a crash leaves a stale
+    record, which the protocol already defines as reclaimable.
+    """
+    target = path if path is not None else lock_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(str(target) + ".flock", "a+", encoding="utf-8") as sidecar:
+        fcntl.flock(sidecar.fileno(), fcntl.LOCK_EX)
+        try:
+            holder = lock_holder(target)
+            if holder is not None and holder != session:
+                raise PipelineError(f"another session holds the shared client lock ({holder})")
+            _write_lock(
+                target,
+                {"running": "yes", "session": session, "acquired": stamp, "heartbeat": stamp},
+            )
+        finally:
+            fcntl.flock(sidecar.fileno(), fcntl.LOCK_UN)
+    stop = threading.Event()
+
+    def beat() -> None:
+        while not stop.wait(LOCK_HEARTBEAT_SECONDS):
+            _write_lock(
+                target,
+                {
+                    "running": "yes",
+                    "session": session,
+                    "acquired": stamp,
+                    "heartbeat": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                },
+            )
+
+    thread = threading.Thread(target=beat, name="playtest-lock-heartbeat", daemon=True)
+    thread.start()
+    try:
+        yield target
+    finally:
+        stop.set()
+        thread.join(timeout=LOCK_HEARTBEAT_SECONDS)
+        if lock_holder(target) in (session, None):
+            _write_lock(target, {"running": "no"})
+
+
+def new_session_id(prefix: str = "shamway") -> str:
+    """A lock session id in the protocol's `<agent>-<UTC stamp>-<hex>` shape."""
+    return f"{prefix}-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(6)}"
 
 
 # ------------------------------------------------------------------- deploy
@@ -558,11 +715,14 @@ def fresh_client_run(
 ) -> AcceptanceRun:
     """Launch a genuinely fresh client and classify the log it writes.
 
-    Refuses to start while a client is running: a bundle stays cached for the
-    life of the process, so a reused client cannot prove a rebuilt bundle. A
-    `mute` run is muted at the OS layer and unmuted again before returning;
-    a *listening* run must not be muted, and says so in its report.
+    Refuses to start while another session holds the shared client lock, and
+    holds it for the duration of this run. Refuses too while a client is
+    running: a bundle stays cached for the life of the process, so a reused
+    client cannot prove a rebuilt bundle. A `mute` run is muted at the OS layer
+    and unmuted again before returning; a *listening* run must not be muted,
+    and says so in its report.
     """
+    refuse_while_held("launch a client")
     if running_client_pids():
         raise PipelineError(
             "a 7 Days to Die client is already running; close it first. A reused client "
@@ -571,20 +731,22 @@ def fresh_client_run(
     if shutil.which(steam_bin) is None:
         raise PipelineError(f"{steam_bin!r} is not on PATH; set --steam-bin to the Steam launcher")
     logs = log_dir or client_log_dir(game_dir)
-    started_at = time.time()
-    command = launch_command(steam_bin, extra_args)
-    subprocess.run(command, check=False)
-    muted_indexes: list[int] = []
-    if mute:
-        muted_indexes = set_client_mute(True)
-    unmuted = False
-    if run_seconds:
-        time.sleep(run_seconds)
-        if mute and muted_indexes:
-            set_client_mute(False, wait_seconds=5)
-            unmuted = True
-        stop_client(running_client_pids())
-    newest = latest_client_log(logs, written_after=started_at)
+    session = os.environ.get(LOCK_SESSION_ENV) or new_session_id()
+    with held_lock(session):
+        started_at = time.time()
+        command = launch_command(steam_bin, extra_args)
+        subprocess.run(command, check=False)
+        muted_indexes: list[int] = []
+        if mute:
+            muted_indexes = set_client_mute(True)
+        unmuted = False
+        if run_seconds:
+            time.sleep(run_seconds)
+            if mute and muted_indexes:
+                set_client_mute(False, wait_seconds=5)
+                unmuted = True
+            stop_client(running_client_pids())
+        newest = latest_client_log(logs, written_after=started_at)
     return AcceptanceRun(
         log=scan_log(newest, mod_name),
         launched=command,
@@ -693,6 +855,11 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
     if args.command == "deploy":
         name = args.name or read_mod_name(args.mod_root / "ModInfo.xml")
         mods_dir = args.mods_dir or user_mods_dir(game_dir)
+        # Checked here rather than on entry: the lock guards the *write*, and a
+        # malformed modlet should say so whoever happens to hold the client.
+        # The Mods/ folder is shared with that holder, and a mod dropped in
+        # during their run is loaded by their next launch.
+        refuse_while_held("deploy into the shared Mods folder")
         copied = deploy_mod(args.mod_root, mods_dir, name, replace=not args.keep_existing)
         print(f"deployed {name} to {mods_dir / name}: {', '.join(copied)}")
         return 0

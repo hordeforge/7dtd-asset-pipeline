@@ -161,6 +161,40 @@ For every rebuilt bundle:
 
 Do not accept a bundle from a launcher that reused an already-running client.
 
+### Step 3 has a mechanical definition too
+
+"Force every changed asset to load by exact URI" reads like a human sitting in
+the world equipping things. It is not: a
+[hordeforge/7dtd-playtest](https://github.com/hordeforge/7dtd-playtest)
+scenario provider runs inside the live client and can ask the engine directly.
+`shamway acceptance-provider` generates that provider from the mod's tracked
+manifest — one case per bundle member, each calling `DataLoader.LoadAsset<T>`
+on the member's real URI, plus a stem the bundle does not contain that must
+return null so a loader answering everything cannot read as a pass.
+
+```bash
+shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
+```
+
+`scripts/playtest-acceptance.sh` runs the whole sequence — generate, build,
+deploy the modlet and the harness mods, hand off to the orchestrator, print
+the case results:
+
+```bash
+shamway script playtest-acceptance
+```
+
+The provider is generated rather than hand-written because the cases *are* the
+manifest: a bundle member with no case is a member nobody proved. Adding an
+extension the writer can emit means adding it to `acceptance.ASSET_CASES` with
+the `LoadAsset<T>` the engine really uses; an unmapped member is refused, not
+skipped.
+
+Two boundaries this does not cross. It proves the engine read the bytes, never
+that they are the right bytes — step 5 is still a person. And it runs against a
+client the harness drives, which means it takes the shared client lock; see
+[sibling-repos.md](sibling-repos.md).
+
 ### The mechanics, on a Linux host
 
 Steps 1, 2, 4 and 7 have a mechanical definition, and `shamway client`

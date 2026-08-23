@@ -6,7 +6,8 @@ PYTHON := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project pyt
 
 all: check test
 
-SHELL_SCRIPTS := scripts/bootstrap scripts/install-tools.sh scripts/install-unity-editor.sh scripts/compile-editor-scripts.sh
+SHELL_SCRIPTS := scripts/bootstrap scripts/install-tools.sh scripts/install-unity-editor.sh \
+	scripts/compile-editor-scripts.sh scripts/playtest-acceptance.sh
 
 check: lint
 	$(PYTHON) -m compileall -q src tests

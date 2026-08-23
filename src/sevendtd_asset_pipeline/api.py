@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from . import client
+from .acceptance import generate as generate_acceptance_provider
 from .build import (
     SYNTHESIZED_CAVEATS,
     expected_unity_version,
@@ -146,6 +147,30 @@ class Pipeline:
         if not self.config.game_dir:
             return None
         return game_unity_version(self.config.game_dir)[0]
+
+    def acceptance_provider(
+        self,
+        harness_dll: Path | str | None = None,
+        install: bool = False,
+        mods_dir: Path | str | None = None,
+    ):
+        """Render (and optionally build) the client-side acceptance provider.
+
+        The cases are the mod's own manifest, so a bundle member that nothing
+        asserts is a member nobody proved.
+        """
+        install_dir = None
+        if install:
+            client.refuse_while_held("install into the shared Mods folder")
+            install_dir = (
+                Path(mods_dir) if mods_dir else client.user_mods_dir(self.config.game_dir)
+            )
+        return generate_acceptance_provider(
+            self.config,
+            self.config.game_dir,
+            Path(harness_dll) if harness_dll else None,
+            install_dir,
+        )
 
     def verify_bundle(self, bundle: Path | str | None = None):
         """Load a bundle in a real Unity runtime and report what came back.
@@ -397,6 +422,9 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "build": lambda self, p: {"bundle": str(self.build(p.get("probe", False)))},
     "pack": lambda self, p: _pack(p, self.config.game_dir),
     "verify_bundle": lambda self, p: self.verify_bundle(p.get("bundle")),
+    "acceptance_provider": lambda self, p: self.acceptance_provider(
+        p.get("harness_dll"), bool(p.get("install", False)), p.get("mods_dir")
+    ),
     "stage": lambda self, p: _stage_result(
         self.stage(p["bundle"], p.get("manifest"), p.get("log"))
     ),

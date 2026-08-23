@@ -163,20 +163,57 @@ deviation from the phase-4 bar in
 [offline-bundle-builder.md](offline-bundle-builder.md); every synthesize prints
 what its gates are worth.
 
+**No longer blocked:** the plumbing for closing it. On 2026-08-24 this
+repository gained `shamway acceptance-provider`, which generates a
+[hordeforge/7dtd-playtest](https://github.com/hordeforge/7dtd-playtest)
+scenario provider from the mod's own tracked manifest — one case per bundle
+member, each calling `DataLoader.LoadAsset<T>` inside the live client, plus a
+stem the bundle does not contain that must return null — and
+`scripts/playtest-acceptance.sh`, which generates, builds, deploys and hands
+the run to that harness. That reaches the engine code a runtime load cannot:
+`@modfolder(Name)` rewriting, `AssetBundleManager` opening the archive, and
+the stem reduction that reads the class-142 `m_Container` table.
+
+Two defects were found and fixed on the way, and both are why this entry stayed
+open longer than the writer deserved: `shamway client deploy` read no
+exclusivity lock, so it could copy a modlet into another session's run; and
+`playtest_run.py` preflighted the dedicated server but not the client, so a
+caller who exported the wrong variable waited out a fifteen-minute timeout
+instead of reading one error. The second is fixed upstream in
+`hordeforge/7dtd-playtest`.
+
+**Still blocked:** the run itself. No suite has completed against a synthesized
+bundle yet, so nothing here may be described as client-accepted.
+
 **You run:** in a mod with `bundle_source = "synthesized"`, an XML reference to
 one of its assets, and a client installed:
 
 ```bash
 shamway build
 shamway validate
+shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
+```
+
+```bash
+shamway script playtest-acceptance
+```
+
+Without the harness, the weaker form that proves the mod loads but not that
+anything read the bundle:
+
+```bash
 shamway client deploy .
 shamway client launch --mod-name MyMod
 ```
 
-**Confirms it worked:** the client log carries `Loaded Mod: MyMod` with no
-bundle-load, incompatibility or wrong-name lines, and the asset itself is
-right when a person looks at or listens to it — a texture that is the right
-way up, a clip at the right pitch.
+**Confirms it worked:** every generated case passes (`[7dtd-playtest] PASS
+<mod>_bundle/load_<stem>`, and `absent_stem_is_null` among them, or the loader
+is answering requests it should refuse), the client log carries `Loaded Mod:
+MyMod` with no bundle-load, incompatibility or wrong-name lines, and the asset
+itself is right when a person looks at or listens to it — a texture the right
+way up, a clip at the right pitch. Record that last judgement with `shamway
+client capture <label> --observable "..."`; without it the only evidence the
+asset was ever *looked at* is a chat message.
 
 ## Verified, for contrast
 

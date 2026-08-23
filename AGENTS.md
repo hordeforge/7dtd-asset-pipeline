@@ -23,6 +23,45 @@ This repository lives in the **hordeforge** organization
 projects. Work here goes on a branch and lands through a pull request; nothing
 is pushed straight to the default branch.
 
+[docs/sibling-repos.md](docs/sibling-repos.md) indexes the other twelve
+repositories and what each owns. Read it before running anything under
+`shamway client`: `7dtd-playtest` owns the live-client exclusivity lock those
+commands take, and a deploy made while another session holds it lands in that
+session's next launch.
+
+### Fix it upstream, do not work around it here
+
+This repository is the generalized extraction of an asset pipeline that grew
+inside a mod repository. Its whole reason to exist is that the general thing
+lives in one place instead of being re-solved locally. That rule does not stop
+at this repository's edge.
+
+**When work here runs into a bug, a missing check, or a confusing default in a
+sibling `hordeforge/7dtd-*` repository, fix it there.** Not with a workaround
+here, not with a note in a doc, not by telling the user. In that sibling:
+branch, fix, add the test that would have caught it, **update that
+repository's own documentation**, push, open a pull request, and merge it —
+autonomously, the same lifecycle this repository uses. Then come back. A
+local workaround for someone else's bug is a second copy of the problem, and
+the next project to hit it starts from zero.
+
+This has a track record. `shamway client deploy` was blind to the shared
+client lock and deployed into another session's run; `playtest_run.py`
+preflighted the dedicated server but not the client, so a caller who exported
+the wrong variable waited out a fifteen-minute timeout instead of reading one
+error line. Both were fixed where they belonged.
+
+### Documentation is part of the change, not a follow-up
+
+Every behaviour change updates the documentation in the same commit that makes
+it — in **whichever** repository the change lands, this one or a sibling. A new
+command goes in this file's command table and in the page that owns its
+subject; a new operation goes in `operations.OPERATIONS`; a new doc page goes
+in `docs.TOPICS`; a new host script goes in `scripts.SCRIPTS`; a new engine
+fact goes in [docs/research-provenance.md](docs/research-provenance.md) with
+the tool that produced it. An undocumented capability is one the next session
+will rebuild from scratch, and an undocumented gate is one it will delete.
+
 - `scripts/bootstrap` — uv venv + uv pip install --editable, with extras
 - `make check test` — compile, shellcheck, and the unit suite
 
@@ -178,6 +217,7 @@ Machine-readable output for agents and CI:
 | `shamway stage BUNDLE` | gate and stage a bundle an editor elsewhere built; lists the gates its evidence could not support |
 | `shamway pack SRC OUT` | synthesize a bundle from textures, clips and text files, with no editor |
 | `shamway verify-bundle` | load a bundle in a real Unity runtime; needs an editor, proves construction only |
+| `shamway acceptance-provider` | generate the 7dtd-playtest scenario provider that loads every bundle member through the game's own `DataLoader`, in a live client |
 | `shamway capabilities --json` | optional capabilities, what they unlock, install commands |
 | `shamway inspect --deep --json` | every serialized object and per-prefab components |
 | `shamway check-mesh --json` | authored-mesh extents and glTF conformance |

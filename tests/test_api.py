@@ -41,7 +41,16 @@ class ManifestTests(unittest.TestCase):
         """A caller decides what is safe to run from `writes`, so guard the set."""
         writers = {name for name, op in OPERATIONS.items() if op.writes}
         self.assertEqual(
-            {"build", "pack", "stage", "init", "render_icon", "client_deploy", "client_launch"},
+            {
+                "build",
+                "pack",
+                "stage",
+                "init",
+                "render_icon",
+                "client_deploy",
+                "client_launch",
+                "acceptance_provider",
+            },
             writers,
         )
 

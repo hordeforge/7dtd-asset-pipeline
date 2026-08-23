@@ -210,12 +210,40 @@ It says nothing about whether the asset is right.
 ### What is still owed
 
 A fresh client. For a synthesized bundle that is not a confirmation step, it is
-*the* acceptance, and [blockers.md](blockers.md) records that it has not yet
-been run:
+*the* acceptance, and [blockers.md](blockers.md) records how far it has got.
+
+The mechanical half is automated. `shamway acceptance-provider` generates a
+scenario provider for
+[hordeforge/7dtd-playtest](https://github.com/hordeforge/7dtd-playtest) with
+one case per manifest entry, each loading its asset through the game's own
+`DataLoader.LoadAsset<T>` inside a live client — the resolution chain a Unity
+runtime cannot run: `@modfolder(Name)` rewriting, `AssetBundleManager`
+opening the archive, and the stem reduction that reads the class-142
+`m_Container` table. `scripts/playtest-acceptance.sh` wires the whole run
+together: generate, build, deploy, hand off to the harness.
+
+```bash
+shamway script playtest-acceptance
+```
+
+```bash
+shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
+```
+
+A bare launch, without the harness, is still available and still valid — it
+proves the mod loads, not that anything read the bundle:
 
 ```bash
 shamway client deploy .
 shamway client launch --mod-name MyMod
+```
+
+The half that stays owed forever is the person. A texture that loads upside
+down and a clip that loads at the wrong pitch pass every case above. Record
+what was judged, and against what, with:
+
+```bash
+shamway client capture bundle-assets --observable "the panel reads upright; the cue is one clean beep"
 ```
 
 ## A bundle built somewhere else

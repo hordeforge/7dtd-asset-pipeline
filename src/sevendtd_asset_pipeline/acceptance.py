@@ -1,0 +1,353 @@
+"""The client half of acceptance: a scenario provider the real game runs.
+
+Every offline gate here ends with the same sentence — acceptance is a fresh
+client that loads the changed asset. `client.py` is the plumbing for launching
+that client; this module is what the client then *does*.
+
+`verify-bundle` already loads a bundle in a Unity runtime of the game's own
+revision, which proves the container and object graph deserialize. It cannot
+prove the **game** reads them, because the game does not call
+`AssetBundle.LoadFromFile` directly. It calls `DataLoader.LoadAsset<T>` on a
+`#@modfolder(Name):Resources/<bundle>.unity3d?<stem>` URI, which runs three
+pieces of engine code no runtime test touches:
+
+* `ModManager.PatchModPathString`, rewriting `@modfolder(Name):` to the loaded
+  mod's real path — and logging `[MODS] Mod reference for a mod that is not
+  loaded` when the name is wrong;
+* `AssetBundleManager.LoadAssetBundle`, opening the archive and caching it for
+  the life of the process;
+* `AssetBundleManager._get`, reducing the request to its file-name stem, which
+  is the only thing that reads the `m_Container` table in the class-142 object.
+
+So this module renders a `7dtd-playtest` scenario provider — a small C# mod
+that runs inside the live client — with one case per bundle member, asserting
+that the game loads it and that its properties survived the trip. It is
+generated rather than vendored because the cases *are* the mod's manifest: a
+bundle member with no case is a member nobody proved.
+
+What it still cannot do is judge the asset. A texture that loads upside down
+and a clip that loads at the wrong pitch both pass here. That is the human
+look and listen, recorded with `shamway client capture`.
+
+Running the provider is `7dtd-playtest`'s job, not this repository's: see
+docs/sibling-repos.md for the boundary and the exclusivity lock both respect.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from importlib.resources import files
+from pathlib import Path
+
+from .client import refuse_while_held, user_mods_dir
+from .config import PipelineConfig, load_config
+from .errors import PipelineError
+from .references import manifest_assets, read_mod_name
+
+# Which `LoadAsset<T>` a bundle member is fetched with, and what about it is
+# worth asserting once loaded. Keyed by source extension, the same mapping
+# `bundle_writer.ASSET_KINDS` uses, so the two cannot disagree about what a
+# `.png` becomes.
+ASSET_CASES: dict[str, tuple[str, str]] = {
+    ".png": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
+    ".tga": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
+    ".jpg": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
+    ".wav": ("AudioClip", "loaded.channels > 0 && loaded.frequency > 0 && loaded.samples > 0"),
+    ".ogg": ("AudioClip", "loaded.channels > 0 && loaded.frequency > 0 && loaded.samples > 0"),
+    ".mp3": ("AudioClip", "loaded.channels > 0 && loaded.frequency > 0 && loaded.samples > 0"),
+    ".txt": ("TextAsset", "loaded.text != null"),
+    ".json": ("TextAsset", "loaded.text != null"),
+    ".csv": ("TextAsset", "loaded.text != null"),
+    ".prefab": ("GameObject", "loaded.transform != null"),
+    ".fbx": ("GameObject", "loaded.transform != null"),
+    ".mat": ("Material", "loaded.shader != null"),
+}
+# What each kind prints into the client log, so a pass is citable rather than
+# merely green. `Report.Info` lines land under the harness's stable prefix.
+ASSET_DETAILS: dict[str, str] = {
+    "Texture2D": '" " + loaded.width + "x" + loaded.height + " " + loaded.format',
+    "AudioClip": '" channels=" + loaded.channels + " frequency=" + loaded.frequency '
+    '+ " samples=" + loaded.samples + " length=" + loaded.length',
+    "TextAsset": '" bytes=" + loaded.bytes.Length',
+    "GameObject": '" children=" + loaded.transform.childCount',
+    "Material": '" shader=" + loaded.shader.name',
+}
+TEMPLATE_DIR = "PlaytestProvider"
+PROVIDER_DIRECTORY = "tools/shamway/acceptance"
+# A stem no bundle contains, asserted to come back null. Without it a loader
+# that answered every request would read as a pass on every case above.
+ABSENT_STEM = "shamwayAbsentStemProbe"
+_IDENTIFIER = re.compile(r"[^A-Za-z0-9_]")
+
+
+@dataclass(frozen=True)
+class ProviderPlan:
+    """What will be written, and the cases it will carry."""
+
+    directory: Path
+    assembly: str
+    suite_id: str
+    mod_name: str
+    bundle_uri_path: str
+    stems: tuple[tuple[str, str], ...]
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "directory": str(self.directory),
+            "assembly": self.assembly,
+            "suite": self.suite_id,
+            "mod_name": self.mod_name,
+            "bundle_uri_path": self.bundle_uri_path,
+            "cases": [{"stem": stem, "kind": kind} for stem, kind in self.stems],
+        }
+
+
+def _identifier(text: str) -> str:
+    cleaned = _IDENTIFIER.sub("", text)
+    return cleaned or "Mod"
+
+
+def _template(name: str) -> str:
+    path = files("sevendtd_asset_pipeline").joinpath(f"templates/{TEMPLATE_DIR}/{name}")
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise PipelineError(f"cannot read packaged provider template {path}: {exc}") from exc
+
+
+def plan(config: PipelineConfig) -> ProviderPlan:
+    """Derive the provider from the mod's own configuration and manifest."""
+    mod_root = Path(config.mod_root)
+    mod_name = read_mod_name(mod_root / "ModInfo.xml")
+    manifest = Path(config.tracked_manifest)
+    if not manifest.is_file():
+        raise PipelineError(
+            f"no tracked manifest at {manifest}; run `shamway build` (or `stage`) first. "
+            "The provider's cases are the manifest: without it there is nothing to assert."
+        )
+    stems: list[tuple[str, str]] = []
+    unsupported: list[str] = []
+    for asset in manifest_assets(manifest):
+        suffix = Path(asset).suffix.lower()
+        entry = ASSET_CASES.get(suffix)
+        if entry is None:
+            unsupported.append(asset)
+            continue
+        stems.append((Path(asset).stem, entry[0]))
+    if unsupported:
+        kinds = ", ".join(sorted(ASSET_CASES))
+        raise PipelineError(
+            "no load case is defined for " + ", ".join(sorted(unsupported)[:5]) + f"; known "
+            f"extensions are {kinds}. Add the extension to acceptance.ASSET_CASES with the "
+            "LoadAsset<T> the engine actually uses for it, rather than leaving a bundle "
+            "member nobody proves."
+        )
+    if not stems:
+        raise PipelineError(f"{manifest} lists no assets a provider case could load")
+    bundle_name = Path(config.bundle_output).name
+    resources = Path(config.resources_dir).name
+    assembly = f"{_identifier(mod_name)}Acceptance"
+    return ProviderPlan(
+        directory=mod_root / PROVIDER_DIRECTORY,
+        assembly=assembly,
+        suite_id=f"{_identifier(mod_name).lower()}_bundle",
+        mod_name=mod_name,
+        bundle_uri_path=f"{resources}/{bundle_name}",
+        stems=tuple(stems),
+    )
+
+
+def _case(stem: str, kind: str) -> str:
+    detail = ASSET_DETAILS.get(kind, '""')
+    assertion = next(check for suffix, (k, check) in ASSET_CASES.items() if k == kind)
+    return f"""
+        {kind} {stem}Loaded = null;
+        queue.Add(CaseDef.Live(label, "load_{stem}", new[] {{ "bundle" }},
+            act: ctx =>
+            {{
+                {stem}Loaded = DataLoader.LoadAsset<{kind}>(Bundle + "?{stem}");
+                var loaded = {stem}Loaded;
+                Report.Info(loaded == null
+                    ? "{stem}: LoadAsset<{kind}> returned null"
+                    : "{stem}: " + loaded.name + {detail});
+            }},
+            assert: ctx =>
+            {{
+                var loaded = {stem}Loaded;
+                return loaded != null && loaded.name == "{stem}" && {assertion};
+            }},
+            fail: "the game did not load {stem} from the staged bundle"));
+"""
+
+
+def render(plan_: ProviderPlan) -> dict[str, str]:
+    """The provider's files, as `filename -> text`."""
+    cases = "".join(_case(stem, kind) for stem, kind in plan_.stems)
+    source = _template("AcceptanceProvider.cs.in").format(
+        MOD_NAME=plan_.mod_name,
+        CLASS_NAME=f"{plan_.assembly}Provider",
+        SUITE_ID=plan_.suite_id,
+        BUNDLE_URI_PATH=plan_.bundle_uri_path,
+        CASES=cases,
+        ABSENT_STEM=ABSENT_STEM,
+    )
+    project = _template("AcceptanceProvider.csproj.in").format(
+        MOD_NAME=plan_.mod_name, ASSEMBLY_NAME=plan_.assembly
+    )
+    mod_info = (
+        '<?xml version="1.0" encoding="UTF-8" ?>\n<xml>\n'
+        f'\t<Name value="{plan_.assembly}" />\n'
+        f'\t<DisplayName value="{plan_.mod_name} bundle acceptance" />\n'
+        '\t<Description value="Generated 7dtd-playtest scenario provider: loads every '
+        'bundle member through the game\'s own DataLoader." />\n'
+        '\t<Author value="shamway" />\n\t<Version value="1.0.0" />\n</xml>\n'
+    )
+    return {
+        f"{plan_.assembly}.cs": source,
+        f"{plan_.assembly}.csproj": project,
+        "ModInfo.xml": mod_info,
+    }
+
+
+def write(plan_: ProviderPlan) -> list[Path]:
+    """Write the provider into the mod, overwriting a previous generation."""
+    plan_.directory.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for name, text in render(plan_).items():
+        target = plan_.directory / name
+        target.write_text(text, encoding="utf-8")
+        written.append(target)
+    return written
+
+
+def build(plan_: ProviderPlan, game_dir: Path, harness_dll: Path, output: Path) -> Path:
+    """Compile the provider against the game's assemblies and the harness."""
+    dotnet = shutil.which("dotnet")
+    if dotnet is None:
+        raise PipelineError(
+            "building the acceptance provider needs the .NET SDK on PATH ('dotnet'). "
+            "It is optional: the rendered source is the deliverable, and any host with "
+            "the SDK can build it."
+        )
+    managed = Path(game_dir) / "7DaysToDie_Data" / "Managed"
+    if not (managed / "Assembly-CSharp.dll").is_file():
+        raise PipelineError(f"no Assembly-CSharp.dll under {managed}; is that a game install?")
+    if not Path(harness_dll).is_file():
+        raise PipelineError(
+            f"no 7dtd-playtest harness assembly at {harness_dll}. Build it in a checkout of "
+            "hordeforge/7dtd-playtest ('make build'), then pass --harness-dll."
+        )
+    project = plan_.directory / f"{plan_.assembly}.csproj"
+    result = subprocess.run(
+        [
+            dotnet,
+            "build",
+            str(project),
+            "-c",
+            "Release",
+            "-o",
+            str(output),
+            "-v",
+            "q",
+            f"-p:GameManagedDir={managed}",
+            f"-p:PlaytestHarnessPath={Path(harness_dll)}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        tail = (result.stdout + result.stderr).strip().splitlines()[-12:]
+        raise PipelineError("dotnet build failed:\n" + "\n".join(tail))
+    assembly = output / f"{plan_.assembly}.dll"
+    if not assembly.is_file():
+        raise PipelineError(f"dotnet build reported success but wrote no {assembly}")
+    shutil.copyfile(plan_.directory / "ModInfo.xml", output / "ModInfo.xml")
+    return assembly
+
+
+def generate(
+    config: PipelineConfig,
+    game_dir: Path | None = None,
+    harness_dll: Path | None = None,
+    install_dir: Path | None = None,
+) -> dict[str, object]:
+    """Render the provider, and build and install it when asked."""
+    plan_ = plan(config)
+    written = write(plan_)
+    result: dict[str, object] = {**plan_.as_dict(), "written": [str(p) for p in written]}
+    if harness_dll is None:
+        result["built"] = None
+        return result
+    if game_dir is None:
+        raise PipelineError("building the provider needs the game directory for its assemblies")
+    output = Path(config.build_dir) / "acceptance" / plan_.assembly
+    output.mkdir(parents=True, exist_ok=True)
+    assembly = build(plan_, game_dir, harness_dll, output)
+    result["built"] = str(assembly)
+    if install_dir is not None:
+        target = Path(install_dir) / plan_.assembly
+        target.mkdir(parents=True, exist_ok=True)
+        for name in (assembly.name, "ModInfo.xml"):
+            shutil.copyfile(output / name, target / name)
+        result["installed"] = str(target)
+    return result
+
+
+# ---------------------------------------------------------------------- CLI
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="shamway acceptance-provider",
+        description="generate the 7dtd-playtest scenario provider that loads this mod's "
+        "bundle through the game's own DataLoader",
+    )
+    parser.add_argument("--config", type=Path, default=None)
+    parser.add_argument(
+        "--harness-dll",
+        type=Path,
+        default=None,
+        help="7dtd-playtest.dll; building is skipped when omitted",
+    )
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="also copy the built provider into the client's Mods folder",
+    )
+    parser.add_argument("--mods-dir", type=Path, default=None)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    config = load_config(args.config)
+    install_dir = None
+    if args.install:
+        refuse_while_held("install into the shared Mods folder")
+        install_dir = args.mods_dir or user_mods_dir(config.game_dir)
+    result = generate(config, config.game_dir, args.harness_dll, install_dir)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return 0
+    written = result.get("written")
+    if isinstance(written, list):
+        for path in written:
+            print(f"wrote {path}")
+    if result.get("built"):
+        print(f"built {result['built']}")
+    if result.get("installed"):
+        print(f"installed {result['installed']}")
+    print(
+        f"next: run it from a hordeforge/7dtd-playtest checkout, which owns the client "
+        f"lock and the runner:\n  make playtest SUITE={result['suite']}"
+    )
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

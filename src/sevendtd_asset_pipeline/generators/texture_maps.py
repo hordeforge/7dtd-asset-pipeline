@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import shutil
 import sys
 import tempfile
@@ -91,6 +92,7 @@ def require_imaging() -> None:
 def save_atomically(array: "np.ndarray", path: Path, mode: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".png", dir=path.parent)
+    os.close(descriptor)
     temporary_path = Path(temporary)
     try:
         Image.fromarray(array, mode).save(temporary_path, "PNG", optimize=True)

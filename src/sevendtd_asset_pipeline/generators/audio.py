@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import array
 import math
+import os
 import random
 import sys
 import tempfile
@@ -42,6 +43,7 @@ def read_wav(path: Path) -> tuple[array.array, int, int]:
 def write_wav(path: Path, samples: array.array, rate: int, channels: int = 1) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    os.close(descriptor)
     temporary_path = Path(temporary)
     try:
         with wave.open(temporary, "wb") as handle:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import sys
 from pathlib import Path
@@ -210,8 +211,9 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _config(args: argparse.Namespace):
-    return load_config(args.config)
+def _print_pairs(data: dict) -> None:
+    for key, value in data.items():
+        print(f"{key}: {value}")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -271,8 +273,7 @@ def run(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(data, indent=2, sort_keys=True))
         else:
-            for key, value in data.items():
-                print(f"{key}: {value}")
+            _print_pairs(data)
         return 0
     if args.command == "check-mesh":
         report = check_mesh(args.mesh, args.max_extent, args.strict)
@@ -386,15 +387,14 @@ def run(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(data, indent=2, sort_keys=True))
         else:
-            for key, value in data.items():
-                print(f"{key}: {value}")
+            _print_pairs(data)
         return 0
     if args.command == "validate" and args.bundle and args.config is None:
         info = validate_bundle(args.bundle)
         print(f"OK: {info.path} Unity {info.unity_version}; class-142 present")
         return 0
 
-    config = _config(args)
+    config = load_config(args.config)
     if args.command == "doctor":
         checks = run_doctor(config)
         if args.json:
@@ -426,8 +426,7 @@ def run(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(data, indent=2, sort_keys=True))
         else:
-            for key, value in data.items():
-                print(f"{key}: {value}")
+            _print_pairs(data)
         return 0
     if args.command == "status":
         report = collect_status(config)
@@ -480,29 +479,19 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    # `client` is a passthrough with its own argparse, so its `--help` must
-    # reach it rather than be claimed (and rejected) by this parser.
-    if arguments[:1] == ["script"]:
-        from .scripts import main as script_main  # noqa: PLC0415
-
+    # These three are passthroughs with their own argparse, so their `--help`
+    # must reach them rather than be claimed (and rejected) by this parser.
+    # Each entry: command -> (module, argv used when none is given).
+    passthrough = {
+        "script": ("scripts", []),
+        "prompt": ("prompts", ["--list"]),
+        "client": ("client", ["--help"]),
+    }
+    head = arguments[:1]
+    if head and head[0] in passthrough:
+        module = importlib.import_module(f".{passthrough[head[0]][0]}", __package__)
         try:
-            return script_main(arguments[1:])
-        except PipelineError as exc:
-            print(f"ERROR: {exc}", file=sys.stderr)
-            return 1
-    if arguments[:1] == ["prompt"]:
-        from .prompts import main as prompt_main  # noqa: PLC0415
-
-        try:
-            return prompt_main(arguments[1:] or ["--list"])
-        except PipelineError as error:
-            print(f"ERROR: {error}", file=sys.stderr)
-            return 1
-    if arguments[:1] == ["client"]:
-        from .client import main as client_main  # noqa: PLC0415
-
-        try:
-            return client_main(arguments[1:] or ["--help"])
+            return module.main(arguments[1:] or passthrough[head[0]][1])
         except PipelineError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1

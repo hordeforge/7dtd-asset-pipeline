@@ -183,6 +183,17 @@ def _write_manifest(root: Path, entries: list[dict[str, object]]) -> Path:
     return path
 
 
+def _safe_stem(label: str) -> str:
+    """A label as a filename stem, so it cannot escape the evidence directory.
+
+    Both capture paths share this: a label is how a frame is cited later, and
+    `../../secrets.png` must never become where that frame is written.
+    """
+    return "".join(
+        character if character.isalnum() or character in "-_" else "-" for character in label
+    )
+
+
 def capture(
     label: str,
     observable: str = "",
@@ -198,7 +209,7 @@ def capture(
     """
     if not label.strip():
         raise PipelineError("a capture needs a label; it is how the frame is cited later")
-    safe = "".join(character if character.isalnum() or character in "-_" else "-" for character in label.strip())
+    safe = _safe_stem(label.strip())
     backend = _require_backend(env)
     directory = Path(root)
     directory.mkdir(parents=True, exist_ok=True)
@@ -244,7 +255,7 @@ def record_existing(
         raise PipelineError(f"no such image: {source}")
     directory = Path(root)
     directory.mkdir(parents=True, exist_ok=True)
-    destination = directory / f"{label.strip()}{source.suffix or '.png'}"
+    destination = directory / f"{_safe_stem(label.strip())}{source.suffix or '.png'}"
     if source.resolve() != destination.resolve():
         shutil.copy2(source, destination)
     return _record(destination, label.strip(), observable.strip(), "provided", session_type(), directory)

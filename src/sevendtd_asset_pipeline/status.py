@@ -9,8 +9,10 @@ the structure and lets the caller decide what to do.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TypeVar
 
 from .capabilities import capabilities
 from .config import PipelineConfig
@@ -50,7 +52,10 @@ class Status:
         return asdict(self)
 
 
-def _record(status: Status, action):
+_T = TypeVar("_T")
+
+
+def _record(status: Status, action: Callable[[], _T]) -> _T | None:
     try:
         return action()
     except PipelineError as exc:
@@ -81,18 +86,23 @@ def collect_status(config: PipelineConfig) -> Status:
             f"ModInfo.xml Name is {declared!r}, configuration says {config.mod_name!r}"
         )
 
+    game_discovered: tuple[str, Path] | None = None
     if config.game_dir:
         discovered = _record(status, lambda: game_unity_version(config.game_dir))
         if discovered is not None:
+            game_discovered = discovered
             status.game_unity_version = discovered[0]
 
+    bundle_info = None
     if status.bundle_present:
-        info = _record(status, lambda: inspect_bundle(config.bundle_output))
-        if info is not None:
-            status.bundle_unity_version = info.unity_version
-            status.bundle_has_assetbundle_object = info.has_assetbundle_object
+        bundle_info = _record(status, lambda: inspect_bundle(config.bundle_output))
+        if bundle_info is not None:
+            status.bundle_unity_version = bundle_info.unity_version
+            status.bundle_has_assetbundle_object = bundle_info.has_assetbundle_object
             if status.game_unity_version:
-                status.version_matches_game = info.unity_version == status.game_unity_version
+                status.version_matches_game = (
+                    bundle_info.unity_version == status.game_unity_version
+                )
 
     if status.manifest_present:
         assets = _record(status, lambda: manifest_assets(config.tracked_manifest))
@@ -114,9 +124,10 @@ def collect_status(config: PipelineConfig) -> Status:
     ]
 
     # The full validator is the authority on correctness; run it last so the
-    # descriptive fields above are populated even when it rejects the mod.
+    # descriptive fields above are populated even when it rejects the mod. It
+    # reuses the reads above rather than paying for them a second time.
     try:
-        validate_mod(config)
+        validate_mod(config, game_version=game_discovered, bundle_info=bundle_info)
         status.valid = True
     except PipelineError as exc:
         status.valid = False

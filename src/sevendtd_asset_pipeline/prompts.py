@@ -378,7 +378,7 @@ def render(
         "kind": kind,
         "subject": subject.strip(),
         "key": chosen,
-        "key_hex": KEYS[chosen][0] if chosen else "",
+        "key_hex": hex_value if chosen else "",
         "prompt": "\n".join(lines),
         "next": lane,
         "notes": list(shape.notes),

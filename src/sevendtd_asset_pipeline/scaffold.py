@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 import shutil
 from importlib.resources import files
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from .assets_src import create as create_assets_src
@@ -185,7 +186,7 @@ def _check_adoptable(project: Path, mod_root: Path, source_root: str | None) -> 
             )
 
 
-def _install_editor_scripts(template, project: Path) -> list[Path]:
+def _install_editor_scripts(template: Traversable, project: Path) -> list[Path]:
     """Copy the pipeline-owned editor scripts into an adopted project."""
     destination = project / EDITOR_FOLDER
     destination.mkdir(parents=True, exist_ok=True)

@@ -10,6 +10,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 from .errors import PipelineError
 
@@ -77,8 +78,15 @@ def _lz4_decompress(source: bytes, expected_size: int) -> bytes:
                     break
         match_length += 4
         start = len(output) - match_offset
-        for index in range(match_length):
-            output.append(output[start + index])
+        # Copies are the decoder's hot loop; a Python-level per-byte append is
+        # orders of magnitude slower than block copies, so slice whenever the
+        # source does not overlap the destination and tile when it does.
+        if match_offset >= match_length:
+            output.extend(output[start : start + match_length])
+        else:
+            pattern = bytes(output[start:])
+            repeats = -(-match_length // match_offset)
+            output.extend((pattern * repeats)[:match_length])
         if len(output) > expected_size:
             raise PipelineError("LZ4 block expands beyond its declared size")
     if len(output) != expected_size:
@@ -152,7 +160,7 @@ HEADER_WINDOW = 4096
 TYPE_TABLE_PREFIX = 32 * 1024 * 1024
 
 
-def _read_at(handle, offset: int, length: int, label: str) -> bytes:
+def _read_at(handle: BinaryIO, offset: int, length: int, label: str) -> bytes:
     """Read exactly `length` bytes at `offset`, or fail with a bounded error."""
     if offset < 0 or length < 0:
         raise PipelineError(f"truncated Unity bundle while reading {label}")

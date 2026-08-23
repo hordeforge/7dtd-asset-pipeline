@@ -17,7 +17,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
 
 from .errors import PipelineError
 
@@ -98,6 +97,7 @@ def fetch_release(version: str, platform: str = "LINUX", timeout: int = 30) -> R
         f"{RELEASE_API}?{query}", headers={"Accept": "application/json"}
     )
     try:
+        # The URL is the fixed https RELEASE_API; only the urlencoded query varies.
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
             payload = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
@@ -106,9 +106,3 @@ def fetch_release(version: str, platform: str = "LINUX", timeout: int = 30) -> R
             "Pass the changeset and download URLs explicitly when offline."
         ) from exc
     return parse_release(payload, version, platform)
-
-
-def version_from_project(project: Path) -> str:
-    from .game import project_unity_version
-
-    return project_unity_version(project)

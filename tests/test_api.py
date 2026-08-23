@@ -85,6 +85,23 @@ class DispatchTests(unittest.TestCase):
             with self.subTest(name):
                 json.dumps(call_json(self.pipeline, name))
 
+    def test_a_stateless_prompt_dispatches_like_the_bound_one(self) -> None:
+        """`prompt` runs before a modlet exists, so it must work without config."""
+        stateless = call_json(
+            None, "prompt", {"kind": "item-icon", "subject": "a nuke"}
+        )
+        bound = self.pipeline.call("prompt", {"kind": "item-icon", "subject": "a nuke"})
+        self.assertEqual(stateless, bound)
+        self.assertIn("Asset type:", stateless["prompt"])
+
+    def test_client_where_resolves_paths_from_an_explicit_game_dir(self) -> None:
+        import tempfile as tempdir
+
+        with tempdir.TemporaryDirectory() as game:
+            data = call_json(None, "client_where", {"game_dir": str(Path(game) / "7 Days To Die")})
+            self.assertIsNone(data["mods_dir"])  # not a Steam library layout
+            self.assertEqual(["steam", "-applaunch", "251570"], data["launch"][:3])
+
 
 class ServeTests(unittest.TestCase):
     def setUp(self) -> None:

@@ -6,8 +6,10 @@ import json
 import os
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeVar
 
 from .capabilities import capabilities
 from .config import PipelineConfig
@@ -35,7 +37,10 @@ def failed(checks: list[Check]) -> bool:
     return any(check.status == "FAIL" for check in checks)
 
 
-def _guard(checks: list[Check], name: str, action):
+_T = TypeVar("_T")
+
+
+def _guard(checks: list[Check], name: str, action: Callable[[], _T]) -> _T | None:
     """Record a failing check instead of aborting the whole report.
 
     Agents and CI consume ``doctor --json``. A raised exception would collapse
@@ -65,14 +70,14 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
     checks: list[Check] = []
 
     actual_name = _guard(checks, "modlet", lambda: read_mod_name(config.mod_root / "ModInfo.xml"))
-    if actual_name is None:
-        pass
-    elif actual_name != config.mod_name:
-        checks.append(
-            Check("FAIL", "modlet", f"ModInfo name {actual_name!r} does not match {config.mod_name!r}")
-        )
-    else:
-        checks.append(Check("OK", "modlet", f"{config.mod_root} ({actual_name})"))
+    if actual_name is not None:
+        # A None here already appended its FAIL check via _guard.
+        if actual_name != config.mod_name:
+            checks.append(
+                Check("FAIL", "modlet", f"ModInfo name {actual_name!r} does not match {config.mod_name!r}")
+            )
+        else:
+            checks.append(Check("OK", "modlet", f"{config.mod_root} ({actual_name})"))
 
     project_version = _guard(
         checks, "Unity project", lambda: project_unity_version(config.unity_project)
@@ -134,8 +139,10 @@ def _capability_checks() -> list[Check]:
     """Capability rows for humans; agents should call `capabilities()` instead."""
     checks: list[Check] = []
     for capability in capabilities():
-        detail = capability.path or "installed" if capability.available else (
-            f"optional: {capability.purpose} -> {capability.install}"
+        detail = (
+            (capability.path or "installed")
+            if capability.available
+            else f"optional: {capability.purpose} -> {capability.install}"
         )
         checks.append(Check("OK" if capability.available else "INFO", capability.name, detail))
     return checks

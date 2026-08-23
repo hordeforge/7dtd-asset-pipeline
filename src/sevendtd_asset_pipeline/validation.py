@@ -25,8 +25,12 @@ class ValidationReport:
     reference_count: int
 
 
-def validate_bundle(path: Path, expected_version: str | None = None) -> BundleInfo:
-    info = inspect_bundle(path)
+def validate_bundle(
+    path: Path, expected_version: str | None = None, info: BundleInfo | None = None
+) -> BundleInfo:
+    """Gate one bundle, reusing `info` when the caller has already parsed `path`."""
+    if info is None:
+        info = inspect_bundle(path)
     if expected_version and info.unity_version != expected_version:
         raise PipelineError(
             f"{path.name} uses Unity {info.unity_version}; installed game uses {expected_version}"
@@ -50,11 +54,34 @@ def reject_ambiguous_stems(assets: list[str]) -> None:
         raise PipelineError(f"bundle contains ambiguous file-name stems: {detail}")
 
 
+def _stem_index(assets: list[str]) -> dict[str, list[str]]:
+    """Fold each asset's stem once, so per-reference lookups stop rescanning."""
+    index: dict[str, list[str]] = defaultdict(list)
+    for asset in assets:
+        index[Path(asset).stem.casefold()].append(Path(asset).stem)
+    return index
+
+
+def _check_stem(
+    where: str, stem: str, index: dict[str, list[str]], manifest: Path
+) -> None:
+    matches = index.get(stem.casefold(), [])
+    if not matches:
+        raise PipelineError(f"{where}: asset stem {stem!r} is absent from {manifest}")
+    if len(matches) != 1:
+        raise PipelineError(f"{where}: asset stem {stem!r} is ambiguous")
+    if matches[0] != stem:
+        raise PipelineError(
+            f"{where}: asset case is {stem!r}, manifest has {matches[0]!r}"
+        )
+
+
 def _check_reference(
     config: PipelineConfig,
     reference: AssetReference,
-    assets: list[str],
-    expected_version: str | None,
+    stems: dict[str, list[str]],
+    resolved: dict[str, Path | None],
+    owned: Path,
 ) -> str:
     relative_source = reference.source.relative_to(config.mod_root)
     if not reference.is_modfolder:
@@ -68,54 +95,69 @@ def _check_reference(
         raise PipelineError(
             f"{relative_source}: URI names mod {reference.mod_name!r}, expected {config.mod_name!r}"
         )
-    bundle = resolve_case_insensitive(config.mod_root, reference.bundle_path)
+    # Patch sets routinely hold dozens of URIs aimed at the one staged bundle,
+    # so resolution results are shared across the loop instead of re-listing
+    # directories per reference.
+    if reference.bundle_path not in resolved:
+        resolved[reference.bundle_path] = resolve_case_insensitive(
+            config.mod_root, reference.bundle_path
+        )
+    bundle = resolved[reference.bundle_path]
     if bundle is None:
         raise PipelineError(f"{relative_source}: bundle does not exist: {reference.bundle_path}")
-    if bundle.resolve() != config.bundle_output.resolve():
+    if bundle != owned:
         raise PipelineError(
             f"{relative_source}: URI resolves to {bundle}, but this pipeline owns {config.bundle_output}"
         )
-    validate_bundle(bundle, expected_version)
-    stems = [Path(asset).stem for asset in assets]
-    matches = [stem for stem in stems if stem.casefold() == reference.asset_stem.casefold()]
-    if not matches:
-        raise PipelineError(
-            f"{relative_source}: asset stem {reference.asset_stem!r} is absent from {config.tracked_manifest}"
-        )
-    if len(matches) != 1:
-        raise PipelineError(f"{relative_source}: asset stem {reference.asset_stem!r} is ambiguous")
-    if matches[0] != reference.asset_stem:
-        raise PipelineError(
-            f"{relative_source}: asset case is {reference.asset_stem!r}, manifest has {matches[0]!r}"
-        )
+    # The staged bundle was already gated at the top of validate_mod, and the
+    # ownership check above proved every reference aims at that same file, so
+    # there is nothing left to parse here.
+    _check_stem(
+        str(relative_source), reference.asset_stem, stems, config.tracked_manifest
+    )
     return f"OK {relative_source}: {reference.asset_stem}"
 
 
-def _check_code_reference(config: PipelineConfig, stem: str, assets: list[str]) -> str:
+def _check_code_reference(config: PipelineConfig, stem: str, stems: dict[str, list[str]]) -> str:
     """A stem the mod's code loads, held to the same rules as an XML reference."""
-    stems = [Path(asset).stem for asset in assets]
-    matches = [candidate for candidate in stems if candidate.casefold() == stem.casefold()]
     where = f"{config.config_file.name} code_references"
-    if not matches:
-        raise PipelineError(f"{where}: asset stem {stem!r} is absent from {config.tracked_manifest}")
-    if len(matches) != 1:
-        raise PipelineError(f"{where}: asset stem {stem!r} is ambiguous")
-    if matches[0] != stem:
-        raise PipelineError(f"{where}: asset case is {stem!r}, manifest has {matches[0]!r}")
+    _check_stem(where, stem, stems, config.tracked_manifest)
     return f"OK {where}: {stem}"
 
 
-def validate_mod(config: PipelineConfig) -> ValidationReport:
+def validate_mod(
+    config: PipelineConfig,
+    *,
+    game_version: tuple[str, Path] | None = None,
+    bundle_info: BundleInfo | None = None,
+) -> ValidationReport:
+    """Gate the whole mod.
+
+    `game_version` and `bundle_info` accept results a caller (such as
+    `collect_status`) has already computed for this configuration; both are
+    expensive reads that must not run twice in one pass. They must describe
+    `config.game_dir`'s answer and a parse of `config.bundle_output`.
+    """
     actual_mod_name = read_mod_name(config.mod_root / "ModInfo.xml")
     if actual_mod_name != config.mod_name:
         raise PipelineError(
             f"ModInfo.xml Name is {actual_mod_name!r}, configuration says {config.mod_name!r}"
         )
-    expected_version = game_unity_version(config.game_dir)[0] if config.game_dir else None
-    validate_bundle(config.bundle_output, expected_version)
+    if game_version is not None:
+        expected_version: str | None = game_version[0]
+    elif config.game_dir:
+        expected_version = game_unity_version(config.game_dir)[0]
+    else:
+        expected_version = None
+    validate_bundle(config.bundle_output, expected_version, bundle_info)
     assets = manifest_assets(config.tracked_manifest)
     reject_ambiguous_stems(assets)
+    stems = _stem_index(assets)
     references = discover_references(config.config_dir)
-    messages = [_check_reference(config, ref, assets, expected_version) for ref in references]
-    messages += [_check_code_reference(config, stem, assets) for stem in config.code_references]
+    owned = config.bundle_output.resolve()
+    resolved: dict[str, Path | None] = {}
+    messages = [
+        _check_reference(config, ref, stems, resolved, owned) for ref in references
+    ]
+    messages += [_check_code_reference(config, stem, stems) for stem in config.code_references]
     return ValidationReport(tuple(messages), len(references) + len(config.code_references))

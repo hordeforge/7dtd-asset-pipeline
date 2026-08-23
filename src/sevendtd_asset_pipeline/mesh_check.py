@@ -27,6 +27,8 @@ from .capabilities import extra_install, has_capability
 from .errors import PipelineError
 
 GLTF_SUFFIXES = (".glb", ".gltf")
+# The independent tools whose absence `_measure` and `_validate_gltf` each record.
+TOOL_COUNT = 2
 
 
 @dataclass
@@ -136,7 +138,7 @@ def check_mesh(path: Path, max_extent: float = 16.0, strict: bool = False) -> Me
         _validate_gltf(path, report, strict)
     else:
         report.skipped.append(f"glTF conformance applies to {'/'.join(GLTF_SUFFIXES)} only")
-    if len(report.skipped) == 2 and not report.problems:
+    if len(report.skipped) == TOOL_COUNT and not report.problems:
         raise PipelineError(
             "no mesh tooling is available. Install it with "
             "scripts/install-tools.sh --with-authoring, or " + extra_install("mesh")

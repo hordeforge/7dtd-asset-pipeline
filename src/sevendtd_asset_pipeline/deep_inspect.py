@@ -19,6 +19,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 from .capabilities import require_capability
 from .errors import PipelineError
@@ -51,14 +53,14 @@ class DeepReport:
         }
 
 
-def _load_unitypy():
+def _load_unitypy() -> ModuleType:
     require_capability("UnityPy")
     import UnityPy  # noqa: PLC0415 - optional dependency, imported on demand
 
     return UnityPy
 
 
-def _walk(game_object, depth: int = 0) -> tuple[Counter, int]:
+def _walk(game_object: Any, depth: int = 0) -> tuple[Counter, int]:
     """Count components across a prefab's whole hierarchy.
 
     A prefab root usually carries only a Transform; the components that matter

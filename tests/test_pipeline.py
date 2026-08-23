@@ -66,6 +66,58 @@ class PipelineTests(unittest.TestCase):
         self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
         self.assertEqual(1, validate_mod(self.config).reference_count)
 
+    def test_a_modinfo_name_disagreement_fails(self) -> None:
+        """The configuration and the modlet must describe the same mod."""
+        self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
+        (self.root / "ModInfo.xml").write_text(
+            '<xml><Name value="OtherName" /></xml>', encoding="utf-8"
+        )
+        with self.assertRaisesRegex(PipelineError, "OtherName"):
+            validate_mod(self.config)
+
+    def test_a_reference_to_a_missing_bundle_is_named(self) -> None:
+        self._stage_mod("#@modfolder:Resources/absent.unity3d?exampleThing.prefab")
+        with self.assertRaisesRegex(PipelineError, "bundle does not exist"):
+            validate_mod(self.config)
+
+    def test_a_reference_to_a_foreign_bundle_fails(self) -> None:
+        self._stage_mod("#@modfolder:Resources/other.unity3d?exampleThing.prefab")
+        resources = self.root / "Resources"
+        (resources / "other.unity3d").write_bytes(unityfs_bundle([142]))
+        with self.assertRaisesRegex(PipelineError, "this pipeline owns"):
+            validate_mod(self.config)
+
+    def test_an_xml_reference_to_an_absent_asset_stem_fails(self) -> None:
+        self._stage_mod("#@modfolder:Resources/example.unity3d?missingThing.prefab")
+        with self.assertRaisesRegex(PipelineError, "absent from"):
+            validate_mod(self.config)
+
+    def test_an_xml_reference_with_mismatched_case_fails(self) -> None:
+        self._stage_mod("#@modfolder:Resources/example.unity3d?examplething.prefab")
+        with self.assertRaisesRegex(PipelineError, "asset case is 'examplething'"):
+            validate_mod(self.config)
+
+    def test_validate_holds_the_staged_bundle_to_the_installed_games_revision(self) -> None:
+        """A game dir makes the revision gate authoritative, not just declared."""
+        game = self.root / "game"
+        (game / "Data" / "Config").mkdir(parents=True)
+        (game / "Data" / "Config" / "items.xml").write_text("<configs/>", encoding="utf-8")
+        entities = game / "Data" / "Bundles" / "Standalone" / "Entities"
+        entities.mkdir(parents=True)
+        # The install speaks 2022.3.62f2; the staged bundle claims something else.
+        (entities / "Entities").write_bytes(unityfs_bundle([142], "2022.3.62f2"))
+        self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
+        body = (self.root / CONFIG_NAME).read_text(encoding="utf-8").replace(
+            'directory = ""', 'directory = "game"', 1
+        )
+        (self.root / CONFIG_NAME).write_text(body, encoding="utf-8")
+        self.config = load_config(self.root / CONFIG_NAME)
+        (self.config.resources_dir / "example.unity3d").write_bytes(
+            unityfs_bundle([142], "2021.3.1f1")
+        )
+        with self.assertRaisesRegex(PipelineError, "installed game uses"):
+            validate_mod(self.config)
+
     def test_validate_rejects_foreign_mod_name(self) -> None:
         self._stage_mod("#@modfolder(OtherMod):Resources/example.unity3d?exampleThing.prefab")
         with self.assertRaisesRegex(PipelineError, "expected 'ExampleMod'"):

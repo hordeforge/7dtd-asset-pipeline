@@ -13,6 +13,9 @@ check:
 	bash -n $(SHELL_SCRIPTS)
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		shellcheck -S warning $(SHELL_SCRIPTS); \
+	elif [ -n "$${CI:-}" ]; then \
+		echo "ERROR: CI requires shellcheck; install it with scripts/install-tools.sh" >&2; \
+		exit 1; \
 	else \
 		echo "note: shellcheck not installed; skipped shell linting"; \
 	fi

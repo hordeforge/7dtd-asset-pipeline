@@ -68,8 +68,6 @@ def handle(request: Any, resolve: Callable[[], Pipeline | None], allow_writes: b
             )
         pipeline = resolve() if operation.needs_config else None
         return {"id": identifier, "ok": True, "result": call_json(pipeline, operation_name, params)}
-    except PipelineError as exc:
-        return _error(identifier, exc)
     except Exception as exc:  # noqa: BLE001 - a handler bug must not kill the session
         return _error(identifier, exc)
 

@@ -20,6 +20,7 @@ out-of-process API cannot drift apart.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +36,7 @@ from .game import game_unity_version
 from .icon_check import IconReport, check_icons
 from .icon_render import RenderResult, render_icon
 from .mesh_check import MeshReport, check_mesh
-from .operations import get as get_operation
+from .operations import Operation, get as get_operation
 from .prompts import render as render_prompt
 from .references import AssetReference, discover_references
 from .scaffold import initialize
@@ -250,7 +251,7 @@ class Pipeline:
         return _DISPATCH[name](self, arguments)
 
 
-def _validated(operation, params: dict[str, Any] | None) -> dict[str, Any]:
+def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str, Any]:
     """Reject unknown or missing parameters, and demand any capability, up front.
 
     Failing here means an out-of-process caller gets the same message for the
@@ -311,7 +312,7 @@ def call_json(pipeline: Pipeline | None, name: str, params: dict[str, Any] | Non
 
 
 # Config-bound operations, resolved against a Pipeline instance.
-_DISPATCH: dict[str, Any] = {
+_DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "status": lambda self, p: self.status(),
     "capabilities": lambda self, p: self.capabilities(p.get("probe_versions", False)),
     "doctor": lambda self, p: self.doctor(),
@@ -319,13 +320,9 @@ _DISPATCH: dict[str, Any] = {
     "refs": lambda self, p: self.refs(),
     "inspect": lambda self, p: self.inspect(p.get("bundle")),
     "inspect_deep": lambda self, p: self.inspect_deep(p.get("bundle")),
-    "check_mesh": lambda self, p: self.check_mesh(
-        p["mesh"], p.get("max_extent", 16.0), p.get("strict", False)
-    ),
-    "check_log": lambda self, p: (self.check_log(p["log"]), {"ok": True})[1],
-    "check_sound": lambda self, p: self.check_sound(
-        p["clip"], p.get("max_seconds", 30.0), p.get("require_mono", True)
-    ),
+    "check_mesh": lambda self, p: self.check_mesh(**_mesh_params(p)),
+    "check_log": lambda self, p: _check_log_result(Path(p["log"])),
+    "check_sound": lambda self, p: self.check_sound(**_sound_params(p)),
     "check_icons": lambda self, p: self.check_icons(
         p.get("atlas_root", "UIAtlases"), p.get("cell", 160)
     ),
@@ -345,18 +342,8 @@ _DISPATCH: dict[str, Any] = {
         p.get("log_dir"),
     ),
     "client_log": lambda self, p: self.client_log(p.get("path"), p.get("log_dir"), p.get("mod_name")),
-    "prompt": lambda self, p: self.prompt(
-        p["kind"], p["subject"], p.get("role", ""), p.get("palette", ""),
-        p.get("key", ""), tuple(p.get("avoid", ())), p.get("stem", "myModThing"),
-    ),
+    "prompt": lambda self, p: self.prompt(**_prompt_params(p)),
 }
-
-
-def _env_game_dir() -> Path | None:
-    import os
-
-    value = os.environ.get("SEVEN_DAYS_TO_DIE_DIR")
-    return Path(value) if value else None
 
 
 def _client_where(game_dir: Path | None) -> dict[str, Any]:
@@ -388,6 +375,43 @@ def _client_log(
     return client.scan_log(client.latest_client_log(directory), mod_name)
 
 
+# Shared parameter plumbing for the operations that run identically with and
+# without a configuration. One mapping per operation keeps the JSON-schema
+# defaults in `_STATELESS` from drifting away from the bound methods in
+# `_DISPATCH`.
+def _prompt_params(params: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "kind": params["kind"],
+        "subject": params["subject"],
+        "role": params.get("role", ""),
+        "palette": params.get("palette", ""),
+        "key": params.get("key", ""),
+        "avoid": tuple(params.get("avoid", ())),
+        "stem": params.get("stem", "myModThing"),
+    }
+
+
+def _mesh_params(params: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "mesh": Path(params["mesh"]),
+        "max_extent": params.get("max_extent", 16.0),
+        "strict": params.get("strict", False),
+    }
+
+
+def _sound_params(params: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "clip": Path(params["clip"]),
+        "max_seconds": params.get("max_seconds", 30.0),
+        "require_mono": params.get("require_mono", True),
+    }
+
+
+def _check_log_result(log: Path) -> dict[str, bool]:
+    reject_disabled_modules(log)
+    return {"ok": True}
+
+
 def _needs_version() -> str:
     raise PipelineError(
         "unity_release needs a 'version' parameter when it runs outside a scaffolded "
@@ -411,28 +435,26 @@ def _init(params: dict[str, Any]) -> dict[str, Any]:
 
 
 # Operations that work without a mod configuration.
-_STATELESS: dict[str, Any] = {
+_STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "capabilities": lambda p: capabilities(p.get("probe_versions", False)),
     # A prompt is rendered before the modlet exists as often as after it.
-    "prompt": lambda p: render_prompt(
-        p["kind"], p["subject"], p.get("role", ""), p.get("palette", ""),
-        p.get("key", ""), tuple(p.get("avoid", ())), p.get("stem", "myModThing"),
-    ),
-    "check_mesh": lambda p: check_mesh(
-        Path(p["mesh"]), p.get("max_extent", 16.0), p.get("strict", False)
-    ),
-    "check_log": lambda p: (reject_disabled_modules(Path(p["log"])), {"ok": True})[1],
-    "check_sound": lambda p: check_sound(
-        Path(p["clip"]), p.get("max_seconds", 30.0), p.get("require_mono", True)
-    ),
+    "prompt": lambda p: render_prompt(**_prompt_params(p)),
+    "check_mesh": lambda p: check_mesh(**_mesh_params(p)),
+    "check_log": lambda p: _check_log_result(Path(p["log"])),
+    "check_sound": lambda p: check_sound(**_sound_params(p)),
     "unity_release": lambda p: fetch_release(
         p["version"] if p.get("version") else _needs_version(), p.get("platform", "LINUX")
     ),
     "init": _init,
-    "client_where": lambda p: _client_where(Path(p["game_dir"]) if p.get("game_dir") else _env_game_dir()),
-    "client_launch": lambda p: client.fresh_client_run(
-        _env_game_dir(), p.get("mod_name"), run_seconds=p.get("run_seconds"), mute=p.get("mute", False),
-        steam_bin=p.get("steam_bin", "steam"), log_dir=Path(p["log_dir"]) if p.get("log_dir") else None,
+    "client_where": lambda p: _client_where(
+        Path(p["game_dir"]) if p.get("game_dir") else client.game_dir_from_env()
     ),
-    "client_log": lambda p: _client_log(p.get("path"), p.get("log_dir"), p.get("mod_name"), _env_game_dir()),
+    "client_launch": lambda p: client.fresh_client_run(
+        client.game_dir_from_env(), p.get("mod_name"), run_seconds=p.get("run_seconds"),
+        mute=p.get("mute", False), steam_bin=p.get("steam_bin", "steam"),
+        log_dir=Path(p["log_dir"]) if p.get("log_dir") else None,
+    ),
+    "client_log": lambda p: _client_log(
+        p.get("path"), p.get("log_dir"), p.get("mod_name"), client.game_dir_from_env()
+    ),
 }

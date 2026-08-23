@@ -47,6 +47,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -593,8 +594,10 @@ def fresh_client_run(
 # ---------------------------------------------------------------------- CLI
 
 
-def _game_dir_from_env() -> Path | None:
-    value = os.environ.get("SEVEN_DAYS_TO_DIE_DIR")
+def game_dir_from_env(env: dict[str, str] | None = None) -> Path | None:
+    """`SEVEN_DAYS_TO_DIE_DIR`, or None — the same override every derivation honours."""
+    environment = os.environ if env is None else env
+    value = environment.get("SEVEN_DAYS_TO_DIE_DIR")
     return Path(value) if value else None
 
 
@@ -660,7 +663,7 @@ def main(argv: list[str] | None = None) -> int:
     discord.add_argument("--user-reg", type=Path, default=None)
 
     args = parser.parse_args(argv)
-    game_dir = args.game_dir or _game_dir_from_env()
+    game_dir = args.game_dir or game_dir_from_env()
     try:
         return _dispatch(args, game_dir)
     except PipelineError as exc:
@@ -674,8 +677,8 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
             "game_dir": str(game_dir) if game_dir else None,
             "compatdata": _maybe(compatdata_dir, game_dir),
             "user_data": _maybe(proton_user_data_dir, game_dir),
-            "mods_dir": _maybe(lambda g: user_mods_dir(g), game_dir),
-            "log_dir": _maybe(lambda g: client_log_dir(g), game_dir),
+            "mods_dir": _maybe(user_mods_dir, game_dir),
+            "log_dir": _maybe(client_log_dir, game_dir),
             "launch": launch_command(),
         }
         if args.json:
@@ -802,7 +805,9 @@ def _capture(args: argparse.Namespace) -> int:
     return 0
 
 
-def _maybe(fn, game_dir: Path | None) -> str | None:
+def _maybe(
+    fn: Callable[[Path], Path | None], game_dir: Path | None
+) -> str | None:
     if game_dir is None:
         return None
     try:
@@ -820,9 +825,9 @@ def _print_log_report(report: LogReport) -> None:
         print(f"  {key:26} {line}")
     if report.missing_positive:
         print("MISSING")
+        meaning_for = {marker.key: marker.meaning for marker in markers_for(report.mod_name)}
         for key in report.missing_positive:
-            meaning = next(m.meaning for m in markers_for(report.mod_name) if m.key == key)
-            print(f"  {key:26} {meaning}")
+            print(f"  {key:26} {meaning_for[key]}")
     if report.problems:
         print("PROBLEMS")
         for line in report.problems:

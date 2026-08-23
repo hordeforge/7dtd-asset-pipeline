@@ -18,8 +18,8 @@ none is baked in here, because a local build tool should not carry a server.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from typing import Any, Callable
+from dataclasses import asdict, dataclass
+from typing import Any
 
 from .errors import PipelineError
 
@@ -43,11 +43,9 @@ class Operation:
     needs_config: bool
     needs_network: bool = False
     capabilities: tuple[str, ...] = ()
-    handler: Callable[..., Any] | None = field(default=None, repr=False, compare=False)
 
     def describe(self) -> dict[str, Any]:
         data = asdict(self)
-        data.pop("handler", None)
         data["capabilities"] = list(self.capabilities)
         return data
 

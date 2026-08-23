@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from sevendtd_asset_pipeline.capabilities import REGISTRY
 from sevendtd_asset_pipeline.capture import (
     BACKENDS,
     MANIFEST_NAME,
+    _require_backend,
     available_backends,
+    capture,
     read_manifest,
     record_existing,
     session_type,
@@ -45,6 +50,85 @@ class SessionTests(unittest.TestCase):
     def test_the_capability_probes_the_same_tools(self) -> None:
         spec = next(item for item in REGISTRY if item.name == "desktop-capture")
         self.assertEqual(set(spec.probe.split()), {b.name for b in BACKENDS})
+
+
+class SelectionTests(unittest.TestCase):
+    """Backend selection without any tool installed or display attached."""
+
+    def test_a_headless_host_is_refused_with_the_reason(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "no desktop session"):
+            _require_backend({})
+
+    def test_a_session_without_tools_names_what_to_install(self) -> None:
+        with mock.patch("sevendtd_asset_pipeline.capture.shutil.which", return_value=None):
+            with self.assertRaisesRegex(PipelineError, "no screenshot tool for this x11 session"):
+                _require_backend({"DISPLAY": ":0"})
+
+    def test_selection_takes_the_first_installed_backend_for_the_session(self) -> None:
+        installed = {"grim", "scrot"}
+
+        def which(name: str) -> str | None:
+            return "/usr/bin/" + name if name in installed else None
+
+        with mock.patch("sevendtd_asset_pipeline.capture.shutil.which", side_effect=which):
+            self.assertEqual("grim", _require_backend({"XDG_SESSION_TYPE": "wayland"}).name)
+            self.assertEqual("scrot", _require_backend({"DISPLAY": ":0"}).name)
+
+
+class CaptureTests(unittest.TestCase):
+    """The run path, driven by stub executables instead of a real desktop."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        root = Path(self.temporary.name)
+        self.tools = root / "tools"
+        self.tools.mkdir()
+        self.evidence = root / "acceptance"
+        self._patcher = mock.patch.dict(
+            os.environ, {"PATH": f"{self.tools}:{os.environ.get('PATH', '')}"}
+        )
+        self._patcher.start()
+        self.addCleanup(self._patcher.stop)
+        self.addCleanup(self.temporary.cleanup)
+
+    def _tool(self, name: str, body: str) -> None:
+        script = self.tools / name
+        script.write_text(f"#!/bin/sh\n{body}", encoding="utf-8")
+        script.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+    def test_a_successful_grab_is_recorded_with_its_digest(self) -> None:
+        self._tool("grim", 'printf "fake png data" > "$1"')
+        entry = capture(
+            "held-nuke",
+            observable="upright in the hand",
+            root=self.evidence,
+            env={"XDG_SESSION_TYPE": "wayland"},
+        )
+        self.assertEqual("grim", entry.backend)
+        self.assertEqual("wayland", entry.session)
+        self.assertIsNone(entry.verdict)
+        self.assertEqual(len(b"fake png data"), entry.bytes)
+        self.assertTrue((self.evidence / "held-nuke.png").is_file())
+        recorded = read_manifest(self.evidence)[0]
+        self.assertEqual(entry.sha256, recorded["sha256"])
+
+    def test_a_tool_that_exits_zero_without_an_image_is_refused(self) -> None:
+        self._tool("grim", "exit 0")
+        with self.assertRaisesRegex(PipelineError, "wrote no image"):
+            capture(
+                "empty",
+                root=self.evidence,
+                env={"XDG_SESSION_TYPE": "wayland"},
+            )
+
+    def test_a_failing_tool_carries_its_last_error_line(self) -> None:
+        self._tool("grim", 'echo "no compositor" >&2\necho "detail line" >&2\nexit 3')
+        with self.assertRaisesRegex(PipelineError, r"grim failed \(3\).*detail line"):
+            capture("broken", root=self.evidence, env={"XDG_SESSION_TYPE": "wayland"})
+
+    def test_an_empty_label_is_rejected_before_anything_runs(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "needs a label"):
+            capture("  ", root=self.evidence, env={})
 
 
 class ManifestTests(unittest.TestCase):
@@ -95,6 +179,12 @@ class ManifestTests(unittest.TestCase):
         self.evidence.mkdir(parents=True)
         (self.evidence / MANIFEST_NAME).write_text("{not json", encoding="utf-8")
         with self.assertRaises(PipelineError):
+            read_manifest(self.evidence)
+
+    def test_a_manifest_that_is_not_a_list_is_refused(self) -> None:
+        self.evidence.mkdir(parents=True)
+        (self.evidence / MANIFEST_NAME).write_text('{"label": "x"}', encoding="utf-8")
+        with self.assertRaisesRegex(PipelineError, "not a list"):
             read_manifest(self.evidence)
 
     def test_recording_a_missing_image_fails(self) -> None:

@@ -18,6 +18,7 @@ ImageMagick's ecosystem, or `uv pip install pillow`).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -45,6 +46,7 @@ def require_imaging() -> None:
 def save_atomically(image: "Image.Image", path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".png", dir=path.parent)
+    os.close(descriptor)
     temporary_path = Path(temporary)
     try:
         image.save(temporary_path, "PNG")

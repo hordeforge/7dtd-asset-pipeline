@@ -186,6 +186,105 @@ def _config_texts(config_dir: Path) -> list[tuple[Path, str]]:
     return texts
 
 
+def _scan_atlases(
+    mod_root: Path, atlas_dir: Path, cell: int
+) -> tuple[list[IconFile], list[str], list[str]]:
+    """Inspect every PNG in every atlas folder; also report non-PNG strays.
+
+    Returns the icons plus the problems and notes accumulated while walking.
+    """
+    icons: list[IconFile] = []
+    problems: list[str] = []
+    notes: list[str] = []
+    for folder in sorted(path for path in atlas_dir.iterdir() if path.is_dir()):
+        members = sorted(folder.iterdir())
+        pngs = [path for path in members if path.suffix.lower() == ".png"]
+        for stray in members:
+            if stray.is_file() and stray not in pngs:
+                notes.append(
+                    f"{stray.relative_to(mod_root)} is not a .png; LoadUiAtlases ignores it"
+                )
+        if not pngs:
+            notes.append(f"{folder.relative_to(mod_root)} contains no icons")
+        seen: dict[str, Path] = {}
+        for png in pngs:
+            folded = png.stem.casefold()
+            collision = seen.get(folded)
+            if collision is not None:
+                problems.append(
+                    f"{folder.name}: {png.name} and {collision.name} differ only in case; "
+                    "the atlas key is the filename stem and one of them will win silently"
+                )
+            seen[folded] = png
+            icons.append(inspect_icon(png, folder.name, cell))
+    for icon in icons:
+        problems.extend(f"{icon.atlas}/{icon.stem}.png: {problem}" for problem in icon.problems)
+    return icons, problems, notes
+
+
+def _match_shipped(
+    key: str, provided: dict[str, IconFile], provided_ci: dict[str, str]
+) -> str | None:
+    """The shipped stem that answers `key`: itself, a case-variant, or None."""
+    if key in provided:
+        return key
+    return provided_ci.get(key.casefold())
+
+
+def _reconcile_explicit_keys(
+    references: dict[str, list[str]],
+    provided: dict[str, IconFile],
+    provided_ci: dict[str, str],
+) -> tuple[list[str], list[str], list[str]]:
+    """Sort `CustomIcon`/`display_entry` keys into resolved and external.
+
+    A key differing only in case from the shipped PNG resolves on one lookup
+    path and not another, so it is reported and still counted as resolved.
+    """
+    resolved: list[str] = []
+    external: list[str] = []
+    problems: list[str] = []
+    for key in sorted(references):
+        shipped = _match_shipped(key, provided, provided_ci)
+        if shipped is None:
+            external.append(key)
+            continue
+        if shipped != key:
+            problems.append(
+                f'icon key "{key}" differs in case from the shipped {shipped}.png; '
+                "keep the key and the filename stem byte-identical"
+            )
+        resolved.append(key)
+    return resolved, external, problems
+
+
+def _reconcile_implicit_names(
+    definitions: dict[str, list[str]],
+    provided: dict[str, IconFile],
+    provided_ci: dict[str, str],
+) -> tuple[list[str], list[str], list[str]]:
+    """Sort name-default lookups into answered and unanswered.
+
+    A definition with no CustomIcon shows the sprite named like itself, so a
+    shipped PNG with that exact stem is in use whether or not anything says so.
+    """
+    implicit: list[str] = []
+    unnamed: list[str] = []
+    problems: list[str] = []
+    for name in sorted(definitions):
+        shipped = _match_shipped(name, provided, provided_ci)
+        if shipped is None:
+            unnamed.append(name)
+            continue
+        if shipped != name:
+            problems.append(
+                f'"{name}" sets no CustomIcon, so its icon is looked up by name, and the '
+                f"shipped {shipped}.png differs from it in case; rename one of them"
+            )
+        implicit.append(name)
+    return implicit, unnamed, problems
+
+
 def discover_implicit_icon_names(config_dir: Path) -> dict[str, list[str]]:
     """Item and block names defined without a `CustomIcon`, mapped to their files.
 
@@ -239,54 +338,21 @@ def check_icons(
     atlas_dir = mod_root / atlas_root
     problems: list[str] = []
     notes: list[str] = []
-    icons: list[IconFile] = []
 
     if not atlas_dir.is_dir():
         notes.append(f"no {atlas_root}/ directory; this mod ships no icons")
+        icons: list[IconFile] = []
     else:
-        for folder in sorted(path for path in atlas_dir.iterdir() if path.is_dir()):
-            members = sorted(folder.iterdir())
-            pngs = [path for path in members if path.suffix.lower() == ".png"]
-            for stray in members:
-                if stray.is_file() and stray not in pngs:
-                    notes.append(
-                        f"{stray.relative_to(mod_root)} is not a .png; LoadUiAtlases ignores it"
-                    )
-            if not pngs:
-                notes.append(f"{folder.relative_to(mod_root)} contains no icons")
-            seen: dict[str, Path] = {}
-            for png in pngs:
-                collision = seen.get(png.stem.casefold())
-                if collision is not None:
-                    problems.append(
-                        f"{folder.name}: {png.name} and {collision.name} differ only in case; "
-                        "the atlas key is the filename stem and one of them will win silently"
-                    )
-                seen[png.stem.casefold()] = png
-                icons.append(inspect_icon(png, folder.name, cell))
-
-    for icon in icons:
-        problems.extend(f"{icon.atlas}/{icon.stem}.png: {problem}" for problem in icon.problems)
+        icons, problems, notes = _scan_atlases(mod_root, atlas_dir, cell)
 
     provided = {icon.stem: icon for icon in icons}
     provided_ci = {stem.casefold(): stem for stem in provided}
     config = config_dir if config_dir else mod_root / "Config"
-    references = discover_icon_references(config)
-    resolved: list[str] = []
-    external: list[str] = []
-    for key in sorted(references):
-        if key in provided:
-            resolved.append(key)
-            continue
-        shipped = provided_ci.get(key.casefold())
-        if shipped is not None:
-            problems.append(
-                f'icon key "{key}" differs in case from the shipped {shipped}.png; '
-                "keep the key and the filename stem byte-identical"
-            )
-            resolved.append(key)
-        else:
-            external.append(key)
+
+    resolved, external, explicit_problems = _reconcile_explicit_keys(
+        discover_icon_references(config), provided, provided_ci
+    )
+    problems.extend(explicit_problems)
     if external:
         notes.append(
             f"{len(external)} icon key(s) are not provided by this mod: "
@@ -294,23 +360,11 @@ def check_icons(
             "draws the intended art in a client, because a missing key silently draws "
             "whatever else answers to it."
         )
-    # The name-default lookup: a definition with no CustomIcon shows the sprite
-    # named like itself. A shipped PNG with that exact name is therefore in use.
-    implicit: list[str] = []
-    unnamed: list[str] = []
-    for name in sorted(discover_implicit_icon_names(config)):
-        if name in provided:
-            implicit.append(name)
-            continue
-        shipped = provided_ci.get(name.casefold())
-        if shipped is not None:
-            problems.append(
-                f'"{name}" sets no CustomIcon, so its icon is looked up by name, and the '
-                f"shipped {shipped}.png differs from it in case; rename one of them"
-            )
-            implicit.append(name)
-        else:
-            unnamed.append(name)
+
+    implicit, unnamed, implicit_problems = _reconcile_implicit_names(
+        discover_implicit_icon_names(config), provided, provided_ci
+    )
+    problems.extend(implicit_problems)
     if unnamed:
         notes.append(
             f"{len(unnamed)} item/block definition(s) set no CustomIcon and ship no PNG of "
@@ -318,6 +372,7 @@ def check_icons(
             "through Extends, or the vanilla sprite of that name, or whatever else answers "
             "— confirm in a client."
         )
+
     unused = sorted(set(provided) - set(resolved) - set(implicit))
     if unused:
         notes.append(

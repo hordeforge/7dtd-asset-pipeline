@@ -15,8 +15,9 @@ import unittest
 import wave
 import zlib
 from pathlib import Path
+from typing import Any
 
-from sevendtd_asset_pipeline import PipelineError
+from sevendtd_asset_pipeline import Pipeline, PipelineError
 from sevendtd_asset_pipeline.assets_src import LANES, render_readme
 from sevendtd_asset_pipeline.icon_check import check_icons, discover_icon_references, read_png_header
 from sevendtd_asset_pipeline.sound_check import check_sound
@@ -160,8 +161,10 @@ class IconTests(unittest.TestCase):
     def test_report_is_json_serializable(self) -> None:
         import json
 
-        write_png(self.atlas / "myModThing.png", 160, 160)
-        json.dumps(check_icons(self.root, self._config("<configs/>")).as_dict())
+        write_png(self.atlas / "myModThing.png", 128, 128)
+        report = check_icons(self.root, self._config("<configs/>"))
+        self.assertEqual(report.as_dict(), json.loads(json.dumps(report.as_dict())))
+        self.assertTrue(all(isinstance(problem, str) for problem in report.problems))
 
 
 class SoundTests(unittest.TestCase):
@@ -352,9 +355,7 @@ class AdoptionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def _adopt(self, **overrides):
-        from sevendtd_asset_pipeline import Pipeline
-
+    def _adopt(self, **overrides: Any) -> tuple[Pipeline, list[Path]]:
         options = dict(
             unity_version="2022.3.62f2",
             adopt_project=self.project,

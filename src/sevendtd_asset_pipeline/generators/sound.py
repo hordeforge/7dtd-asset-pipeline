@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import array
 import math
+import os
 import random
 import shutil
 import sys
@@ -331,6 +332,7 @@ def write_wav(path: Path, samples: list[float], rate: int = RATE) -> None:
         "h", (max(-FULL_SCALE, min(FULL_SCALE, int(value * FULL_SCALE))) for value in samples)
     )
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    os.close(descriptor)
     temporary_path = Path(temporary)
     try:
         with wave.open(temporary, "wb") as handle:

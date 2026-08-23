@@ -65,6 +65,38 @@ class PromptTests(unittest.TestCase):
         self.assertIn("shamway check-icons", joined)
         self.assertNotIn("{stem}", joined)
 
+    def test_an_unknown_key_colour_names_the_known_ones(self) -> None:
+        with self.assertRaises(PipelineError) as caught:
+            render("item-icon", subject="a thing", key="chartreuse")
+        self.assertIn("magenta", str(caught.exception))
+        self.assertIn("green", str(caught.exception))
+
+    def test_the_cli_lists_kinds_and_renders_json(self) -> None:
+        """`shamway prompt` is an agent surface, so both output shapes are pinned."""
+        import contextlib
+        import io
+        import json
+
+        from sevendtd_asset_pipeline.prompts import main
+
+        listing = io.StringIO()
+        with contextlib.redirect_stdout(listing):
+            self.assertEqual(0, main(["--list"]))
+        self.assertIn("item-icon", listing.getvalue())
+
+        payload = io.StringIO()
+        with contextlib.redirect_stdout(payload):
+            self.assertEqual(0, main(["--json", "--list"]))
+        kinds = json.loads(payload.getvalue())
+        self.assertEqual({entry["kind"] for entry in kinds}, set(KINDS))
+
+        rendered = io.StringIO()
+        with contextlib.redirect_stdout(rendered):
+            self.assertEqual(0, main(["--json", "item-icon", "--subject", "a nuke"]))
+        result = json.loads(rendered.getvalue())
+        self.assertIn("Asset type:", result["prompt"])
+        self.assertEqual("a nuke", result["subject"])
+
     def test_no_line_runs_past_the_margin(self) -> None:
         """Terminal output is read in a terminal: reference detail gets its own
         column, and nothing wraps past it."""

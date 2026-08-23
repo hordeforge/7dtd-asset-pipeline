@@ -43,15 +43,20 @@ MISSING
 	exit 1
 fi
 
-# uv provisions an interpreter itself when the host has none new enough, so
-# the Python version is a constraint here rather than a prerequisite.
-uv venv --python '>=3.11' "$VENV"
-
-TARGET="$ROOT"
+# uv sync resolves from the committed uv.lock and verifies its hashes, so
+# every checkout installs exactly the versions the repository pinned instead
+# of whatever PyPI serves today. It creates .venv and provisions an
+# interpreter itself when the host has none new enough, so the Python version
+# is a constraint here rather than a prerequisite. The dev group (ruff, mypy,
+# setuptools) rides along so `make check test` works out of the box.
+SYNC_ARGS=(--project "$ROOT" --python '>=3.11')
 if [[ -n "$EXTRAS" ]]; then
-	TARGET="${ROOT}[${EXTRAS}]"
+	IFS=',' read -r -a extras <<<"$EXTRAS"
+	for extra in "${extras[@]}"; do
+		SYNC_ARGS+=(--extra "$extra")
+	done
 fi
-uv pip install --python "$VENV" --editable "$TARGET"
+uv sync "${SYNC_ARGS[@]}"
 
 cat <<EOF
 Installed the pipeline in $VENV
@@ -62,6 +67,6 @@ Run:
 Or, without activating anything:
   uv run --project $ROOT shamway --help
 
-For a user-wide command instead:
+For a user-wide command instead (resolves fresh, outside the lock):
   uv tool install $ROOT
 EOF

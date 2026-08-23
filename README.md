@@ -37,7 +37,7 @@ scripts/install-tools.sh --with-unity-prereqs
 
 Install this checkout:
 
-- `scripts/bootstrap` — uv venv + uv pip install --editable, with extras
+- `scripts/bootstrap` — uv sync from the committed lockfile, with extras
 
 ```bash
 scripts/bootstrap

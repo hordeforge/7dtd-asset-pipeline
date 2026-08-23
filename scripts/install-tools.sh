@@ -540,12 +540,15 @@ install_python_extras() {
 	fi
 	if ! have uv; then
 		echo "note: uv is unavailable, so the Python capabilities were skipped. Run:"
-		echo "      uv pip install '${target}[all]'"
+		echo "      uv sync --project '${target}' --extra all"
 		return
 	fi
 	echo "Installing optional Python capabilities (UnityPy, Pillow, NumPy, trimesh)"
 	if [[ -d "$ROOT/.venv" ]]; then
-		if uv pip install --quiet --python "$ROOT/.venv" "${target}[all]"; then
+		# The checkout's own venv: resolve from the committed uv.lock so the
+		# extras land at the same hash-pinned versions bootstrap installs.
+		# --no-dev keeps lint/type tools out of a consumer host.
+		if uv sync --project "$ROOT" --no-dev --extra all; then
 			echo "OK: installed into $ROOT/.venv"
 			return
 		fi
@@ -555,7 +558,7 @@ install_python_extras() {
 		return
 	fi
 	echo "note: could not install the Python capabilities automatically. Run:"
-	echo "      uv venv && uv pip install '${target}[all]'"
+	echo "      uv sync --project '${target}' --extra all"
 }
 
 install_ilspycmd() {

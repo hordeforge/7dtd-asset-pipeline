@@ -58,8 +58,9 @@ uv tool install /path/to/7dtd-asset-pipeline
 ```
 
 `scripts/bootstrap` creates only `.venv/` in this checkout and installs the
-package into it with `uv pip install --editable`, including the optional
-capabilities. Pass `--no-extras` for the dependency-free core alone. It never
+package into it with `uv sync`, which resolves from the committed `uv.lock`
+and verifies its hashes — including the optional capabilities. Pass
+`--no-extras` for the dependency-free core alone. It never
 uses `sudo`, installs OS packages, or modifies shell startup files.
 
 ## 2. Identify the game install and Unity revision

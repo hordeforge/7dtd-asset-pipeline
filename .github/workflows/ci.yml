@@ -31,11 +31,11 @@ jobs:
           enable-cache: true
       - run: uv python install ${{ matrix.python-version }}
       # Install the core alone: the suite must pass without the optional
-      # capabilities, because that is how most consumers first run it. Into a
-      # venv, not --system: recent uv refuses to write into its own managed
-      # interpreters (externally-managed error), which left these jobs red.
-      - run: uv venv --python ${{ matrix.python-version }}
-      - run: uv pip install --editable .
+      # capabilities, because that is how most consumers first run it.
+      # `uv sync --locked` resolves from the committed uv.lock and verifies
+      # its hashes — never a fresh resolution against PyPI — and brings the
+      # dev group (ruff, mypy, setuptools) that `make check` needs.
+      - run: uv sync --locked --python ${{ matrix.python-version }}
       # Later steps (and the Makefile's `uv run`) resolve ./.venv from PATH.
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       # Exercise the installed console script, not only the source tree, so a
@@ -43,11 +43,6 @@ jobs:
       # consumer's checkout.
       - run: shamway --help
       - run: shamway schema
-      # Both pinned to the versions the [tool.ruff] / strict [tool.mypy]
-      # configurations were written against: a tool bump changes verdicts, so
-      # it lands here deliberately. Into the job's venv, not --system: that
-      # hits the runner's externally-managed marker.
-      - run: uv pip install ruff==0.16.4 mypy==2.3.1 setuptools
       - run: make check test
 
   capabilities:
@@ -62,9 +57,9 @@ jobs:
       - run: ./scripts/bootstrap
       - run: .venv/bin/shamway capabilities --json
       - run: .venv/bin/shamway capabilities --missing
-      # make check resolves both analyzers by name, as in the test jobs.
+      # make check resolves both analyzers by name; bootstrap's uv sync
+      # installed the pinned dev group into the same venv.
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-      - run: uv pip install ruff==0.16.4 mypy==2.3.1 setuptools
       - run: make check test
 
   scaffold:
@@ -77,8 +72,8 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-      - run: uv venv
-      - run: uv pip install --editable .
+      # Core only, no dev tools: this job drives the CLI, it does not lint.
+      - run: uv sync --locked --no-dev
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: |
           mkdir -p /tmp/MyMod
@@ -107,8 +102,8 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-      - run: uv venv
-      - run: uv pip install --editable .
+      # Core only, no dev tools: coverage runs the unit suite directly.
+      - run: uv sync --locked --no-dev
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: make coverage
       - run: uv run --no-project --with coverage python scripts/coverage_badge.py "$RUNNER_TEMP/coverage.svg"

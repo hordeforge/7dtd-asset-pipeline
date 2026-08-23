@@ -30,6 +30,14 @@ authoring = ["pillow>=10", "numpy>=1.24"]
 mesh = ["trimesh>=4"]
 all = ["UnityPy>=1.20,<2", "pillow>=10", "numpy>=1.24", "trimesh>=4"]
 
+# Lint and type-check versions are load-bearing: verdicts change between
+# releases, so every checkout and every CI job must agree on exactly one.
+# Declared here (PEP 735) rather than inline in ci.yml so the pins have a
+# single home and land in uv.lock with hashes, which `uv sync --locked`
+# verifies on every install.
+[dependency-groups]
+dev = ["ruff==0.16.4", "mypy==2.3.1", "setuptools"]
+
 [project.scripts]
 shamway = "sevendtd_asset_pipeline.cli:main"
 

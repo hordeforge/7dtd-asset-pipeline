@@ -61,7 +61,7 @@ def _root() -> Path:
         return source
     raise PipelineError(
         "the packaged documentation is missing; reinstall the pipeline "
-        "(uv pip install --editable . from a checkout)"
+        "(uv sync from a checkout)"
     )
 
 

@@ -62,7 +62,7 @@ fact goes in [docs/research-provenance.md](docs/research-provenance.md) with
 the tool that produced it. An undocumented capability is one the next session
 will rebuild from scratch, and an undocumented gate is one it will delete.
 
-- `scripts/bootstrap` — uv venv + uv pip install --editable, with extras
+- `scripts/bootstrap` — uv sync from the committed lockfile, with extras
 - `make check test` — compile, shellcheck, and the unit suite
 
 ```bash

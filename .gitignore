@@ -1,7 +1,4 @@
 .venv/
-# This is a library published for others to install, not a pinned application,
-# so consumers resolve their own dependencies. uv run writes this locally.
-uv.lock
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -36,4 +33,9 @@ dist/
 .agents
 .scratch/
 .gauntlet.lock.coverage.json
+# Other lockfiles stay local, but this project's own uv.lock is committed:
+# it pins the dev toolchain and every transitive version for CI and
+# contributor checkouts, and `uv sync --locked` verifies its hashes.
+# Published wheels still declare open ranges, so consumers are unaffected.
 *.lock
+!uv.lock

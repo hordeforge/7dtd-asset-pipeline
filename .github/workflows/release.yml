@@ -22,11 +22,10 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-      - run: uv python install 3.13
-      # Into a venv, not --system: recent uv refuses to write into its own
-      # managed interpreters (externally-managed error).
-      - run: uv venv --python 3.13
-      - run: uv pip install --editable .
+      # uv sync provisions the interpreter itself when missing, resolves from
+      # the committed uv.lock (hashes verified), and installs the dev group
+      # `make check` needs.
+      - run: uv sync --locked --python 3.13
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: make check test
 

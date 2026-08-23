@@ -616,9 +616,9 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    # These three are passthroughs with their own argparse, so their `--help`
-    # must reach them rather than be claimed (and rejected) by this parser.
-    # Each entry: command -> (module, argv used when none is given).
+    # These are passthroughs with their own argument handling, so their
+    # `--help` must reach them rather than be claimed (and rejected) by this
+    # parser. Each entry: command -> (module, argv used when none is given).
     passthrough = {
         "script": ("scripts", []),
         "prompt": ("prompts", ["--list"]),

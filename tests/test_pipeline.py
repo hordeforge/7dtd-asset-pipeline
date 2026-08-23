@@ -44,6 +44,18 @@ class PipelineTests(unittest.TestCase):
         report = validate_mod(config)
         self.assertEqual(1, report.reference_count)
 
+    def test_scaffold_rejects_an_unknown_bundle_source_before_writing(self) -> None:
+        """The CLI's argparse choices catch this; the API and `call` arrive here.
+
+        A bad value that reached render_config would scaffold every file and
+        then write a configuration load_config rejects forever: a mod reported
+        as created that no command can open.
+        """
+        with self.assertRaisesRegex(PipelineError, "bundle_source must be one of"):
+            initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="bogus")
+        self.assertFalse((self.root / CONFIG_NAME).exists(), "nothing may be written")
+        self.assertFalse((self.root / "tools").exists())
+
     def _stage_mod(self, uri: str) -> None:
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
         config = load_config(self.root / CONFIG_NAME)

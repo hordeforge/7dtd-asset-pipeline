@@ -330,5 +330,5 @@ def editor_matches_project(reported: str, config: PipelineConfig) -> Check:
         "FAIL",
         "Editor revision",
         f"UNITY_EDITOR reports {reported!r} but the project is pinned to {expected}; a build "
-        "would silently upgrade the project. Point UNITY_EDITOR at the {0} editor.".format(expected),
+        f"would silently upgrade the project. Point UNITY_EDITOR at the {expected} editor.",
     )

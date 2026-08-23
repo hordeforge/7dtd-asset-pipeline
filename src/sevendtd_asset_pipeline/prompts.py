@@ -310,10 +310,9 @@ def _wrap(label: str, value: str, width: int = 78) -> str:
     every clause's first line runs a label's width past the margin.
     """
     indent = " " * 14
-    body = textwrap.fill(
+    return textwrap.fill(
         value, width=width, initial_indent=f"{label + ':':<14}", subsequent_indent=indent
     )
-    return body
 
 
 def render(

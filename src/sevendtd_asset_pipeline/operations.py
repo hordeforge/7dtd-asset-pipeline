@@ -26,7 +26,7 @@ from .config import BUNDLE_SOURCES
 from .docs import topics
 from .errors import PipelineError
 from .generators import describe
-from .prompts import kinds
+from .prompts import KINDS, KEYS, kinds
 
 # Cost classes, so a caller can decide what to run in a tight loop.
 INSTANT = "instant"  # no I/O beyond the mod directory
@@ -393,6 +393,9 @@ _DEFINITIONS: tuple[Operation, ...] = (
             {
                 "kind": {
                     "type": "string",
+                    # Derived from KINDS so the published schema cannot drift
+                    # from what render() and `shamway prompt --list` accept.
+                    "enum": sorted(KINDS),
                     "description": "item-icon, block-concept, material-albedo, "
                     "particle-card, or opacity-mask",
                 },
@@ -404,6 +407,8 @@ _DEFINITIONS: tuple[Operation, ...] = (
                 "palette": {"type": "string", "description": "three to five named colours"},
                 "key": {
                     "type": "string",
+                    # "" keeps the kind's default; the same choices the CLI publishes.
+                    "enum": ["", *sorted(KEYS)],
                     "description": "magenta, green, or black; defaults per kind",
                 },
                 "avoid": {

@@ -17,7 +17,7 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from .assets_src import create as create_assets_src
-from .config import CONFIG_NAME, render_config
+from .config import BUNDLE_SOURCES, CONFIG_NAME, render_config
 from .consumer_docs import render_agent_guide
 from .errors import PipelineError
 from .references import read_mod_name
@@ -115,6 +115,13 @@ def initialize(
     created, nothing is vendored into one, and the mod needs no editor to be
     built, validated or shipped.
     """
+    # Checked before anything is written: an unknown source renders a
+    # configuration `load_config` rejects, and the scaffold has already copied
+    # a Unity project by the time that surfaces. The CLI's argparse choices
+    # catch this for the command line; the API and `shamway call` arrive here.
+    if bundle_source not in BUNDLE_SOURCES:
+        options = ", ".join(f"{name!r} ({why})" for name, why in BUNDLE_SOURCES.items())
+        raise PipelineError(f"bundle_source must be one of: {options}")
     mod_root = mod_root.resolve()
     if not mod_root.is_dir():
         raise PipelineError(f"mod root does not exist: {mod_root}")

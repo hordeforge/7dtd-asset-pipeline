@@ -359,6 +359,13 @@ def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str,
             raise PipelineError(
                 f"operation {operation.name!r} requires parameter {required!r}"
             )
+    for name, value in arguments.items():
+        allowed = properties[name].get("enum")
+        if allowed and value not in allowed:
+            options = ", ".join(repr(option) for option in allowed)
+            raise PipelineError(
+                f"operation {operation.name!r} got {name}={value!r}; expected one of: {options}"
+            )
     for capability in operation.capabilities:
         require_capability(capability)
     return arguments

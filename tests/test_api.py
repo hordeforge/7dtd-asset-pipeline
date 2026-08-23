@@ -131,6 +131,34 @@ class DispatchTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "requires parameter 'mesh'"):
             call_json(None, "check_mesh", {})
 
+    def test_a_published_enum_is_enforced_before_any_work_starts(self) -> None:
+        """`shamway schema` publishes enums, so `call` holds params to them.
+
+        init's bundle_source is a write: an unvalidated value used to scaffold
+        the whole modlet and only then fail on load, or worse, report success
+        through `serve` with a configuration nothing can open.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            mod_root = Path(directory) / "mod"
+            mod_root.mkdir()
+            (mod_root / "ModInfo.xml").write_text(
+                '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+            )
+            with self.assertRaisesRegex(PipelineError, "expected one of"):
+                call_json(None, "init", {"mod_root": str(mod_root), "bundle_source": "bogus"})
+            self.assertFalse((mod_root / ".shamway.toml").exists(), "nothing may be written")
+
+    def test_the_published_enums_cannot_drift_from_their_registries(self) -> None:
+        from sevendtd_asset_pipeline.config import BUNDLE_SOURCES
+        from sevendtd_asset_pipeline.prompts import KEYS, KINDS
+
+        by_name = {operation["name"]: operation for operation in manifest()["operations"]}
+        prompt = by_name["prompt"]["parameters"]["properties"]
+        self.assertEqual(sorted(KINDS), prompt["kind"]["enum"])
+        self.assertEqual(["", *sorted(KEYS)], prompt["key"]["enum"])
+        init = by_name["init"]["parameters"]["properties"]
+        self.assertEqual(sorted(BUNDLE_SOURCES), init["bundle_source"]["enum"])
+
     def test_config_bound_operation_without_config_explains_itself(self) -> None:
         with self.assertRaisesRegex(PipelineError, "needs a mod configuration"):
             call_json(None, "status")

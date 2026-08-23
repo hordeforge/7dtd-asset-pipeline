@@ -24,13 +24,6 @@ class BundleCase(unittest.TestCase):
 
 
 class UnityFsTests(BundleCase):
-    def write(self, data: bytes) -> Path:
-        directory = Path(tempfile.mkdtemp())
-        path = directory / "test.unity3d"
-        path.write_bytes(data)
-        self.addCleanup(lambda: __import__("shutil").rmtree(directory))
-        return path
-
     def test_reads_revision_and_class_ids(self) -> None:
         info = inspect_bundle(self.write(unityfs_bundle([1, 21, 142])))
         self.assertEqual("2022.3.62f2", info.unity_version)
@@ -54,6 +47,57 @@ class UnityFsTests(BundleCase):
     def test_rejects_non_bundle(self) -> None:
         with self.assertRaisesRegex(PipelineError, "not a UnityFS"):
             inspect_bundle(self.write(b"not a bundle"))
+
+
+class TypeTreeTests(BundleCase):
+    """The branch every real bundle takes: type trees present.
+
+    The shipped game's own bundles carry `has_type_tree = 1`
+    (docs/research-provenance.md, dissected from `Data/Bundles/…/Entities`),
+    so the per-type tree skip is the production path of the class-ID gate —
+    and until these fixtures it was the one path no test ever read.
+    """
+
+    def test_reads_class_ids_through_type_trees(self) -> None:
+        info = inspect_bundle(self.write(unityfs_bundle([21, 114, 142], has_type_tree=True)))
+        self.assertEqual((21, 114, 142), info.class_ids)
+        self.assertTrue(info.has_assetbundle_object)
+
+    def test_reads_type_trees_through_an_lz4_block(self) -> None:
+        # The skip arithmetic must also survive decompression, not only the
+        # plain-block path.
+        info = inspect_bundle(self.write(lz4_bundle([142] * 6, has_type_tree=True)))
+        self.assertEqual((142,) * 6, info.class_ids)
+
+    def test_a_truncated_type_tree_is_a_bounded_error(self) -> None:
+        payload = serialized_file([142], has_type_tree=True)
+        short = payload[:-8]
+        bundle = build_bundle(
+            [(short, len(short), 0)], node_size=len(short)
+        )
+        with self.assertRaisesRegex(PipelineError, "truncated Unity bundle"):
+            inspect_bundle(self.write(bundle))
+
+    def test_a_first_node_past_the_payload_is_refused(self) -> None:
+        """A directory that promises data the blocks do not hold cannot parse."""
+        payload = serialized_file([142])
+        bundle = build_bundle(
+            [(payload, len(payload), 0)],
+            node_size=len(payload),
+            node_offset=len(payload) + 16,
+        )
+        with self.assertRaisesRegex(PipelineError, "does not contain the first directory node"):
+            inspect_bundle(self.write(bundle))
+
+    def test_the_padding_bit_aligns_the_payload_before_reading_it(self) -> None:
+        payload = serialized_file([1, 142])
+        bundle = build_bundle(
+            [(payload, len(payload), 0)],
+            node_size=len(payload),
+            header_flags=0x40 | 0x200,
+        )
+        info = inspect_bundle(self.write(bundle))
+        self.assertEqual((1, 142), info.class_ids)
 
 
 class Lz4Tests(BundleCase):

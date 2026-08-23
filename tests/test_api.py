@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from typing import cast
 
+from fixtures import unityfs_bundle
+
 from sevendtd_asset_pipeline import OPERATIONS, Pipeline, PipelineError, manifest
 from sevendtd_asset_pipeline.api import call_json
 from sevendtd_asset_pipeline.serve import handle, serve
@@ -96,6 +98,112 @@ class CommandLineTests(unittest.TestCase):
         lines = stderr.getvalue().splitlines()
         self.assertEqual(1, len(lines), f"expected one ERROR line, got {lines}")
         self.assertTrue(lines[0].startswith("ERROR: "), lines)
+
+
+class EntryPointTests(unittest.TestCase):
+    """The per-command argument plumbing behind `shamway <command>`.
+
+    `schema` shipped broken once because a local shadow only `run()` could see;
+    these exercise the entry point of the cheap read-only commands an agent
+    runs first, where a wiring mistake is invisible to the API-level tests.
+    """
+
+    def _mod(self) -> tuple[tempfile.TemporaryDirectory[str], Path]:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "ModInfo.xml").write_text(
+            '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+        )
+        _, _ = Pipeline.scaffold(root, unity_version="2022.3.62f2", bundle_name="example.unity3d")
+        return temporary, root
+
+    def test_status_exit_code_follows_the_mod_state(self) -> None:
+        import contextlib
+        import io
+
+        from sevendtd_asset_pipeline.cli import main
+
+        _, root = self._mod()
+        config_file = root / ".shamway.toml"
+        # Nothing staged yet: status reports, and fails the process.
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(1, main(["--config", str(config_file), "status"]))
+        # A staged bundle, its manifest, and a matching reference: valid.
+        resources = root / "Resources"
+        resources.mkdir()
+        (resources / "example.unity3d").write_bytes(unityfs_bundle([1, 142]))
+        manifest = root / "tools/shamway/manifests/example.unity3d.manifest"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(
+            "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n",
+            encoding="utf-8",
+        )
+        (root / "Config").mkdir()
+        (root / "Config/blocks.xml").write_text(
+            '<configs><block name="x"><property name="Model" '
+            'value="#@modfolder(ExampleMod):Resources/example.unity3d?exampleThing.prefab" />'
+            "</block></configs>",
+            encoding="utf-8",
+        )
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(0, main(["--config", str(config_file), "status", "--json"]))
+        data = json.loads(out.getvalue())
+        self.assertTrue(data["valid"], data["problems"])
+
+    def test_inspect_json_publishes_the_container_gate(self) -> None:
+        import contextlib
+        import io
+
+        from sevendtd_asset_pipeline.cli import main
+
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "b.unity3d"
+            bundle.write_bytes(unityfs_bundle([1, 142]))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(0, main(["inspect", str(bundle), "--json"]))
+            data = json.loads(out.getvalue())
+        self.assertEqual("2022.3.62f2", data["unity_version"])
+        self.assertIn(142, data["class_ids"])
+        self.assertTrue(data["has_assetbundle_object"])
+
+    def test_validate_bundle_standalone_needs_no_configuration(self) -> None:
+        import contextlib
+        import io
+
+        from sevendtd_asset_pipeline.cli import main
+
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "b.unity3d"
+            bundle.write_bytes(unityfs_bundle([142]))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(0, main(["validate", "--bundle", str(bundle)]))
+        self.assertIn("OK:", out.getvalue())
+
+    def test_refs_prints_one_source_uri_line_per_reference(self) -> None:
+        import contextlib
+        import io
+
+        from sevendtd_asset_pipeline.cli import main
+
+        _, root = self._mod()
+        (root / "Config").mkdir()
+        (root / "Config/blocks.xml").write_text(
+            '<configs><block name="x"><property name="Model" '
+            'value="#@modfolder(ExampleMod):Resources/example.unity3d?exampleThing.prefab" />'
+            "</block></configs>",
+            encoding="utf-8",
+        )
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(0, main(["--config", str(root / ".shamway.toml"), "refs"]))
+        self.assertEqual(
+            ["Config/blocks.xml: #@modfolder(ExampleMod):Resources/example.unity3d?exampleThing.prefab"],
+            out.getvalue().splitlines(),
+        )
 
 
 class DispatchTests(unittest.TestCase):

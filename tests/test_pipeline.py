@@ -7,6 +7,7 @@ from pathlib import Path
 from fixtures import unityfs_bundle
 
 from sevendtd_asset_pipeline.build import reject_disabled_modules
+from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.config import CONFIG_NAME, PipelineConfig, load_config
 from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.scaffold import initialize
@@ -391,6 +392,262 @@ class PipelineTests(unittest.TestCase):
         (bundles / "corrupt.unity3d").write_bytes(b"garbage")
         with self.assertRaisesRegex(PipelineError, "no readable UnityFS bundle"):
             game_unity_version(game)
+
+
+class SynthesisPreflightTests(unittest.TestCase):
+    """The editorless build path's refusals, which need no writer to reach."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        (self.root / "ModInfo.xml").write_text(
+            '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+        )
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _synthesized_config(self, unity_version: str = "2022.3.62f2") -> PipelineConfig:
+        initialize(self.root, None, "example.unity3d", unity_version, bundle_source="synthesized")
+        return load_config(self.root / CONFIG_NAME)
+
+    def test_a_synthesis_without_any_revision_evidence_is_refused(self) -> None:
+        """A bundle claims a revision; writing one that claims nothing is refused."""
+        from sevendtd_asset_pipeline.build import expected_unity_version
+
+        config = self._synthesized_config("")
+        with self.assertRaisesRegex(PipelineError, "no Unity revision is known"):
+            expected_unity_version(config)
+
+    def test_an_unknown_build_target_is_named_with_the_known_ones(self) -> None:
+        """The argument check fires before any writer work starts."""
+        from sevendtd_asset_pipeline.build import synthesize_bundle
+
+        config = self._synthesized_config()
+        config_file = self.root / CONFIG_NAME
+        config_file.write_text(
+            config_file.read_text(encoding="utf-8").replace(
+                'target = "StandaloneWindows64"', 'target = "Dreamcast"'
+            ),
+            encoding="utf-8",
+        )
+        config = load_config(config_file)
+        with self.assertRaisesRegex(PipelineError, "StandaloneWindows64"):
+            synthesize_bundle(config)
+
+
+class BuildPreflightTests(unittest.TestCase):
+    """`run_build`'s editor checks fire before any editor is started."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        (self.root / "ModInfo.xml").write_text(
+            '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+        )
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _config_without_host_environment(self, **overrides: str) -> PipelineConfig:
+        """load_config resolves UNITY_EDITOR and SEVEN_DAYS_TO_DIE_DIR at load time."""
+        import os
+        from unittest import mock
+
+        clean = {
+            k: v for k, v in os.environ.items()
+            if k not in ("UNITY_EDITOR", "SEVEN_DAYS_TO_DIE_DIR")
+        }
+        clean.update(overrides)
+        with mock.patch.dict(os.environ, clean, clear=True):
+            return load_config(self.root / CONFIG_NAME)
+
+    def test_a_local_build_without_an_editor_is_refused_with_the_next_step(self) -> None:
+        from sevendtd_asset_pipeline.build import run_build
+
+        config = self._config_without_host_environment()
+        with self.assertRaisesRegex(PipelineError, "UNITY_EDITOR is not configured"):
+            run_build(config)
+
+    def test_an_editor_that_cannot_be_executed_is_refused_before_use(self) -> None:
+        import stat
+
+        from sevendtd_asset_pipeline.build import run_build
+
+        editor = self.root / "not-an-editor"
+        editor.write_text("this is not executable", encoding="utf-8")
+        editor.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        config = self._config_without_host_environment(UNITY_EDITOR=str(editor))
+        with self.assertRaisesRegex(PipelineError, "not executable"):
+            run_build(config)
+
+    def test_a_project_at_the_wrong_revision_for_the_game_is_refused(self) -> None:
+        from sevendtd_asset_pipeline.build import run_build
+
+        game = self.root / "game"
+        (game / "Data" / "Config").mkdir(parents=True)
+        (game / "Data" / "Config" / "items.xml").write_text("<configs/>", encoding="utf-8")
+        entities = game / "Data" / "Bundles" / "Standalone" / "Entities"
+        entities.mkdir(parents=True)
+        (entities / "Entities").write_bytes(unityfs_bundle([142], "2022.3.62f2"))
+        editor = self.root / "fake-editor"
+        editor.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        editor.chmod(0o755)
+        version_file = (
+            self.root / "tools" / "shamway" / "UnityProject"
+            / "ProjectSettings" / "ProjectVersion.txt"
+        )
+        version_file.write_text("m_EditorVersion: 2021.3.1f1\n", encoding="utf-8")
+        config_file = self.root / CONFIG_NAME
+        config_file.write_text(
+            config_file.read_text(encoding="utf-8").replace('directory = ""', f'directory = "{game.as_posix()}"', 1),
+            encoding="utf-8",
+        )
+        config = self._config_without_host_environment(UNITY_EDITOR=str(editor))
+        with self.assertRaisesRegex(PipelineError, "installed game uses"):
+            run_build(config)
+
+
+class ConfigRejectionTests(unittest.TestCase):
+    """The configuration parser's refusal lines, one per malformed shape.
+
+    Everything in the pipeline reads this file, so a value of the wrong type
+    must be named here rather than discovered as a TypeError three commands
+    later. The happy paths are covered by every scaffold-based test above.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _load(self, body: str) -> None:
+        config_file = self.root / CONFIG_NAME
+        config_file.write_text(body, encoding="utf-8")
+        load_config(config_file)
+
+    def test_malformed_toml_is_a_named_error(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "cannot read"):
+            self._load("schema_version = 1\nmod_name = \n")
+
+    def test_an_empty_mod_name_is_rejected(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "mod_name"):
+            self._load('schema_version = 1\nmod_name = ""\nbundle_source = "none"\n')
+
+    def test_a_non_string_mod_name_is_rejected(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "mod_name"):
+            self._load("schema_version = 1\nmod_name = 7\nbundle_source = \"none\"\n")
+
+    def test_scalar_unity_and_game_sections_are_rejected(self) -> None:
+        head = 'schema_version = 1\nmod_name = "M"\nbundle_source = "none"\n'
+        with self.assertRaisesRegex(PipelineError, r"\[unity\] and \[game\] must be TOML tables"):
+            self._load(head + "unity = 5\n")
+        with self.assertRaisesRegex(PipelineError, r"\[unity\] and \[game\] must be TOML tables"):
+            self._load(head + 'game = "nope"\n')
+
+    def test_code_references_must_be_non_empty_stems(self) -> None:
+        for body in (
+            'schema_version = 1\nmod_name = "M"\n'
+            'bundle_source = "synthesized"\nbundle_name = "m.unity3d"\n'
+            'code_references = ["a", ""]\n',
+            'schema_version = 1\nmod_name = "M"\n'
+            'bundle_source = "synthesized"\nbundle_name = "m.unity3d"\n'
+            'code_references = "exampleThing"\n',
+        ):
+            with (
+                self.subTest(body=body),
+                self.assertRaisesRegex(PipelineError, "code_references"),
+            ):
+                self._load(body)
+
+    def test_an_empty_path_value_is_rejected(self) -> None:
+        body = (
+            'schema_version = 1\nmod_name = "M"\nbundle_source = "none"\n'
+            'resources_dir = ""\n'
+        )
+        with self.assertRaisesRegex(PipelineError, "resources_dir.*non-empty path string"):
+            self._load(body)
+
+    def test_a_config_that_does_not_exist_is_reported_with_the_search_root(self) -> None:
+        nested = self.root / "a" / "b"
+        nested.mkdir(parents=True)
+        with self.assertRaisesRegex(PipelineError, f"could not find {CONFIG_NAME}.*{nested}"):
+            load_config(nested / CONFIG_NAME)
+
+    def test_bundle_source_dir_reads_against_the_right_base(self) -> None:
+        """With a project the source sits inside it; without, against the mod."""
+        for bundle_source, base in (("unity", "unity_project"), ("synthesized", "mod_root")):
+            with (
+                self.subTest(bundle_source=bundle_source),
+                tempfile.TemporaryDirectory() as name,
+            ):
+                root = Path(name)
+                (root / "ModInfo.xml").write_text(
+                    '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+                )
+                initialize(root, None, "example.unity3d", "2022.3.62f2", bundle_source=bundle_source)
+                config = load_config(root / CONFIG_NAME)
+                expected_base = getattr(config, base)
+                self.assertEqual(expected_base / config.source_root, config.bundle_source_dir)
+
+
+needs_unitypy = unittest.skipUnless(
+    has_capability("UnityPy"),
+    "the synthesized backend needs UnityPy for the engine's type trees",
+)
+
+@needs_unitypy
+class SynthesisStagingTests(unittest.TestCase):
+    """`synthesize_bundle` is `run_build`'s editorless second half.
+
+    The probe must stage exactly nothing — the same promise the Unity probe
+    makes at minutes of cost — and the real run stages manifest-then-bundle
+    through the same atomic copies and gates as `stage_bundle`.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        (self.root / "ModInfo.xml").write_text(
+            '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+        )
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="synthesized")
+        self.config = load_config(self.root / CONFIG_NAME)
+        source = self.config.bundle_source_dir
+        source.mkdir(parents=True, exist_ok=True)
+        (source / "myModNote.txt").write_text("hello", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_a_probe_writes_nothing_into_the_modlet(self) -> None:
+        from sevendtd_asset_pipeline.build import synthesize_bundle
+
+        built = synthesize_bundle(self.config, probe=True)
+        self.assertEqual("probe", built.parent.name)
+        self.assertTrue(built.is_file())
+        self.assertFalse(self.config.bundle_output.exists())
+        self.assertFalse(self.config.tracked_manifest.exists())
+
+    def test_a_full_synthesis_gates_and_stages_both_artifacts(self) -> None:
+        from sevendtd_asset_pipeline.build import synthesize_bundle
+        from sevendtd_asset_pipeline.references import manifest_assets
+        from sevendtd_asset_pipeline.unityfs import inspect_bundle
+
+        staged = synthesize_bundle(self.config)
+        self.assertEqual(self.config.bundle_output, staged)
+        # The artifact staged is the artifact the gates just passed on.
+        probe = synthesize_bundle(self.config, probe=True)
+        self.assertEqual(probe.read_bytes(), staged.read_bytes())
+        info = inspect_bundle(staged)
+        self.assertTrue(info.has_assetbundle_object)
+        self.assertEqual("2022.3.62f2", info.unity_version)
+        self.assertEqual(
+            ["bundle/myModNote.txt"], manifest_assets(self.config.tracked_manifest)
+        )
 
 
 MANIFEST = (

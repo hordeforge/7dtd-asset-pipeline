@@ -394,9 +394,12 @@ def run(args: argparse.Namespace) -> int:
         bundle, manifest_text = pack_directory(args.source, args.output.name, version)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_bytes(bundle)
-        manifest = args.manifest or Path(f"{args.output}.manifest")
-        manifest.write_text(manifest_text, encoding="utf-8")
-        print(f"OK: synthesized {args.output} ({len(bundle)} bytes) and {manifest}")
+        # Not `manifest`: that name belongs to the operation registry's manifest()
+        # at module level, and a local of the same name shadows it for the whole
+        # of run() — which broke `shamway schema` in a way no unit test saw.
+        manifest_path = args.manifest or Path(f"{args.output}.manifest")
+        manifest_path.write_text(manifest_text, encoding="utf-8")
+        print(f"OK: synthesized {args.output} ({len(bundle)} bytes) and {manifest_path}")
         for caveat in SYNTHESIZED_CAVEATS:
             print(f"note: {caveat}")
         return 0

@@ -105,6 +105,10 @@ jobs:
       - run: make coverage
       - run: uv run --no-project --with coverage python scripts/coverage_badge.py "$RUNNER_TEMP/coverage.svg"
       - name: Publish the badge to the badges branch
+        env:
+          # The default token is not in the environment unless mapped here,
+          # and set -u fails the step on the unbound GITHUB_TOKEN otherwise.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"

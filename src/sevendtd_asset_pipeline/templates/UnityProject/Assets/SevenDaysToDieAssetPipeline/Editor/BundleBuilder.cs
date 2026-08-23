@@ -47,7 +47,13 @@ namespace SevenDaysToDie.AssetPipeline
             {
                 // A probe deliberately skips this: it proves the environment
                 // with a throwaway cube and must not run the mod's generators.
-                if (!probe) ShamwayPreBuild.RunAll();
+                if (!probe)
+                {
+                    // Hand the generators the configured folder, so a mod never
+                    // has to hardcode a path that already lives in .shamway.toml.
+                    ShamwayPreBuild.SourceRoot = sourceRoot;
+                    ShamwayPreBuild.RunAll();
+                }
                 var assets = CollectAssets(sourceRoot);
                 if (assets.Length == 0)
                     throw new Exception("No assets found below " + sourceRoot + ".");

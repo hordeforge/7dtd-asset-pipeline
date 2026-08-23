@@ -45,6 +45,18 @@ namespace SevenDaysToDie.AssetPipeline
     public static class ShamwayPreBuild
     {
         /// <summary>
+        /// The bundle-membership folder this build is collecting, as configured
+        /// in `.shamway.toml`.
+        ///
+        /// <para>A generator has to write its output somewhere inside that
+        /// folder, and hardcoding the path in the mod means the same value
+        /// lives in two places and drifts the first time either moves. Read it
+        /// from here instead. Set before any generator runs; null outside a
+        /// build.</para>
+        /// </summary>
+        public static string SourceRoot { get; internal set; }
+
+        /// <summary>
         /// Run every marked generator. Returns how many ran.
         ///
         /// Deliberately loud even when it finds nothing: "pre-build: 0 generators"

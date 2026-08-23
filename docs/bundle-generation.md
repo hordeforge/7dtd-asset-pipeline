@@ -65,6 +65,11 @@ Two deliberate behaviours:
   the log distinguishes a mod that has none from a mod whose attribute sits on
   a method the compiler never saw.
 
+A generator that writes into the bundle folder should read the path from
+`ShamwayPreBuild.SourceRoot` rather than hardcoding it — otherwise the same
+value lives in both `.shamway.toml` and the C#, and drifts the first time
+either moves.
+
 Keep the generators idempotent. A common pattern is a stamp constant that the
 generator compares before rebuilding, so an unchanged build does not reassign
 Unity's internal IDs on every run — but then remember to bump the stamp when

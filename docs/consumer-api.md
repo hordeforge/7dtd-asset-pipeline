@@ -222,7 +222,7 @@ errors raised by the commands that need one all read from it.
   {"name": "UnityPy", "kind": "module", "available": true, "version": "1.25.3",
    "path": null, "purpose": "list every serialized object and per-prefab component…",
    "unlocks": ["shamway inspect --deep"],
-   "install": "uv pip install '7dtd-asset-pipeline[inspect]'"}
+   "install": "uv pip install '7dtd-asset-pipeline[inspect] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'"}
 ]
 ```
 
@@ -232,20 +232,21 @@ capability, what it unlocks, and its install command — never a traceback:
 
 ```text
 ERROR: shamway inspect --deep needs the optional capability 'UnityPy'
-(list every serialized object …). Install it with: uv pip install '…[inspect]'
+(list every serialized object …). Install it with: uv pip install '…[inspect] @ git+…'
 ```
 
-`status --json` carries a `capabilities` map of `{name: available}`, so a
-single call answers both "what is the mod's state" and "what can I run".
+Every hint pins the canonical git source. The project is not registered on
+PyPI, so a bare-name hint would resolve against the public index — fail
+today, install whoever registers the name first tomorrow.
 
 Install everything at once:
 
-- `uv pip install '7dtd-asset-pipeline[all]'` — UnityPy, Pillow, NumPy, trimesh
+- `uv pip install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'` — UnityPy, Pillow, NumPy, trimesh
 - `scripts/install-tools.sh --with-authoring` — Blender, OpenSCAD, glTF validator, …
 - `scripts/install-tools.sh --with-desktop-capture` — a screenshot tool for `client capture`
 
 ```bash
-uv pip install '7dtd-asset-pipeline[all]'
+uv pip install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'
 scripts/install-tools.sh --with-authoring
 scripts/install-tools.sh --with-desktop-capture
 ```

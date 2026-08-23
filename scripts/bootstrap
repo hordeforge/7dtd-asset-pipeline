@@ -45,11 +45,14 @@ fi
 
 # uv sync resolves from the committed uv.lock and verifies its hashes, so
 # every checkout installs exactly the versions the repository pinned instead
-# of whatever PyPI serves today. It creates .venv and provisions an
-# interpreter itself when the host has none new enough, so the Python version
-# is a constraint here rather than a prerequisite. The dev group (ruff, mypy,
-# setuptools) rides along so `make check test` works out of the box.
-SYNC_ARGS=(--project "$ROOT" --python '>=3.11')
+# of whatever PyPI serves today. --locked keeps that promise when the
+# manifest has drifted from the lock: it fails and asks for a deliberate
+# `uv lock` rather than silently resolving fresh against PyPI. It creates
+# .venv and provisions an interpreter itself when the host has none new
+# enough, so the Python version is a constraint here rather than a
+# prerequisite. The dev group (ruff, mypy, setuptools) rides along so
+# `make check test` works out of the box.
+SYNC_ARGS=(--locked --project "$ROOT" --python '>=3.11')
 if [[ -n "$EXTRAS" ]]; then
 	IFS=',' read -r -a extras <<<"$EXTRAS"
 	for extra in "${extras[@]}"; do

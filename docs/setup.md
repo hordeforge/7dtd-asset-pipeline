@@ -58,8 +58,10 @@ uv tool install /path/to/7dtd-asset-pipeline
 ```
 
 `scripts/bootstrap` creates only `.venv/` in this checkout and installs the
-package into it with `uv sync`, which resolves from the committed `uv.lock`
-and verifies its hashes — including the optional capabilities. Pass
+package into it with `uv sync --locked`, which resolves from the committed
+`uv.lock` and verifies its hashes — including the optional capabilities. The
+`--locked` flag fails rather than re-resolving when `pyproject.toml` has
+drifted from the lock; re-lock deliberately with `uv lock`. Pass
 `--no-extras` for the dependency-free core alone. It never
 uses `sudo`, installs OS packages, or modifies shell startup files.
 

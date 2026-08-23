@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 from sevendtd_asset_pipeline import PipelineError, capabilities
-from sevendtd_asset_pipeline.capabilities import REGISTRY, require_capability
+from sevendtd_asset_pipeline.capabilities import REGISTRY, SOURCE_URL, require_capability
 
 
 class CapabilityTests(unittest.TestCase):
@@ -36,6 +36,19 @@ class CapabilityTests(unittest.TestCase):
         self.assertIn("UnityPy", message)
         self.assertIn("inspect --deep", message)
         self.assertIn("uv pip install", message)
+
+    def test_no_install_hint_resolves_the_bare_name_from_an_index(self) -> None:
+        """The project is not on PyPI, so a bare-name hint is dependency confusion.
+
+        `uv pip install '7dtd-asset-pipeline[all]'` resolves against the public
+        index, where this name is unregistered: it fails today and installs
+        whoever registers the name first tomorrow. Every hint the registry
+        emits must pin the canonical git source instead.
+        """
+        for capability in capabilities():
+            with self.subTest(capability.name):
+                if "7dtd-asset-pipeline[" in capability.install:
+                    self.assertIn("@ " + SOURCE_URL, capability.install)
 
     def test_require_passes_when_available(self) -> None:
         with mock.patch(

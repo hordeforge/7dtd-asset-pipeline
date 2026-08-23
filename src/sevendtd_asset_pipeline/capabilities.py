@@ -71,10 +71,16 @@ def installed_as_uv_tool() -> bool:
 
 
 def extra_install(extra: str) -> str:
-    """The command that adds one optional-dependency extra to this install."""
+    """The command that adds one optional-dependency extra to this install.
+
+    Every hint pins the canonical git source, never the bare name: this
+    project is not registered on PyPI, so an index-resolving hint fails
+    outright today and resolves to whoever registers the name first tomorrow
+    — dependency confusion on the exact line a user pastes into a shell.
+    """
     if installed_as_uv_tool():
         return f"uv tool install --force '7dtd-asset-pipeline[{extra}] @ {SOURCE_URL}'"
-    return f"uv pip install '7dtd-asset-pipeline[{extra}]'"
+    return f"uv pip install '7dtd-asset-pipeline[{extra}] @ {SOURCE_URL}'"
 
 
 REGISTRY: tuple[_Spec, ...] = (

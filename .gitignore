@@ -25,6 +25,7 @@ build/
 
 # Staged by setup.py so `shamway docs` works from a wheel; not a source of truth.
 src/sevendtd_asset_pipeline/docs/
+src/sevendtd_asset_pipeline/scripts/
 build/
 dist/
 

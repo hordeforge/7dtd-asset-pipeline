@@ -11,6 +11,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 WITH_AUTHORING=0
 WITH_UNITY_PREREQS=0
+WITH_RESEARCH=0
 CHECK_ONLY=0
 
 usage() {
@@ -25,6 +26,8 @@ OPTIONS
                          (Blender, OpenSCAD, ImageMagick, FFmpeg, Xvfb)
   --with-unity-prereqs   Also install what scripts/install-unity-editor.sh
                          needs (curl, tar, libarchive, flatpak, libxml2.so.2)
+  --with-research        Also install the decompilers that engine facts must
+                         cite (.NET 8 SDK + ilspycmd, Mono's monodis)
   --check                Report what is present or missing and install nothing
   -h, --help             Show this help
 
@@ -32,6 +35,8 @@ BASE TOOLS
   python3 (>=3.11)   The pipeline CLI and its TOML configuration parser
   uv                 The Python toolchain: environments, installs, and runs
   git, make          Version control and the consumer Makefile targets
+  shellcheck         Lints this repository's scripts in 'make check'
+  pactl              Mutes and unmutes a test client (shamway client mute)
 
 WITH --with-authoring
   blender            Headless mesh authoring, conversion, and turntables
@@ -49,6 +54,18 @@ WITH --with-unity-prereqs
   libxml2.so.2       The Unity 2022 editor links the old libxml2 soname;
                      distributions shipping 2.14+ provide only libxml2.so.16
 
+WITH --with-research
+  dotnet (8 SDK)     Hosts ilspycmd; installed as a global dotnet tool into
+                     ~/.dotnet/tools, which must be on PATH
+  ilspycmd           Decompiles Assembly-CSharp.dll: the named source every
+                     new engine fact in docs/research-provenance.md cites
+  monodis            Mono's IL disassembler, the second opinion on a method
+                     body (and mcs, for compiling a throwaway check)
+
+SUPPORTED PACKAGE MANAGERS
+  pacman, apt-get, dnf, zypper. On anything else the script refuses to guess
+  package names; install what --check lists by hand.
+
 This script never handles Unity credentials or licenses. See docs/setup.md.
 HELP
 }
@@ -57,6 +74,7 @@ while (($#)); do
 	case "$1" in
 		--with-authoring) WITH_AUTHORING=1; shift ;;
 		--with-unity-prereqs) WITH_UNITY_PREREQS=1; shift ;;
+		--with-research) WITH_RESEARCH=1; shift ;;
 		--check) CHECK_ONLY=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) echo "ERROR: unknown option $1" >&2; usage >&2; exit 1 ;;
@@ -92,11 +110,21 @@ report() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+has_dotnet_8_sdk() {
+	have dotnet && dotnet --list-sdks 2>/dev/null | grep -q '^8\.'
+}
+
+has_ilspycmd() {
+	have ilspycmd || [[ -x "$HOME/.dotnet/tools/ilspycmd" ]]
+}
+
 run_check() {
 	report python3 "pipeline CLI (>=3.11, REQUIRED)" has_python_311
 	report uv "Python toolchain (REQUIRED)" have uv
 	report git "version control" have git
 	report make "consumer Makefile targets" have make
+	report shellcheck "script linting in make check" have shellcheck
+	report pactl "client mute/unmute (shamway client)" have pactl
 	if ((WITH_AUTHORING)); then
 		report blender "mesh authoring" have blender
 		report openscad "parametric geometry" have openscad
@@ -115,6 +143,11 @@ run_check() {
 			report "$tool" "Unity editor install" have "$tool"
 		done
 		report libxml2.so.2 "Unity editor runtime" has_libxml2_so2
+	fi
+	if ((WITH_RESEARCH)); then
+		report dotnet "8.x SDK, hosts ilspycmd" has_dotnet_8_sdk
+		report ilspycmd "decompile Assembly-CSharp.dll" has_ilspycmd
+		report monodis "Mono IL disassembler" have monodis
 	fi
 }
 
@@ -141,6 +174,8 @@ collect_pacman() {
 	have uv || PACKAGES+=(uv)
 	have git || PACKAGES+=(git)
 	have make || PACKAGES+=(make)
+	have shellcheck || PACKAGES+=(shellcheck)
+	have pactl || PACKAGES+=(libpulse)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -156,12 +191,18 @@ collect_pacman() {
 		have flatpak || PACKAGES+=(flatpak)
 		has_libxml2_so2 || PACKAGES+=(libxml2-legacy)
 	fi
+	if ((WITH_RESEARCH)); then
+		has_dotnet_8_sdk || PACKAGES+=(dotnet-sdk-8.0 dotnet-runtime-8.0)
+		have monodis || PACKAGES+=(mono)
+	fi
 }
 
 collect_apt() {
 	has_python_311 || PACKAGES+=(python3)
 	have git || PACKAGES+=(git)
 	have make || PACKAGES+=(make)
+	have shellcheck || PACKAGES+=(shellcheck)
+	have pactl || PACKAGES+=(pulseaudio-utils)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -177,12 +218,18 @@ collect_apt() {
 		have flatpak || PACKAGES+=(flatpak)
 		has_libxml2_so2 || PACKAGES+=(libxml2)
 	fi
+	if ((WITH_RESEARCH)); then
+		has_dotnet_8_sdk || PACKAGES+=(dotnet-sdk-8.0)
+		have monodis || PACKAGES+=(mono-devel mono-utils)
+	fi
 }
 
 collect_dnf() {
 	has_python_311 || PACKAGES+=(python3)
 	have git || PACKAGES+=(git)
 	have make || PACKAGES+=(make)
+	have shellcheck || PACKAGES+=(ShellCheck)
+	have pactl || PACKAGES+=(pulseaudio-utils)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -197,6 +244,37 @@ collect_dnf() {
 		have bsdtar || PACKAGES+=(bsdtar)
 		have flatpak || PACKAGES+=(flatpak)
 		has_libxml2_so2 || PACKAGES+=(libxml2)
+	fi
+	if ((WITH_RESEARCH)); then
+		has_dotnet_8_sdk || PACKAGES+=(dotnet-sdk-8.0)
+		have monodis || PACKAGES+=(mono-devel)
+	fi
+}
+
+collect_zypper() {
+	has_python_311 || PACKAGES+=(python311)
+	have git || PACKAGES+=(git)
+	have make || PACKAGES+=(make)
+	have shellcheck || PACKAGES+=(ShellCheck)
+	have pactl || PACKAGES+=(pulseaudio-utils)
+	if ((WITH_AUTHORING)); then
+		have blender || PACKAGES+=(blender)
+		have openscad || PACKAGES+=(openscad)
+		have magick || PACKAGES+=(ImageMagick)
+		have ffmpeg || PACKAGES+=(ffmpeg)
+		have xvfb-run || PACKAGES+=(xvfb-run)
+	fi
+	if ((WITH_UNITY_PREREQS)); then
+		have curl || PACKAGES+=(curl)
+		have tar || PACKAGES+=(tar)
+		have xz || PACKAGES+=(xz)
+		have bsdtar || PACKAGES+=(bsdtar)
+		have flatpak || PACKAGES+=(flatpak)
+		has_libxml2_so2 || PACKAGES+=(libxml2-2)
+	fi
+	if ((WITH_RESEARCH)); then
+		has_dotnet_8_sdk || PACKAGES+=(dotnet-sdk-8.0)
+		have monodis || PACKAGES+=(mono-devel)
 	fi
 }
 
@@ -280,8 +358,11 @@ elif command -v apt-get >/dev/null 2>&1; then
 elif command -v dnf >/dev/null 2>&1; then
 	collect_dnf
 	((${#PACKAGES[@]})) && $SUDO dnf install -y "${PACKAGES[@]}"
+elif command -v zypper >/dev/null 2>&1; then
+	collect_zypper
+	((${#PACKAGES[@]})) && $SUDO zypper --non-interactive install "${PACKAGES[@]}"
 else
-	echo "ERROR: no supported package manager (pacman, apt-get, dnf) was found." >&2
+	echo "ERROR: no supported package manager (pacman, apt-get, dnf, zypper) was found." >&2
 	echo "       Install the tools listed by 'scripts/install-tools.sh --check' by hand." >&2
 	exit 1
 fi
@@ -408,6 +489,15 @@ install_python_extras() {
 	# Capabilities, not requirements: the pipeline core stays dependency-free
 	# and each command says what to install when a capability is missing.
 	local target="$ROOT"
+	if [[ ! -f "$ROOT/pyproject.toml" ]]; then
+		# Running from the installed package, not a checkout: the extras go
+		# into whatever environment owns `shamway`, and the capability
+		# registry knows the right command for that environment.
+		echo "note: Python capabilities are installed per environment. Run:"
+		echo "      shamway capabilities --missing"
+		echo "      and use the install command it prints for pillow/numpy/UnityPy/trimesh."
+		return
+	fi
 	if ! have uv; then
 		echo "note: uv is unavailable, so the Python capabilities were skipped. Run:"
 		echo "      uv pip install '${target}[all]'"
@@ -428,15 +518,49 @@ install_python_extras() {
 	echo "      uv venv && uv pip install '${target}[all]'"
 }
 
+install_ilspycmd() {
+	# ilspycmd is a dotnet global tool, not a distribution package. It lands in
+	# ~/.dotnet/tools, which the user puts on PATH. Never set a global
+	# DOTNET_ROOT for it: a distribution .NET upgrade can strand the tool, and
+	# the fallback SDK Unity Hub ships (Editor/Data/DotNetSdk) is per-editor.
+	if has_ilspycmd; then
+		echo "OK: ilspycmd is already installed"
+		return
+	fi
+	if ! has_dotnet_8_sdk; then
+		echo "note: no .NET 8 SDK on PATH; skipped ilspycmd. Install the SDK and rerun."
+		return
+	fi
+	echo "Installing ilspycmd as a dotnet global tool"
+	if dotnet tool install --global ilspycmd >/dev/null; then
+		echo "OK: installed ~/.dotnet/tools/ilspycmd (add ~/.dotnet/tools to PATH)"
+	else
+		echo "note: dotnet tool install ilspycmd failed; see https://github.com/icsharpcode/ILSpy"
+	fi
+}
+
 if ((WITH_AUTHORING)); then
 	install_blender
 	install_gltf_validator
 	install_python_extras
 fi
+if ((WITH_RESEARCH)); then
+	install_ilspycmd
+fi
 
 echo
 echo "Installed base tooling. Current state:"
 run_check
+
+# The two things every later step needs. A table line saying MISS is easy to
+# scroll past; a non-zero exit is not.
+missing=()
+has_python_311 || missing+=("python3 >= 3.11")
+have uv || [[ -x "$HOME/.local/bin/uv" ]] || missing+=("uv")
+if ((${#missing[@]})); then
+	echo "ERROR: still missing after install: ${missing[*]}" >&2
+	exit 1
+fi
 cat <<'EOF'
 
 Next:

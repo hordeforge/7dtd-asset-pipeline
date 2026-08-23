@@ -29,6 +29,17 @@ class PipelineConfig:
     target: str
     unity_editor: Path | None
     game_dir: Path | None
+    code_references: tuple[str, ...] = ()
+    """Bundle stems the mod's own C# loads, which no XML names.
+
+    `validate` can only discover what `Config/**/*.xml` references. A prefab
+    loaded from a Harmony hook (`DataLoader.LoadAsset<GameObject>(uri)`), a
+    light prefab a particle module instantiates, an AudioClip a script plays —
+    none of those appear in any XML, so a typo in their stem is invisible
+    offline unless the mod declares them here. Listed stems are checked against
+    the tracked manifest exactly like an XML reference: present, unambiguous,
+    exact case.
+    """
 
     @property
     def bundle_output(self) -> Path:
@@ -87,6 +98,11 @@ def load_config(path: Path | None = None) -> PipelineConfig:
     game = data.get("game", {})
     if not isinstance(unity, dict) or not isinstance(game, dict):
         raise PipelineError("[unity] and [game] must be TOML tables")
+    code_references = data.get("code_references", [])
+    if not isinstance(code_references, list) or not all(
+        isinstance(item, str) and item.strip() for item in code_references
+    ):
+        raise PipelineError("code_references must be a list of non-empty asset stems")
 
     config = PipelineConfig(
         config_file=config_file,
@@ -102,6 +118,7 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         target=str(data.get("target", "StandaloneWindows64")),
         unity_editor=_optional_path(base, unity.get("editor"), "UNITY_EDITOR"),
         game_dir=_optional_path(base, game.get("directory"), "SEVEN_DAYS_TO_DIE_DIR"),
+        code_references=tuple(item.strip() for item in code_references),
     )
     for field, owned_path in (
         ("resources_dir", config.resources_dir),
@@ -139,6 +156,11 @@ manifest_dir = "{manifest_dir}"
 resources_dir = "Resources"
 config_dir = "Config"
 target = "StandaloneWindows64"
+
+# Bundle stems the mod's C# loads directly (DataLoader.LoadAsset, a particle
+# Lights prefab, a scripted AudioClip). No XML names them, so `validate` only
+# sees them if they are listed here. Stem only, exact case, no extension.
+code_references = []
 
 [unity]
 # Prefer the UNITY_EDITOR environment variable for machine-local paths.

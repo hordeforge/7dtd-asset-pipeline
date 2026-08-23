@@ -18,9 +18,12 @@ records where each 7DTD-specific rule came from.
 
 ## Working on this repository
 
+- `scripts/bootstrap` — uv venv + uv pip install --editable, with extras
+- `make check test` — compile, shellcheck, and the unit suite
+
 ```bash
-scripts/bootstrap        # uv venv + uv pip install --editable, with extras
-make check test          # compile, shellcheck, and the unit suite
+scripts/bootstrap
+make check test
 ```
 
 Use **uv** for every Python step — environments, installs, and runs. Do not
@@ -39,15 +42,22 @@ no Unity, and no game install.
   is available on the host.
 - Changes to the editor-side C# (`GeneratedAsset.cs`, `IconRenderer.cs`,
   `ShamwayPreBuild.cs`, `BundleBuilder.cs`) are not covered by the Python suite.
-  State plainly whether an editor actually ran them, and never describe an
-  untested editor change as verified.
+  `make check` compiles them against the installed editor's assemblies when
+  `mcs` and an editor are present (`scripts/compile-editor-scripts.sh`); run
+  that, then state plainly which grade the change reached — compiled, probed,
+  or executed by an editor — and never describe a compiled-only change as
+  verified.
 - Those four files are what a consuming mod vendors. Adding a fifth means
   adding it to `scaffold.PIPELINE_EDITOR_SCRIPTS`, or an adopted project silently
   will not get it.
-- New engine facts need a named source: `Data/Config/*.xml` in the installed
-  game, `ilspycmd`/`monodis` on `Assembly-CSharp.dll`, or `maci0/7dtd-research`.
-  Record which tool produced the fact. "It seemed to work in game" is not a
-  source and the next session cannot re-verify it.
+- New engine facts need a named source: `Data/Config/*.xml` (and `XML.txt`)
+  in the installed game, `ilspycmd`/`monodis` on `Assembly-CSharp.dll`
+  (`scripts/install-tools.sh --with-research` installs them), or
+  `maci0/7dtd-research`. Record which tool produced the fact. "It seemed to
+  work in game" is not a source and the next session cannot re-verify it; a
+  `strings` hit proves a name exists, not a behaviour. Decompiled evidence
+  beats a wiki or a monorepo doc: `Localization.csv` was documented in the
+  mod root for a year and the engine reads it from `Config/`.
 - Keep the consumer scaffold standalone. A modlet built with this pipeline
   must never need a relative checkout of this repository, another mod, or a
   sibling project at build time. That is why the generators and the
@@ -82,7 +92,13 @@ with a fresh client and a human look or listen at the changed asset.
 ## Safety rules
 
 - **Never write to a 7 Days to Die install.** It is read-only evidence for the
-  Unity revision and engine behavior.
+  Unity revision and engine behavior. The client's per-user data directory
+  (`compatdata/251570/pfx/…/AppData/Roaming/7DaysToDie/`) is *not* the
+  install: that is where `shamway client deploy` writes, and where a Proton
+  client loads mods from.
+- **Never launch a client over someone else's.** `shamway client launch`
+  refuses while `7DaysToDie.exe` runs; do not work around that. One machine
+  has one client, and a reused process proves nothing about a rebuild.
 - **Never automate, request, print, log, or commit Unity credentials or
   license data.** Sign-in and activation are user-owned actions.
   `scripts/install-unity-editor.sh` deliberately stops and waits for a human.
@@ -96,9 +112,12 @@ with a fresh client and a human look or listen at the changed asset.
 
 Full walkthrough: [docs/quickstart.md](docs/quickstart.md). The short form:
 
+- `scripts/install-tools.sh --with-unity-prereqs` — host packages
+- `scripts/bootstrap` — the CLI
+
 ```bash
-scripts/install-tools.sh --with-unity-prereqs   # host packages
-scripts/bootstrap                               # the CLI
+scripts/install-tools.sh --with-unity-prereqs
+scripts/bootstrap
 shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 scripts/install-unity-editor.sh --project /path/to/MyMod/tools/shamway/UnityProject
 shamway doctor && shamway build --probe
@@ -106,9 +125,12 @@ shamway doctor && shamway build --probe
 
 Then, per asset change:
 
+- `shamway build` — build, gate, stage bundle + tracked manifest
+- `shamway validate` — bundle and every recursive Config/**/*.xml reference
+
 ```bash
-shamway build      # build, gate, stage bundle + tracked manifest
-shamway validate   # bundle and every recursive Config/**/*.xml reference
+shamway build
+shamway validate
 ```
 
 Machine-readable output for agents and CI:
@@ -128,16 +150,25 @@ Machine-readable output for agents and CI:
 | `shamway render-icon STEM` | render a prefab into its atlas cell (needs a display) |
 | `shamway generate --list` | the packaged asset generators, callable from any mod |
 | `shamway docs [TOPIC]` | this repository's documentation, served from the package |
+| `shamway script NAME` | the host scripts (install-tools, install-unity-editor, compile-editor-scripts), served from the package |
+| `shamway client where --json` | the client's per-user `Mods/` and `logs/` paths |
+| `shamway client deploy MOD` | copy the deployable modlet there (writes outside the install only) |
+| `shamway client launch --mod-name NAME` | a genuinely fresh client, then its log classified; refuses a running one |
+| `shamway client log --json` | classify the newest client log: positive load lines and silent-failure signatures |
 
 Every command exits non-zero with a single `ERROR: ...` line on stderr when a
 gate fails. Prefer the exit code over parsing prose.
 
 Do not hardcode the command surface. It is published:
 
+- `shamway schema` — every operation, as JSON
+- `shamway call status` — run one, JSON in and out
+- `shamway serve` — many, one process, ~17x faster
+
 ```bash
-shamway schema                              # every operation, as JSON
-shamway call status                         # run one, JSON in and out
-shamway serve                               # many, one process, ~17x faster
+shamway schema
+shamway call status
+shamway serve
 ```
 
 Each operation declares its `cost`, whether it `writes`, whether it
@@ -167,8 +198,10 @@ and never in a loop:
   interactive desktop for license activation.
 - `shamway build` starts a real Unity editor; a cold project import takes
   minutes.
-- `shamway build` (without `--probe`) is the only command that writes into
-  the modlet, and only after every offline gate passes. Use `--probe` for any
+- `shamway build` (without `--probe`) and `render-icon` are the only commands
+  that write into the modlet, and `build` only after every offline gate
+  passes; `client deploy`/`launch` write outside it, and `schema` marks all
+  five writers. Use `--probe` for any
   environment question — it never stages anything.
 
 Prefer `doctor`, `inspect`, `refs`, and `validate` when diagnosing. They are

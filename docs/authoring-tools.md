@@ -113,6 +113,24 @@ filters, and prints the matching `sounds.xml` entry. Gate the result with
 `shamway check-sound`, then always listen to it; deterministic does not
 mean good.
 
+## Engine facts
+
+### ilspycmd and monodis — the named sources
+
+Every 7DTD-specific rule in this repository cites a decompiled method, and a
+new one must too (see [AGENTS.md](../AGENTS.md)). `ilspycmd` (ILSpy's CLI, a
+.NET global tool) is the primary: `ilspycmd -t ModManager
+"$SEVEN_DAYS_TO_DIE_DIR/7DaysToDie_Data/Managed/Assembly-CSharp.dll"` prints
+one type. Mono's `monodis` (and `ikdasm`) is the second opinion on a method
+body; `strings` proves only that a name exists. `scripts/install-tools.sh
+--with-research` installs all three, and `mcs` from the same Mono package is
+what `scripts/compile-editor-scripts.sh` uses to compile the editor scripts
+against a real editor's assemblies without starting it.
+
+- ILSpy: <https://github.com/icsharpcode/ILSpy>
+- The installed game's own `Data/Config/XML.txt` is the first source for
+  what an XML property means.
+
 ## Unity and bundle diagnostics
 
 ### This pipeline's inspector
@@ -176,3 +194,5 @@ or live-client gates.
 | item icon | `shamway generate cutout`, `shamway render-icon`, Pillow/ImageMagick | `shamway check-icons` + downscaled montage | client atlas lookup + human readability |
 | particle card | Pillow/NumPy/Blender | alpha-edge montage | particle material state + live VFX |
 | sound | `shamway generate sound`, FFmpeg | `shamway check-sound` | sound group lookup + listening at range |
+| detail normal | `shamway generate texture-maps detail` | tiling seam check on a cylinder | in-game light sweep on the flat-colour part |
+| fresh client | `shamway client deploy` / `launch` | `shamway client log` | a person's look or listen |

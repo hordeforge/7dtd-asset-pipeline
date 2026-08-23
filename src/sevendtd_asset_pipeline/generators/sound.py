@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """Synthesize the sound a mod needs, as code, with a recorded seed.
 
-`make-audio.py` measures and converts clips. This script *creates* them: each
+`shamway generate audio` measures and converts clips. This script *creates* them: each
 subcommand is one designed voice rather than a generic oscillator, because
 "explosion" and "sine wave with noise" are not the same request. Nothing here
 is recorded or downloaded, so the script itself is the clip's provenance — the
 same role a prompt plays for generated art. Re-running it reproduces the file
 byte-for-byte.
 
-    make-sound.py blast   art/audio/blast-near.wav --seed 7
-    make-sound.py blast   art/audio/blast-far.wav  --seed 7 --distant
-    make-sound.py tick    art/audio/fuse-tick.wav
-    make-sound.py whoosh  art/audio/throw.wav --seconds 1.4
-    make-sound.py hum     art/audio/generator-loop.wav --loop
-    make-sound.py beep    art/audio/ui-confirm.wav --hz 880 --beeps 2
-    make-sound.py sounds-xml myModBlast --distant myModBlastDistant
+    shamway generate sound blast   art/audio/blast-near.wav --seed 7
+    shamway generate sound blast   art/audio/blast-far.wav  --seed 7 --distant
+    shamway generate sound tick    art/audio/fuse-tick.wav
+    shamway generate sound whoosh  art/audio/throw.wav --seconds 1.4
+    shamway generate sound hum     art/audio/generator-loop.wav --loop
+    shamway generate sound beep    art/audio/ui-confirm.wav --hz 880 --beeps 2
+    shamway generate sound sounds-xml myModBlast --distant myModBlastDistant
 
 Standard library only, so the audio lane works on a bare host. Output is mono
 16-bit PCM at 44.1 kHz: Unity imports that without complaint and compresses it
@@ -34,6 +34,7 @@ import argparse
 import array
 import math
 import random
+import shutil
 import sys
 import tempfile
 import wave
@@ -156,7 +157,7 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
     and the sub-bass pressure sweep, distant has neither, because air absorbs
     high frequencies over distance and the shock front arrives as a swell.
     Generate both from one seed and wire them as a sound group's clip and its
-    `DistantClip` — see `make-sound.py sounds-xml`.
+    `DistantClip` — see `shamway generate sound sounds-xml`.
     """
     times = seconds(duration)
     white = noise(len(times), generator)
@@ -357,7 +358,7 @@ def describe(path: Path, samples: list[float], rate: int, seed: int) -> None:
 SOUNDS_XML = """<configs>
 	<append xpath="/Sounds">
 		<SoundDataNode name="{group}">
-			<AudioSource name="Sounds/AudioSource_{source}" />
+			<AudioSource name="@:Sounds/Prefabs/AudioSource_{source}.prefab" />
 			<AudioClip ClipName="#@modfolder({mod}):Resources/{bundle}?{stem}.wav" />{distant}{noise}
 		</SoundDataNode>
 	</append>
@@ -431,6 +432,12 @@ def main(argv: list[str] | None = None) -> int:
         sub.add_argument("output", type=Path)
         sub.add_argument("--seed", type=int, default=0, help="recorded seed; keeps output reproducible")
         sub.add_argument("--peak", type=float, default=None, help="override the normalized peak (0..1)")
+        sub.add_argument(
+            "--promote",
+            type=Path,
+            default=None,
+            help="also write the same bytes here (the bundle copy, under its mod-prefixed stem)",
+        )
         return sub
 
     blast_parser = voice("blast", "large explosion, near-field or distant")
@@ -468,7 +475,7 @@ def main(argv: list[str] | None = None) -> int:
     xml.add_argument(
         "--fade-end", type=int, default=200, help="metres past which the near clip stops"
     )
-    xml.add_argument("--source", default="Explosion", help="vanilla AudioSource prefab suffix")
+    xml.add_argument("--source", default="Explosion", help="vanilla AudioSource prefab suffix, e.g. Explosion, Impact, UseAction, UI_Item, Interact")
     xml.add_argument(
         "--noise", action="store_true",
         help="also report this sound to the AI director; omit when layering on a vanilla "
@@ -510,6 +517,12 @@ def main(argv: list[str] | None = None) -> int:
         samples = normalize(samples, 20 * math.log10(args.peak))
     write_wav(args.output, samples)
     describe(args.output, samples, RATE, args.seed)
+    if args.promote is not None:
+        # Promote from the generator, never by hand: the shipped clip is then
+        # the recorded design by construction, and cannot drift from it.
+        args.promote.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(args.output, args.promote)
+        print(f"promoted: {args.promote} (byte-identical)")
     return 0
 
 

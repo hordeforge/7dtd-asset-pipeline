@@ -59,8 +59,11 @@ gates are necessary but not sufficient. Nothing here has been through a real
 client.
 
 **You run:** build a bundle in a real mod, deploy it, start a genuinely fresh
-client, and load each changed asset by its real URI. See
-[release-checklist.md](release-checklist.md).
+client, and load each changed asset by its real URI. The plumbing exists now
+(`shamway client deploy`, `shamway client launch --mod-name …`, which refuses
+a running client and classifies the log this launch wrote); what is missing
+is a human running it against a pipeline-built bundle. See
+[validation.md](validation.md) and [release-checklist.md](release-checklist.md).
 
 **Confirms it worked:** the asset renders or sounds correct, and the client log
 has no bundle-load, incompatibility, wrong-name, shader, or particle errors.
@@ -69,12 +72,26 @@ has no bundle-load, incompatibility, wrong-name, shader, or particle errors.
 
 **Blocks:** any claim that `shamway render-icon` works. Its Python side is
 exercised — prefab resolution, the missing-editor and missing-Pillow errors,
-the coverage gate, and the atlas-cell check — but `IconRenderer.cs` itself has
-never been compiled or executed by Unity, and neither have the newer
-`GeneratedAsset` helpers (`ImportNormalMap`, `ImportLinearMap`,
-`ImportColorMap`, `ParticleMaterial`, `ZeroCurve`, `BudgetParticles`,
-`ImportAudioClip`, `AudioSourcePrefab`). The Python suite cannot cover editor
-C#.
+the coverage gate, and the atlas-cell check — and since 2026-08-23 all four
+editor scripts **compile** against Unity 2022.3.62f2's own assemblies
+(`scripts/compile-editor-scripts.sh`, run by `make check`; it immediately
+found and fixed a hard-obsolete `AudioImporter.preloadAudioData`). On the same
+day a `shamway build --probe` with Unity 2022.3.62f2 opened a freshly
+scaffolded project, compiled all four scripts with no `error CS` line,
+executed `BundleBuilder`, and produced a class-142 bundle. A non-probe
+`shamway build` on the same throwaway mod, with one `[ShamwayPreBuild]`
+generator, then proved the hook end to end — `pre-build: 1 generator(s)`,
+`running SmokeGenerators.Touch`, `Shamway.SourceRoot` reaching the generator —
+and executed `StandardMaterial` (with the `_OcclusionMap` slot), `Tile`,
+`EmissiveMaterial`, `Primitive`, `RootCapsuleCollider`, `SavePrefab`,
+`LightPrefab`, `ImportNormalMap` and `ImportLinearMap`; the `.mat` files carry
+`_NORMALMAP`, `_METALLICGLOSSMAP`, `_EMISSION` and the tiling, and
+`inspect --deep` shows the `CapsuleCollider` and `Light` survived
+serialization. What remains unproven is *execution* of the rest:
+`IconRenderer.cs` and the remaining `GeneratedAsset` helpers
+(`ImportColorMap`, `ParticleMaterial`, `ZeroCurve`, `BudgetParticles`,
+`ImportAudioClip`, `AudioSourcePrefab`) have never been *run* by an editor
+from this repository, and nothing built here has yet been loaded by a client.
 
 **You run:** in a scaffolded mod with a prefab in the bundle folder, on a host
 with a display (or under `xvfb-run -a`):

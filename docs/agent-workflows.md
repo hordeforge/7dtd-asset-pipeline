@@ -41,6 +41,9 @@ Every generator should:
 - write to a temporary file and replace only on success;
 - print dimensions, format, channels, and hashes;
 - support a check/dry-run mode when practical;
+- write the editable source **and** the byte-identical bundle copy in one
+  run (`--promote` / `--also`), so the shipped file is the recorded design by
+  construction;
 - never edit the installed game.
 
 For AI-generated source art, record the tool/model, prompt, references,
@@ -60,9 +63,15 @@ not acceptance evidence.
 
 ## Texture/material lane
 
-1. State channel semantics and color-space intent per file.
-2. Generate maps with Material Maker or seeded code.
-3. Check sizes, alpha, numeric ranges, tiling seams, and packed-channel means.
+1. State channel semantics and color-space intent per file, and the
+   material profile per surface family — painted, bare metal, rubber,
+   emissive — from [art-direction.md](art-direction.md).
+2. Generate maps with `shamway generate texture-maps` (from an albedo, or
+   `detail` for a tileable normal from seeded noise), Material Maker, or
+   seeded code. Detail normals are periodic by construction; anisotropic for
+   machined metal, isotropic and coarser for rubber.
+3. Check sizes, alpha, numeric ranges, tiling seams, and packed-channel means
+   (the mask must average back to the scalars it replaces).
 4. Configure Unity imports before assigning materials.
 5. Enable shader keywords and complete blend/depth/render state in code.
 6. Inspect generated `.mat` YAML.
@@ -133,6 +142,13 @@ Three rules keep it honest:
 - **"Reviewed" means a person looked or listened.** A green offline run is not
   a review, and writing it in that column is how a mod ends up believing its
   art was checked.
+- **Three states, not two.** Stand-in, accepted, and *mod-owned but failed
+  review* — the third is the one that gets lost, because the asset exists.
+- **Re-verify the table against `Config/` and the installed game**, not
+  against prose, whenever either changes. The source project's table was
+  stale on two rows (a wrong scale, an un-overridden prefab) until it was.
+- **Keep an owed-sounds list beside it** — events still silent — because an
+  unauthored sound produces no error ([audio.md](audio.md)).
 
 ## Evidence packet
 
@@ -143,6 +159,13 @@ For a release candidate preserve:
 - bundle and manifest SHA-256;
 - `shamway inspect --json` output;
 - `shamway validate`, `check-icons`, and `check-sound` output;
-- client/server logs for the exact run;
-- screenshots/turntables/listening notes;
+- client/server logs for the exact run — **copied out**, because the client
+  rewrites `output_log_client__*.txt` on every launch, so a path into the
+  live log directory is not evidence;
+- the `shamway client log --json` classification for the run;
+- screenshots/turntables/listening notes, each capture named for the
+  observable it records (`held-mesh-scale`, `placed-bounds`,
+  `detonation-audio-near`) with the stated expectation beside it, so a later
+  reader knows what a picture was meant to prove;
+- the audio state of the run (muted or listening);
 - negative-control result where graceful fallback matters.

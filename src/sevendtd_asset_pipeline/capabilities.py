@@ -16,6 +16,8 @@ from __future__ import annotations
 import importlib.util
 import shutil
 import subprocess
+import sys
+from pathlib import Path
 from dataclasses import asdict, dataclass
 from functools import lru_cache
 
@@ -54,6 +56,27 @@ class _Spec:
     install: str
 
 
+SOURCE_URL = "git+https://github.com/ywy50/7dtd-asset-pipeline"
+
+
+def installed_as_uv_tool() -> bool:
+    """Whether this interpreter is a `uv tool install` environment.
+
+    The distinction decides the install hint: `uv pip install` targets a venv
+    the user activated, which a tool-installed `shamway` does not have. Its
+    extras are added by reinstalling the tool with them.
+    """
+    prefix = Path(sys.prefix).as_posix()
+    return "/uv/tools/" in prefix or prefix.endswith("/uv/tools")
+
+
+def extra_install(extra: str) -> str:
+    """The command that adds one optional-dependency extra to this install."""
+    if installed_as_uv_tool():
+        return f"uv tool install --force '7dtd-asset-pipeline[{extra}] @ {SOURCE_URL}'"
+    return f"uv pip install '7dtd-asset-pipeline[{extra}]'"
+
+
 REGISTRY: tuple[_Spec, ...] = (
     _Spec(
         name="UnityPy",
@@ -61,7 +84,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="UnityPy",
         unlocks=("shamway inspect --deep",),
         purpose="list every serialized object and per-prefab component in a built bundle",
-        install="uv pip install '7dtd-asset-pipeline[inspect]'",
+        install=extra_install("inspect"),
     ),
     _Spec(
         name="trimesh",
@@ -69,7 +92,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="trimesh",
         unlocks=("shamway check-mesh",),
         purpose="mesh extents, watertightness, and geometry counts",
-        install="uv pip install '7dtd-asset-pipeline[mesh]'",
+        install=extra_install("mesh"),
     ),
     _Spec(
         name="gltf_validator",
@@ -77,7 +100,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="gltf_validator",
         unlocks=("shamway check-mesh",),
         purpose="Khronos glTF/GLB conformance for authored meshes",
-        install="scripts/install-tools.sh --with-authoring",
+        install="shamway script install-tools --with-authoring",
     ),
     _Spec(
         name="blender",
@@ -85,7 +108,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="blender",
         unlocks=("shamway generate mesh",),
         purpose="authored mesh lane: organic, rigged, and sculpted geometry",
-        install="scripts/install-tools.sh --with-authoring",
+        install="shamway script install-tools --with-authoring",
     ),
     _Spec(
         name="openscad",
@@ -93,7 +116,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="openscad",
         unlocks=("a mod's own OpenSCAD generators",),
         purpose="parametric hard-surface geometry",
-        install="scripts/install-tools.sh --with-authoring",
+        install="shamway script install-tools --with-authoring",
     ),
     _Spec(
         name="pillow",
@@ -107,7 +130,7 @@ REGISTRY: tuple[_Spec, ...] = (
             "alpha coverage in shamway check-icons",
         ),
         purpose="icon generation, background cutout, texture maps, and icon rendering",
-        install="uv pip install '7dtd-asset-pipeline[authoring]'",
+        install=extra_install("authoring"),
     ),
     _Spec(
         name="numpy",
@@ -115,7 +138,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="numpy",
         unlocks=("shamway generate texture-maps",),
         purpose="seeded numeric texture synthesis",
-        install="uv pip install '7dtd-asset-pipeline[authoring]'",
+        install=extra_install("authoring"),
     ),
     _Spec(
         name="magick",
@@ -123,7 +146,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="magick",
         unlocks=("a mod's own image generators",),
         purpose="deterministic raster transforms and contact sheets",
-        install="scripts/install-tools.sh --with-authoring",
+        install="shamway script install-tools --with-authoring",
     ),
     _Spec(
         name="xvfb",
@@ -132,7 +155,7 @@ REGISTRY: tuple[_Spec, ...] = (
         unlocks=("shamway render-icon on a headless host",),
         purpose="a virtual display; the icon renderer needs a real graphics device and "
         "silently produces a blank image without one",
-        install="scripts/install-tools.sh --with-authoring",
+        install="shamway script install-tools --with-authoring",
     ),
     _Spec(
         name="ffmpeg",
@@ -140,7 +163,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="ffmpeg",
         unlocks=("a mod's own audio scripts",),
         purpose="audio conversion, normalization, and filtering",
-        install="scripts/install-tools.sh --with-authoring",
+        install="shamway script install-tools --with-authoring",
     ),
 )
 

@@ -45,15 +45,21 @@ Exit code 0 means valid. Start here rather than reading files.
 | `shamway inspect --deep PATH` | fast | every object and per-prefab components (UnityPy) |
 | `shamway check-mesh FILE` | fast | authored-mesh extents and glTF conformance |
 | `shamway check-sound FILE` | fast | clip format, level, clipping, DC offset |
-| `shamway check-icons` | instant | atlas cells and every `CustomIcon` key |
-| `shamway validate` | fast | bundle + every XML reference |
+| `shamway check-icons` | instant | atlas cells and every icon key: `CustomIcon`, `display_entry icon=`, and item/block names |
+| `shamway validate` | fast | bundle + every XML reference + `code_references` |
 | `shamway build --probe` | minutes | proves the environment; stages nothing |
 | `shamway build` | minutes | builds, gates, and stages the bundle |
 | `shamway render-icon STEM` | minutes | renders a prefab into its atlas cell |
+| `shamway client where` | instant | where the installed client loads mods from and logs to |
+| `shamway client deploy .` | fast | copy the deployable modlet there (outside the game install) |
+| `shamway client launch --mod-name {mod_name}` | minutes | a genuinely fresh client, then its log classified |
+| `shamway client log --mod-name {mod_name}` | instant | classify the newest client log |
 
 Diagnose with the fast read-only commands. `build` and `render-icon` are the
-only two that write into this mod; reach for them only when an asset actually
-changed. `render-icon` needs a graphics device — run it under `xvfb-run -a` on
+only two that write into this mod (`schema` marks them, `init`, and the two
+`client` writers with `writes: true`); `client deploy` writes into the client's
+per-user `Mods/` folder, which is outside both this mod and the game install.
+Reach for them only when an asset actually changed. `render-icon` needs a graphics device — run it under `xvfb-run -a` on
 a headless host, because with `-nographics` Unity writes a blank image instead
 of failing.
 
@@ -62,11 +68,15 @@ of failing.
 Do not scrape `--help`. The operation surface is published, and every operation
 says what it costs, whether it writes, and what it needs:
 
+- `shamway schema` — every operation and its JSON Schema
+- `shamway call status` — run one, JSON in and out
+- `shamway serve` — many operations in one process
+
 ```bash
-shamway schema                       # every operation and its JSON Schema
-shamway call status                  # run one, JSON in and out
+shamway schema
+shamway call status
 shamway call build --params '{"probe":true}'
-shamway serve                        # many operations in one process
+shamway serve
 ```
 
 `serve` reads one JSON request per line and writes one response per line
@@ -90,12 +100,17 @@ Never copy a script out of the pipeline into this repository, and never write a
 relative path into a checkout of it. Everything generalized is reachable from
 the command this mod already depends on:
 
+- `shamway generate --list` — sound, audio, cutout, icon, texture-maps, mesh
+- `shamway generate sound --help` — each one explains itself
+- `shamway docs` — every rule the pipeline knows
+- `shamway docs art-direction` — the style contract, in full
+
 ```bash
-shamway generate --list                  # sound, audio, cutout, icon, texture-maps, mesh
-shamway generate sound --help            # each one explains itself
+shamway generate --list
+shamway generate sound --help
 shamway generate sound blast assets-src/audio/blast.wav --seed 7
-shamway docs                             # every rule the pipeline knows
-shamway docs art-direction               # the style contract, in full
+shamway docs
+shamway docs art-direction
 ```
 
 What belongs in *this* repository is the content: `Config/`, `UIAtlases/`, the
@@ -112,22 +127,33 @@ atomic writes). Keep it in this mod.
 Some features need a tool the core does not require. Never guess whether one is
 installed — ask, and act on the answer:
 
+- `shamway capabilities --json` — what works now, and what unlocks what
+- `shamway capabilities --missing` — only what is absent, with install commands
+
 ```bash
-shamway capabilities --json          # what works now, and what unlocks what
-shamway capabilities --missing       # only what is absent, with install commands
+shamway capabilities --json
+shamway capabilities --missing
 ```
 
-`status --json` also carries a `capabilities` map. Install everything with
-`uv pip install '7dtd-asset-pipeline[all]'` plus, for Blender/OpenSCAD/glTF,
-the pipeline's `scripts/install-tools.sh --with-authoring`.
+`status --json` also carries a `capabilities` map, and each missing entry
+prints the install command that fits *this* install (a `uv tool install`ed
+command and a venv need different ones). Blender, OpenSCAD, the glTF
+validator, and the decompilers come from the packaged host installer —
+`shamway script install-tools --with-authoring --with-research` — which needs
+no checkout, like everything else here. `shamway script --list` names the
+other two: the Unity editor installer and the editor-script compiler
+(`shamway script compile-editor-scripts --scripts
+tools/shamway/UnityProject/Assets/SevenDaysToDieAssetPipeline/Editor --with
+<your Editor folder>`), which proves this mod's generators compile for the
+game-matched editor in ten seconds, with no editor started.
 
 ## Making the assets
 
 Author sources in `assets-src/`, then copy only the **selected** output into the
 Unity bundle folder. Read `assets-src/README.md` — it says what provenance each
-asset owes. The pipeline's own docs carry the lane detail: `docs/art-direction.md`
-for anything generated or drawn, `docs/audio.md` for sound, `docs/vfx.md` for
-particle effects.
+asset owes. The pipeline's own docs carry the lane detail: `shamway docs art-direction`
+for anything generated or drawn, `shamway docs audio` for sound, `shamway docs vfx`
+for particle effects.
 
 **Meshes — two lanes, both first-class.** Pick by what the shape needs:
 
@@ -148,7 +174,7 @@ them and `check-icons` exists for them.
 **Sound.** `shamway generate sound` synthesizes designed voices from a
 recorded seed and prints the matching `sounds.xml` entry;
 `check-sound` gates the file. A clip that loads can still be inaudible — an
-AudioSource prefab's `maxDistance` decides that — so read `docs/audio.md` before
+AudioSource prefab's `maxDistance` decides that — so read `shamway docs audio` before
 wiring a long-range sound.
 
 `GeneratedAsset` also builds materials, texture imports, particle blend state,
@@ -195,6 +221,39 @@ valid prefab, so nothing reports it.
    working, verified, or done on `build`/`validate` output alone. Acceptance
    is a fresh client that loads the asset by its real URI plus a human look or
    listen. Say plainly which of the two you did.
+10. **`Localization.csv` lives inside `Config/`.** The engine reads it nowhere
+    else, logs nothing when it is misplaced, and shows every name as its raw
+    key. `[MODS] Loading localization from mod: {mod_name}` in the client log
+    is the proof it was found.
+11. **Declare what only code loads.** A prefab a Harmony hook fetches, a Light
+    prefab a particle module uses, a clip a script plays — no XML names them.
+    List their stems in `.shamway.toml` `code_references` or `validate`
+    cannot see them.
+12. **One client per machine, and never a reused one.** `shamway client launch`
+    refuses while a client runs; do not work around it, and do not launch
+    over a client someone else is using. A bundle is cached for the life of
+    the process, so a reused client proves nothing about a rebuild.
+
+## Fresh-client acceptance, mechanically
+
+```bash
+shamway client deploy .
+shamway client launch --mod-name {mod_name} --run-seconds 120 --mute
+```
+
+`deploy` copies `ModInfo.xml`, `Config/`, `Resources/`, `UIAtlases/`,
+`Prefabs/` and root DLLs into the folder the client actually reads — on a
+Proton host its per-user `Mods/` under `compatdata/251570/`, not the install's
+`Mods/`, where a second copy would be ignored with a duplicate warning.
+`launch` starts the client through Steam, waits, stops it, and fails unless
+the log this launch wrote contains `Loaded Mod: {mod_name}`,
+`UIAtlas ItemIconAtlas: Pack took`, and the localization line, with no
+`Mod reference for a mod that is not loaded`, `Loading AssetBundle … failed`,
+`Model has a wrong name`, `SteamAPI_Init() failed`, or particle curve-mode
+error. `--mute` is for runs that are not listening runs; a listening run is
+never muted, and the report says which it was. PASS means the asset
+**loads**. Whether it looks or sounds right is still a person's call, and the
+report's last line says so.
 
 ## Referencing an asset from XML
 
@@ -212,18 +271,23 @@ and exact case of every such URI under `Config/`.
 
 Read the error; each one names its own fix. Then:
 
+- `shamway inspect --deep Resources/{bundle_name}` — did the component survive?
+
 ```bash
 shamway status --json
 shamway inspect Resources/{bundle_name}
-shamway inspect --deep Resources/{bundle_name}   # did the component survive?
+shamway inspect --deep Resources/{bundle_name}
 shamway check-log .shamway/build/bundle/unity-build.log
 ```
 
 Silent failures worth knowing before you chase one: a missing icon draws
 whatever else answers to its key, a missing model draws a fallback mesh, an
 unknown sound group simply never plays, a script-built material renders flat or
-opaque when its shader keyword or blend state was never set, and an inherited
-`TintColor` quietly recolours authored paint. None of them produce an error.
+opaque when its shader keyword or blend state was never set, an inherited
+`TintColor` quietly recolours authored paint, a wrong XPath applies nothing
+and logs nothing, and a misplaced `Localization.csv` shows raw keys. None of
+them produce an error. `shamway docs troubleshooting` maps each symptom to
+its cause.
 
 Do not change compression, graphics APIs, or exporter shape speculatively. If
 class 142 is missing, the cause is an engine module, not a build option.

@@ -13,82 +13,30 @@ The project was extracted from the production asset workflow in Atomic
 Doomsday and generalized so it has no dependency on that mod, its art, or its
 repository layout.
 
-## What it includes
-
-- host-tooling and Unity-editor installers that start from a bare machine;
-- a mod-scaffolding command and generic Unity project template;
-- a real editor-side `BuildPipeline.BuildAssetBundles` implementation;
-- Windows-target, LZ4, strict, forced-rebuild bundle generation;
-- a throwaway probe bundle that tests setup before art is involved;
-- build-log rejection when Unity silently strips disabled engine modules;
-- dependency-free UnityFS metadata inspection and the required class-142
-  `AssetBundle` gate;
-- installed-game Unity-version discovery instead of a permanently hardcoded
-  version, and checksum-verified editor resolution from Unity's release
-  service instead of a hardcoded changeset;
-- recursive `Config/**/*.xml` reference discovery, covering models, item
-  meshes, and `sounds.xml` clips alike;
-- validation of mod names, bundle paths, manifest membership, exact case, and
-  bundle-wide file-stem uniqueness;
-- atomic staging of the bundle and its tracked manifest;
-- setup, integration, troubleshooting, authoring, agent-workflow, and release
-  documentation, plus an `AGENTS.md` contract for coding agents;
-- reproducible generators for the sound, icon, cutout, texture, and mesh lanes,
-  plus a Unity-side `GeneratedAsset` library for asset-as-code prefabs,
-  materials, texture imports, particle blend state, and audio;
-- offline gates for the asset classes a bundle check cannot see: atlas icons
-  against every `CustomIcon` key, and clips against format, level, and DC
-  offset;
-- an editor-side icon renderer, so an icon that should *be* the item cannot
-  drift from the mesh;
-- an art-direction contract with prompt patterns, so generated 2D assets match
-  the game rather than merely being clean;
-- generators and documentation served from the installed package
-  (`shamway generate`, `shamway docs`), so a consuming mod owns only its
-  own content and never a path into this repository;
-- programmatic interfaces built on one operation registry: a self-describing
-  `schema`, a `call` endpoint for any language, a `serve` stdio loop about 17x
-  faster for repeated calls, a `Pipeline` Python facade, and a capability
-  registry — plus an agent contract written straight into the consuming mod;
-- optional OSS capabilities that degrade cleanly: UnityPy object-level bundle
-  inspection, and trimesh + the Khronos glTF validator for authored meshes;
-- unit tests with generated good and broken UnityFS fixtures.
-
-## Requirements
-
-- [uv](https://docs.astral.sh/uv/) — every Python step runs through it, and
-  `scripts/install-tools.sh` installs it;
-- Python 3.11 or newer for the pipeline CLI (uv provisions one if needed);
-- a legal, activated Unity Editor matching the installed game's own bundle
-  revision;
-- Unity Windows Build Support (Mono), because the shipped game client loads a
-  Windows-target bundle even when it runs through Proton;
-- an installed 7 Days to Die client as read-only version authority.
-
-Unity credentials and licenses are never stored in scripts, configuration, or
-environment variables by this project.
-
 ## Quick start
 
 [Quickstart](docs/quickstart.md) is the complete path from a bare machine to a
-validated bundle. The short form:
+validated bundle. The short form follows; everything after it is detail.
 
-Install host tooling (`pacman`, `apt-get`, or `dnf`; `--check` installs
+Install host tooling (`pacman`, `apt-get`, `dnf`, or `zypper`; `--check` installs
 nothing and just reports what is missing):
 
 ```bash
-scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
+scripts/install-tools.sh --check --with-authoring --with-unity-prereqs --with-research
 scripts/install-tools.sh --with-unity-prereqs
 ```
 
 Install this checkout:
 
+- `scripts/bootstrap` — uv venv + uv pip install --editable, with extras
+
 ```bash
-scripts/bootstrap            # uv venv + uv pip install --editable, with extras
+scripts/bootstrap
 .venv/bin/shamway --help
 ```
 
-Or, for a user-wide command, `uv tool install .`.
+Or, for a user-wide command with every optional lane, `uv tool install '.[all]'`
+(from a clone) or `uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/ywy50/7dtd-asset-pipeline'`.
 
 Scaffold the pipeline into an existing modlet. The command reads the correct
 Unity version from the installed game:
@@ -145,12 +93,18 @@ shamway docs art-direction
 Orient in an unfamiliar mod, or drive the pipeline from a script or agent, with
 one non-raising call:
 
+- `shamway status --json` — whole-mod state
+- `shamway capabilities --json` — which optional tools work, and what they unlock
+- `shamway schema` — every operation, machine-readable
+- `shamway call status` — run one operation, JSON in and out
+- `shamway serve` — many operations over one stdio session
+
 ```bash
-shamway status --json        # whole-mod state
-shamway capabilities --json  # which optional tools work, and what they unlock
-shamway schema               # every operation, machine-readable
-shamway call status          # run one operation, JSON in and out
-shamway serve                # many operations over one stdio session
+shamway status --json
+shamway capabilities --json
+shamway schema
+shamway call status
+shamway serve
 ```
 
 See [Mod repo layout](docs/mod-repo-layout.md) for the ownership split between
@@ -159,6 +113,77 @@ the full programmatic contract.
 
 The offline gates are necessary, not sufficient. Acceptance always ends with
 a fresh-client load and a visual/audio check appropriate to the changed asset.
+The load half is mechanical:
+
+```bash
+shamway client deploy .
+shamway client launch --mod-name MyMod --run-seconds 120 --mute
+```
+
+## What it includes
+
+- host-tooling and Unity-editor installers that start from a bare machine;
+- a mod-scaffolding command and generic Unity project template;
+- a real editor-side `BuildPipeline.BuildAssetBundles` implementation;
+- Windows-target, LZ4, strict, forced-rebuild bundle generation;
+- a throwaway probe bundle that tests setup before art is involved;
+- build-log rejection when Unity silently strips disabled engine modules;
+- dependency-free UnityFS metadata inspection and the required class-142
+  `AssetBundle` gate;
+- installed-game Unity-version discovery instead of a permanently hardcoded
+  version, and checksum-verified editor resolution from Unity's release
+  service instead of a hardcoded changeset;
+- recursive `Config/**/*.xml` reference discovery, covering models, item
+  meshes, and `sounds.xml` clips alike;
+- validation of mod names, bundle paths, manifest membership, exact case, and
+  bundle-wide file-stem uniqueness;
+- atomic staging of the bundle and its tracked manifest;
+- setup, integration, troubleshooting, authoring, agent-workflow, and release
+  documentation, plus an `AGENTS.md` contract for coding agents;
+- reproducible generators for the sound, audio-conversion, icon, cutout, texture, and mesh lanes,
+  plus a Unity-side `GeneratedAsset` library for asset-as-code prefabs,
+  materials, texture imports, particle blend state, and audio;
+- offline gates for the asset classes a bundle check cannot see: atlas icons
+  against every `CustomIcon` key, and clips against format, level, and DC
+  offset;
+- an editor-side icon renderer, so an icon that should *be* the item cannot
+  drift from the mesh;
+- an art-direction contract with prompt patterns, so generated 2D assets match
+  the game rather than merely being clean;
+- generators, documentation, and host scripts served from the installed
+  package (`shamway generate`, `shamway docs`, `shamway script`), so a
+  consuming mod owns only its own content and never a path into this
+  repository;
+- programmatic interfaces built on one operation registry: a self-describing
+  `schema`, a `call` endpoint for any language, a `serve` stdio loop about 17x
+  faster for repeated calls, a `Pipeline` Python facade, and a capability
+  registry — plus an agent contract written straight into the consuming mod;
+- optional OSS capabilities that degrade cleanly: UnityPy object-level bundle
+  inspection, and trimesh + the Khronos glTF validator for authored meshes;
+- fresh-client acceptance plumbing (`shamway client`): where a Proton client
+  loads mods from and logs to, an allow-listed deploy, a launch that refuses a
+  running client, an OS-layer mute for non-listening runs, and a log
+  classifier that knows every positive line and every silent-failure
+  signature this project has met;
+- a declared list of code-loaded bundle stems (`code_references`), so assets
+  no XML names are validated too;
+- an editor-script compile gate that needs no running editor
+  (`scripts/compile-editor-scripts.sh`, in `make check`);
+- unit tests with generated good and broken UnityFS fixtures.
+
+## Requirements
+
+- [uv](https://docs.astral.sh/uv/) — every Python step runs through it, and
+  `scripts/install-tools.sh` installs it;
+- Python 3.11 or newer for the pipeline CLI (uv provisions one if needed);
+- a legal, activated Unity Editor matching the installed game's own bundle
+  revision;
+- Unity Windows Build Support (Mono), because the shipped game client loads a
+  Windows-target bundle even when it runs through Proton;
+- an installed 7 Days to Die client as read-only version authority.
+
+Unity credentials and licenses are never stored in scripts, configuration, or
+environment variables by this project.
 
 ## Documentation
 

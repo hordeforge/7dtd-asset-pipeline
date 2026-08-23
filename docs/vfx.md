@@ -8,12 +8,14 @@ Each of those has happened; each has a specific, cheap preventative below.
 
 ## Quick start
 
+- import the card, build the prefab with GeneratedAsset.ParticleMaterial(...)
+- `shamway inspect --deep Resources/mymod.unity3d` — did the systems survive?
+
 ```bash
 shamway generate cutout luma assets-src/vfx/smoke-mask.png \
     assets-src/vfx/smoke-card.png --black-point 15
-# import the card, build the prefab with GeneratedAsset.ParticleMaterial(...)
 shamway build
-shamway inspect --deep Resources/mymod.unity3d    # did the systems survive?
+shamway inspect --deep Resources/mymod.unity3d
 ```
 
 Everything below is detail.
@@ -31,6 +33,46 @@ consequences follow:
   presentation stays in place underneath, so a missing effect costs polish, not
   playability. Test that fallback deliberately, by making the bundle
   unavailable — it is the one path nobody exercises by accident.
+- The effect's **footprint must not imply a gameplay measurement**. A dust
+  cloud that reaches exactly the damage radius becomes the thing players
+  measure by, and the next balance change makes it lie. Keep the visual
+  reach well inside or clearly unrelated to the numbers; the tooltip and the
+  actual effects are the source of truth. "The cloud is a landmark, not a
+  measuring tool."
+
+### Where a client-only effect attaches
+
+The stock presentation path, decompiled from V 3.1.0 b14: `GameManager.explode`
+calls `ExplosionClient` locally and broadcasts `NetPackageExplosionClient`,
+whose `ProcessPackage` calls the same method on every client.
+`ExplosionClient(Vector3 _center, Quaternion, int _index, int _blastPower,
+float _blastRadius, float _blockDamage, int _entityId, List<BlockChangeInfo>)`
+instantiates `WorldStaticData.prefabExplosions[_index]` — with whatever
+`AudioPlayer` that prefab carries (see [audio.md](audio.md)). A Harmony
+**postfix** on it is therefore the place to spawn a custom effect for an
+explosion: it runs after the stock presentation, on every client, never on a
+dedicated server (guard with `GameManager.IsDedicatedServer` anyway). For
+per-frame ambience, a postfix on `EntityPlayerLocal.OnUpdateLive` is
+client-only by construction, because `EntityPlayerLocal` is never created on
+a server.
+
+The hook loads the prefab with `DataLoader.LoadAsset<GameObject>(uri)` using
+the same `#@modfolder(...)` URI form as XML; the string-path overload needs
+`Unity.Addressables.dll` (and `UnityEngine.PhysicsModule.dll` for colliders)
+referenced at compile time. No XML names such a prefab, so list its stem in
+`.shamway.toml` `code_references` or `validate` cannot see it.
+
+Two engine habits every spawned object must respect:
+
+- **The floating origin.** 7DTD re-bases world coordinates; instantiate at
+  `center - Origin.position`, exactly as the stock method does, and
+  subscribe any long-lived client object — a boundary `LineRenderer`, a
+  persistent haze — to `Origin.OriginChanged` so it re-anchors when the origin
+  shifts. An object that ignores this jumps when the player travels far.
+- **Destroy after the last particle, not after the last emission.** Schedule
+  the instance's destruction past the end of the *longest-lived* particle of
+  the *last* stage. The source effect emits its cap until 36 s and destroys at
+  95 s; destroying at 40 s cut the cloud off mid-air.
 
 ## The engine module trap, again
 
@@ -45,9 +87,10 @@ scaffolded project declares the module. What the class-142 gate **cannot** tell
 you is whether a specific component survived, which is what
 `inspect --deep` is for:
 
+- myModBlastVfx (GameObject) [7 objects: ParticleSystem=6, ParticleSystemRenderer=6, Transform=7]
+
 ```bash
 shamway inspect --deep Resources/mymod.unity3d
-#   myModBlastVfx (GameObject) [7 objects: ParticleSystem=6, ParticleSystemRenderer=6, Transform=7]
 ```
 
 Six systems in the prefab and six in the bundle is the proof. Zero, with a
@@ -121,6 +164,35 @@ Prune destroyed instances before counting.
 
 Log the chosen tier and the measured distance when the effect spawns. That one
 line is the difference between "the LOD rule exists" and "the LOD rule ran".
+Measure the distance from `world.GetPrimaryPlayer()`; when there is no local
+player yet (a client still loading), treat it as 0 and give the full effect.
+
+**Re-derive the concurrency cap whenever stage durations change.** The cap is
+a statement about how many effects overlap, and overlap is lifetime times
+rate: the source effect's policy was calibrated for a 40 s lifetime, and the
+retiming to 95 s more than doubled overlap without touching a single cap.
+
+## Persistent, viewer-attached ambience
+
+A one-shot explosion is not the only pattern. A zone effect — haze, drizzle,
+ash, fog inside a contaminated area — is the other, and it has its own rules:
+
+- **Looping systems in local simulation space, parented to or repositioned
+  at the local player every update.** The client is never told a boundary;
+  the effect travels with the viewer and *density* does the talking.
+- **Emission driven by the same replicated value gameplay uses** — set
+  `emission.rateOverTimeMultiplier` from it every update — never from a
+  second curve that can drift from the rules.
+- **A visibility floor and hysteresis.** Density like `0.25 + 0.75·√R`
+  keeps the rim visible rather than clear; appear at `R = 0.05` and disappear
+  at `0.03`, so walking the boundary shows a gradient and never a strobe.
+  Destroy the instance at zero.
+- **Budget for hours on screen, not ninety seconds.** The source effect runs
+  at 178 live particles against 384 for the burst. Review it by day, by
+  night, indoors, and against melee readability — an ambience that hides a
+  zombie is a gameplay change.
+- **Nothing reads it back.** No game system may consult the effect; it is
+  presentation of a value, not the value.
 
 ## Staging a large effect
 
@@ -137,6 +209,13 @@ timings are the part that must match the gameplay it presents.
 | Cap | the head, emitted where the column arrives |
 | Dissipation | drift, desaturate, and fade without a hard edge or a persistent wall |
 
+**Settle timing on keyframes before authoring cards.** Generate two or three
+stage keyframes first — "deliberately not a particle texture" — to decide
+stage responsibilities and timings, then author the cards. The prompt asks
+for chunky camera-facing hand-painted clusters in dusty daylight and refuses
+lens flare, full-screen whiteout, neon glow and photoreal simulation; see
+[art-direction.md](art-direction.md) for the card prompts.
+
 **Derive the cap's start time; do not choose it.** If the column climbs at a
 known speed to a known height, the cap begins when the first particles arrive.
 A cap that starts earlier hangs above a gap, which is the single most common
@@ -144,7 +223,17 @@ reason a mushroom-shaped effect does not read as one.
 
 **Match the effect's duration to the gameplay it presents.** An effect that
 runs for a third of the event it describes reads as a bang followed later by
-unrelated damage. This is a timing bug that looks like an art problem.
+unrelated damage. This is a timing bug that looks like an art problem — and
+when one side is retimed, retime the other in the same change.
+
+**A Lights module needs a Light prefab, and the prefab is a bundle stem.**
+The particle Lights module references a Light *prefab asset*
+(`GeneratedAsset.LightPrefab`), which ships as its own bundle member that only
+the module references — no XML, so declare it in `code_references`. Two API
+traps: `lights.intensityMultiplier` is a float and the curve goes on
+`lights.intensity`; assigning a `MinMaxCurve` where a float is expected fails
+the whole project as "Scripts have compiler errors". Keep the pulse short
+(one flash), never a sustained light.
 
 Material profiles, expressed as required behaviour rather than filenames:
 

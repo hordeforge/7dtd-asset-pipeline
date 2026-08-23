@@ -81,6 +81,15 @@ a design decision that has to be made deliberately:
   placed model. A tier that inherits another tier's art is a bug, not a
   shortcut — a player who cannot tell a small charge from a large one at a
   glance will eventually use the wrong one.
+- A smaller tier's icon can be a **derivative of the same source**, drawn
+  smaller and greyer so it reads as the same object with less in it:
+  `shamway generate icon src.png UIAtlases/ItemIconAtlas/myModSmall.png
+  --fill 0.7 --saturation 0.45` is the proven pairing. Record the numbers
+  with the source. It is a third lane beside generating and rendering, not a
+  substitute for a different *kind* of thing owning different art.
+- When generating a sibling, pass the **approved family icons as image
+  references** to the model alongside the prompt. It is the cheapest way to
+  keep treatment, angle and palette consistent across a family.
 
 That last rule has a trap behind it in XML, not in art: `ItemClassesFromXml`
 and `BlocksFromXml` copy every parent property an `Extends` `param1` list does
@@ -94,6 +103,14 @@ The installed game is read-only evidence, and its icon atlas is the reference
 that settles arguments about treatment. Its item icons are **160 × 160** cells
 in `Data/Addressables/Standalone/automatic_assets_generic/itemicons.bundle`
 (measured on V 3.1.0 b14).
+
+Inside that bundle the cells are grouped into named `icons_mip0_N` textures
+(the 160 px figure is the `mip0` measurement); that is the name to look for
+when extracting with UnityPy. For *held* scale, the calibration reference is
+`Data/Addressables/Standalone/automatic_assets_other/items.bundle`: vanilla's
+`GrenadePrefab` and `timedChargePrefab` are identity-transform prefabs whose
+mesh children sit at the origin, so "as big as a grenade" is a number you can
+read rather than guess.
 
 Inspect a few icons close to your subject — a thrown explosive for a thrown
 explosive, an electrical device for an electrical device — and note the
@@ -113,6 +130,34 @@ installed; for extracting the images themselves, UnityPy is the scriptable
 option and AssetStudio or UABE are the interactive ones. Pin whichever you use
 — all three track Unity's serialization format and break across versions.
 
+## Producing the source image
+
+This repository ships no image-generation model, and does not pick one for
+you; it ships the *contract* the image must meet, and the tools that turn a
+candidate into a deployable asset. The source project made every 2D asset
+with the image-generation workflow built into the coding agent it was driven
+by (its "stylized-concept" use case), and that is the expected path for an
+agent: generate with whatever image model the agent session has, using the
+prompt pattern below, with the approved family icons passed as image
+references when a sibling is being made. A person does the same in any
+hosted image model's UI, or locally with Stable Diffusion / ComfyUI / FLUX,
+or in Material Maker for tileable PBR sources, or by drawing.
+
+Whatever produces the pixels, the request is the same:
+
+- one subject, at **1024 px or larger**, as PNG — never an upscaled or
+  JPEG-compressed candidate, because the cutout works on edge pixels;
+- against the **flat key colour** named in the prompt, never "transparent";
+- narrow, role-specific candidates (three to five), reviewed at 160 px, one
+  selected, the rest deleted;
+- the model or tool, the exact prompt, the references, and the selection
+  reason recorded in `assets-src/README.md` — the prompt is provenance, not
+  acceptance evidence.
+
+Then the pipeline takes over: `shamway generate cutout key` for the cutout,
+`--size 160 --pad 0.9 --trim` for the cell, `shamway check-icons` for the
+gate, and a look in the inventory for the verdict.
+
 ## Writing the prompt
 
 A prompt that produces a usable asset has six parts and a long negative list.
@@ -121,12 +166,15 @@ product renders, and every clause below exists because its absence produced a
 reject.
 
 ```text
+Asset type:   7 Days to Die <inventory icon | tileable albedo | particle card>
 Create exactly one <subject>, <what it is for in one clause>.
 Subject:      <the shapes, materials and components, in order of importance>
 Style:        deliberately authored, slightly hand-painted survival-game prop;
               worn industrial materials; simplified forms
 Composition:  high-angle three-quarter view, single centred object, generous
               padding, fully contained
+Lighting:     dramatic neutral studio lighting; <one mood clause, e.g.
+              dangerous industrial>
 Palette:      <three to five named colours, e.g. oxidised olive, charcoal,
               dirty steel, muted hazard yellow, one faded red accent>
 Readability:  must read clearly at 160 x 160 pixels
@@ -136,6 +184,11 @@ Constraints:  no text, numerals, logos, watermark, UI frame, border, scenery,
               lens flare, cinematic treatment, glossy product-render finish,
               loose wires, carry handle or yoke, extra objects
 ```
+
+The asset-type line matters because a model asked for "an icon" and a model
+asked for "a tileable albedo" must make opposite decisions about perspective;
+the lighting line matters because without it the default is a cinematic
+rim-lit render, which is the look the whole page is trying to avoid.
 
 Notes that matter more than they look:
 
@@ -201,9 +254,49 @@ normal has to be redrawn every time the albedo changes:
 
 ```bash
 shamway generate texture-maps assets-src/textures/paint.png \
-    --out-dir tools/shamway/UnityProject/Assets/ModAssets/Bundle/Textures \
-    --stem myModPaint --metallic 0.58 --smoothness 0.16
+    --out-dir assets-src/textures/derived --stem myModPaint \
+    --metallic 0.58 --smoothness 0.16 \
+    --also tools/shamway/UnityProject/Assets/ModAssets/Bundle/Textures
 ```
+
+`--metallic` and `--smoothness` are the scalars the flat material shipped
+with: the mask is *variation around them*, with its means pinned, so a signed
+palette keeps its reflectance while the surface gains relief. `--also`
+writes the byte-identical bundle copy from the same run.
+
+### Material profiles for a prop
+
+Most of a hard-surface prop has no albedo at all — it is flat-coloured
+primitives — and "finished" needs a definition per surface family or the
+result is smooth plastic under the game's lighting. Expressed as required
+behaviour, not filenames:
+
+| Profile | Typical parts | Required maps and behaviour |
+|---|---|---|
+| Painted steel | bodies, housings, drums | authored albedo, a normal **in register** with it, and the packed mask; wear must read where the albedo shows wear — a scratch that changes colour but not reflectance reads as a decal |
+| Bare metal | fins, plates, terminals, lids | no albedo; flat colour plus a **tileable detail normal**, mildly anisotropic so it reads as machined stock rather than sand |
+| Rubber / tape | feet, straps, binding tape | flat colour plus a coarser, isotropic detail normal; matte, and visibly not the same surface as the metal beside it |
+| Emissive lamp | an armed indicator | smooth and map-free — a lens whose only job is to be unambiguously lit or unlit; `GeneratedAsset.EmissiveMaterial` |
+
+The detail normals come from seeded noise, periodic by construction so a
+cylinder's wrap-around UVs never show a seam:
+
+```bash
+shamway generate texture-maps detail --out-dir assets-src/textures/derived \
+    --stem myModSteel --size 512 --seed 7 --anisotropy 2.6 --grit 0.35 --slope 0.28
+shamway generate texture-maps detail --out-dir assets-src/textures/derived \
+    --stem myModRubber --size 256 --seed 7 --exponent -1.5 --slope 0.42
+```
+
+Apply them with `GeneratedAsset.Tile(material, u, v)` at a repeat chosen from
+the part's real size. Masks are capped at 512 px and normals at 1024 px on
+import for a reason: mask channels are blurred fields, so extra resolution
+stores noise, and two 1024 px paint normals took the source bundle from 1.6
+MB to 5.2 MB.
+
+The human sign-off for this pass: fine relief and uneven gloss on paint;
+seams and scuffs where the albedo shows them; bare steel brushed, not
+mirrored; rubber matte; and nothing anywhere that looks like wet plastic.
 
 ### Worked example: a particle card
 
@@ -220,6 +313,25 @@ black**, because a chroma key cannot survive soft smoke edges.
 > background. No colour, landscape, sky, ground plane, fire, embers, debris,
 > text, UI, watermark, shadow, reflection, frame, gradient, or cinematic
 > rendering.
+
+The flash and the ring are keyed like any other image. Their negative lists
+name the failures those subjects attract, which is the whole technique:
+
+> Create exactly one isolated, compact near-spherical white-hot flash/fireball
+> sprite for an additive particle material. The centre is nearly white with a
+> pale yellow rim and a restrained orange edge; use chunky, camera-facing,
+> slightly hand-painted game-particle forms. Use a perfectly flat solid
+> `#ff00ff` chroma-key background, with no ground plane, gradients, shadow,
+> reflection, lens flare, smoke column, dust ring, terrain, debris, UI, text,
+> logo, watermark, or cinematic background.
+
+> Create exactly one isolated, top-down circular shock-ring sprite: a broken,
+> thin, expanding ring of pale yellow-white heat and dusty orange at the
+> outer edge, with an empty centre. It must read as a restrained
+> ground-hugging effect rather than a portal, magic spell, sci-fi HUD, or
+> target marker. Use a perfectly flat solid `#ff00ff` chroma-key background,
+> with no ground plane, gradients, shadow, reflection, fireball, smoke
+> column, terrain, debris, UI, text, logo, watermark, or cinematic background.
 
 Then convert brightness to alpha and make the colour white, so the particle
 system's own colour-over-lifetime tints it:
@@ -249,9 +361,10 @@ RGBA result is the working source. Neither is deployable — the deployable file
 is the atlas derivative below.
 
 Defaults worth knowing: `--transparent-threshold 12` and `--opaque-threshold
-50` are percentages of the RGB distance range, so they hold whatever key colour
-was used. Widen the gap for a soft-edged subject, narrow it for a hard-edged
-one, and record whichever you used.
+50` are **percentages** of the RGB distance range, so they hold whatever key
+colour was used. (A mod-local script that records `12 / 220` is on a 0–255
+scale; the two are not interchangeable.) Widen the gap for a soft-edged
+subject, narrow it for a hard-edged one, and record whichever you used.
 
 ## Making the deployable atlas cell
 
@@ -294,8 +407,10 @@ whose icon was a flat drawing of a green pipe bomb while its actual mesh was a
 drum-and-charges assembly. Both were "finished", and they disagreed. A rendered
 icon makes that impossible.
 
+- `shamway render-icon myModThing` — UIAtlases/ItemIconAtlas/myModThing.png
+
 ```bash
-shamway render-icon myModThing                     # UIAtlases/ItemIconAtlas/myModThing.png
+shamway render-icon myModThing
 shamway render-icon myModThing --yaw 150 --pitch 20 --padding 1.1
 ```
 
@@ -334,6 +449,38 @@ The single most common review mistake is judging a 1254 px source. Judge the
 A missing icon does not draw a blank: the atlas returns whatever else answers
 to that key, which is why an icon bug can look like a deliberate choice. Only
 a look in the inventory closes it.
+
+## Props from primitives
+
+The procedural mesh lane (`GeneratedAsset.Primitive`) produces a reviewable
+diff of numbers, and its first output is always eleven bare shapes that read
+as nothing. The rebuild that made one read as an improvised device went to
+about forty primitives, and every lesson generalises:
+
+- **Rolled hoops and a chime at each end** are most of what makes a cylinder
+  read as a *drum* at icon scale.
+- **Cap every pipe.** An open-ended pipe is a tube, not a charge.
+- **Offset repeated parts so a gap, not a part, faces the front** — the
+  first build put a pipe squarely in front of the placard.
+- **Parts must extend past the body's silhouette**, or they vanish at 160 px
+  behind whatever wraps the body.
+- **Model a wrap as straight runs, never as a thin wide cylinder.** A
+  thin cylinder is a solid disc; two of them turned the whole item into a
+  stack of black plates. This was the single biggest fix.
+- **Break rotational symmetry once** — a taped-on box, a stub antenna, a
+  wire run. It is the part that says somebody built this.
+- **Symbols and decals go on a textured quad**, not on geometry. A trefoil as
+  three rotated cubes reads as three smudges; the real symbol needs curved
+  blades (ISO proportions: a central disc of radius R, three 60° blades from
+  1.5R to 5R, on a worn border), and a 256 px card on one quad costs far less
+  than curved geometry. Draw it at 4× with Pillow and LANCZOS-downsample.
+- **Re-tune colour for linear space.** Tape at 0.2 albedo was mid-grey
+  plastic strapping on screen; 0.07 reads as tape. A dark, highly metallic
+  colour has almost no diffuse response left and renders brown — lower the
+  metallic before brightening the colour.
+- **Do not hand-draw the icon of a modelled item.** The source project's one
+  Pillow-drawn icon sat next to photoreal renders, matched neither them nor
+  its own mesh, and was replaced by `render-icon`.
 
 ## What is deliberately not here
 

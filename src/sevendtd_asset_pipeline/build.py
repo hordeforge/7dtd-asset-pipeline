@@ -16,23 +16,49 @@ from .validation import reject_ambiguous_stems, validate_bundle
 
 DISABLED_MODULE_TEXT = "is not supported because the module"
 DISABLED_MODULE_SUFFIX = "is disabled in the build"
+# A particle module whose X/Y/Z MinMaxCurves are not all in one mode serializes
+# cleanly and then logs this on *every frame the system updates* in the client
+# — thousands of lines a second. The editor already says it once at authoring
+# time, so the build log is where it is cheap to catch.
+PARTICLE_CURVE_MODE_TEXT = "curves must all be in the same mode"
+
+
+def _log_lines(log: Path) -> list[str]:
+    try:
+        return log.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        raise PipelineError(f"cannot read Unity log {log}: {exc}") from exc
 
 
 def disabled_module_lines(log: Path) -> list[str]:
-    try:
-        lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError as exc:
-        raise PipelineError(f"cannot read Unity log {log}: {exc}") from exc
-    return [line for line in lines if DISABLED_MODULE_TEXT in line and DISABLED_MODULE_SUFFIX in line]
+    return [
+        line for line in _log_lines(log) if DISABLED_MODULE_TEXT in line and DISABLED_MODULE_SUFFIX in line
+    ]
+
+
+def particle_curve_mode_lines(log: Path) -> list[str]:
+    return [line for line in _log_lines(log) if PARTICLE_CURVE_MODE_TEXT in line]
 
 
 def reject_disabled_modules(log: Path) -> None:
+    """Reject a log that shows Unity stripping classes or shipping a per-frame error.
+
+    The name is historical; it is the build-log gate, and it now has two
+    families. Each one produced a bundle that passed every other check.
+    """
     hits = disabled_module_lines(log)
     if hits:
         raise PipelineError(
             "Unity stripped engine-module classes while reporting build success:\n"
             + "\n".join(hits)
             + "\nAdd the matching com.unity.modules.* packages and rebuild."
+        )
+    curves = particle_curve_mode_lines(log)
+    if curves:
+        raise PipelineError(
+            "a particle system mixes MinMaxCurve modes; the client logs this on every frame:\n"
+            + "\n".join(sorted(set(curves))[:5])
+            + "\nExpress a stationary axis as GeneratedAsset.ZeroCurve(), never as 0f (docs/vfx.md)."
         )
 
 

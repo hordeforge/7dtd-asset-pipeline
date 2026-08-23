@@ -157,6 +157,20 @@ def _parser() -> argparse.ArgumentParser:
     )
     generate.add_argument("--list", action="store_true", help="list the generators and exit")
 
+    script_parser = commands.add_parser(
+        "script", help="run a packaged host script: install-tools, install-unity-editor, compile-editor-scripts"
+    )
+    script_parser.add_argument("arguments", nargs=argparse.REMAINDER, help="`shamway script --list` names them")
+
+    client_parser = commands.add_parser(
+        "client",
+        help="fresh-client acceptance: where, deploy, launch, log, mute, unmute, disable-discord",
+        add_help=False,
+    )
+    client_parser.add_argument(
+        "arguments", nargs=argparse.REMAINDER, help="passed through; `shamway client --help` lists them"
+    )
+
     documentation = commands.add_parser(
         "docs", help="print this pipeline's documentation, from the installed package"
     )
@@ -295,6 +309,10 @@ def run(args: argparse.Namespace) -> int:
             print("Run one with: shamway generate NAME [ARGS...]  (--help works per generator)")
             return 0
         return run_generator(args.generator, args.arguments)
+    if args.command == "client":
+        from .client import main as client_main
+
+        return client_main(args.arguments or ["--help"])
     if args.command == "docs":
         if not args.topic:
             entries = doc_topics()
@@ -386,7 +404,7 @@ def run(args: argparse.Namespace) -> int:
         else:
             report = validate_mod(config)
             print(*report.messages, sep="\n")
-            print(f"OK: bundle and {report.reference_count} XML reference(s) validated")
+            print(f"OK: bundle and {report.reference_count} reference(s) validated (XML and code_references)")
         return 0
     if args.command == "unity-release":
         data = fetch_release(project_unity_version(config.unity_project), args.platform).as_dict()
@@ -446,8 +464,27 @@ def run(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    # `client` is a passthrough with its own argparse, so its `--help` must
+    # reach it rather than be claimed (and rejected) by this parser.
+    if arguments[:1] == ["script"]:
+        from .scripts import main as script_main  # noqa: PLC0415
+
+        try:
+            return script_main(arguments[1:])
+        except PipelineError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+    if arguments[:1] == ["client"]:
+        from .client import main as client_main  # noqa: PLC0415
+
+        try:
+            return client_main(arguments[1:] or ["--help"])
+        except PipelineError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
     try:
-        return run(_parser().parse_args(argv))
+        return run(_parser().parse_args(arguments))
     except (PipelineError, TimeoutError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

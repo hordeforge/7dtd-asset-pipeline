@@ -64,33 +64,56 @@ the file byte-for-byte, so a diff means someone changed the design.
 Nothing here is a copy of the pipeline. Author with its generators and read its
 rules through the command itself — there is no checkout of it to point at:
 
+- `shamway generate --list` — the generators, and what each needs
+- `shamway docs art-direction` — the style contract and prompt patterns
+- `shamway docs audio` — the sound lane
+- `shamway docs mod-repo-layout` — what belongs here vs in the pipeline
+
 ```bash
-shamway generate --list              # the generators, and what each needs
-shamway docs art-direction           # the style contract and prompt patterns
-shamway docs audio                   # the sound lane
-shamway docs mod-repo-layout         # what belongs here vs in the pipeline
+shamway generate --list
+shamway docs art-direction
+shamway docs audio
+shamway docs mod-repo-layout
 ```
 
 ```bash
-shamway generate sound blast audio/thing.wav --seed 7
+shamway generate sound blast audio/thing.wav --seed 7 \
+    --promote ../tools/shamway/UnityProject/Assets/ModAssets/Bundle/Sounds/myModThing.wav
 shamway generate cutout key icons/src.png ../UIAtlases/ItemIconAtlas/thing.png \
     --size 160 --pad 0.9 --trim
+shamway generate texture-maps textures/paint.png --out-dir textures/derived --stem myModPaint \
+    --also ../tools/shamway/UnityProject/Assets/ModAssets/Bundle/Textures
 shamway generate mesh meshes/thing.glb --shape box --size 1 0.6 0.8
 ```
 
+Promote from the generator (`--promote`, `--also`), never by copying by hand:
+the bundle copy is then the recorded design by construction.
+
 Then gate each lane, build, and validate — from the mod root:
 
+- `shamway capabilities --json` — what is installed, and what it unlocks
+- `shamway check-icons` — every atlas PNG and CustomIcon key
+- `shamway render-icon myModThing` — photograph a prefab into an icon
+
 ```bash
-shamway capabilities --json          # what is installed, and what it unlocks
+shamway capabilities --json
 shamway check-mesh assets-src/meshes/thing.glb
 shamway check-sound assets-src/audio/thing.wav
-shamway check-icons                  # every atlas PNG and CustomIcon key
-shamway render-icon myModThing       # photograph a prefab into an icon
+shamway check-icons
+shamway render-icon myModThing
 shamway build && shamway validate
 ```
 
 Then a fresh client, and a human look or listen. Offline gates are necessary,
-never sufficient.
+never sufficient:
+
+```bash
+shamway client deploy .
+shamway client launch --mod-name {mod_name} --run-seconds 120 --mute
+```
+
+A listening run is never `--mute`. Record in the provenance row which of the
+two a person did.
 """
 
 

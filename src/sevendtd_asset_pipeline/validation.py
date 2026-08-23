@@ -91,6 +91,20 @@ def _check_reference(
     return f"OK {relative_source}: {reference.asset_stem}"
 
 
+def _check_code_reference(config: PipelineConfig, stem: str, assets: list[str]) -> str:
+    """A stem the mod's code loads, held to the same rules as an XML reference."""
+    stems = [Path(asset).stem for asset in assets]
+    matches = [candidate for candidate in stems if candidate.casefold() == stem.casefold()]
+    where = f"{config.config_file.name} code_references"
+    if not matches:
+        raise PipelineError(f"{where}: asset stem {stem!r} is absent from {config.tracked_manifest}")
+    if len(matches) != 1:
+        raise PipelineError(f"{where}: asset stem {stem!r} is ambiguous")
+    if matches[0] != stem:
+        raise PipelineError(f"{where}: asset case is {stem!r}, manifest has {matches[0]!r}")
+    return f"OK {where}: {stem}"
+
+
 def validate_mod(config: PipelineConfig) -> ValidationReport:
     actual_mod_name = read_mod_name(config.mod_root / "ModInfo.xml")
     if actual_mod_name != config.mod_name:
@@ -102,5 +116,6 @@ def validate_mod(config: PipelineConfig) -> ValidationReport:
     assets = manifest_assets(config.tracked_manifest)
     reject_ambiguous_stems(assets)
     references = discover_references(config.config_dir)
-    messages = tuple(_check_reference(config, ref, assets, expected_version) for ref in references)
-    return ValidationReport(messages, len(references))
+    messages = [_check_reference(config, ref, assets, expected_version) for ref in references]
+    messages += [_check_code_reference(config, stem, assets) for stem in config.code_references]
+    return ValidationReport(tuple(messages), len(references) + len(config.code_references))

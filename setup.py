@@ -22,6 +22,7 @@ from setuptools.command.build_py import build_py as _build_py
 
 ROOT = Path(__file__).parent
 SOURCE_DOCS = ROOT / "docs"
+SOURCE_SCRIPTS = ROOT / "scripts"
 PACKAGE = "sevendtd_asset_pipeline"
 
 
@@ -33,6 +34,14 @@ class build_py(_build_py):  # noqa: N801 - setuptools requires this name
             staged.mkdir(parents=True, exist_ok=True)
             for page in sorted(SOURCE_DOCS.glob("*.md")):
                 shutil.copy2(page, staged / page.name)
+        # The host scripts ship the same way, so `shamway script NAME` works
+        # in a mod that has no checkout of this repository.
+        staged_scripts = ROOT / "src" / PACKAGE / "scripts"
+        if SOURCE_SCRIPTS.is_dir():
+            shutil.rmtree(staged_scripts, ignore_errors=True)
+            staged_scripts.mkdir(parents=True, exist_ok=True)
+            for script in sorted(SOURCE_SCRIPTS.glob("*.sh")):
+                shutil.copy2(script, staged_scripts / script.name)
         super().run()
 
 

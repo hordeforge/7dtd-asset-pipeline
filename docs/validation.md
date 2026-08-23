@@ -32,6 +32,9 @@ stderr. Prefer exit codes over parsing prose.
 | URI mod identity | wrong `@modfolder` name, or a URI targeting game bundles | `ModInfo.xml` and recursive XML scan |
 | Bundle path | missing, wrong, or escaped file | case-insensitive resolution below mod root |
 | Asset case/membership | typo, case mismatch, or absent stem | URI and tracked manifest |
+| Code-referenced stems | a prefab or clip only C# loads, absent from or misnamed in the bundle | `code_references` in `.shamway.toml` against the tracked manifest |
+| Particle curve-mode log gate | a system that logs on every frame in the client | `curves must all be in the same mode` in the Unity build log |
+| Editor revision | `UNITY_EDITOR` pointing at a different editor, which silently upgrades the project | `Unity -version` against `ProjectVersion.txt` |
 | Atlas cell shape | an icon that is not square, not the cell size, has no alpha, or was never cut out of its background | PNG IHDR chunk, plus alpha coverage when Pillow is present |
 | Icon key case | a `CustomIcon` whose case differs from the filename stem it ships | recursive XML scan against `UIAtlases/` |
 | Clip format | stereo, unexpected sample rate, silence, near-silence, clipping, DC offset | WAV frames |
@@ -39,8 +42,27 @@ stderr. Prefer exit codes over parsing prose.
 
 Icons are **not** bundle members — `ModManager.LoadUiAtlases` packs
 `UIAtlases/<Atlas>/*.png` at runtime — so `validate` cannot see them and
-`check-icons` exists to cover them. A `CustomIcon` key this mod does not
-provide is reported, never failed: referencing a vanilla key is normal.
+`check-icons` exists to cover them. It reconciles three kinds of key:
+`CustomIcon`, `display_entry icon=` in `progression.xml`, and the **name** of
+every item or block that sets no `CustomIcon`, because that is the engine's
+default sprite lookup. A key this mod does not provide is reported, never
+failed: referencing a vanilla key is normal.
+
+### What `validate` discovers, and what it cannot
+
+`validate` scans the *text* of `Config/**/*.xml`. Two consequences:
+
+- **An asset only C# loads is invisible.** A prefab a Harmony hook fetches
+  with `DataLoader.LoadAsset<GameObject>(uri)`, a Light prefab a particle
+  Lights module instantiates, an AudioClip a script plays — no XML names them.
+  Declare their stems in `.shamway.toml` `code_references` and they are held
+  to the same membership, uniqueness, and case rules.
+- **A patch that never lands still passes.** A wrong XPath — a missing
+  container element, a case difference, a leading `/` left off — matches
+  nothing, and the patcher logs nothing. The `Model` or `ClipName` inside it
+  is syntactically perfect and resolves offline, and the game never sees it.
+  `validate` proves a URI is *correct*, not that it is *applied*; only a
+  client (or the engine's `ConfigsDump`) proves that.
 
 The UnityFS parser is dependency-free and bounded: it reads archive metadata,
 decompresses uncompressed/LZ4 blocks, and reads serialized class IDs. It does
@@ -88,11 +110,125 @@ For every rebuilt bundle:
    appropriate to the mod;
 2. start a fresh client process so no old bundle remains cached;
 3. force every changed asset to load by exact URI;
-4. search the client log for bundle-load failures, incompatibility, wrong-name
-   errors, missing shaders, particle errors, and exceptions;
+4. search the client log for the lines that prove the mod loaded, and for
+   bundle-load failures, incompatibility, wrong-name errors, missing shaders,
+   particle errors, and exceptions;
 5. inspect models, materials, VFX, icons, and audio with human eyes/ears;
 6. test relevant distances, lighting, held/world states, LODs, and repeated
    spawning;
 7. preserve durable evidence (log/report/screenshots and bundle hash).
 
 Do not accept a bundle from a launcher that reused an already-running client.
+
+### The mechanics, on a Linux host
+
+Steps 1, 2, 4 and 7 have a mechanical definition, and `shamway client`
+encodes it so "fresh" is not a matter of opinion:
+
+- `shamway client where` — the client's per-user Mods/ and logs/
+- `shamway client deploy .` — copy the deployable modlet there
+- `shamway client log --mod-name MyMod` — classify the newest log again
+
+```bash
+shamway client where
+shamway client deploy .
+shamway client launch --mod-name MyMod --run-seconds 120 --mute
+shamway client log --mod-name MyMod
+```
+
+What each of those knows:
+
+- **Where the client loads mods from.** A Proton client's user data is the
+  wine user's `%APPDATA%`:
+  `<library>/steamapps/compatdata/251570/pfx/drive_c/users/steamuser/AppData/Roaming/7DaysToDie/`.
+  Its `Mods/` is where mods are deployed for acceptance; it survives a Steam
+  file verification and needs no write into the install. The install's own
+  `Mods/` holds only `0_TFP_Harmony`, so looking there and concluding the mod
+  is absent is a false alarm. A mod present in **both** loads from the
+  per-user copy and the install copy is ignored with a duplicate warning —
+  the stale-bundle trap. When reading the install for reference, look only
+  at its real `Mods/`; backup or overhaul folders such as `Mods.DF/` are not
+  loaded and are not evidence. `deploy` copies only `ModInfo.xml`, `Config/`,
+  `Resources/`, `UIAtlases/`, `Prefabs/`, `UI/` and root DLLs, replacing the
+  previous deployment, so nothing stale survives beside the new bundle.
+- **What "fresh" means.** A bundle is cached for the life of the process
+  under its path, so a reused client proves nothing about a rebuild. `launch`
+  refuses while a `7DaysToDie.exe` or `7DaysToDie_EAC.exe` is running
+  (matching the executable, not the bare name, which also matches the
+  dedicated server and `7DaysToDie_Data` paths), records the launch time, and
+  then requires the newest `logs/output_log_client__*.txt` to post-date it.
+- **Where the log is, and that it is rewritten.** The client writes a new
+  `output_log_client__<date>__<time>.txt` under the user data's `logs/` on
+  every start. Quote the report or copy the file; a line number from the live
+  log is meaningful only for the run that produced it.
+- **The positive lines.** A loaded mod logs `[MODS] Loaded Mod: <Name>`; a
+  packed atlas logs `UIAtlas ItemIconAtlas: Pack took N us`; a found
+  `Config/Localization.csv` logs `[MODS] Loading localization from mod:
+  <Name>`. The **absence** of a positive line is the diagnosis: no
+  localization line means the file is in the wrong place, and nothing else
+  will say so.
+- **The negative lines**, each named after the silent failure it reveals:
+  `[MODS] Mod reference for a mod that is not loaded` (the `@modfolder(Name)`
+  does not match `ModInfo.xml`), `Loading AssetBundle … failed` and
+  `not compatible with this newer version of the Unity runtime` (the bundle
+  did not open), `Model has a wrong name` / `ERR Model '…'` (stem or case),
+  `SteamAPI_Init() failed` (Steam was not running), `curves must all be in the
+  same mode` (particle modes), `Awake IsFocused: False` (see
+  troubleshooting: Proton async-load starvation), and
+  `EntityFallingBlock … fell off the world` on the **server** log (a placed
+  model block with no support). A bare exception is reported but not
+  failed, because vanilla throws some; read the first one.
+- **Launching through Steam.** `steam -applaunch 251570 -skipintro
+  -skipnewsscreen=true` is what `launch` runs. Steam hands the request to the
+  already-running Steam client, so the game inherits **Steam's**
+  environment, not the shell's: a variable a test hook reads must go into the
+  game's Steam launch options as `VAR=value %command%`, and `tr '\0' '\n' <
+  /proc/<pid>/environ | grep VAR` confirms it arrived. Steam must be running
+  even when Proton is exec'd directly by another launcher — without it the
+  client logs `SteamAPI_Init() failed` and sits on a menu backdrop that looks
+  like a display fault. `disable-discord` flips the persisted
+  `DiscordDisabled` pref in the Proton `user.reg` so an unattended run does
+  not negotiate rich presence.
+- **Audio.** `--mute` mutes the client's PipeWire/Pulse sink input at the OS
+  layer (never a game setting) and unmutes it again before returning. A
+  listening run is never muted; see [audio.md](audio.md), which also covers
+  the saved WirePlumber state that keeps a muted game silent afterwards.
+
+`launch` and `log` exit 0 only when every positive line was found and no
+negative line appeared. That is **loadability** evidence: the mod loaded, the
+atlas packed, the bundle opened, nothing errored. It is not a look or a
+listen, and the report says so in its last line.
+
+### Step 3, precisely: asking the game rather than reading pixels
+
+"Force every changed asset to load" is best done **in process**, with a mod's
+own test hook or console command, because each resolution path has a fallback
+that hides a miss from the eye:
+
+- Load each bundle asset with `DataLoader.LoadAsset<Transform>(uri)` directly
+  and compare the returned object's **name** to the URI stem. Going through
+  `BlockShapeModelEntity.getPrefab` would hand back `block_missingPrefab` and
+  items would draw `leather.fbx`; the direct load returns `null` on a failed
+  open, which is the honest answer.
+- Ask the atlas for each sprite **by name**.
+  `MultiSourceAtlasManager.GetAtlasForSprite` returns `atlases[0]` for an
+  unknown sprite, so a missing icon draws some other atlas's art rather than
+  nothing.
+- Look each sound group up in `Audio.Manager.audioData`, and remember that
+  `Block.SoundPickup` defaults to `craft_take_item`: a dropped sound property
+  is a *wrong* sound, not a missing one.
+- Cover the assets no XML names — code-loaded VFX prefabs, Light prefabs,
+  scripted clips — and the properties whose absence is silent:
+  `ActivationTransformToHide` children, `DropScale`, an inherited `TintColor`
+  (this check is what caught a vanilla tint multiplying authored paint that
+  nothing else reported).
+
+Report it as one line of the form `resolved=N/N icons= models= vfx= sounds=
+misses=none`. To get a new item into the bag for a look, `giveself <item>
+[qty] [quality] [putInInventory]` — the fourth argument defaults to **false**
+and drops the item into the world, which looks exactly like a bad item name.
+
+A run like this proves that everything resolves. It signs off nothing: the
+held lamp being legible, the smaller tier reading smaller beside the larger,
+the cloud reading from the ground and from two kilometres — those are a
+person's, and the evidence packet records who looked.

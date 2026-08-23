@@ -32,6 +32,8 @@ enabling the sample XML references in `Config/`.
 | `Config/sounds.xml` | a `sounds.xml` `ClipName` bundle URI, which `validate` checks the same way |
 | `UIAtlases/ItemIconAtlas/` | where icons go — **not** the bundle; `shamway check-icons` covers them |
 
+- `make -f Makefile.assets assets-validate` — bundle references + atlas icons
+
 ```bash
-make -f Makefile.assets assets-validate   # bundle references + atlas icons
+make -f Makefile.assets assets-validate
 ```

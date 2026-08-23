@@ -7,8 +7,8 @@ size with a clean alpha channel. This does the deterministic part of that: trim
 to content, fit into the cell with padding, and report what it produced. It
 never invents art.
 
-    make-icon.py source.png UIAtlases/ItemIconAtlas/myModThing.png
-    make-icon.py source.png out.png --size 160 --padding 0.06 --contact-sheet sheet.png
+    shamway generate icon source.png UIAtlases/ItemIconAtlas/myModThing.png
+    shamway generate icon source.png out.png --size 160 --padding 0.06 --contact-sheet sheet.png
 
 Icons are not bundle assets: an icon-only change needs no bundle rebuild.
 Requires Pillow (scripts/install-tools.sh --with-authoring installs it via
@@ -22,9 +22,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+from ..capabilities import extra_install
+
 MISSING = None
 try:
-    from PIL import Image
+    from PIL import Image, ImageEnhance
 except ImportError as error:  # pragma: no cover - depends on host packages
     # Deferred, not fatal: --help must work on a bare host, so someone can read
     # what this needs before installing anything.
@@ -36,7 +38,7 @@ def require_imaging() -> None:
     if MISSING is not None:
         raise SystemExit(
             "ERROR: the icon lane needs Pillow ({}).\n"
-            "  Install it with: uv pip install '7dtd-asset-pipeline[authoring]'".format(MISSING)
+            "  Install it with: {}".format(MISSING, extra_install("authoring"))
         )
 
 
@@ -51,14 +53,32 @@ def save_atomically(image: "Image.Image", path: Path) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
-def build_icon(source: Path, size: int, padding: float, trim: bool) -> "Image.Image":
+def build_icon(
+    source: Path,
+    size: int,
+    padding: float,
+    trim: bool,
+    fill: float = 1.0,
+    saturation: float = 1.0,
+) -> "Image.Image":
+    """Fit the source into a cell.
+
+    `fill` and `saturation` exist for one reason: a smaller tier of a family is
+    the same source drawn smaller and greyer, so it reads as the same object
+    with less in it. 0.7 fill and 0.45 saturation is a proven pairing; pass
+    them instead of generating a second source, and record them.
+    """
     image = Image.open(source).convert("RGBA")
     if trim:
         box = image.getbbox()
         if box is None:
             raise SystemExit(f"ERROR: {source} is fully transparent")
         image = image.crop(box)
-    inner = max(1, int(round(size * (1 - 2 * padding))))
+    if saturation != 1.0:
+        alpha = image.getchannel("A")
+        image = ImageEnhance.Color(image.convert("RGB")).enhance(saturation).convert("RGBA")
+        image.putalpha(alpha)
+    inner = max(1, int(round(size * (1 - 2 * padding) * fill)))
     # Preserve aspect ratio: an icon squashed to fit reads as a different object.
     image.thumbnail((inner, inner), Image.LANCZOS)
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -88,6 +108,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--padding", type=float, default=0.05, help="fraction of the cell, per side")
     parser.add_argument("--no-trim", dest="trim", action="store_false", help="keep source margins")
     parser.add_argument("--contact-sheet", type=Path, help="also write a 1x/2x/4x review sheet")
+    parser.add_argument(
+        "--fill", type=float, default=1.0, help="scale the subject within the padded cell (0.7 for a smaller tier)"
+    )
+    parser.add_argument(
+        "--saturation", type=float, default=1.0, help="colour saturation multiplier (0.45 for a greyer tier)"
+    )
     args = parser.parse_args(argv)
     require_imaging()
 
@@ -97,8 +123,12 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("ERROR: 7DTD atlas icons must be .png")
     if not 0 <= args.padding < 0.5:
         raise SystemExit("ERROR: --padding must be in [0, 0.5)")
+    if not 0 < args.fill <= 1:
+        raise SystemExit("ERROR: --fill must be in (0, 1]")
+    if args.saturation < 0:
+        raise SystemExit("ERROR: --saturation must be >= 0")
 
-    icon = build_icon(args.source, args.size, args.padding, args.trim)
+    icon = build_icon(args.source, args.size, args.padding, args.trim, args.fill, args.saturation)
     save_atomically(icon, args.output)
     alpha = icon.getchannel("A")
     histogram = alpha.histogram()
@@ -107,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"size:    {icon.width}x{icon.height} RGBA")
     print(f"stem:    {args.output.stem}   (this is the CustomIcon key)")
     print(f"opaque:  {100 * opaque / (icon.width * icon.height):.1f}% of the cell")
+    if args.fill != 1.0 or args.saturation != 1.0:
+        print(f"variant: fill {args.fill}  saturation {args.saturation}   (record these with the source)")
     if args.contact_sheet:
         contact_sheet(icon, args.contact_sheet)
         print(f"sheet:   {args.contact_sheet}")

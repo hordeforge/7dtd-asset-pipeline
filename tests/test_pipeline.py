@@ -76,6 +76,32 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "targets game bundles"):
             validate_mod(self.config)
 
+    def _add_code_references(self, *stems: str) -> None:
+        path = self.root / CONFIG_NAME
+        listed = ", ".join(f'"{stem}"' for stem in stems)
+        body = path.read_text(encoding="utf-8").replace("code_references = []", f"code_references = [{listed}]")
+        path.write_text(body, encoding="utf-8")
+        self.config = load_config(path)
+
+    def test_code_references_are_validated_against_the_manifest(self) -> None:
+        self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
+        self._add_code_references("exampleThing")
+        report = validate_mod(self.config)
+        self.assertEqual(2, report.reference_count)
+        self.assertTrue(any("code_references: exampleThing" in m for m in report.messages))
+
+    def test_code_reference_absent_from_the_manifest_fails(self) -> None:
+        self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
+        self._add_code_references("exampleVfxLight")
+        with self.assertRaisesRegex(PipelineError, "code_references.*absent"):
+            validate_mod(self.config)
+
+    def test_code_reference_case_must_match(self) -> None:
+        self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
+        self._add_code_references("examplething")
+        with self.assertRaisesRegex(PipelineError, "asset case"):
+            validate_mod(self.config)
+
     def test_init_refuses_to_clobber_an_existing_makefile(self) -> None:
         makefile = self.root / "Makefile.assets"
         makefile.write_text("assets:\n\techo mine\n", encoding="utf-8")
@@ -97,6 +123,21 @@ class PipelineTests(unittest.TestCase):
         log = self.root / "unity.log"
         log.write_text("Build completed with a result of 'Succeeded'\n")
         reject_disabled_modules(log)
+
+    def test_particle_curve_mode_error_fails(self) -> None:
+        log = self.root / "unity.log"
+        log.write_text("Particle Velocity curves must all be in the same mode\nBuild completed\n")
+        with self.assertRaisesRegex(PipelineError, "MinMaxCurve"):
+            reject_disabled_modules(log)
+
+    def test_doctor_rejects_an_editor_whose_version_differs_from_the_project(self) -> None:
+        from sevendtd_asset_pipeline.doctor import editor_matches_project
+
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        config = load_config(self.root / ".shamway.toml")
+        self.assertEqual("OK", editor_matches_project("2022.3.62f2", config).status)
+        self.assertEqual("OK", editor_matches_project("2022.3.62f2 (7670c08855a9)", config).status)
+        self.assertEqual("FAIL", editor_matches_project("6000.5.9f1", config).status)
 
     def test_scaffold_pins_the_changeset_when_it_is_known(self) -> None:
         initialize(self.root, None, "example.unity3d", "2022.3.62f2", "7670c08855a9")

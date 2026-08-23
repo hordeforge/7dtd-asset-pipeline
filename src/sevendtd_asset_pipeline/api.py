@@ -23,7 +23,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from . import client
 from .build import reject_disabled_modules, run_build
+from .client import AcceptanceRun, LogReport
 from .capabilities import Capability, capabilities, require_capability
 from .config import PipelineConfig, load_config
 from .deep_inspect import DeepReport, deep_inspect
@@ -151,6 +153,16 @@ class Pipeline:
         """Check the mod's atlas PNGs and its CustomIcon keys. Icons are not bundle members."""
         return check_icons(self.config.mod_root, self.config.config_dir, atlas_root, cell)
 
+    def client_where(self, game_dir: Path | str | None = None) -> dict[str, Any]:
+        """The Proton client's per-user paths, derived from the game directory."""
+        return _client_where(Path(game_dir) if game_dir else self.config.game_dir)
+
+    def client_log(
+        self, path: Path | str | None = None, log_dir: Path | str | None = None, mod_name: str | None = None
+    ) -> LogReport:
+        """Classify the newest client log (or a given one)."""
+        return _client_log(path, log_dir, mod_name, self.config.game_dir)
+
     def unity_release(self, version: str | None = None, platform: str = "LINUX") -> Release:
         """Resolve the official editor download for a revision. Uses the network."""
         from .game import project_unity_version
@@ -171,6 +183,33 @@ class Pipeline:
     ) -> RenderResult:
         """Render a bundle prefab into an atlas icon. Starts a real editor."""
         return render_icon(self.config, prefab, output, size, atlas, yaw, pitch, padding)
+
+    def client_deploy(
+        self, mods_dir: Path | str | None = None, mod_name: str | None = None, replace: bool = True
+    ) -> dict[str, Any]:
+        """Copy the deployable modlet into the client's per-user Mods/ folder."""
+        name = mod_name or self.config.mod_name
+        target = Path(mods_dir) if mods_dir else client.user_mods_dir(self.config.game_dir)
+        copied = client.deploy_mod(self.config.mod_root, target, name, replace)
+        return {"destination": str(target / name), "copied": copied}
+
+    def client_launch(
+        self,
+        run_seconds: int | None = None,
+        mute: bool = False,
+        mod_name: str | None = None,
+        steam_bin: str = "steam",
+        log_dir: Path | str | None = None,
+    ) -> AcceptanceRun:
+        """Start a fresh client through Steam and classify the log it writes."""
+        return client.fresh_client_run(
+            self.config.game_dir,
+            mod_name or self.config.mod_name,
+            run_seconds=run_seconds,
+            mute=mute,
+            steam_bin=steam_bin,
+            log_dir=Path(log_dir) if log_dir else None,
+        )
 
     def build(self, probe: bool = False) -> Path:
         """Build, gate, and stage. The only method that writes into the modlet.
@@ -279,7 +318,52 @@ _DISPATCH: dict[str, Any] = {
     "unity_release": lambda self, p: self.unity_release(p.get("version"), p.get("platform", "LINUX")),
     "build": lambda self, p: {"bundle": str(self.build(p.get("probe", False)))},
     "init": lambda self, p: _init(p),
+    "client_where": lambda self, p: self.client_where(p.get("game_dir")),
+    "client_deploy": lambda self, p: self.client_deploy(
+        p.get("mods_dir"), p.get("mod_name"), p.get("replace", True)
+    ),
+    "client_launch": lambda self, p: self.client_launch(
+        p.get("run_seconds"), p.get("mute", False), p.get("mod_name"), p.get("steam_bin", "steam"),
+        p.get("log_dir"),
+    ),
+    "client_log": lambda self, p: self.client_log(p.get("path"), p.get("log_dir"), p.get("mod_name")),
 }
+
+
+def _env_game_dir() -> Path | None:
+    import os
+
+    value = os.environ.get("SEVEN_DAYS_TO_DIE_DIR")
+    return Path(value) if value else None
+
+
+def _client_where(game_dir: Path | None) -> dict[str, Any]:
+    def maybe(fn: Any) -> str | None:
+        if game_dir is None:
+            return None
+        try:
+            value = fn(game_dir)
+        except PipelineError:
+            return None
+        return None if value is None else str(value)
+
+    return {
+        "game_dir": str(game_dir) if game_dir else None,
+        "compatdata": maybe(client.compatdata_dir),
+        "user_data": maybe(client.proton_user_data_dir),
+        "mods_dir": maybe(client.user_mods_dir),
+        "log_dir": maybe(client.client_log_dir),
+        "launch": client.launch_command(),
+    }
+
+
+def _client_log(
+    path: Path | str | None, log_dir: Path | str | None, mod_name: str | None, game_dir: Path | None
+) -> LogReport:
+    if path:
+        return client.scan_log(Path(path), mod_name)
+    directory = Path(log_dir) if log_dir else client.client_log_dir(game_dir)
+    return client.scan_log(client.latest_client_log(directory), mod_name)
 
 
 def _needs_version() -> str:
@@ -318,4 +402,10 @@ _STATELESS: dict[str, Any] = {
         p["version"] if p.get("version") else _needs_version(), p.get("platform", "LINUX")
     ),
     "init": _init,
+    "client_where": lambda p: _client_where(Path(p["game_dir"]) if p.get("game_dir") else _env_game_dir()),
+    "client_launch": lambda p: client.fresh_client_run(
+        _env_game_dir(), p.get("mod_name"), run_seconds=p.get("run_seconds"), mute=p.get("mute", False),
+        steam_bin=p.get("steam_bin", "steam"), log_dir=Path(p["log_dir"]) if p.get("log_dir") else None,
+    ),
+    "client_log": lambda p: _client_log(p.get("path"), p.get("log_dir"), p.get("mod_name"), _env_game_dir()),
 }

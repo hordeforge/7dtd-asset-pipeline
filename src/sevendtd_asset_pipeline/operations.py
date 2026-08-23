@@ -246,6 +246,69 @@ _DEFINITIONS: tuple[Operation, ...] = (
         needs_config=True,
     ),
     Operation(
+        name="client_where",
+        summary="Where the installed Proton client keeps its per-user Mods/ folder and its "
+        "log, derived from the game directory. Nothing is read or written.",
+        parameters=_schema({"game_dir": PATH_PARAM}),
+        returns="{game_dir, compatdata, user_data, mods_dir, log_dir, launch[]}",
+        cost=INSTANT,
+        writes=False,
+        needs_config=False,
+    ),
+    Operation(
+        name="client_deploy",
+        summary="Copy the deployable modlet (ModInfo.xml, Config/, Resources/, UIAtlases/, "
+        "Prefabs/, UI/, root DLLs) into the client's per-user Mods/ folder for a fresh-client "
+        "run, replacing a stale copy. Writes outside the modlet and outside the game install.",
+        parameters=_schema(
+            {
+                "mods_dir": {**PATH_PARAM, "description": "defaults to the Proton per-user Mods/"},
+                "mod_name": {"type": "string", "description": "folder name; defaults to ModInfo Name"},
+                "replace": {"type": "boolean", "default": True},
+            }
+        ),
+        returns="{destination, copied[]}",
+        cost=FAST,
+        writes=True,
+        needs_config=True,
+    ),
+    Operation(
+        name="client_launch",
+        summary="Start a genuinely fresh client through Steam, optionally muted at the OS "
+        "layer and stopped after run_seconds, then classify the log this launch wrote. "
+        "Refuses while a client is running, because a reused client keeps the old bundle cached.",
+        parameters=_schema(
+            {
+                "run_seconds": {"type": "integer", "description": "stop the client after this long"},
+                "mute": {"type": "boolean", "default": False},
+                "mod_name": {"type": "string", "description": "require 'Loaded Mod: NAME'"},
+                "steam_bin": {"type": "string", "default": "steam"},
+                "log_dir": PATH_PARAM,
+            }
+        ),
+        returns="AcceptanceRun: log{found, missing_positive, problems, ok}, launched[], muted, ok",
+        cost=MINUTES,
+        writes=True,
+        needs_config=False,
+    ),
+    Operation(
+        name="client_log",
+        summary="Find the newest client log (or read a given one) and classify it: the lines "
+        "that prove the mod, its atlas and its localization loaded, and the lines that name "
+        "each silent failure this pipeline knows.",
+        parameters=_schema(
+            {
+                "path": PATH_PARAM,
+                "log_dir": PATH_PARAM,
+                "mod_name": {"type": "string"},
+            }
+        ),
+        returns="LogReport: log, mod_name, found{}, missing_positive[], problems[], ok",
+        cost=INSTANT,
+        writes=False,
+        needs_config=False,
+    ),
+    Operation(
         name="init",
         summary="Scaffold the pipeline into an existing modlet, or adopt the Unity project "
         "the mod already has. Refuses to overwrite.",

@@ -7,9 +7,9 @@ review needs (duration, channels, rate, peak, RMS) so a change is reviewable
 without opening an editor, and writes through a temporary file so a failed run
 never leaves a half-written clip in the Unity project.
 
-    make-audio.py report  clip.wav
-    make-audio.py convert source.wav out.wav --rate 44100 --mono --peak 0.89
-    make-audio.py tone    out.wav --seconds 1.5 --hz 440 --seed 7
+    shamway generate audio report  clip.wav
+    shamway generate audio convert source.wav out.wav --rate 44100 --mono --peak 0.89
+    shamway generate audio tone    out.wav --seconds 1.5 --hz 440 --seed 7
 
 7DTD positions sounds in 3D itself, so a stereo clip on a 3D AudioSource is
 downmixed anyway; mono is the default for that reason.

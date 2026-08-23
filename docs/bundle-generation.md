@@ -76,6 +76,52 @@ Unity's internal IDs on every run — but then remember to bump the stamp when
 you change the generator's output, or the committed prefab silently keeps its
 old shape.
 
+### A complete generator, proven in an editor
+
+The editor script below is the one this repository ran through a real
+`shamway build` on Unity 2022.3.62f2 (see [blockers.md](blockers.md)); every
+helper it calls executed and every state it sets was read back out of the
+built `.mat` and the bundle. It lives in a folder of the mod's own — it
+**must** be under an `Editor/` directory, because `UnityEditor` APIs are
+editor-only — beside the vendored pipeline scripts, and it writes only under
+`Shamway.SourceRoot`, the bundle-membership folder.
+
+```csharp
+using SevenDaysToDie.AssetPipeline;
+using UnityEngine;
+
+public static class MyModGenerators
+{
+    [ShamwayPreBuild(Order = 10)]
+    public static void EnsureThing()
+    {
+        var folder = Shamway.SourceRoot + "/Generated";
+        var normal = GeneratedAsset.ImportNormalMap(Shamway.SourceRoot + "/Textures/myModSteelNormal.png");
+        var mask = GeneratedAsset.ImportLinearMap(Shamway.SourceRoot + "/Textures/myModPaintMask.png");
+        var steel = GeneratedAsset.StandardMaterial(folder + "/myModSteelMaterial.mat",
+            new Color(0.5f, 0.5f, 0.52f), null, normal, mask, 0.58f, 0.16f);
+        GeneratedAsset.Tile(steel, 4f, 4f);
+        var lamp = GeneratedAsset.EmissiveMaterial(folder + "/myModLampMaterial.mat", Color.red, Color.red);
+        var root = GeneratedAsset.Root("myModThing");
+        GeneratedAsset.Primitive(root.transform, PrimitiveType.Cylinder, "body",
+            Vector3.zero, Vector3.zero, new Vector3(0.2f, 0.3f, 0.2f), steel);
+        GeneratedAsset.Primitive(root.transform, PrimitiveType.Sphere, "lamp",
+            new Vector3(0, 0.35f, 0), Vector3.zero, new Vector3(0.05f, 0.05f, 0.05f), lamp);
+        GeneratedAsset.RootCapsuleCollider(root, new Vector3(0, 0.3f, 0), 0.2f, 0.6f);
+        GeneratedAsset.SavePrefab(root, folder, "myModThing");
+        GeneratedAsset.LightPrefab(folder, "myModFlashLight", Color.yellow);
+    }
+}
+```
+
+The textures come from `shamway generate texture-maps` (`detail` for the
+steel normal). `myModFlashLight` is referenced by no XML, so it goes in
+`code_references`. Before starting an editor, prove the script compiles:
+
+```bash
+shamway script compile-editor-scripts --scripts tools/shamway/UnityProject/Assets/SevenDaysToDieAssetPipeline/Editor --with tools/shamway/UnityProject/Assets/MyMod/Editor
+```
+
 ## Names are an engine contract
 
 7DTD resolves a requested asset by its **file-name stem**, after discarding
@@ -85,6 +131,8 @@ directory and extension. Therefore:
 - the referenced stem's case must equal the loaded object's name;
 - two files such as `Meshes/Radio.fbx` and `Prefabs/radio.prefab` are a
   collision even though their paths and extensions differ;
+- a material and the texture or card it uses naturally want the same name,
+  so name materials with a `Material` suffix;
 - use a mod-specific prefix on every shippable asset.
 
 The C# builder rejects collisions before serialization. The Python validator
@@ -160,6 +208,18 @@ and uncommitted `.meta` changes. A prefab generator should write only when its
 schema/version stamp changes; rewriting otherwise identical prefabs can change
 internal IDs.
 
+The stamp has a trap on its other side: **a generator edited without bumping
+its stamp silently ships the old prefab**, with a green build and a
+matching-looking icon (`render-icon` photographs what is on disk). Only a
+live check of the prefab's detail caught it in the source project. Bump the
+stamp in the same edit as the geometry, every time.
+
+Unity also rewrites `ProjectSettings/ProjectSettings.asset` on every
+experiment — `targetPixelDensity`, `buildNumber`, iOS/tvOS strings, an
+automatic `m_BuildTargetGraphicsAPIs` entry — churn unrelated to any fix.
+Discard it deliberately, hunk by hunk, never by bulk-reverting the project
+directory, which would also throw away a real `.meta`.
+
 ## Script-authored materials
 
 Setting a visible material property is not necessarily enough. Unity's
@@ -169,10 +229,32 @@ state, and render queues. Batch builds do not run that GUI.
 At minimum, verify generated `.mat` text for:
 
 - `_NORMALMAP` when assigning `_BumpMap`;
-- `_METALLICGLOSSMAP` when assigning a packed metallic map;
-- correct texture import type and linear/sRGB setting;
+- `_METALLICGLOSSMAP` when assigning a packed metallic map — and the same
+  texture assigned to `_OcclusionMap` as well, because Standard reads
+  occlusion from that slot's G channel only;
+- `_EMISSION` when assigning `_EmissionColor`, or the lamp is painted, not lit;
+- correct texture import type and linear/sRGB setting, with masks capped at
+  512 px and normals at 1024 px (mask channels are blurred fields, so extra
+  resolution stores noise; two 1024 px normals tripled the source bundle);
 - particle `_SrcBlend`, `_DstBlend`, `_ZWrite`, keywords, and render queue;
 - compatible curve modes across particle axes.
 
 These states can be wrong with a clean build, a valid bundle, a successful
 client load, and no missing asset. Human rendering review remains mandatory.
+
+`GeneratedAsset.StandardMaterial`, `EmissiveMaterial`, `Tile`, and
+`ParticleMaterial` set every one of those states; the `.mat` grep in
+[vfx.md](vfx.md) reads them back.
+
+## Compiling the editor scripts without an editor
+
+The Python suite cannot see a C# mistake, and Unity reports one only as
+"Scripts have compiler errors". `scripts/compile-editor-scripts.sh` compiles
+the four vendored editor scripts with Mono's `mcs` against the installed
+editor's own `Managed/UnityEngine/*.dll` and netstandard 2.1 reference —
+about ten seconds, no editor started — and `make check` runs it whenever
+`mcs` and an editor are present. It proves the scripts compile for that
+revision; it does not prove they do the right thing when run, and a report
+must keep that distinction. Its first run found a hard-obsolete API
+(`AudioImporter.preloadAudioData`) that would have failed every editor
+compile in a consuming mod.

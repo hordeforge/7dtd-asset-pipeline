@@ -28,8 +28,10 @@
 | `icon_check.py` | the atlas gate: cell geometry, alpha, and every `CustomIcon` key |
 | `sound_check.py` | the clip gate: channels, rate, level, clipping, DC offset |
 | `assets_src.py` | the editable-source tree and the provenance contract written into the mod |
+| `client.py` | fresh-client acceptance: the client's per-user paths, allow-listed deployment, Steam launch, OS-layer mute, and log classification |
+| `scripts/compile-editor-scripts.sh` | compiles the vendored editor C# against a real editor's assemblies, without starting one |
 | `scripts/install-*.sh` | host packages and the checksum-verified game-matched editor |
-| `scripts/generators/` | reproducible sound, audio, cutout, icon, texture, and mesh generation |
+| `generators/` (in the package) | reproducible sound, audio, cutout, icon, texture, and mesh generation, as `shamway generate` |
 | consumer `AGENTS.md` | the agent contract, written into the mod by `init` |
 | UnityFS reader | signature, revision, block decompression, serialized type table |
 | tracked `.manifest` | complete build membership for offline exact-stem validation |
@@ -42,6 +44,16 @@ The CLI trusts neither an editor zero exit nor a matching bundle header by
 itself. Staging occurs only after log and artifact gates. It never parses or
 executes scripts from the game install and never writes there.
 
+`client.py` is the one component that touches a running game, and its
+boundary is deliberate: it launches through Steam (`steam -applaunch`) rather
+than executing anything from the install, reads the install only to derive
+the Steam library, and writes only below the client's per-user data directory
+(`compatdata/<app>/pfx/.../AppData/Roaming/7DaysToDie/`), which is outside
+the install and is where a Proton client loads mods from anyway. Its mute is
+an OS audio-layer operation on the process's sink input, never a game
+setting. It proves loadability and hands over to a person; it makes no
+claim about what an asset looks or sounds like.
+
 The UnityFS reader is intentionally not a general Unity deserializer. A small
 auditable parser has a narrower attack and maintenance surface for the two
 facts the gate needs. UnityPy and AssetsTools.NET remain optional independent
@@ -52,8 +64,9 @@ chunk with the standard library and the clip check uses `wave`, so both run on
 a bare host. Pillow only ever *adds* a measurement (alpha coverage), and its
 absence degrades to a note rather than to a pass.
 
-`build` and `render-icon` are the only operations that write into the modlet,
-and the registry marks both `writes: true` so a caller — `serve` included — can
+`build` and `render-icon` are the only operations that write into the modlet
+(`client_deploy` and `client_launch` write outside it, into the client's
+per-user data), and the registry marks every writer `writes: true` so a caller — `serve` included — can
 refuse them before anything starts.
 
 ## Why a tracked manifest

@@ -58,8 +58,118 @@ decompiling the installed `Assembly-CSharp.dll` with `ilspycmd` and/or
   `ItemClass.CloneModel` applies `UpdateLight.SetTintColor`, which multiplies
   every material `_Color` by the item's `TintColor`.
 
-Re-verify these method bodies after a major game update. The current CLI gates
-encode their consequences but do not decompile the game automatically.
+Added by the second sweep of the source project (2026-08-23), each from
+`ilspycmd` on the same V 3.1.0 b14 assembly unless stated:
+
+- `DataLoader.ParseDataPathIdentifier` runs `ModManager.PatchModPathString`
+  *before* splitting the `#…?…` form, recognises `@:` as an Addressable, and
+  treats anything else as a `Resources` path; `ModManager.TryPatchModPathString`
+  logs `[MODS] Mod reference for a mod that is not loaded` on an unknown
+  `@modfolder(Name)`; `AssetBundleManager.LoadAssetBundle` treats a rooted
+  path as final and a relative one as `Data/Bundles/Standalone<BundleTags.Tag>/…`;
+  an opened bundle is cached for the session under its path.
+- `GameIO.GetFilenameFromPathWithoutExtension` splits on
+  `ResourcePathSeparators = { '/', '\\', '?' }`, which is the mechanism behind
+  stem-only addressing; `BlockShapeModelEntity` registers loaded prefabs with
+  `GameObjectPool.AddPooledObject` and reads `Model`, `ModelOffset`,
+  `LODCullScale` but no scale property.
+- The bundle is opened lazily by `LoadManager.LoadAsset`; `LoadManager.AddTask`
+  takes the synchronous `LoadSync` branch on `GameManager.IsDedicatedServer`,
+  so a dedicated server loads block model prefabs. Measured 2026-08-10: a
+  Linux dedicated server opened a Windows-target bundle (probe modlet with a
+  vanilla-manifest bundle plus a nonexistent stem: `ERR Model '…' not found`,
+  no `Loading AssetBundle … failed`). The Windows client's and Linux server's
+  `Entities/trees` differ in MD5 while both headers read 2022.3.62f2.
+- `ModManager.LoadLocalizations` builds `mod.Path + "/Config"` and
+  `Localization.LoadPatchDictionaries` opens `<that>/Localization.csv`,
+  logging `[MODS] Loading localization from mod: <name>`; `Localization.Get`
+  returns the key on a miss. Found live 2026-08-10 as every display name
+  rendering as its id. **`ywy50/7dtd-mods/docs/best-practices.md` states the
+  opposite ("mod root") with an "(Official + Measured)" tag and is wrong**;
+  `AtomicDoomsday/scripts/build.sh` cites the same decompile and ships the
+  file inside `Config/`. Decompiled evidence beat the wiki-sourced claim, and
+  this repository once copied the wrong one.
+- `ModManager.LoadUiAtlases` goes through `UIAtlasFromFolder.CreateUiAtlasFromFolder`;
+  no atlas is loaded on a dedicated server; the default sprite lookup is the
+  item's own name, `CustomIcon` overriding it, and `display_entry icon=` in
+  `progression.xml` names a sprite too. `MultiSourceAtlasManager.GetAtlasForSprite`
+  returns `atlases[0]` for an unknown sprite. The 160 px cell is the
+  `icons_mip0_*` measurement.
+- The server sends patched XML to a joining client via `NetPackageConfigFile`;
+  `ModManager` loads assemblies from the local mod folder only. A
+  `ModInfo.xml` `SkipWithAntiCheat="true"` returns
+  `Mod.EModLoadState.SkippedDueToAntiCheat` on an EAC-on client before loading
+  anything. `EntityPlayerLocal` is never constructed on a dedicated server
+  (V3.1 assembly inspection).
+- `ItemClass.CloneModel` resolves `DropMeshFile`, then `HandMeshfile`, then
+  `Meshfile`; always adds `UpdateLightOnAllMaterials`; calls
+  `SetTintColorForItem` with `TintColor` or the default `255,255,255`
+  (`Block.StringToVector3` divides by 255) — white is a no-op; and disables
+  every collider on the held copy. `EntityItem.createMesh` applies `DropScale`
+  as a uniform local scale (overwriting, not compounding), sets the dropped
+  rotation, and enables every collider found in the mesh on layer 13, adding
+  `RootTransformRefEntity`. Vanilla `GrenadePrefab` carries a root
+  `CapsuleCollider`; `GrenadePrefab` and `timedChargePrefab` are identity
+  prefabs with mesh children at the origin (UnityPy on
+  `automatic_assets_other/items.bundle`, 2026-08-22).
+- `ItemClassTimeBomb.Init` splits `ActivationTransformToHide` on `;`;
+  `setActivationTransformsActive` is called with `Meta != 0` from
+  `OnMeshCreated`, `true` from `OnDroppedUpdate`, `false` from
+  `OnHoldingReset`. `ActivationEmissive` keys on a renderer tag.
+- `DynamicProperties.CopyFrom` honours `param1` entries naming a whole
+  `<property class>` block or a dotted `Class.Property`; `ItemClassesFromXml`
+  builds `Effects` from the child node only (`effect_group` is not inherited);
+  `CreativeMode` is never inherited. Item/block/recipe names are global across
+  mods and baked into save data.
+- `GameManager.explode` calls `ExplosionClient` locally and broadcasts
+  `NetPackageExplosionClient`; `ExplosionClient(Vector3, Quaternion, int
+  _index, int _blastPower, float _blastRadius, float _blockDamage, int, List<BlockChangeInfo>)`
+  instantiates `WorldStaticData.prefabExplosions[_index]` with its
+  `AudioPlayer`, at `center - Origin.position` (`monodis` and `ilspycmd`
+  agree). `Origin.OriginChanged` is the re-anchoring event (matches vanilla
+  `LandClaimBoundsHelper`, which reuses `Materials/LandClaimBoundary`).
+- `Audio.Manager.Play(Vector3 position, string group, int entityId = -1,
+  bool, float volumeScale)` and `Audio.Manager.PlayInsidePlayerHead(group)`;
+  `Block.SoundPickup` defaults to `craft_take_item`; installed
+  `Data/Config/sounds.xml` has three clips under `buff_geiger_counter`.
+- `GameManager` sets `Application.runInBackground = true` only under
+  `Application.isEditor`, and `Application.backgroundLoadingPriority` is never
+  assigned in `Assembly-CSharp` — the Proton async-load starvation at world
+  load; `Awake IsFocused: False` is the log tell.
+- A `Shape=ModelEntity` block without support becomes `EntityFallingBlock` in
+  the server's stability pass and logs `fell off the world` on the dedicated
+  log (observed live).
+- `Constants.cVersionMajor/Minor/Build` = 3/10/14, formatted by
+  `VersionInformation` as `V {Major}.{Minor/10}.{Minor%10} (b{Build})`.
+- Unity 2022.3.62f2: `UnityEditor.AudioImporter.preloadAudioData` is
+  `[Obsolete(…, true)]` (`ilspycmd -t UnityEditor.AudioImporter UnityEditor.dll`),
+  found 2026-08-23 by `scripts/compile-editor-scripts.sh`.
+
+### Evidence tiers
+
+`strings` on an assembly proves a name exists, not a method body; treat such
+a fact as "known to exist, API to be confirmed". `ilspycmd` (the primary)
+and `monodis`/`ikdasm` (the second opinion) prove bodies. "It seemed to work
+in game" is not a tier.
+
+### Re-verifying after a game update
+
+The facts above were recorded at various dates and carried forward on trust
+until the source project re-decompiled all of them in one pass. Repeat that
+pass after every game update, and record it in this shape:
+
+| | |
+|---|---|
+| Installed build | `V 3.1.0 (b14)`, from `Constants` |
+| Assembly | `$SEVEN_DAYS_TO_DIE_DIR/7DaysToDie_Data/Managed/Assembly-CSharp.dll`, mtime and size |
+| Tools | `ilspycmd` version, `monodis`/`ikdasm` |
+| Date | |
+| Result | *N* claims re-decompiled, *M* confirmed, *K* corrected — and what the corrections were |
+
+`scripts/install-tools.sh --with-research` installs the tools. Then, in
+order: `shamway doctor` (does the game's revision still match the editor?),
+`shamway build --probe`, re-decompile every method named on this page,
+`shamway validate`, and a fresh client.
 
 ## Class-142 finding
 
@@ -68,6 +178,29 @@ game bundles using a hand-written UnityFS/SerializedFile reader and UnityPy.
 Both used the same Unity revision and Windows platform metadata, but rejected
 bundles lacked class 142. Unity's own build log reported that AssetBundle and
 particle modules were disabled; the project package manifest was empty.
+
+The chain of evidence, so the next investigator can re-establish it:
+
+1. **The message is Unity's, not the game's.** `strings` on the shipped
+   `UnityPlayer.dll` contains `The AssetBundle '%s' could not be loaded because
+   it is not compatible with this newer version of the Unity runtime…`; no
+   7DTD assembly emits it. It is `AssetBundleLoadResult.NotCompatible` in
+   `AssetBundle.bindings.cs` (UnityCsReference, 2022.3 branch), and the
+   "newer runtime" wording means the bundle *looks pre-5.0* — which a bundle
+   with no container object does. It says nothing about editor version, which
+   is why a matching header never contradicted the error.
+2. **What a correct object contains.** The shipped game's own
+   `Data/Bundles/Standalone/Entities/trees` and `Entities` (2022.3.62f2,
+   serialized platform 19, type trees on, UnityFS flags `0x243` = LZ4HC plus
+   combined directory) each carry exactly one class-142 `AssetBundle` object
+   with `m_RuntimeCompatibility: 1`, `m_PathFlags: 7`, a populated
+   `m_Container` (713 entries for `trees`) and `m_PreloadTable`. This is what
+   the game builds today, not an old format. `unityfs.py` checks the class ID;
+   `inspect --deep` (UnityPy) can read the container to confirm every manifest
+   entry is listed.
+3. **The rejected bundles parsed to `[1, 4, 21, 23, 28, 33, 48]`** and no
+   142, confirmed by UnityPy and by an independent hand-written reader.
+4. **Unity's own build log said so**, with a stack trace.
 
 Adding the built-in modules, forcing a full rebuild, and rejecting the warning
 produced a class-142 container that a fresh client loaded. This pipeline keeps
@@ -108,6 +241,14 @@ and all seven of its XML bundle references passed the source validator.
 
 That version is evidence for the extraction, not a forever constant. New
 consumer projects discover their installed game's revision.
+
+The source validator that `validation.py` generalizes was proven both ways
+before extraction: it passed on the vanilla client and Linux-server bundles
+(both 2022.3.62f2) and failed on all six seeded fixture faults — wrong stem,
+case mismatch, duplicate stem, missing bundle, wrong mod name, and a missing
+`@modfolder(…)`. Rebuilds were measured byte-identical by SHA-256 before and
+after `ForceRebuildAssetBundle`, which is the evidence behind the
+determinism advice in [bundle-generation.md](bundle-generation.md).
 
 ## Live verification of the class-142 finding
 

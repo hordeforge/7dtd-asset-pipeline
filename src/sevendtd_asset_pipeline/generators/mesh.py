@@ -17,8 +17,8 @@ For hard-surface props that are really a few boxes and cylinders, the other
 lane is cheaper: compose built-in primitives in the Unity project with
 `GeneratedAsset.Primitive(...)`, which emits no mesh asset at all.
 
-    make-mesh.py out.glb --shape cylinder --size 0.19 0.19 0.42
-    make-mesh.py out.glb --shape box --size 1 0.5 2 --name myModCrate
+    shamway generate mesh out.glb --shape cylinder --size 0.19 0.19 0.42
+    shamway generate mesh out.glb --shape box --size 1 0.5 2 --name myModCrate
 
 `--size` is metres as **width, depth, height**. Blender is Z-up, so height is
 authored as Z there; the glTF exporter converts to the Y-up convention Unity

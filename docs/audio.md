@@ -10,12 +10,15 @@ can still be inaudible, and nothing offline will say so.
 Synthesize a clip, gate it, put it in the bundle, and wire it:
 
 ```bash
-shamway generate sound blast assets-src/audio/blast-near.wav --seed 7
+shamway generate sound blast assets-src/audio/blast-near.wav --seed 7 \
+    --promote tools/shamway/UnityProject/Assets/ModAssets/Bundle/Sounds/myModBlastNear.wav
 shamway check-sound assets-src/audio/blast-near.wav
-cp assets-src/audio/blast-near.wav \
-   tools/shamway/UnityProject/Assets/ModAssets/Bundle/Sounds/myModBlastNear.wav
 shamway build && shamway validate
 ```
+
+`--promote` writes the bundle copy from the same run, byte-identical, under
+its mod-prefixed stem. Promote from the generator, never by hand-copying: the
+shipped clip is then the recorded design by construction and cannot drift.
 
 Print the `Config/sounds.xml` entry to paste:
 
@@ -41,7 +44,7 @@ without caring which file or property it came from.
 <configs>
 	<append xpath="/Sounds">
 		<SoundDataNode name="myModBlast">
-			<AudioSource name="Sounds/AudioSource_Explosion" />
+			<AudioSource name="@:Sounds/Prefabs/AudioSource_Explosion.prefab" />
 			<AudioClip ClipName="#@modfolder(MyMod):Resources/mymod.unity3d?myModBlastNear.wav" />
 			<DistantClip ClipName="#@modfolder(MyMod):Resources/mymod.unity3d?myModBlastDistant.wav" />
 			<DistantFadeStart value="120" />
@@ -58,7 +61,7 @@ attribute:
 
 | Element | What it sets |
 |---|---|
-| `AudioSource name=` | the node's default source prefab — a bundle URI or a vanilla `@:Sounds/Prefabs/AudioSource_*.prefab` |
+| `AudioSource name=` | the node's default source prefab — a bundle URI or a vanilla `@:Sounds/Prefabs/AudioSource_*.prefab`; the installed `sounds.xml` uses the full `@:` form every time (`UI_Item`, `Footsteps`, `UseAction`, `Reloads`, `Impact`, `Interact`, `Explosion`, … are the common suffixes) |
 | `AudioClip ClipName=` | the clip; also takes `AudioSourceName`, `Loop`, `DistantClip`, `DistantSource`, `AltSound` |
 | `DistantFadeStart` / `DistantFadeEnd` | the crossover distances — **the first defaults to −1, meaning never** |
 | `Noise` | reports the sound to the AI director (`ID`, `range`, `volumeScale`, `heardBy`) |
@@ -116,6 +119,35 @@ persist for normal play, since WirePlumber saves per-application stream state.
 If a sound "does not play", confirm the client is actually unmuted before
 believing any of the three above.
 
+The mechanics, which `shamway client` wraps:
+
+- `shamway client launch --mute --run-seconds 120` — a non-listening run
+- `shamway client mute` — the running client only
+- `shamway client unmute` — and report the saved state
+
+```bash
+shamway client launch --mute --run-seconds 120
+shamway client mute
+shamway client unmute
+```
+
+`mute` polls `pactl -f json list sink-inputs` for a stream whose
+`application.name` or `application.process.binary` contains `7DaysToDie`
+(the stream exists only once the game has initialised audio, hence the poll),
+then `pactl set-sink-input-mute <index> 1`. It never touches GamePrefs, the
+in-game sliders, or the registry. `unmute` does the reverse and then reads
+`~/.local/state/wireplumber/stream-properties`: if the
+`Output/Audio:application.name:7DaysToDie…` entry still says `"mute":true`,
+the next launch starts silent, and the game has to be running for the unmute
+to be written back — or edit that file and `systemctl --user restart
+wireplumber`.
+
+Two rules follow. **A listening run is never muted**, and a harness that
+accepts a sound must refuse an explicit mute rather than quietly honour it — a
+green run nobody could hear is worse than none. And **every run report names
+its audio state**, so a later reader can tell a listening run from a loading
+run.
+
 ## Two clips, one event
 
 A large event heard near and far is not two sounds; it is one event and two
@@ -139,6 +171,36 @@ shamway generate sound blast assets-src/audio/blast-far.wav  --seed 7 --distant
 If the mod plays the distant clip from code, delay it by `distance / 343`
 seconds. A nuclear blast heard instantly two kilometres away reads as a bug
 even to a player who could not say why.
+
+Four more facts from the same large-event work, each decompiled or measured
+on V 3.1.0 b14:
+
+- **The vanilla explosion keeps playing underneath.** `GameManager.ExplosionClient`
+  instantiates `WorldStaticData.prefabExplosions[ParticleIndex]` *including
+  the `AudioPlayer` that prefab carries* — index 13 is a grenade-scale bang
+  under two seconds. A mod sound for the same event **layers on top** unless
+  the mod suppresses it, and suppress-versus-layer, volume scale, and
+  `MaxVoices` are first-listen decisions. It is also why a second `<Noise>`
+  reports the event to the AI director twice.
+- **Heard further than seen.** Sound carries to 6,000 m while the detailed
+  cloud is culled past 2,500 m; schedule the audio **before** the visual LOD
+  decision, never inside it, or the far player hears nothing. At the edge,
+  fade to roughly a quarter volume rather than to nothing — silence at the
+  boundary reads as a cut, not as distance.
+- **Play through the engine, not an AudioSource.** `Audio.Manager.Play(Vector3
+  position, string group, int entityId = -1, bool, float volumeScale)` keeps
+  the game's own AudioSource prefab, mixer routing, and the player's volume
+  options; nothing a mod writes should construct an `AudioSource`. Positions
+  are world coordinates minus `Origin.position` (7DTD re-bases its floating
+  origin), as the stock code does. When the clip is delayed, recompute the
+  direction at arrival, not at firing: the player moves during a six-second
+  flight.
+- **Local, non-positional cues.** `Audio.Manager.PlayInsidePlayerHead(group)`
+  plays a sound group at the listener, and vanilla groups are reusable by
+  name — `buff_geiger_counter` (three clips in the installed
+  `Data/Config/sounds.xml`) is the stock hazard-feedback cue. For an
+  intensity-driven cue, bound the repeat interval (the source project used
+  4.0 s down to 0.18 s) so it stays readable rather than becoming a tone.
 
 ## The generator
 
@@ -168,9 +230,11 @@ sign of mod-made ambience there is.
 
 ## The offline gate
 
+- `shamway check-sound clip.wav --json` — for CI and agents
+
 ```bash
 shamway check-sound assets-src/audio/blast-near.wav
-shamway check-sound clip.wav --json      # for CI and agents
+shamway check-sound clip.wav --json
 ```
 
 It fails on the format mistakes a listener cannot fix afterwards: not mono, an
@@ -197,6 +261,21 @@ repository's own generator.
 shamway call check_sound --params '{"clip": "clip.wav"}'
 ```
 
+## Which XML properties name a sound group
+
+`validate` proves the clip; nothing offline proves the *group name* a
+property references exists. These are the properties in the installed
+V 3.1.0 b14 `items.xml`, `blocks.xml`, and `entityclasses.xml` that take a
+sound group, by frequency: blocks `SoundPlace`, `SoundPickup`, `OpenSound`,
+`CloseSound`, `UpgradeSound`, `SoundDestroy`, `LockedSound`, `TriggerSound`,
+`ActivateSound`; items and actions `Sound_start`, `Sound_end`, `Sound_repeat`,
+`Sound_loop`, `Sound_empty`, `Sound_reload`, `Sound_Sight_In`/`Out`,
+`SoundHolster`, `SoundUnholster`, `SoundJammed`, `SoundTick`; entities
+`SoundHurt`, `SoundDeath`, `SoundAttack`, `SoundAlert`, `SoundRandom`,
+`SoundSense`, `SoundGiveUp`, `StartSound`, `StopSound`. A typo in any of them
+is silent in game; the in-process check in [validation.md](validation.md)
+looks each one up in `Audio.Manager.audioData`.
+
 ## Countdown ticks
 
 `ItemClass.Init` parses `SoundTick` as `"<group>[,<delaySeconds>]"`, defaulting
@@ -208,7 +287,8 @@ is whatever the mesh shows.
 
 ## Unity import
 
-Copy only the selected clip into the bundle-membership folder, and commit its
+Promote only the selected clip into the bundle-membership folder — from the
+generator (`--promote`), so the bytes are the recorded design — and commit its
 `.meta`. `GeneratedAsset.ImportAudioClip(...)` sets the import the pipeline
 wants: Vorbis compression, force-to-mono, `preloadAudioData` off, and streaming
 for anything long — a bundle opens lazily, and a multi-megabyte clip
@@ -232,3 +312,10 @@ proves nothing about the experience. Before calling a sound done, listen:
 
 Say which of these you did. "The bundle validates and the clip resolves" is not
 "the sound works", and the difference is the whole point of this page.
+
+Keep an **owed-sounds list** in the mod's docs alongside the asset inventory:
+every gameplay event that is still silent (a countdown tick, a falling
+whistle, an arming click, a zone ambience). A sound that was never authored
+produces no error, so the list is the only thing that makes its absence
+visible. Reusing a vanilla group on a mod-owned model is legitimate — say so
+in the inventory, the way a stand-in mesh is declared.

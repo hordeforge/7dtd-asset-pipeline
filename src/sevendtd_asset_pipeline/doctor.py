@@ -173,7 +173,32 @@ def _editor_checks(config: PipelineConfig) -> list[Check]:
     reported = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "unknown"
     if result.returncode != 0:
         return [Check("FAIL", "Unity editor", f"Unity -version exited {result.returncode}: {reported}")]
-    return [
+    checks = [
         Check("OK", "Unity editor", f"{editor} ({reported})"),
         Check("OK", "Windows support", str(windows)),
     ]
+    checks.append(editor_matches_project(reported, config))
+    return checks
+
+
+def editor_matches_project(reported: str, config: PipelineConfig) -> Check:
+    """The editor binary's own version against the project's pinned revision.
+
+    A host routinely has several editors installed, and a `UNITY_EDITOR` that
+    points at the wrong one does not fail: batch mode opens the project,
+    silently upgrades it to that editor's version, and builds a bundle the
+    game rejects. The project-vs-game check cannot see this, because it reads
+    `ProjectVersion.txt` *before* Unity rewrites it.
+    """
+    try:
+        expected = project_unity_version(config.unity_project)
+    except PipelineError as exc:
+        return Check("WARN", "Editor revision", f"cannot read the project revision: {exc}")
+    if expected in reported:
+        return Check("OK", "Editor revision", f"editor reports {expected}, matching the project")
+    return Check(
+        "FAIL",
+        "Editor revision",
+        f"UNITY_EDITOR reports {reported!r} but the project is pinned to {expected}; a build "
+        "would silently upgrade the project. Point UNITY_EDITOR at the {0} editor.".format(expected),
+    )

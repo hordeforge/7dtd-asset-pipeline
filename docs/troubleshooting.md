@@ -36,6 +36,28 @@ The requested file-name stem and loaded object name differ by spelling or
 case, or two assets share a stem. Run `shamway validate`, inspect the
 tracked manifest, and rename the root prefab/object and source file together.
 
+## “Scripts have compiler errors” and nothing else
+
+That one line is all the shell sees; the real `error CS…` line with a file
+and line number is in the Unity log (`.shamway/build/*/unity-build.log`).
+Read it there. Two causes recur: a `MinMaxCurve` assigned where the particle
+Lights module wants a float (`lights.intensityMultiplier` is a float; the
+curve goes on `lights.intensity`), and a hard-obsolete editor API — on
+2022.3.62f2 `AudioImporter.preloadAudioData` is `[Obsolete(…, true)]`, so the
+setting goes on `AudioImporterSampleSettings` instead. Catch both before
+starting an editor with `scripts/compile-editor-scripts.sh`, which compiles
+the editor scripts against the real editor's assemblies.
+
+## `doctor` says the editor revision differs from the project
+
+`UNITY_EDITOR` points at a different editor than the one `ProjectVersion.txt`
+pins — a host routinely has several. This is not a warning to wave through:
+batch mode opens the project with whatever editor it is given, **silently
+upgrades it** to that editor's version, and builds a bundle the game rejects.
+The project-vs-game check cannot see this, because it reads
+`ProjectVersion.txt` before Unity rewrites it. Point `UNITY_EDITOR` at the
+game-matched editor (`~/Unity/Hub/Editor/<revision>/Editor/Unity`).
+
 ## Bundle loads but prefab/component is empty or missing
 
 The class-142 gate proves the container, not every component. Search the Unity
@@ -43,16 +65,22 @@ log for all disabled-module warnings and inspect the object table with
 UnityPy/AssetsTools.NET. Ensure the relevant engine module—particles, physics,
 audio, animation—is declared. Then verify the exact prefab live.
 
-## Normal or metallic map is assigned but has no effect
+## Normal or metallic map is assigned but has no effect, or renders flat green
 
 Check both sides:
 
 - importer: normal-map type for normals; linear (`sRGBTexture = false`) for
   numeric masks;
-- material: `_NORMALMAP` or `_METALLICGLOSSMAP` keyword enabled.
+- material: `_NORMALMAP` or `_METALLICGLOSSMAP` keyword enabled; `_EMISSION`
+  for an emissive lamp; and the packed mask assigned to **both**
+  `_MetallicGlossMap` and `_OcclusionMap`, since Standard reads occlusion
+  from the second slot only.
 
+A material whose keyword was never enabled is not merely "unchanged": in the
+client it renders flat and green-tinged, which is the signature to look for.
 Inspector-looking fields alone are insufficient for script-generated
-materials.
+materials; `GeneratedAsset.StandardMaterial` and `EmissiveMaterial` set the
+keywords, and the `.mat` grep in [vfx.md](vfx.md) is how to read them back.
 
 ## Transparent particles appear as opaque cards
 
@@ -81,6 +109,15 @@ behaviours can still silence it, and all three pass every offline gate:
 See [audio.md](audio.md). Check the clip itself first with
 `shamway check-sound`, which rejects silence, near-silence, clipping, and
 DC offset.
+
+## The icon did not change after I edited the generator
+
+`render-icon` photographs whatever prefab is on disk. A generator gated on a
+stamp (the `[ShamwayPreBuild]` pattern) regenerates only when its stamp
+changes, so a geometry edit that forgot to bump the stamp re-renders the old
+mesh — and the old mesh ships in the bundle too, with a green build. Bump the
+stamp, or delete the generated prefab, and look at the prefab itself before
+believing the icon.
 
 ## A rendered icon is a uniform transparent square
 
@@ -117,6 +154,64 @@ does **not** stop the parent's value being inherited — it has to be *excluded*
 The symptom is silent: an authored palette multiplied by an inherited tint, or
 a new variant wearing another variant's mesh. Nothing in a bundle gate can see
 it, because the bundle is correct.
+
+## Every display name shows as its raw id
+
+`Localization.csv` is at the mod root. The engine reads it from **`Config/`**
+only (`ModManager.LoadLocalizations` builds `mod.Path + "/Config"`), logs
+nothing when it is elsewhere, and `Localization.Get` returns the key on a
+miss. The client log has `[MODS] Loading localization from mod: <Name>` when
+the file was found; its absence is the diagnosis. Move the file into
+`Config/`.
+
+## `[MODS] Mod reference for a mod that is not loaded`
+
+The `Name` inside `@modfolder(Name)` does not match any loaded mod's
+`ModInfo.xml` `Name` — a rename, a copy into another mod, or a case
+difference. `shamway validate` checks the name against this mod's
+`ModInfo.xml`; this line in the client log means the deployed copy differs
+from the one validated, or the mod did not load at all (check for
+`Loaded Mod: <Name>` first).
+
+## The mod is installed but the client ignores it, or warns of a duplicate
+
+On a Proton host the client loads mods from its per-user data
+(`…/compatdata/251570/pfx/drive_c/users/steamuser/AppData/Roaming/7DaysToDie/Mods/`),
+not from the install's `Mods/`. A mod present in both places loads from the
+per-user copy and the install copy is ignored with a duplicate warning — so a
+rebuilt bundle deployed to the wrong one never runs. `shamway client where`
+prints the folder the client actually reads; `shamway client deploy` puts the
+modlet there and replaces what was there before.
+
+## The client sits on a menu backdrop with no menu
+
+Steam was not running when the client started. Exec'ing Proton directly
+bypasses the Steam *launcher*, not the Steam *API*: the log says
+`[Steamworks.NET] SteamAPI_Init() failed … probably Steam not running`, the
+first thing to touch Steamworks throws, and the symptom looks like a display
+or Proton fault. Start Steam (`steam -silent` is enough) first, and grep the
+log for `SteamAPI_Init` before suspecting anything else.
+
+## The client hangs at world load, but only sometimes
+
+Proton async-load starvation. The shipped build sets
+`Application.runInBackground` only inside `if (Application.isEditor)` and
+never assigns `Application.backgroundLoadingPriority` (both confirmed with
+`ilspycmd` on V 3.1.0 b14), so when the window loses focus Unity throttles the
+process and the async `Resources.LoadAsync`/`LoadManager.LoadAsset` waits in
+world load can starve — the log ends after `AstarManager Init` and nothing
+follows. It is a race against focus, which is why it is non-deterministic.
+`Awake IsFocused: False` early in the log is the tell. Keep the client
+window focused during an acceptance run.
+
+## A placed block vanishes, and the client shows air
+
+On the **dedicated server** log: `WRN Entity FallingBlock_N
+(EntityFallingBlock) fell off the world, pos=…`. A `Shape=ModelEntity` block
+placed without support under every voxel it occupies becomes a falling
+entity in the stability pass; the client just reports air. Ground each
+column of the placement, never fall back to a local-only `SetBlockLocal`,
+and read the server log before hypothesising about bundles or replication.
 
 ## `doctor` cannot find game or editor
 

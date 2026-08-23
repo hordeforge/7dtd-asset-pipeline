@@ -63,9 +63,11 @@ namespace SevenDaysToDie.AssetPipeline
             part.transform.localPosition = position;
             part.transform.localEulerAngles = rotation;
             part.transform.localScale = scale;
-            // CreatePrimitive attaches a collider to every part. 7DTD wants one
-            // collider on the root, not one per visual piece, so strip them here
-            // and add the root collider deliberately with RootCollider.
+            // CreatePrimitive attaches a collider to every part. EntityItem.createMesh
+            // (V 3.1.0 b14, ilspycmd) enables *every* collider it finds in a dropped
+            // item's mesh on layer 13, so each visual piece would become a physics
+            // body. Strip them here and add one root collider deliberately with
+            // RootCollider or RootCapsuleCollider.
             var collider = part.GetComponent<Collider>();
             if (collider != null) UnityEngine.Object.DestroyImmediate(collider);
             if (material != null) part.GetComponent<MeshRenderer>().sharedMaterial = material;
@@ -76,10 +78,12 @@ namespace SevenDaysToDie.AssetPipeline
         /// Create a prefab root with an identity transform.
         ///
         /// The root must stay at identity scale and rotation: the engine applies
-        /// its own corrections after loading (item code applies a dropped
-        /// correction rotation and DropScale), and a root that already carries a
-        /// transform compounds with those instead of replacing them. Author the
-        /// real dimensions on the child parts.
+        /// its own transform after loading. EntityItem.createMesh (V 3.1.0 b14,
+        /// ilspycmd) *overwrites* the instantiated root's localScale with
+        /// DropScale and its localRotation with the dropped correction, so a
+        /// scale authored on the root is silently discarded rather than
+        /// compounded. Author the real dimensions on the child parts, and size
+        /// variants with ScaleChildren.
         /// </summary>
         public static GameObject Root(string name)
         {
@@ -96,6 +100,22 @@ namespace SevenDaysToDie.AssetPipeline
             var collider = root.AddComponent<BoxCollider>();
             collider.center = center;
             collider.size = size;
+            return collider;
+        }
+
+        /// <summary>
+        /// The capsule variant, which is what vanilla's held-item prefabs carry
+        /// (GrenadePrefab has one root CapsuleCollider). A dropped item rolls
+        /// and settles more naturally on a capsule than on a box.
+        /// </summary>
+        public static CapsuleCollider RootCapsuleCollider(
+            GameObject root, Vector3 center, float radius, float height, int direction = 1)
+        {
+            var collider = root.AddComponent<CapsuleCollider>();
+            collider.center = center;
+            collider.radius = radius;
+            collider.height = height;
+            collider.direction = direction;   // 0 = X, 1 = Y (upright), 2 = Z
             return collider;
         }
 
@@ -159,7 +179,54 @@ namespace SevenDaysToDie.AssetPipeline
                 // Standard ignores _Metallic and _Glossiness entirely once this
                 // keyword is on; the map's own channels take over.
                 material.EnableKeyword("_METALLICGLOSSMAP");
+                // One packed texture feeds two slots: Standard reads metallic from
+                // _MetallicGlossMap.r, smoothness from .a, and occlusion from
+                // _OcclusionMap.g. Without this second assignment the G channel
+                // the texture-maps generator writes is never sampled.
+                material.SetTexture("_OcclusionMap", metallicGlossMap);
+                material.SetFloat("_OcclusionStrength", 1f);
             }
+            return Save(material, assetPath);
+        }
+
+        /// <summary>
+        /// Tile a material's maps, for a flat-colour part that borrows a
+        /// tileable detail normal (texture-maps detail) instead of an albedo.
+        ///
+        /// Standard shares one scale/offset across _MainTex, _BumpMap and
+        /// _MetallicGlossMap, so the tiling is set once on _MainTex. Choose the
+        /// repeat from the part's real size: a 512 px steel normal authored at
+        /// roughly 0.25 m per tile wants a 4x repeat on a one-metre face.
+        /// </summary>
+        public static Material Tile(Material material, float repeatU, float repeatV)
+        {
+            material.mainTextureScale = new Vector2(repeatU, repeatV);
+            EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssets();
+            return material;
+        }
+
+        /// <summary>
+        /// Create or replace an emissive Standard material, for an indicator
+        /// lamp or a lit panel.
+        ///
+        /// _EmissionColor alone does nothing: the Standard shader samples
+        /// emission only under the _EMISSION keyword, which the inspector
+        /// enables when a colour is chosen and nothing enables in batch mode.
+        /// The GI flag is set too, or a baked lighting pass ignores the lamp.
+        /// Intensity above 1 is how an LED reads as lit rather than painted.
+        /// </summary>
+        public static Material EmissiveMaterial(
+            string assetPath, Color albedo, Color emission, float intensity = 2.4f,
+            float smoothness = 0.6f)
+        {
+            var material = new Material(Shader.Find("Standard"));
+            material.SetColor("_Color", albedo);
+            material.SetFloat("_Metallic", 0f);
+            material.SetFloat("_Glossiness", smoothness);
+            material.SetColor("_EmissionColor", emission * intensity);
+            material.EnableKeyword("_EMISSION");
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             return Save(material, assetPath);
         }
 
@@ -413,9 +480,13 @@ namespace SevenDaysToDie.AssetPipeline
                 : AudioClipLoadType.DecompressOnLoad;
             settings.compressionFormat = AudioCompressionFormat.Vorbis;
             settings.quality = 0.7f;
+            // Per-platform since 2022.2. The old AudioImporter.preloadAudioData is
+            // [Obsolete(..., error: true)] on 2022.3.62f2 (ilspycmd on
+            // UnityEditor.dll), so touching it fails the whole project's editor
+            // compile as "Scripts have compiler errors".
+            settings.preloadAudioData = false;
             importer.defaultSampleSettings = settings;
             importer.forceToMono = true;   // 7DTD positions sounds in 3D itself
-            importer.preloadAudioData = false;
             importer.SaveAndReimport();
             return AssetDatabase.LoadAssetAtPath<AudioClip>(assetPath);
         }
@@ -449,6 +520,31 @@ namespace SevenDaysToDie.AssetPipeline
             source.rolloffMode = rolloff;
             source.minDistance = minDistance;
             source.maxDistance = maxDistance;
+            return SavePrefab(root, folder, stem);
+        }
+
+        /// <summary>
+        /// A Light prefab for a particle system's Lights module.
+        ///
+        /// The Lights module needs a Light *prefab asset*, not a component, and
+        /// that prefab is a bundle member only the particle module references:
+        /// no XML names it, so list its stem in .shamway.toml
+        /// `code_references` or validate cannot see it. Keep range and
+        /// intensity modest and let the module's intensity curve do the pulse
+        /// (lights.intensityMultiplier is a float; the curve goes on
+        /// lights.intensity — assigning a MinMaxCurve where a float is expected
+        /// fails the whole build as "Scripts have compiler errors").
+        /// </summary>
+        public static GameObject LightPrefab(
+            string folder, string stem, Color color, float range = 60f, float intensity = 4f)
+        {
+            var root = Root(stem);
+            var light = root.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = color;
+            light.range = range;
+            light.intensity = intensity;
+            light.shadows = LightShadows.None;
             return SavePrefab(root, folder, stem);
         }
 

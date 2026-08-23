@@ -10,11 +10,19 @@ scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
 ```
 
 `--check` reports `OK`/`MISS` per tool and installs nothing. Drop `--check` to
-install through `pacman`, `apt-get`, or `dnf`. Only Python is required for the
-CLI itself; `--with-unity-prereqs` covers the editor installer's needs and
-`--with-authoring` the optional art tooling in
+install through `pacman`, `apt-get`, `dnf`, or `zypper`. Only Python is
+required for the CLI itself; `--with-unity-prereqs` covers the editor
+installer's needs, `--with-authoring` the optional art tooling in
 [Authoring tools](authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
-and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy).
+and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy) —
+and `--with-research` the decompilers every new engine fact must cite: the
+.NET 8 SDK with `ilspycmd` as a global dotnet tool (in `~/.dotnet/tools`,
+which goes on `PATH`), and Mono for `monodis` and `mcs`. Never set a global
+`DOTNET_ROOT` for ilspycmd; a distribution .NET upgrade can strand the tool,
+and Unity Hub ships a fallback SDK under `Editor/Data/DotNetSdk` per editor.
+The base set also installs `shellcheck` (for `make check`) and `pactl` (for
+`shamway client mute`). The script exits non-zero if Python or uv is still
+missing afterwards, rather than leaving a `MISS` line to scroll past.
 
 Xvfb is there for one specific reason: `shamway render-icon` needs a real
 graphics device, and Unity run with `-nographics` renders a blank image instead
@@ -93,9 +101,11 @@ is recorded here as **evidence, not a constant**. Every command discovers the
 revision from the installed game rather than trusting this table, because the
 game dictates it and a new game build can move it:
 
+- `shamway doctor` — FAILs if project and game disagree
+
 ```bash
 shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
-shamway doctor          # FAILs if project and game disagree
+shamway doctor
 ```
 
 `init` also pins the changeset into the project's
@@ -193,7 +203,14 @@ export UNITY_EDITOR="/absolute/path/to/Unity/Hub/Editor/2022.3.62f2/Editor/Unity
 
 On Windows, `UNITY_EDITOR` ends in `Editor/Unity.exe`. On macOS it points at
 the executable inside the editor application bundle. Do not commit either
-path.
+path. The pipeline reads these two variables and the two `shamway client`
+overrides in [configuration.md](configuration.md); it reads no `.local.env`
+or other dotenv file, so a mod that keeps one must export it itself.
+
+`doctor` compares what `UNITY_EDITOR -version` reports against the project's
+pinned revision and **fails** on a difference. That check exists because a
+wrong editor does not fail: batch mode opens the project, upgrades it
+silently, and builds a bundle the game rejects.
 
 ## 5. Prove setup
 
@@ -217,7 +234,13 @@ It also exposes license failures that `Unity -version` cannot.
 ## Platform notes
 
 - Linux native Unity can build the Windows-target bundle. Proton is not
-  required for the editor. The final client test may still run under Proton.
+  required for the editor; the source project tried a Windows editor under an
+  isolated Proton prefix as an escape hatch and proved it unnecessary, so
+  that path is not carried here. The final client test may still run under
+  Proton.
+- Without starting the editor, `scripts/compile-editor-scripts.sh` compiles
+  the vendored editor scripts against the installed editor's assemblies
+  (needs `mcs` from `--with-research`); `make check` runs it when it can.
 - Older Unity 2022 editors may need distribution compatibility libraries.
   If the editor itself fails before writing a log, run `ldd "$UNITY_EDITOR"`
   and install the missing library through the host's package manager; do not

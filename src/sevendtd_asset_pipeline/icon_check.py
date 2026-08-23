@@ -14,9 +14,17 @@ separately and never guesses:
 
 * **atlas files** — what this mod actually ships, and whether each PNG is a
   usable atlas cell;
-* **resolved references** — a `CustomIcon` this mod's own atlas answers;
-* **external references** — a `CustomIcon` no atlas here provides. That is
-  legitimate (vanilla keys are the normal case) and is reported, never failed.
+* **resolved references** — a key this mod's own atlas answers;
+* **external references** — a key no atlas here provides. That is legitimate
+  (vanilla keys are the normal case) and is reported, never failed.
+
+Three things name an atlas key. `CustomIcon` on an item or block, `icon=` on a
+`progression.xml` `display_entry`, and — when an item or block sets no
+`CustomIcon` at all — the definition's **own name**, which is the engine's
+default sprite lookup. `CustomIcon` exists for the cases where the sprite name
+differs from the thing's name, so an item named exactly like its PNG needs no
+property, and a typo in that PNG's name is invisible to any check that reads
+`CustomIcon` alone. All three are reconciled here.
 
 PNG geometry is read from the IHDR chunk with the standard library, so the
 check runs on a bare host. Alpha coverage needs a decoder, so it is measured
@@ -30,6 +38,7 @@ import struct
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from .capabilities import extra_install
 from .errors import PipelineError
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -40,6 +49,13 @@ COLOUR_TYPE_NAMES = {0: "grayscale", 2: "rgb", 3: "palette", 4: "grayscale+alpha
 # The V3 item atlas cell measured from the game's own itemicons bundle.
 DEFAULT_CELL = 160
 ICON_PROPERTIES = ("CustomIcon",)
+# `<display_entry icon="...">` in progression.xml names an atlas sprite too.
+DISPLAY_ENTRY_ICON = re.compile(r'<display_entry\b[^>]*\bicon\s*=\s*"([^"]+)"')
+# An item or block definition, with its body, so the absence of CustomIcon
+# inside it can be seen. Mod Config files are patch fragments, so a regex over
+# the text is the honest parser here.
+DEFINITION = re.compile(r'<(item|block)\s+name\s*=\s*"([^"]+)"[^>]*>(.*?)</\1>', re.DOTALL)
+CUSTOM_ICON_INSIDE = re.compile(r'name\s*=\s*"CustomIcon"')
 
 
 @dataclass(frozen=True)
@@ -69,6 +85,8 @@ class IconReport:
     external: tuple[str, ...]
     problems: tuple[str, ...]
     notes: tuple[str, ...]
+    implicit: tuple[str, ...] = ()
+    """Item/block names with no CustomIcon that a shipped PNG answers by name."""
 
     @property
     def ok(self) -> bool:
@@ -80,6 +98,7 @@ class IconReport:
             "icons": [icon.as_dict() for icon in self.icons],
             "resolved": list(self.resolved),
             "external": list(self.external),
+            "implicit": list(self.implicit),
             "problems": list(self.problems),
             "notes": list(self.notes),
             "ok": self.ok,
@@ -155,16 +174,46 @@ def inspect_icon(path: Path, atlas: str, cell: int = DEFAULT_CELL) -> IconFile:
     )
 
 
-def discover_icon_references(config_dir: Path) -> dict[str, list[str]]:
-    """Every `CustomIcon` value under Config/, mapped to the files that ask for it."""
-    references: dict[str, list[str]] = {}
+def _config_texts(config_dir: Path) -> list[tuple[Path, str]]:
+    texts: list[tuple[Path, str]] = []
     if not config_dir.is_dir():
-        return references
+        return texts
     for xml_file in sorted(config_dir.rglob("*.xml")):
         try:
-            text = xml_file.read_text(encoding="utf-8-sig")
+            texts.append((xml_file, xml_file.read_text(encoding="utf-8-sig")))
         except OSError as exc:
             raise PipelineError(f"cannot read {xml_file}: {exc}") from exc
+    return texts
+
+
+def discover_implicit_icon_names(config_dir: Path) -> dict[str, list[str]]:
+    """Item and block names defined without a `CustomIcon`, mapped to their files.
+
+    These resolve their sprite by name (or by a `CustomIcon` inherited through
+    `Extends`, which this cannot see), so a PNG named exactly like the item is
+    the icon whether or not any property says so.
+    """
+    names: dict[str, list[str]] = {}
+    for xml_file, text in _config_texts(config_dir):
+        for match in DEFINITION.finditer(text):
+            if CUSTOM_ICON_INSIDE.search(match.group(3)):
+                continue
+            names.setdefault(match.group(2).strip(), []).append(str(xml_file))
+    return names
+
+
+def discover_icon_references(config_dir: Path) -> dict[str, list[str]]:
+    """Every explicit atlas key under Config/, mapped to the files that ask for it.
+
+    Explicit means `CustomIcon` and `display_entry icon=`; the name-default
+    lookup is `discover_implicit_icon_names`.
+    """
+    references: dict[str, list[str]] = {}
+    for xml_file, text in _config_texts(config_dir):
+        for match in DISPLAY_ENTRY_ICON.finditer(text):
+            value = match.group(1).strip()
+            if value:
+                references.setdefault(value, []).append(str(xml_file))
         for name in ICON_PROPERTIES:
             # A regex rather than a parse: mod Config files are XPath patch
             # fragments, and a fragment with several roots is not a document.
@@ -221,7 +270,8 @@ def check_icons(
 
     provided = {icon.stem: icon for icon in icons}
     provided_ci = {stem.casefold(): stem for stem in provided}
-    references = discover_icon_references(config_dir if config_dir else mod_root / "Config")
+    config = config_dir if config_dir else mod_root / "Config"
+    references = discover_icon_references(config)
     resolved: list[str] = []
     external: list[str] = []
     for key in sorted(references):
@@ -231,7 +281,7 @@ def check_icons(
         shipped = provided_ci.get(key.casefold())
         if shipped is not None:
             problems.append(
-                f'CustomIcon "{key}" differs in case from the shipped {shipped}.png; '
+                f'icon key "{key}" differs in case from the shipped {shipped}.png; '
                 "keep the key and the filename stem byte-identical"
             )
             resolved.append(key)
@@ -239,22 +289,46 @@ def check_icons(
             external.append(key)
     if external:
         notes.append(
-            f"{len(external)} CustomIcon key(s) are not provided by this mod: "
+            f"{len(external)} icon key(s) are not provided by this mod: "
             f"{', '.join(external)}. That is normal for vanilla keys — confirm each one "
             "draws the intended art in a client, because a missing key silently draws "
             "whatever else answers to it."
         )
-    unused = sorted(set(provided) - set(resolved))
+    # The name-default lookup: a definition with no CustomIcon shows the sprite
+    # named like itself. A shipped PNG with that exact name is therefore in use.
+    implicit: list[str] = []
+    unnamed: list[str] = []
+    for name in sorted(discover_implicit_icon_names(config)):
+        if name in provided:
+            implicit.append(name)
+            continue
+        shipped = provided_ci.get(name.casefold())
+        if shipped is not None:
+            problems.append(
+                f'"{name}" sets no CustomIcon, so its icon is looked up by name, and the '
+                f"shipped {shipped}.png differs from it in case; rename one of them"
+            )
+            implicit.append(name)
+        else:
+            unnamed.append(name)
+    if unnamed:
+        notes.append(
+            f"{len(unnamed)} item/block definition(s) set no CustomIcon and ship no PNG of "
+            f"their own name: {', '.join(unnamed)}. Each shows a CustomIcon inherited "
+            "through Extends, or the vanilla sprite of that name, or whatever else answers "
+            "— confirm in a client."
+        )
+    unused = sorted(set(provided) - set(resolved) - set(implicit))
     if unused:
         notes.append(
-            f"{len(unused)} shipped icon(s) no CustomIcon references: {', '.join(unused)}. "
-            "Block items and recipes can reference an icon indirectly, so this is a "
-            "prompt to check, not an error."
+            f"{len(unused)} shipped icon(s) nothing references by CustomIcon, display_entry, "
+            f"or item/block name: {', '.join(unused)}. A recipe or a C# lookup can still use "
+            "one, so this is a prompt to check, not an error."
         )
     if icons and icons[0].alpha_coverage is None:
         notes.append(
             "alpha coverage was not measured; install Pillow "
-            "(uv pip install '7dtd-asset-pipeline[authoring]') to gate empty icons"
+            f"({extra_install('authoring')}) to gate empty icons"
         )
     return IconReport(
         atlas_dir=str(atlas_dir),
@@ -263,6 +337,7 @@ def check_icons(
         external=tuple(external),
         problems=tuple(problems),
         notes=tuple(notes),
+        implicit=tuple(implicit),
     )
 
 
@@ -272,6 +347,7 @@ __all__ = [
     "IconReport",
     "check_icons",
     "discover_icon_references",
+    "discover_implicit_icon_names",
     "inspect_icon",
     "read_png_header",
 ]

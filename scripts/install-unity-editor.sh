@@ -85,8 +85,14 @@ for required in curl python3; do
 done
 
 echo "Resolving the official Unity $VERSION download"
-RELEASE_JSON="$(PYTHONPATH="$ROOT/src" python3 -m sevendtd_asset_pipeline \
-	unity-release --version "$VERSION" --json)"
+# From a checkout, run the module in place; from the installed package
+# (`shamway script install-unity-editor`), the command is already on PATH.
+if [[ -d "$ROOT/src/sevendtd_asset_pipeline" ]]; then
+	RELEASE_JSON="$(PYTHONPATH="$ROOT/src" python3 -m sevendtd_asset_pipeline \
+		unity-release --version "$VERSION" --json)"
+else
+	RELEASE_JSON="$(shamway unity-release --version "$VERSION" --json)"
+fi
 read_field() {
 	printf '%s' "$RELEASE_JSON" | python3 -c \
 		'import json,sys; print(json.load(sys.stdin)[sys.argv[1]] or "")' "$1"

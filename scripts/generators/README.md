@@ -49,10 +49,14 @@ for:
 
 Each lane has an offline check that needs no Unity, no network, and no game:
 
+- `shamway check-sound assets-src/audio/blast.wav` — format, level, DC offset
+- `shamway check-icons` — cells + every CustomIcon key
+- `shamway check-mesh  assets-src/meshes/thing.glb` — extents, glTF conformance
+
 ```bash
-shamway check-sound assets-src/audio/blast.wav   # format, level, DC offset
-shamway check-icons                              # cells + every CustomIcon key
-shamway check-mesh  assets-src/meshes/thing.glb  # extents, glTF conformance
+shamway check-sound assets-src/audio/blast.wav
+shamway check-icons
+shamway check-mesh  assets-src/meshes/thing.glb
 ```
 
 ## Two mesh lanes
@@ -64,11 +68,23 @@ Both are first-class; pick by what the shape needs.
 | **Authored** — `shamway generate mesh`, Blender, OpenSCAD | organic, rigged, sculpted, or anything primitives cannot express | Blender on the host | a real class-43 `Mesh` object |
 | **Procedural** — `GeneratedAsset.Primitive(...)` in the Unity project | hard-surface props that are boxes, cylinders, and spheres | nothing beyond Unity | no `Mesh` object; the prefab references Unity's built-in primitives |
 
+A procedural prop's first draft is always a handful of bare shapes that read
+as nothing; the one that shipped went to about forty primitives, and the
+lessons — hoops on drums, caps on pipes, wraps as straight runs never thin
+discs, one asymmetric detail, decals on a textured quad, colours re-tuned for
+linear space — are in `shamway docs art-direction` under "Props from
+primitives". Its flat-coloured parts get surface from a tileable detail
+normal (`shamway generate texture-maps detail`) applied with
+`GeneratedAsset.Tile`, so primitives need not mean plastic.
+
 Validate an authored mesh before importing it:
 
+- `shamway check-mesh out.glb` — extents, watertightness, glTF conformance
+- `shamway check-mesh out.glb --strict` — also fail on glTF warnings
+
 ```bash
-shamway check-mesh out.glb            # extents, watertightness, glTF conformance
-shamway check-mesh out.glb --strict   # also fail on glTF warnings
+shamway check-mesh out.glb
+shamway check-mesh out.glb --strict
 ```
 
 That catches the expensive mistakes early — most often a mesh authored in

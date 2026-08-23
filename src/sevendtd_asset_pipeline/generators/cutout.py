@@ -11,8 +11,8 @@ soft edge, and a fringe is exactly what makes an icon look pasted on.
 
 Two modes, because two kinds of source need opposite treatment:
 
-    make-cutout.py key  concept.png cut.png            # flat chroma background
-    make-cutout.py luma smoke-mask.png smoke-card.png  # grayscale opacity mask
+    shamway generate cutout key  concept.png cut.png            # flat chroma background
+    shamway generate cutout luma smoke-mask.png smoke-card.png  # grayscale opacity mask
 
 **key** removes a solid background colour, keeping partial alpha across the
 transition band so soft edges survive, and de-spills the leftover key tint that
@@ -23,7 +23,7 @@ alpha and RGB becomes white, so the particle system's own colour-over-lifetime
 tints it. Raising the black point removes the faint halo a generator leaves in
 "empty" space without hardening the puff edges.
 
-Needs Pillow: uv pip install '7dtd-asset-pipeline[authoring]'
+Needs Pillow; `shamway capabilities --missing` prints the install command for this host.
 
 Check the result with `shamway check-icons` (for an atlas cell) and look at
 it against both a light and a dark background — a fringe is invisible on one.
@@ -34,6 +34,8 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+
+from ..capabilities import extra_install
 
 MISSING = None
 try:
@@ -49,7 +51,7 @@ def require_imaging() -> None:
     if MISSING is not None:
         raise SystemExit(
             "ERROR: the cutout lane needs Pillow ({}).\n"
-            "  Install it with: uv pip install '7dtd-asset-pipeline[authoring]'".format(MISSING)
+            "  Install it with: {}".format(MISSING, extra_install("authoring"))
         )
 
 
@@ -197,12 +199,12 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "EXAMPLES\n"
-            "  make-cutout.py key art/nuke-v4-chromakey.png art/nuke-v4.png\n"
+            "  shamway generate cutout key art/nuke-v4-chromakey.png art/nuke-v4.png\n"
             "      remove an auto-detected flat background, keeping soft edges\n\n"
-            "  make-cutout.py key art/icon-src.png UIAtlases/ItemIconAtlas/myModNuke.png \\\n"
+            "  shamway generate cutout key art/icon-src.png UIAtlases/ItemIconAtlas/myModNuke.png \\\n"
             "      --size 160 --pad 0.9 --trim\n"
             "      cut out, trim to the subject, and centre it in a 160 px atlas cell\n\n"
-            "  make-cutout.py luma art/smoke-mask.png art/smoke-card.png --black-point 15\n"
+            "  shamway generate cutout luma art/smoke-mask.png art/smoke-card.png --black-point 15\n"
             "      grayscale puff mask to a white RGBA particle card\n"
         ),
     )

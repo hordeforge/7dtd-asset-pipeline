@@ -24,7 +24,7 @@ classifiers = [
 # survived serialization. Pin the minor version; UnityPy documents that minor
 # releases may break its API.
 inspect = ["UnityPy>=1.20,<2"]
-# The Python authoring lanes in scripts/generators/.
+# The Python authoring lanes in src/sevendtd_asset_pipeline/generators/.
 authoring = ["pillow>=10", "numpy>=1.24"]
 # Pre-Unity mesh checks for the Blender/OpenSCAD lane.
 mesh = ["trimesh>=4"]
@@ -47,7 +47,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 # templates/ is the Unity project init copies into a mod; docs/ is staged into
 # the package by setup.py so `shamway docs` works without a checkout.
-sevendtd_asset_pipeline = ["templates/**/*", "docs/*.md"]
+sevendtd_asset_pipeline = ["templates/**/*", "docs/*.md", "scripts/*.sh"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

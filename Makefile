@@ -6,14 +6,17 @@ PYTHON := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project pyt
 
 all: check test
 
+SHELL_SCRIPTS := scripts/bootstrap scripts/install-tools.sh scripts/install-unity-editor.sh scripts/compile-editor-scripts.sh
+
 check:
 	$(PYTHON) -m compileall -q src tests
-	bash -n scripts/bootstrap scripts/install-tools.sh scripts/install-unity-editor.sh
+	bash -n $(SHELL_SCRIPTS)
 	@if command -v shellcheck >/dev/null 2>&1; then \
-		shellcheck -S warning scripts/bootstrap scripts/install-tools.sh scripts/install-unity-editor.sh; \
+		shellcheck -S warning $(SHELL_SCRIPTS); \
 	else \
 		echo "note: shellcheck not installed; skipped shell linting"; \
 	fi
+	scripts/compile-editor-scripts.sh --quiet-missing
 
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -v

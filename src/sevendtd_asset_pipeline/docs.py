@@ -40,6 +40,7 @@ TOPICS: dict[str, tuple[str, str]] = {
     "troubleshooting": ("troubleshooting.md", "failure messages and their root causes"),
     "configuration": ("configuration.md", "every .shamway.toml key"),
     "architecture": ("architecture.md", "design, boundaries, and the trust model"),
+    "blockers": ("blockers.md", "what still needs a human, a licence, or a client"),
     "research-provenance": ("research-provenance.md", "where each 7DTD-specific rule came from"),
     "release-checklist": ("release-checklist.md", "artifact and live acceptance"),
 }

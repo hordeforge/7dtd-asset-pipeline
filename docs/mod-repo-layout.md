@@ -10,8 +10,12 @@ repository — it calls the installed command.
 Install the pipeline once, per machine:
 
 ```bash
-uv tool install git+https://github.com/ywy50/7dtd-asset-pipeline
+uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/ywy50/7dtd-asset-pipeline'
 ```
+
+The `[all]` extra brings Pillow, NumPy, UnityPy and trimesh, which the icon,
+texture, and mesh lanes need; without it the core still builds and validates,
+and `shamway capabilities --missing` prints the exact command to add them.
 
 Scaffold it into a mod that already has a `ModInfo.xml`:
 
@@ -21,11 +25,15 @@ shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 
 From then on, everything is a command inside the mod:
 
+- `shamway status --json` — where this mod stands
+- `shamway generate --list` — the asset generators, ready to call
+- `shamway docs` — this repository's documentation
+
 ```bash
 cd /path/to/MyMod
-shamway status --json          # where this mod stands
-shamway generate --list        # the asset generators, ready to call
-shamway docs                   # this repository's documentation
+shamway status --json
+shamway generate --list
+shamway docs
 ```
 
 Everything below is detail.
@@ -85,6 +93,10 @@ Three of those need a word:
 - **`Resources/` and `manifests/` are build outputs you commit.** They are one
   logical artifact — the bundle and the manifest that records its membership —
   so commit them together, and never hand-edit either.
+- **`ProjectSettings/ProjectSettings.asset` churns.** Unity rewrites it on
+  every experiment (`targetPixelDensity`, `buildNumber`, platform strings).
+  Review those hunks and discard the noise deliberately; never bulk-revert
+  the project directory, which also discards real `.meta` changes.
 
 ### Committing, and what never ships
 
@@ -149,11 +161,21 @@ and seeds, and the bundle itself. Those are content.
 
 ## Calling the tooling from the mod
 
-Everything generalized is reachable through the one command, from anywhere:
+Everything generalized is reachable through the one command, from anywhere —
+the generators, the documentation, and the host scripts:
 
 ```bash
-shamway generate --list                     # what generators exist
-shamway generate sound --help               # a generator's own options
+shamway script --list
+shamway script install-tools --with-authoring --with-research
+shamway script install-unity-editor --project tools/shamway/UnityProject
+```
+
+- `shamway generate --list` — what generators exist
+- `shamway generate sound --help` — a generator's own options
+
+```bash
+shamway generate --list
+shamway generate sound --help
 shamway generate sound blast assets-src/audio/blast.wav --seed 7
 shamway generate cutout key assets-src/icons/src.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
@@ -166,10 +188,14 @@ shamway generate mesh assets-src/meshes/crate.glb --shape box --size 1 0.6 0.8
 The generators live inside the installed package, so this works with no
 checkout of this repository and no relative paths. The documentation does too:
 
+- `shamway docs` — the topics
+- `shamway docs art-direction` — the style contract, in full
+- `shamway docs audio` — the sound lane
+
 ```bash
-shamway docs                    # the topics
-shamway docs art-direction      # the style contract, in full
-shamway docs audio              # the sound lane
+shamway docs
+shamway docs art-direction
+shamway docs audio
 ```
 
 That is the answer to "where do I read the rules" for an agent working in a mod
@@ -190,11 +216,16 @@ Generators and full documentation: `shamway generate --list`, `shamway docs`.
 An agent that starts from those two lines can discover the whole surface
 without being told any of it in advance:
 
+- `shamway status --json` — where this mod stands; never raises
+- `shamway schema` — every operation, its cost, whether it writes
+- `shamway capabilities --json` — which optional tools work, and how to install them
+- `shamway docs` — every rule this pipeline knows
+
 ```bash
-shamway status --json           # where this mod stands; never raises
-shamway schema                  # every operation, its cost, whether it writes
-shamway capabilities --json     # which optional tools work, and how to install them
-shamway docs                    # every rule this pipeline knows
+shamway status --json
+shamway schema
+shamway capabilities --json
+shamway docs
 ```
 
 ## When a mod outgrows a generator

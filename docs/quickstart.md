@@ -28,9 +28,12 @@ scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
 `--check` installs nothing; it prints `OK`/`MISS` per tool so you can see what
 the host is missing. Then install for real:
 
+- `scripts/install-tools.sh --with-unity-prereqs` — required for step 4
+- `scripts/install-tools.sh --with-authoring` — art and inspection tooling
+
 ```bash
-scripts/install-tools.sh --with-unity-prereqs     # required for step 4
-scripts/install-tools.sh --with-authoring         # art and inspection tooling
+scripts/install-tools.sh --with-unity-prereqs
+scripts/install-tools.sh --with-authoring
 ```
 
 `install-tools.sh` installs uv first, since every Python step runs through it.
@@ -40,8 +43,8 @@ trimesh). Blender and the glTF validator fall back to official
 checksum-verified builds where the distribution has no package. Check what is
 usable at any time with `shamway capabilities --json`.
 
-Supported package managers are `pacman`, `apt-get`, and `dnf`. On anything
-else, install the tools `--check` lists by hand; the script refuses to guess
+Supported package managers are `pacman`, `apt-get`, `dnf`, and `zypper`. On
+anything else, install the tools `--check` lists by hand; the script refuses to guess
 package names rather than installing the wrong thing.
 
 ## 2. The pipeline CLI (seconds)
@@ -86,6 +89,7 @@ MyMod/
         ├── Assets/SevenDaysToDieAssetPipeline/Editor/BundleBuilder.cs
         ├── Assets/SevenDaysToDieAssetPipeline/Editor/GeneratedAsset.cs
         ├── Assets/SevenDaysToDieAssetPipeline/Editor/IconRenderer.cs
+        ├── Assets/SevenDaysToDieAssetPipeline/Editor/ShamwayPreBuild.cs
         ├── Packages/manifest.json          # engine modules; these are build inputs
         └── ProjectSettings/ProjectVersion.txt  # the game-matched revision
 ```
@@ -149,9 +153,12 @@ Put source assets **and their `.meta` files** under
 mod-prefixed, globally unique stem — 7DTD resolves assets by file-name stem
 alone, discarding folder and extension.
 
+- `shamway build` — build, gate, and stage bundle + tracked manifest
+- `shamway validate` — bundle plus every reference in Config/**/*.xml
+
 ```bash
-shamway build      # build, gate, and stage bundle + tracked manifest
-shamway validate   # bundle plus every reference in Config/**/*.xml
+shamway build
+shamway validate
 ```
 
 Reference it from XML using the mod's `ModInfo.xml` name:
@@ -169,9 +176,12 @@ and server behaviour.
 Two deployable asset classes are **not** bundle members and have their own
 gates:
 
+- `shamway check-icons` — UIAtlases cells + every icon key
+- `shamway check-sound assets-src/audio/x.wav` — format, level, clipping, DC offset
+
 ```bash
-shamway check-icons                        # UIAtlases cells + every CustomIcon key
-shamway check-sound assets-src/audio/x.wav # format, level, clipping, DC offset
+shamway check-icons
+shamway check-sound assets-src/audio/x.wav
 ```
 
 ## 7. Driving it from a script or an agent
@@ -180,10 +190,14 @@ shamway check-sound assets-src/audio/x.wav # format, level, clipping, DC offset
 shamway status --json
 ```
 
+- `shamway schema` — every operation, machine-readable
+- `shamway call status` — run one operation, JSON in and out
+- `shamway serve` — many operations over one stdio session
+
 ```bash
-shamway schema               # every operation, machine-readable
-shamway call status          # run one operation, JSON in and out
-shamway serve                # many operations over one stdio session
+shamway schema
+shamway call status
+shamway serve
 ```
 
 `status` is one call, no Unity, no network, and it never raises for a
@@ -197,22 +211,39 @@ the rules. See [Consumer interfaces](consumer-api.md).
 
 Offline gates are necessary, not sufficient. Finish with a genuinely fresh
 client that loads the changed asset by its real URI, and look at or listen to
-it. [Validation](validation.md) lists exactly what offline parsing cannot
-prove; [Release checklist](release-checklist.md) is the full list.
+it. On a Linux host the mechanical half of that is three commands:
+
+```bash
+shamway client deploy .
+shamway client launch --mod-name MyMod --run-seconds 120 --mute
+shamway client log --mod-name MyMod
+```
+
+`deploy` copies only the deployable modlet into the folder the Proton client
+actually reads (its per-user `Mods/`, not the install); `launch` refuses to
+start over a running client, starts one through Steam, and fails unless the
+log this launch wrote shows the mod, its atlas, and its localization loaded
+with no bundle, name, or particle error; `log` classifies the newest log
+again. A listening run is never `--mute`. That proves the asset *loads*. Then
+look at it, or listen to it, and say that you did. [Validation](validation.md)
+lists exactly what offline parsing cannot prove; [Release
+checklist](release-checklist.md) is the full list.
 
 ## Creating the assets themselves
 
 `shamway generate` ships reproducible generators for
-the sound, cutout, icon, texture, and mesh lanes; the scaffolded Unity project
+the sound, audio-conversion, cutout, icon, texture, and mesh lanes; the scaffolded Unity project
 ships `GeneratedAsset.cs` for building prefabs, materials, imports, particle
 state, and audio from code, and `IconRenderer.cs` for photographing a prefab
 into an atlas cell.
 
 ```bash
-shamway generate sound blast assets-src/audio/blast.wav --seed 7
+shamway generate sound blast assets-src/audio/blast.wav --seed 7 \
+    --promote tools/shamway/UnityProject/Assets/ModAssets/Bundle/Sounds/myModBlast.wav
 shamway generate cutout key assets-src/icons/thing-src.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
-shamway render-icon myModThing        # or render the item itself
+shamway generate texture-maps detail --out-dir assets-src/textures --stem myModSteel --seed 7
+shamway render-icon myModThing
 ```
 
 Read these before authoring:
@@ -227,12 +258,17 @@ Read these before authoring:
 
 ## When something fails
 
+- `shamway status --json` — whole-mod state; never raises
+- `shamway doctor --json` — structured environment report
+- `shamway inspect Resources/mymod.unity3d` — revision, class IDs, class 142
+- `shamway refs` — every URI the XML actually uses
+
 ```bash
-shamway status --json                     # whole-mod state; never raises
-shamway doctor --json                     # structured environment report
-shamway inspect Resources/mymod.unity3d   # revision, class IDs, class 142
+shamway status --json
+shamway doctor --json
+shamway inspect Resources/mymod.unity3d
 shamway check-log .shamway/build/bundle/unity-build.log
-shamway refs                              # every URI the XML actually uses
+shamway refs
 ```
 
 [Troubleshooting](troubleshooting.md) maps each failure message to its root

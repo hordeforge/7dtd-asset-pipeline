@@ -23,7 +23,7 @@ import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from .capabilities import has_capability
+from .capabilities import extra_install, has_capability
 from .errors import PipelineError
 
 GLTF_SUFFIXES = (".glb", ".gltf")
@@ -55,8 +55,7 @@ class MeshReport:
 def _measure(path: Path, report: MeshReport, max_extent: float) -> None:
     if not has_capability("trimesh"):
         report.skipped.append(
-            "geometry checks need the 'trimesh' capability: "
-            "uv pip install '7dtd-asset-pipeline[mesh]'"
+            "geometry checks need the 'trimesh' capability: " + extra_install("mesh")
         )
         return
     import trimesh  # noqa: PLC0415 - optional dependency, imported on demand
@@ -140,7 +139,6 @@ def check_mesh(path: Path, max_extent: float = 16.0, strict: bool = False) -> Me
     if len(report.skipped) == 2 and not report.problems:
         raise PipelineError(
             "no mesh tooling is available. Install it with "
-            "scripts/install-tools.sh --with-authoring, or "
-            "uv pip install '7dtd-asset-pipeline[mesh]'"
+            "scripts/install-tools.sh --with-authoring, or " + extra_install("mesh")
         )
     return report

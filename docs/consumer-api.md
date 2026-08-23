@@ -30,8 +30,10 @@ whatever protocol they actually need. That choice stays with the consumer.
 
 ## 0. The machine-readable contract
 
+- `shamway schema` — the full operation manifest, as JSON
+
 ```bash
-shamway schema            # the full operation manifest, as JSON
+shamway schema
 ```
 
 Each operation publishes its name, summary, JSON Schema parameters, what it
@@ -40,7 +42,7 @@ returns, and three fields a caller needs before running anything:
 | Field | Meaning |
 |---|---|
 | `cost` | `instant`, `fast`, `seconds`, or `minutes` — `minutes` starts Unity |
-| `writes` | whether it modifies files; only `build` and `init` do |
+| `writes` | whether it modifies files; `build`, `init`, `render_icon`, `client_deploy`, and `client_launch` do |
 | `needs_config` | whether it must run inside a scaffolded modlet |
 | `capabilities` | optional tools it requires, e.g. `["UnityPy"]` |
 
@@ -105,8 +107,6 @@ def call(op, **params):
 print(call("status")["valid"])
 ```
 
-## 3. `Pipeline` — the Python entry point
-
 ## 1. What `init` puts in your mod
 
 `shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"` writes:
@@ -159,6 +159,9 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `render-icon STEM` | no | yes | **yes** | photograph a prefab into its atlas cell |
 | `generate NAME [ARGS]` | no | Blender for `mesh` | **yes** (writes what you ask for) | run a packaged asset generator |
 | `docs [TOPIC]` | no | no | no | print packaged documentation |
+| `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts) |
+| `client where\|deploy\|launch\|log\|mute\|unmute` | no | no | **deploy/launch** write outside the modlet | fresh-client acceptance plumbing |
+| `schema` / `call NAME` / `serve` | no | no | per operation | the machine-readable surface |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |
 
 `build` and `render-icon` are the only commands that write into the modlet, and
@@ -224,9 +227,12 @@ single call answers both "what is the mod's state" and "what can I run".
 
 Install everything at once:
 
+- `uv pip install '7dtd-asset-pipeline[all]'` — UnityPy, Pillow, NumPy, trimesh
+- `scripts/install-tools.sh --with-authoring` — Blender, OpenSCAD, glTF validator, …
+
 ```bash
-uv pip install '7dtd-asset-pipeline[all]'   # UnityPy, Pillow, NumPy, trimesh
-scripts/install-tools.sh --with-authoring    # Blender, OpenSCAD, glTF validator, …
+uv pip install '7dtd-asset-pipeline[all]'
+scripts/install-tools.sh --with-authoring
 ```
 
 ### `inspect --deep --json`
@@ -273,11 +279,16 @@ never cut out of its background, or whose case does not match its key.
 These two are argv-passthrough commands rather than JSON operations, and they
 exist so a consuming mod needs nothing from this repository's filesystem:
 
+- `shamway generate --list` — sound, audio, cutout, icon, texture-maps, mesh
+- `shamway generate sound --help` — each generator's own options
+- `shamway docs` — the topics
+- `shamway docs art-direction` — one page, in full
+
 ```bash
-shamway generate --list                 # sound, audio, cutout, icon, texture-maps, mesh
-shamway generate sound --help           # each generator's own options
-shamway docs                            # the topics
-shamway docs art-direction              # one page, in full
+shamway generate --list
+shamway generate sound --help
+shamway docs
+shamway docs art-direction
 ```
 
 Both are published in `shamway schema` under `generators` and
@@ -295,6 +306,8 @@ under 2% covered, which is what a missing graphics device produces.
 "detail": …}]`. `inspect --json` emits `path`, `unity_version`,
 `archive_format`, `class_ids`, `has_assetbundle_object`.
 
+## `Pipeline` — the Python entry point
+
 For consumers scripting the pipeline in-process. `Pipeline` is the recommended
 entry point; the individual functions stay available for callers that want one
 piece. Only names re-exported from the package root are supported.
@@ -309,7 +322,7 @@ pipeline, created = Pipeline.scaffold(    # or create one in an existing modlet
 
 status = pipeline.status()                # never raises for a mod-state problem
 if not status.valid:
-    pipeline.build()                      # the only method that writes
+    pipeline.build()
     pipeline.validate()
 
 pipeline.call("inspect_deep")             # same dispatch as `call` and `serve`
@@ -333,6 +346,10 @@ pipeline.call("inspect_deep")             # same dispatch as `call` and `serve`
 | `.check_log(path)` | raises if the log shows stripped modules |
 | `.unity_release(version=None)` | `Release` (uses the network) |
 | `.build(probe=False)` | staged bundle `Path` |
+| `.client_where(game_dir=None)` | the client's per-user paths, as a dict |
+| `.client_deploy(mods_dir=None, mod_name=None, replace=True)` | `{destination, copied}` (writes outside the modlet) |
+| `.client_launch(run_seconds=None, mute=False, mod_name=None, …)` | `AcceptanceRun` (starts a real client) |
+| `.client_log(path=None, log_dir=None, mod_name=None)` | `LogReport` |
 | `.call(name, params)` | the registry operation, JSON-shaped |
 
 ### The underlying functions
@@ -388,7 +405,7 @@ The offline half needs no Unity, no game install, and no network, so it runs
 on any hosted runner as a pull-request gate:
 
 ```yaml
-- run: uv tool install 7dtd-asset-pipeline
+- run: uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/ywy50/7dtd-asset-pipeline'
 - run: shamway status --json
 - run: shamway validate
 ```

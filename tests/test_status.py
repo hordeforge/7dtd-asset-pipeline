@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import unityfs_bundle
+
 from sevendtd_asset_pipeline import collect_status, load_config
 from sevendtd_asset_pipeline.config import CONFIG_NAME
 from sevendtd_asset_pipeline.scaffold import initialize
-
-from fixtures import unityfs_bundle
 
 
 class StatusTests(unittest.TestCase):

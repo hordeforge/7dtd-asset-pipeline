@@ -46,7 +46,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from .client import refuse_while_held, user_mods_dir
-from .config import load_config
+from .config import PipelineConfig, load_config
 from .errors import PipelineError
 from .references import manifest_assets, read_mod_name
 
@@ -121,11 +121,11 @@ def _template(name: str) -> str:
         raise PipelineError(f"cannot read packaged provider template {path}: {exc}") from exc
 
 
-def plan(config: object) -> ProviderPlan:
+def plan(config: PipelineConfig) -> ProviderPlan:
     """Derive the provider from the mod's own configuration and manifest."""
-    mod_root = Path(config.mod_root)  # type: ignore[attr-defined]
+    mod_root = Path(config.mod_root)
     mod_name = read_mod_name(mod_root / "ModInfo.xml")
-    manifest = Path(config.tracked_manifest)  # type: ignore[attr-defined]
+    manifest = Path(config.tracked_manifest)
     if not manifest.is_file():
         raise PipelineError(
             f"no tracked manifest at {manifest}; run `shamway build` (or `stage`) first. "
@@ -150,8 +150,8 @@ def plan(config: object) -> ProviderPlan:
         )
     if not stems:
         raise PipelineError(f"{manifest} lists no assets a provider case could load")
-    bundle_name = Path(config.bundle_output).name  # type: ignore[attr-defined]
-    resources = Path(config.resources_dir).name  # type: ignore[attr-defined]
+    bundle_name = Path(config.bundle_output).name
+    resources = Path(config.resources_dir).name
     assembly = f"{_identifier(mod_name)}Acceptance"
     return ProviderPlan(
         directory=mod_root / PROVIDER_DIRECTORY,
@@ -228,7 +228,8 @@ def write(plan_: ProviderPlan) -> list[Path]:
 
 def build(plan_: ProviderPlan, game_dir: Path, harness_dll: Path, output: Path) -> Path:
     """Compile the provider against the game's assemblies and the harness."""
-    if shutil.which("dotnet") is None:
+    dotnet = shutil.which("dotnet")
+    if dotnet is None:
         raise PipelineError(
             "building the acceptance provider needs the .NET SDK on PATH ('dotnet'). "
             "It is optional: the rendered source is the deliverable, and any host with "
@@ -245,7 +246,7 @@ def build(plan_: ProviderPlan, game_dir: Path, harness_dll: Path, output: Path) 
     project = plan_.directory / f"{plan_.assembly}.csproj"
     result = subprocess.run(
         [
-            "dotnet",
+            dotnet,
             "build",
             str(project),
             "-c",
@@ -272,7 +273,7 @@ def build(plan_: ProviderPlan, game_dir: Path, harness_dll: Path, output: Path) 
 
 
 def generate(
-    config: object,
+    config: PipelineConfig,
     game_dir: Path | None = None,
     harness_dll: Path | None = None,
     install_dir: Path | None = None,
@@ -286,7 +287,7 @@ def generate(
         return result
     if game_dir is None:
         raise PipelineError("building the provider needs the game directory for its assemblies")
-    output = Path(config.build_dir) / "acceptance" / plan_.assembly  # type: ignore[attr-defined]
+    output = Path(config.build_dir) / "acceptance" / plan_.assembly
     output.mkdir(parents=True, exist_ok=True)
     assembly = build(plan_, game_dir, harness_dll, output)
     result["built"] = str(assembly)
@@ -333,8 +334,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(result, indent=2))
         return 0
-    for path in result["written"]:  # type: ignore[union-attr]
-        print(f"wrote {path}")
+    written = result.get("written")
+    if isinstance(written, list):
+        for path in written:
+            print(f"wrote {path}")
     if result.get("built"):
         print(f"built {result['built']}")
     if result.get("installed"):

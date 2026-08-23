@@ -94,7 +94,7 @@ def border_key(image: Image.Image, inset: int = 2) -> tuple[int, int, int]:
 
 
 def distance(pixel: tuple[int, int, int], key: tuple[int, int, int]) -> float:
-    return sum((a - b) ** 2 for a, b in zip(pixel, key)) ** 0.5
+    return sum((a - b) ** 2 for a, b in zip(pixel, key, strict=True)) ** 0.5
 
 
 def key_out(
@@ -124,18 +124,15 @@ def key_out(
             if separation <= near:
                 target[x, y] = (red, green, blue, 0)
                 continue
-            if separation >= far:
-                coverage = 1.0
-            else:
-                coverage = (separation - near) / (far - near)
+            coverage = 1.0 if separation >= far else (separation - near) / (far - near)
             if despill and coverage < 1.0:
                 # In the transition band the pixel is part subject, part key.
                 # Pull it away from the key so the edge does not keep its tint.
                 red, green, blue = (
-                    max(0, min(255, int(channel - (1.0 - coverage) * (key_channel - 128) * 0.6)))
+                    max(0, min(255, round(channel - (1.0 - coverage) * (key_channel - 128) * 0.6)))
                     for channel, key_channel in ((red, key[0]), (green, key[1]), (blue, key[2]))
                 )
-            new_alpha = int(round(alpha * coverage))
+            new_alpha = round(alpha * coverage)
             target[x, y] = (red, green, blue, new_alpha)
             if new_alpha > 8:
                 opaque_pixels += 1
@@ -155,7 +152,7 @@ def luma_to_alpha(image: Image.Image, black_point: float, white_rgb: bool) -> tu
     covered = 0
     for y in range(height):
         for x in range(width):
-            alpha = int(round(max(0.0, source[x, y] - floor) / span * 255.0))
+            alpha = round(max(0.0, source[x, y] - floor) / span * 255.0)
             if white_rgb:
                 target[x, y] = (255, 255, 255, alpha)
             else:

@@ -12,10 +12,11 @@ import unittest
 from pathlib import Path
 
 from sevendtd_asset_pipeline import acceptance
+from sevendtd_asset_pipeline.config import PipelineConfig
 from sevendtd_asset_pipeline.errors import PipelineError
 
 
-def _mod(root: Path, assets: list[str], mod_name: str = "ExampleMod") -> object:
+def _mod(root: Path, assets: list[str], mod_name: str = "ExampleMod") -> PipelineConfig:
     from sevendtd_asset_pipeline.config import load_config, render_config
 
     (root / "Config").mkdir(parents=True, exist_ok=True)

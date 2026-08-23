@@ -39,6 +39,7 @@ docs/validation.md and docs/research-provenance.md.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import json
 import os
@@ -372,19 +373,15 @@ def running_client_pids(proc: Path = Path("/proc")) -> list[int]:
 
 def stop_client(pids: list[int], grace_seconds: float = 5.0) -> None:
     for pid in pids:
-        try:
+        with contextlib.suppress(ProcessLookupError):
             os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
     deadline = time.monotonic() + grace_seconds
     while time.monotonic() < deadline and any(_alive(pid) for pid in pids):
         time.sleep(0.2)
     for pid in pids:
         if _alive(pid):
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
 
 
 def _alive(pid: int) -> bool:
@@ -435,7 +432,11 @@ def _sink_inputs() -> list[dict[str, object]]:
     if shutil.which("pactl") is None:
         raise PipelineError("pactl is not installed; cannot reach the PipeWire/Pulse sink inputs")
     result = subprocess.run(
-        ["pactl", "-f", "json", "list", "sink-inputs"], capture_output=True, text=True, check=False
+        # PATH lookup is deliberate: pactl is a user tool located by shutil.which above.
+        ["pactl", "-f", "json", "list", "sink-inputs"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if result.returncode != 0:
         raise PipelineError(f"pactl failed: {result.stderr.strip() or result.returncode}")
@@ -477,7 +478,7 @@ def set_client_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
         if indexes:
             for index in indexes:
                 subprocess.run(
-                    ["pactl", "set-sink-input-mute", str(index), "1" if muted else "0"],
+                    ["pactl", "set-sink-input-mute", str(index), "1" if muted else "0"],  # noqa: S607
                     check=False,
                 )
             return indexes

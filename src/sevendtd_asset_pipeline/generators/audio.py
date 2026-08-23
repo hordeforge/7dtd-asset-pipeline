@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         describe(args.output, samples, channels, args.rate)
         return 0
 
-    generator = random.Random(args.seed)
+    generator = random.Random(args.seed)  # noqa: S311 - seeded waveform noise, not secrets
     count = int(args.seconds * args.rate)
     samples = array.array("h", bytes(2 * count))
     for index in range(count):

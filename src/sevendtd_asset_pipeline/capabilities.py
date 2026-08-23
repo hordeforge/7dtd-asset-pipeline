@@ -17,9 +17,9 @@ import importlib.util
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 from dataclasses import asdict, dataclass
-from functools import lru_cache
+from functools import cache
+from pathlib import Path
 
 from .errors import PipelineError
 
@@ -200,7 +200,7 @@ def _command_version(executable: str) -> str | None:
 
 
 def _module_version(module: str) -> str | None:
-    from importlib.metadata import PackageNotFoundError, version  # noqa: PLC0415
+    from importlib.metadata import PackageNotFoundError, version
 
     for candidate in (module, module.lower(), module.replace("PIL", "pillow")):
         try:
@@ -248,7 +248,7 @@ def capabilities(probe_versions: bool = False) -> list[Capability]:
     return [_resolve(spec, probe_versions) for spec in REGISTRY]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _availability() -> dict[str, bool]:
     return {capability.name: capability.available for capability in capabilities()}
 

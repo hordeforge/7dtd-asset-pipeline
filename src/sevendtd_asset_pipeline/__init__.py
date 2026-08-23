@@ -20,20 +20,20 @@ Every entry point raises `PipelineError` with a single user-actionable message
 when a gate fails.
 """
 
+from ._version import __version__
 from .api import Pipeline, call_json
 from .build import reject_disabled_modules, run_build
 from .capabilities import Capability, capabilities, has_capability, require_capability
 from .config import PipelineConfig, load_config
 from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, failed, run_doctor
-from .mesh_check import MeshReport, check_mesh
 from .errors import PipelineError
-from ._version import __version__
 from .game import game_unity_version, project_unity_version
 from .icon_check import IconReport, check_icons
 from .icon_render import RenderResult, render_icon
-from .references import AssetReference, discover_references, manifest_assets
+from .mesh_check import MeshReport, check_mesh
 from .operations import OPERATIONS, Operation, manifest
+from .references import AssetReference, discover_references, manifest_assets
 from .scaffold import initialize
 from .sound_check import SoundReport, check_sound
 from .status import Status, collect_status
@@ -42,6 +42,7 @@ from .unityfs import BundleInfo, inspect_bundle
 from .validation import ValidationReport, validate_bundle, validate_mod
 
 __all__ = [
+    "OPERATIONS",
     "AssetReference",
     "BundleInfo",
     "Capability",
@@ -49,7 +50,6 @@ __all__ = [
     "DeepReport",
     "IconReport",
     "MeshReport",
-    "OPERATIONS",
     "Operation",
     "Pipeline",
     "PipelineConfig",

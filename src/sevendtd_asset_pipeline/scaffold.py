@@ -22,7 +22,6 @@ from .consumer_docs import render_agent_guide
 from .errors import PipelineError
 from .references import read_mod_name
 
-
 # The mod-side entry points. `validate` and `check-icons` run together because
 # icons are not bundle members: one command cannot see both.
 MAKEFILE_TARGETS = """.PHONY: assets assets-probe assets-validate assets-doctor assets-status assets-icons

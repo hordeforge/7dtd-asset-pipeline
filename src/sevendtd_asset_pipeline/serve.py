@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any, Callable, TextIO
+from collections.abc import Callable
+from typing import Any, TextIO
 
 from .api import Pipeline, call_json
 from .errors import PipelineError
@@ -81,8 +82,8 @@ def serve(
     """Read requests until end of input, writing one response line per request."""
     stream_in = stream_in or sys.stdin
     stream_out = stream_out or sys.stdout
-    for line in stream_in:
-        line = line.strip()
+    for raw_line in stream_in:
+        line = raw_line.strip()
         if not line:
             continue
         try:

@@ -123,7 +123,7 @@ def read_png_header(path: Path) -> tuple[int, int, int, int]:
 
 def _alpha_coverage(path: Path) -> float | None:
     try:
-        from PIL import Image  # noqa: PLC0415 - optional capability
+        from PIL import Image
     except ImportError:
         return None
     with Image.open(path) as image:

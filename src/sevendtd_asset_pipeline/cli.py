@@ -22,17 +22,19 @@ from .capabilities import capabilities
 from .client import main as client_main
 from .config import BUNDLE_SOURCES, load_config
 from .deep_inspect import deep_inspect
+from .docs import read as read_doc
+from .docs import topics as doc_topics
 from .doctor import failed, run_doctor
-from .docs import read as read_doc, topics as doc_topics
 from .errors import PipelineError
-from .generators import describe as describe_generators, run as run_generator
 from .game import game_unity_version, project_unity_version
+from .generators import describe as describe_generators
+from .generators import run as run_generator
 from .icon_check import check_icons
 from .icon_render import render_icon
 from .mesh_check import check_mesh
-from .references import discover_references
 from .operations import manifest
 from .prompts import main as prompt_main
+from .references import discover_references
 from .scaffold import initialize
 from .serve import serve
 from .sound_check import check_sound

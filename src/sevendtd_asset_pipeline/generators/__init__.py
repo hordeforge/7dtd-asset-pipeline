@@ -77,7 +77,7 @@ def run(name: str, argv: list[str]) -> int:
     argparse derives the program name from it — otherwise `--help` advertises
     the module path rather than the command the user actually typed.
     """
-    import sys  # noqa: PLC0415 - only needed on this path
+    import sys
 
     module = load(name)
     original = sys.argv[0]

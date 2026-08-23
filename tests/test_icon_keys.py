@@ -13,13 +13,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from test_assets import write_png
+
 from sevendtd_asset_pipeline.icon_check import (
     check_icons,
     discover_icon_references,
     discover_implicit_icon_names,
 )
-
-from test_assets import write_png
 
 
 class IconKeyTests(unittest.TestCase):

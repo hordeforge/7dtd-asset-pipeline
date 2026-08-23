@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 import tempfile
 from pathlib import Path
 
@@ -43,7 +42,7 @@ def require_imaging() -> None:
         )
 
 
-def save_atomically(image: "Image.Image", path: Path) -> None:
+def save_atomically(image: Image.Image, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".png", dir=path.parent)
     os.close(descriptor)
@@ -62,7 +61,7 @@ def build_icon(
     trim: bool,
     fill: float = 1.0,
     saturation: float = 1.0,
-) -> "Image.Image":
+) -> Image.Image:
     """Fit the source into a cell.
 
     `fill` and `saturation` exist for one reason: a smaller tier of a family is
@@ -80,7 +79,7 @@ def build_icon(
         alpha = image.getchannel("A")
         image = ImageEnhance.Color(image.convert("RGB")).enhance(saturation).convert("RGBA")
         image.putalpha(alpha)
-    inner = max(1, int(round(size * (1 - 2 * padding) * fill)))
+    inner = max(1, round(size * (1 - 2 * padding) * fill))
     # Preserve aspect ratio: an icon squashed to fit reads as a different object.
     image.thumbnail((inner, inner), Image.LANCZOS)
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -88,7 +87,7 @@ def build_icon(
     return canvas
 
 
-def contact_sheet(icon: "Image.Image", path: Path) -> None:
+def contact_sheet(icon: Image.Image, path: Path) -> None:
     """Native size beside 2x and 4x, so small-size legibility is reviewable."""
     scales = (1, 2, 4)
     width = sum(icon.width * scale for scale in scales) + 16 * (len(scales) + 1)

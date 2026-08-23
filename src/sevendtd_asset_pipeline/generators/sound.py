@@ -78,7 +78,7 @@ def lowpass(samples: list[float], cutoff_hz: float, rate: int = RATE, passes: in
 
 def highpass(samples: list[float], cutoff_hz: float, rate: int = RATE) -> list[float]:
     low = lowpass(samples, cutoff_hz, rate)
-    return [value - filtered for value, filtered in zip(samples, low)]
+    return [value - filtered for value, filtered in zip(samples, low, strict=True)]
 
 
 def envelope(times: list[float], attack: float, decay: float, power: float = 1.0) -> list[float]:
@@ -185,22 +185,22 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
         rumble = [
             value / peak * shape * (1.0 + 0.45 * math.sin(2 * math.pi * 0.35 * time)
                                     * math.sin(2 * math.pi * 0.11 * time + 0.7))
-            for value, shape, time in zip(rumble, onset, times)
+            for value, shape, time in zip(rumble, onset, times, strict=True)
         ]
         # A faint delayed thud, so there is *some* transient at distance.
         thud_shape = envelope([max(time - 0.45, 0.0) for time in times], 0.01, 0.12)
-        thud = [value * shape for value, shape in zip(lowpass(white, 400.0), thud_shape)]
+        thud = [value * shape for value, shape in zip(lowpass(white, 400.0), thud_shape, strict=True)]
         return normalize(remove_dc(fade_tail(mix((1.0, rumble), (0.35, thud)), 2.5)), -2.0)
 
-    crack = [value * shape for value, shape in zip(white, envelope(times, 0.002, 0.02))]
-    rip = [value * shape for value, shape in zip(lowpass(white, 1800.0), envelope(times, 0.01, 0.18))]
+    crack = [value * shape for value, shape in zip(white, envelope(times, 0.002, 0.02), strict=True)]
+    rip = [value * shape for value, shape in zip(lowpass(white, 1800.0), envelope(times, 0.01, 0.18), strict=True)]
 
     # Pressure wave: an exponential sweep from 70 Hz to 22 Hz over three
     # seconds. Below about 25 Hz it is felt more than heard, which is the point.
     start_hz, end_hz, sweep_length = 70.0, 22.0, 3.0
     rate_constant = math.log(end_hz / start_hz) / sweep_length
     sweep = []
-    for time, shape in zip(times, envelope(times, 0.03, 2.2, power=1.2)):
+    for time, shape in zip(times, envelope(times, 0.03, 2.2, power=1.2), strict=True):
         held = min(time, sweep_length)
         phase = 2 * math.pi * start_hz * (math.exp(rate_constant * held) - 1.0) / rate_constant
         if time > sweep_length:
@@ -212,13 +212,13 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
     rumble = [
         value / peak * shape * (1.0 + 0.35 * math.sin(2 * math.pi * 0.7 * time + 1.0)
                                 * math.sin(2 * math.pi * 0.23 * time))
-        for value, shape, time in zip(rumble, envelope(times, 0.12, duration * 0.33, power=0.9), times)
+        for value, shape, time in zip(rumble, envelope(times, 0.12, duration * 0.33, power=0.9), times, strict=True)
     ]
     band = lowpass(highpass(white, 900.0), 5000.0)
     gate = lowpass([1.0 if generator.random() < 0.08 else 0.0 for _ in times], 60.0)
     debris = [
         value * shape * open_amount * 4.0 * 0.18
-        for value, shape, open_amount in zip(band, envelope(times, 0.3, 1.6), gate)
+        for value, shape, open_amount in zip(band, envelope(times, 0.3, 1.6), gate, strict=True)
     ]
     return normalize(
         remove_dc(
@@ -235,7 +235,7 @@ def tick(generator: random.Random) -> list[float]:
     """
     times = seconds(0.09)
     transient = [
-        value * shape for value, shape in zip(noise(len(times), generator), envelope(times, 0.0005, 0.0025))
+        value * shape for value, shape in zip(noise(len(times), generator), envelope(times, 0.0005, 0.0025), strict=True)
     ]
     ring = [
         0.60 * math.sin(2 * math.pi * 2350 * time) * a
@@ -246,11 +246,12 @@ def tick(generator: random.Random) -> list[float]:
             envelope(times, 0.0005, 0.012),
             envelope(times, 0.0005, 0.006),
             envelope(times, 0.001, 0.018),
+            strict=True,
         )
     ]
     knock = [
         math.sin(2 * math.pi * 190 * time) * shape * 0.3
-        for time, shape in zip(times, envelope(times, 0.001, 0.02))
+        for time, shape in zip(times, envelope(times, 0.001, 0.02), strict=True)
     ]
     body = highpass(transient, 600.0)
     return normalize(mix((0.8, body), (1.0, ring), (1.0, knock)), -3.0)
@@ -272,7 +273,7 @@ def whoosh(duration: float, generator: random.Random) -> list[float]:
         # Sine hump: closest at the middle of the clip.
         nearness = math.sin(math.pi * position) ** 1.5
         output.append(bright[index] * nearness + dark[index] * (1.0 - nearness) * 0.6)
-    shaped = [value * shape for value, shape in zip(output, [math.sin(math.pi * t / duration) ** 1.2 for t in times])]
+    shaped = [value * shape for value, shape in zip(output, [math.sin(math.pi * t / duration) ** 1.2 for t in times], strict=True)]
     return normalize(remove_dc(fade_tail(shaped, min(0.15, duration * 0.2))), -3.0)
 
 
@@ -311,7 +312,7 @@ def beep(hz: float, count: int, generator: random.Random) -> list[float]:
     shape = envelope(single, 0.004, 0.045)
     body = [
         (math.sin(2 * math.pi * hz * time) + 0.25 * math.sin(2 * math.pi * hz * 2 * time)) * value
-        for time, value in zip(single, shape)
+        for time, value in zip(single, shape, strict=True)
     ]
     gap = [0.0] * int(0.07 * RATE)
     output: list[float] = []
@@ -489,7 +490,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "sounds-xml":
         return sounds_xml(args)
 
-    generator = random.Random(args.seed)
+    generator = random.Random(args.seed)  # noqa: S311 - seeded waveform noise, not secrets
     if args.command == "blast":
         duration = args.seconds or (15.0 if args.distant else 11.0)
         samples = blast(duration, generator, args.distant)

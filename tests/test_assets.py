@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import array
 import math
-import sevendtd_asset_pipeline
 import struct
 import tempfile
 import unittest
@@ -18,9 +17,14 @@ import zlib
 from pathlib import Path
 from typing import Any
 
+import sevendtd_asset_pipeline
 from sevendtd_asset_pipeline import Pipeline, PipelineError
 from sevendtd_asset_pipeline.assets_src import LANES, render_readme
-from sevendtd_asset_pipeline.icon_check import check_icons, discover_icon_references, read_png_header
+from sevendtd_asset_pipeline.icon_check import (
+    check_icons,
+    discover_icon_references,
+    read_png_header,
+)
 from sevendtd_asset_pipeline.sound_check import check_sound
 
 
@@ -357,12 +361,12 @@ class AdoptionTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def _adopt(self, **overrides: Any) -> tuple[Pipeline, list[Path]]:
-        options = dict(
-            unity_version="2022.3.62f2",
-            adopt_project=self.project,
-            source_root="Assets/ExistingMod/Bundle",
-            manifest_dir="_meta/unity/manifests",
-        )
+        options: dict[str, Any] = {
+            "unity_version": "2022.3.62f2",
+            "adopt_project": self.project,
+            "source_root": "Assets/ExistingMod/Bundle",
+            "manifest_dir": "_meta/unity/manifests",
+        }
         options.update(overrides)
         return Pipeline.scaffold(self.root, **options)
 

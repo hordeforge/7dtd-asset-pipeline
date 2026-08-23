@@ -43,9 +43,9 @@ class SessionTests(unittest.TestCase):
     def test_every_backend_builds_an_argv_ending_in_its_output(self) -> None:
         for backend in BACKENDS:
             with self.subTest(backend=backend.name):
-                argv = backend.command(Path("/tmp/shot.png"))
+                argv = backend.command(Path("/tmp/shot.png"))  # noqa: S108 - literal argv data
                 self.assertEqual(argv[0], backend.name)
-                self.assertEqual(argv[-1], "/tmp/shot.png")
+                self.assertEqual(argv[-1], "/tmp/shot.png")  # noqa: S108 - literal argv data
 
     def test_the_capability_probes_the_same_tools(self) -> None:
         spec = next(item for item in REGISTRY if item.name == "desktop-capture")
@@ -60,9 +60,11 @@ class SelectionTests(unittest.TestCase):
             _require_backend({})
 
     def test_a_session_without_tools_names_what_to_install(self) -> None:
-        with mock.patch("sevendtd_asset_pipeline.capture.shutil.which", return_value=None):
-            with self.assertRaisesRegex(PipelineError, "no screenshot tool for this x11 session"):
-                _require_backend({"DISPLAY": ":0"})
+        with (
+            mock.patch("sevendtd_asset_pipeline.capture.shutil.which", return_value=None),
+            self.assertRaisesRegex(PipelineError, "no screenshot tool for this x11 session"),
+        ):
+            _require_backend({"DISPLAY": ":0"})
 
     def test_selection_takes_the_first_installed_backend_for_the_session(self) -> None:
         installed = {"grim", "scrot"}

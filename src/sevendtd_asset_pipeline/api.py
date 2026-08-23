@@ -34,8 +34,8 @@ from .build import (
 )
 from .bundle_verify import verify_with_editor
 from .bundle_writer import pack_directory
-from .client import AcceptanceRun, LogReport
 from .capabilities import Capability, capabilities, require_capability
+from .client import AcceptanceRun, LogReport
 from .config import PipelineConfig, load_config
 from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, run_doctor
@@ -44,7 +44,8 @@ from .game import game_unity_version, project_unity_version
 from .icon_check import IconReport, check_icons
 from .icon_render import RenderResult, render_icon
 from .mesh_check import MeshReport, check_mesh
-from .operations import Operation, get as get_operation
+from .operations import Operation
+from .operations import get as get_operation
 from .prompts import render as render_prompt
 from .references import AssetReference, discover_references, manifest_assets
 from .scaffold import initialize

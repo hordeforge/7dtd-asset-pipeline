@@ -89,7 +89,7 @@ def require_imaging() -> None:
         )
 
 
-def save_atomically(array: "np.ndarray", path: Path, mode: str) -> None:
+def save_atomically(array: np.ndarray, path: Path, mode: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".png", dir=path.parent)
     os.close(descriptor)
@@ -118,23 +118,23 @@ def sha256(path: Path) -> str:
 # ------------------------------------------------------------------ imaging
 
 
-def luminance(rgb: "np.ndarray") -> "np.ndarray":
+def luminance(rgb: np.ndarray) -> np.ndarray:
     return rgb[..., 0] * 0.2126 + rgb[..., 1] * 0.7152 + rgb[..., 2] * 0.0722
 
 
-def blur(field: "np.ndarray", radius: float) -> "np.ndarray":
+def blur(field: np.ndarray, radius: float) -> np.ndarray:
     """Gaussian blur through Pillow, so the result matches what an artist sees."""
     image = Image.fromarray(np.clip(field * 255.0, 0, 255).astype(np.uint8), "L")
     return np.asarray(image.filter(ImageFilter.GaussianBlur(radius)), dtype=np.float64) / 255.0
 
 
-def height_from_albedo(rgb: "np.ndarray", detail_radius: float = DEFAULT_DETAIL_RADIUS) -> "np.ndarray":
+def height_from_albedo(rgb: np.ndarray, detail_radius: float = DEFAULT_DETAIL_RADIUS) -> np.ndarray:
     """High-frequency relief: the albedo's luminance minus its own low-pass."""
     lum = luminance(rgb)
     return lum - blur(lum, detail_radius)
 
 
-def normal_map(height: "np.ndarray", slope_p99: float = DEFAULT_SLOPE_P99, flip_green: bool = False) -> "np.ndarray":
+def normal_map(height: np.ndarray, slope_p99: float = DEFAULT_SLOPE_P99, flip_green: bool = False) -> np.ndarray:
     """Tangent-space normal map, +X right, +Y up, +Z out of the surface.
 
     Gradients are wrapped central differences, so a tileable height field stays
@@ -158,7 +158,7 @@ def normal_map(height: "np.ndarray", slope_p99: float = DEFAULT_SLOPE_P99, flip_
     return np.clip(packed * 255.0, 0, 255).astype(np.uint8)
 
 
-def centred(field: "np.ndarray", swing: float) -> "np.ndarray":
+def centred(field: np.ndarray, swing: float) -> np.ndarray:
     """Map a field onto [-swing, swing] by its own 1st/99th percentiles.
 
     Percentiles rather than the maximum, so one outlier pixel cannot flatten
@@ -170,20 +170,20 @@ def centred(field: "np.ndarray", swing: float) -> "np.ndarray":
     return np.clip((field - low) / (high - low) * 2.0 - 1.0, -1.0, 1.0) * swing
 
 
-def zero_mean(field: "np.ndarray") -> "np.ndarray":
+def zero_mean(field: np.ndarray) -> np.ndarray:
     """Remove the field's own mean, so adding it to a scalar preserves that
     scalar as the map's mean — the reflectance rule."""
     return field - field.mean()
 
 
 def mask_map(
-    rgb: "np.ndarray",
+    rgb: np.ndarray,
     metallic_mean: float,
     smoothness_mean: float,
     metallic_swing: float = 0.34,
     smoothness_swing: float = 0.20,
     detail_radius: float = DEFAULT_DETAIL_RADIUS,
-) -> "np.ndarray":
+) -> np.ndarray:
     """Pack R = metallic, G = occlusion, B = 0, A = smoothness.
 
     Brighter, cleaner albedo pixels (a band-pass of the luminance, so it is
@@ -211,7 +211,7 @@ def mask_map(
     return np.stack([np.clip(c * 255.0, 0, 255).astype(np.uint8) for c in channels], axis=-1)
 
 
-def tileable_noise(size: int, rng: "np.random.Generator", exponent: float, anisotropy: float) -> "np.ndarray":
+def tileable_noise(size: int, rng: np.random.Generator, exponent: float, anisotropy: float) -> np.ndarray:
     """Periodic noise: white noise shaped in the frequency domain.
 
     Filtering an FFT and transforming back yields a field that wraps exactly.

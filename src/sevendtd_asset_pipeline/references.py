@@ -33,7 +33,10 @@ class AssetReference:
 
 def read_mod_name(mod_info: Path) -> str:
     try:
-        root = ET.parse(mod_info).getroot()
+        # Parses XML from inside the mod being validated, never from the network
+        # or a game install; defusedxml would add the first runtime dependency
+        # to a zero-dependency core.
+        root = ET.parse(mod_info).getroot()  # noqa: S314
     except (OSError, ET.ParseError) as exc:
         raise PipelineError(f"cannot parse {mod_info}: {exc}") from exc
     for element in root.iter():

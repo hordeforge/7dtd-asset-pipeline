@@ -76,7 +76,7 @@ def _resolve_prefab(config: PipelineConfig, prefab: str) -> str:
 
 def _downscale(source: Path, destination: Path, size: int) -> float:
     require_capability("pillow")
-    from PIL import Image  # noqa: PLC0415 - optional capability, checked above
+    from PIL import Image
 
     with Image.open(source) as image:
         resized = image.convert("RGBA").resize((size, size), Image.LANCZOS)

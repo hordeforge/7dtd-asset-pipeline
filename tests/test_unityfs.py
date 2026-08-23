@@ -5,11 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import build_bundle, lz4_bundle, serialized_file, unityfs_bundle
+
 from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.unityfs import _lz4_decompress, inspect_bundle
 from sevendtd_asset_pipeline.validation import validate_bundle
-
-from fixtures import build_bundle, lz4_block, lz4_bundle, serialized_file, unityfs_bundle
 
 
 class BundleCase(unittest.TestCase):

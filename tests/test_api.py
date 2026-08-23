@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import cast
 
 from sevendtd_asset_pipeline import OPERATIONS, Pipeline, PipelineError, manifest
 from sevendtd_asset_pipeline.api import call_json
@@ -89,9 +90,8 @@ class CommandLineTests(unittest.TestCase):
         from sevendtd_asset_pipeline.cli import main
 
         stderr = io.StringIO()
-        with tempfile.TemporaryDirectory() as directory:
-            with contextlib.redirect_stderr(stderr):
-                code = main(["inspect", str(Path(directory) / "absent.unity3d")])
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stderr(stderr):
+            code = main(["inspect", str(Path(directory) / "absent.unity3d")])
         self.assertEqual(1, code)
         lines = stderr.getvalue().splitlines()
         self.assertEqual(1, len(lines), f"expected one ERROR line, got {lines}")
@@ -186,6 +186,11 @@ class DispatchTests(unittest.TestCase):
             self.assertEqual(["steam", "-applaunch", "251570"], data["launch"][:3])
 
 
+def _nested(response: dict[str, object], key: str) -> dict[str, object]:
+    """The protocol nests one object under 'result' or 'error'."""
+    return cast("dict[str, object]", response[key])
+
+
 class ServeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -213,12 +218,13 @@ class ServeTests(unittest.TestCase):
 
     def test_schema_is_served_over_the_same_channel(self) -> None:
         (response,) = self._run({"id": 1, "op": "schema"})
-        self.assertEqual(len(OPERATIONS), len(response["result"]["operations"]))
+        operations = cast("list[object]", _nested(response, "result")["operations"])
+        self.assertEqual(len(OPERATIONS), len(operations))
 
     def test_writes_are_refused_unless_explicitly_allowed(self) -> None:
         (response,) = self._run({"id": 1, "op": "build", "params": {"probe": True}})
         self.assertFalse(response["ok"])
-        self.assertIn("read-only", response["error"]["message"])
+        self.assertIn("read-only", cast(str, _nested(response, "error")["message"]))
 
     def test_a_bad_line_does_not_desynchronize_the_session(self) -> None:
         output = io.StringIO()
@@ -232,13 +238,13 @@ class ServeTests(unittest.TestCase):
     def test_non_object_request_is_an_error_not_a_crash(self) -> None:
         response = handle([1, 2, 3], lambda: self.pipeline, False)
         self.assertFalse(response["ok"])
-        self.assertIn("JSON object", response["error"]["message"])
+        self.assertIn("JSON object", cast(str, _nested(response, "error")["message"]))
 
     def test_errors_carry_a_type_and_message(self) -> None:
         (response,) = self._run({"id": 1, "op": "validate"})
         self.assertFalse(response["ok"])
-        self.assertEqual("PipelineError", response["error"]["type"])
-        self.assertTrue(response["error"]["message"])
+        self.assertEqual("PipelineError", _nested(response, "error")["type"])
+        self.assertTrue(_nested(response, "error")["message"])
 
 
 class ImportHygieneTests(unittest.TestCase):

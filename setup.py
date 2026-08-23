@@ -26,7 +26,9 @@ SOURCE_SCRIPTS = ROOT / "scripts"
 PACKAGE = "sevendtd_asset_pipeline"
 
 
-class build_py(_build_py):  # noqa: N801 - setuptools requires this name
+# setuptools publishes no type information (no py.typed): the base class is
+# Any, and strict mode needs this named exception right on the subclass line.
+class build_py(_build_py):  # type: ignore[misc]  # noqa: N801 - setuptools requires this name
     def run(self) -> None:
         staged = ROOT / "src" / PACKAGE / "docs"
         if SOURCE_DOCS.is_dir():

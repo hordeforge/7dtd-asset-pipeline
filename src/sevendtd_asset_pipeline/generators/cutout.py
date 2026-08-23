@@ -32,6 +32,7 @@ it against both a light and a dark background — a fringe is invisible on one.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import secrets
 import sys
@@ -97,7 +98,7 @@ def border_key(image: Image.Image, inset: int = 2) -> tuple[int, int, int]:
 
 def distance(pixel: tuple[int, int, int], key: tuple[int, int, int]) -> float:
     squared = sum((a - b) ** 2 for a, b in zip(pixel, key, strict=True))
-    return squared ** 0.5
+    return math.sqrt(squared)
 
 
 def key_out(

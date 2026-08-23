@@ -54,6 +54,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from importlib.util import find_spec
 from pathlib import Path
 
 from .capture import DEFAULT_ROOT, capture, read_manifest, record_existing
@@ -270,7 +271,14 @@ def _write_lock(path: Path, fields: dict[str, str]) -> None:
 
 @contextmanager
 def _flocked(path: Path) -> Iterator[None]:
-    """Hold the protocol's sidecar flock around a critical section."""
+    """Hold the protocol's sidecar flock around a critical section.
+
+    Function scope on purpose, like the other fcntl import below: the module
+    only exists on Unix, and every client subcommand stays importable without
+    it so `--help` and the Windows-facing paths keep working.
+    """
+    import fcntl
+
     with open(str(path) + ".flock", "a+", encoding="utf-8") as sidecar:
         fcntl.flock(sidecar.fileno(), fcntl.LOCK_EX)
         try:
@@ -296,16 +304,14 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
     retries transient `OSError`s — dying silently would stale the record
     while the client it guards is still running.
     """
-    try:
-        # Function scope on purpose: fcntl exists only on Unix, and every other
-        # client subcommand (deploy, log, capture against a native Windows
-        # client) must stay importable without it.
-        import fcntl
-    except ImportError as exc:
+    # Availability probe, not an import: the module itself is imported where
+    # it is used, and function scope keeps Unix-only fcntl out of every other
+    # client subcommand (deploy, log, capture against a native Windows client).
+    if find_spec("fcntl") is None:
         raise PipelineError(
             "the shared client lock needs flock (fcntl), which only exists on Unix; "
             "this Proton-host operation cannot run here"
-        ) from exc
+        ) from None
     target = path if path is not None else lock_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

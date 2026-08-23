@@ -34,5 +34,6 @@ dist/
 
 .claude
 .agents
+.scratch/
 .gauntlet.lock.coverage.json
 *.lock

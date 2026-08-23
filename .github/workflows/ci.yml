@@ -43,10 +43,11 @@ jobs:
       # consumer's checkout.
       - run: shamway --help
       - run: shamway schema
-      # Pinned to the version the [tool.ruff] configuration was written for:
-      # a rule-set bump changes verdicts, so it lands here deliberately. Into
-      # the job's venv: --system hits the runner's externally-managed marker.
-      - run: uv pip install ruff==0.16.4
+      # Both pinned to the versions the [tool.ruff] / strict [tool.mypy]
+      # configurations were written against: a tool bump changes verdicts, so
+      # it lands here deliberately. Into the job's venv, not --system: that
+      # hits the runner's externally-managed marker.
+      - run: uv pip install ruff==0.16.4 mypy==2.3.1 setuptools
       - run: make check test
 
   capabilities:
@@ -61,9 +62,9 @@ jobs:
       - run: ./scripts/bootstrap
       - run: .venv/bin/shamway capabilities --json
       - run: .venv/bin/shamway capabilities --missing
-      # make check needs ruff resolvable by name, as in the test jobs.
+      # make check resolves both analyzers by name, as in the test jobs.
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-      - run: uv pip install ruff==0.16.4
+      - run: uv pip install ruff==0.16.4 mypy==2.3.1 setuptools
       - run: make check test
 
   scaffold:

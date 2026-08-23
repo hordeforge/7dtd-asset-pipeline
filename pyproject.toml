@@ -99,14 +99,10 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.11"
+strict = true
+# Written against mypy 2.3.1; CI pins the same version as it pins ruff.
 # Regenerable setuptools output; checking it doubles every finding.
 exclude = ["^build/"]
-# Baseline under a full-strict tree: every function is annotated, but strict's
-# disallow-any flags still find ~80 real findings across src and tests.
-# Ratchet: fix those, then flip strict on; these three stay regardless.
-no_implicit_optional = true
-warn_unused_ignores = true
-warn_redundant_casts = true
 # The optional-capability modules ship stubs only (numpy), which
 # follow_imports otherwise keeps parsing regardless of the override below.
 follow_imports_for_stubs = true

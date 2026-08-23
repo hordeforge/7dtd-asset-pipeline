@@ -257,7 +257,7 @@ class ProcessAndAudioTests(unittest.TestCase):
             self.assertFalse(client._is_client_pid(999999, proc))
             signalled: list[tuple[int, int]] = []
             with patch.object(
-                client.os, "kill", side_effect=lambda pid, sig: signalled.append((pid, sig))
+                os, "kill", side_effect=lambda pid, sig: signalled.append((pid, sig))
             ):
                 client.stop_client([300, 301], grace_seconds=0.05, proc=proc)
             self.assertNotIn(301, [pid for pid, _ in signalled])
@@ -403,8 +403,10 @@ class LockTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "playtest_running"
-            with patch.object(client, "LOCK_HEARTBEAT_SECONDS", 0.02):
-                with client.held_lock("mine-1", path):
+            with (
+                patch.object(client, "LOCK_HEARTBEAT_SECONDS", 0.02),
+                client.held_lock("mine-1", path),
+            ):
                     # The documented reclaim: our record aged out and another
                     # session took over while we were suspended.
                     self._lock(

@@ -260,7 +260,9 @@ class PipelineTests(unittest.TestCase):
         initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="synthesized")
         config = load_config(self.root / CONFIG_NAME)
 
-        def by_name() -> dict:
+        from sevendtd_asset_pipeline.doctor import Check
+
+        def by_name() -> dict[str, Check]:
             return {check.name: check for check in run_doctor(config)}
 
         # No game dir: the scaffolded [unity] version is WARN-grade evidence,

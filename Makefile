@@ -9,7 +9,7 @@ all: check test
 SHELL_SCRIPTS := scripts/bootstrap scripts/install-tools.sh scripts/install-unity-editor.sh \
 	scripts/compile-editor-scripts.sh scripts/playtest-acceptance.sh
 
-check: lint
+check: lint typecheck
 	$(PYTHON) -m compileall -q src tests
 	bash -n $(SHELL_SCRIPTS)
 	@if command -v shellcheck >/dev/null 2>&1; then \
@@ -34,10 +34,9 @@ lint:
 		echo "note: ruff not installed; skipped python linting"; \
 	fi
 
-# Not part of `check` yet: the tree still carries ~80 findings under these
-# settings (first-assignment narrowing in cli.run(), object-typed JSON flows in
-# tests). Fix them, then add `typecheck` to the check prerequisites and the CI
-# install step makes it blocking.
+# Strict whole-tree typing. Same contract as lint: run when the tool is on
+# PATH, hard-fail in CI, and say so plainly when skipped on a dev host.
+# setuptools is checked alongside mypy because setup.py subclasses build_py.
 typecheck:
 	@if command -v mypy >/dev/null 2>&1; then \
 		mypy .; \

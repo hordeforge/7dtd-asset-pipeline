@@ -15,7 +15,7 @@ def integrity(digest: str) -> str:
 
 
 # Shape captured from the live release service for 2022.3.62f2 on 2026-08-23.
-PAYLOAD = {
+PAYLOAD: dict[str, object] = {
     "results": [
         {
             "version": "2022.3.62f2",
@@ -57,7 +57,7 @@ class UnityReleaseTests(unittest.TestCase):
         self.assertTrue(release.editor.url.endswith(".tar.xz"))
 
     def test_missing_integrity_is_reported_as_absent_not_invented(self) -> None:
-        payload = {
+        payload: dict[str, object] = {
             "results": [
                 {
                     "version": "1.2.3f4",
@@ -94,11 +94,11 @@ class _Response:
     def read(self) -> bytes:
         return self._payload
 
-    def __enter__(self) -> "_Response":
+    def __enter__(self) -> _Response:
         return self
 
-    def __exit__(self, *_exc: object) -> bool:
-        return False
+    def __exit__(self, *_exc: object) -> None:
+        """Never suppress: a failing body must keep failing."""
 
 
 class FetchReleaseTests(unittest.TestCase):

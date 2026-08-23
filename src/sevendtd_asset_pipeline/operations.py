@@ -25,8 +25,8 @@ from ._version import __version__
 from .config import BUNDLE_SOURCES
 from .docs import topics
 from .errors import PipelineError
-from .generators import describe
-from .prompts import KINDS, KEYS, kinds
+from .generators import GeneratorInfo, describe
+from .prompts import KEYS, KINDS, kinds
 
 # Cost classes, so a caller can decide what to run in a tight loop.
 INSTANT = "instant"  # no I/O beyond the mod directory
@@ -501,7 +501,7 @@ def manifest() -> dict[str, Any]:
     }
 
 
-def _generators() -> list[dict[str, Any]]:
+def _generators() -> list[GeneratorInfo]:
     """The packaged asset generators, callable as `shamway generate NAME`."""
     return describe()
 

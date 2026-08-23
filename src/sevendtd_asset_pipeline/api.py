@@ -47,6 +47,7 @@ from .icon_render import RenderResult, render_icon
 from .mesh_check import MeshReport, check_mesh
 from .operations import Operation
 from .operations import get as get_operation
+from .prompts import PromptResult
 from .prompts import render as render_prompt
 from .references import AssetReference, discover_references, manifest_assets
 from .scaffold import initialize
@@ -318,7 +319,7 @@ class Pipeline:
         key: str = "",
         avoid: tuple[str, ...] = (),
         stem: str = "myModThing",
-    ) -> dict[str, Any]:
+    ) -> PromptResult:
         """One house-style image-generation prompt, and the lane that follows it.
 
         Needs no config and no mod: an agent can render a prompt before the

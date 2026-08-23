@@ -57,6 +57,7 @@ class DeepInspectResourceTests(unittest.TestCase):
             report = None
             for _ in range(50):
                 report = deep_inspect(self.bundle)
+            assert report is not None, "deep_inspect returned no report in 50 runs"
             self.assertEqual(["mymodnote"], [entry.asset_stem for entry in report.entries])
         finally:
             gc.enable()

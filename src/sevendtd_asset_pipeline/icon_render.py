@@ -95,7 +95,7 @@ def _downscale(source: Path, destination: Path, size: int) -> float:
         finally:
             temporary.unlink(missing_ok=True)
         counts = resized.getchannel("A").histogram()
-    opaque = sum(counts[9:])
+    opaque: int = sum(counts[9:])
     return opaque / float(size * size)
 
 

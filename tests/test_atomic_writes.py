@@ -13,6 +13,10 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PIL import Image
 from pathlib import Path
 from unittest import mock
 
@@ -23,7 +27,7 @@ def dotfiles(directory: Path) -> list[str]:
     return sorted(path.name for path in directory.iterdir() if path.name.startswith("."))
 
 
-class ReplaceFails(OSError):
+class ReplaceError(OSError):
     """A replace that dies the way an interrupted run would."""
 
 
@@ -37,7 +41,7 @@ class CutoutSaveTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def _image(self):
+    def _image(self) -> Image.Image:
         from PIL import Image
 
         return Image.new("RGBA", (4, 4), (255, 0, 255, 255))
@@ -54,7 +58,7 @@ class CutoutSaveTests(unittest.TestCase):
         from sevendtd_asset_pipeline.generators.cutout import save
 
         def exploding(self: Path, target: object) -> Path:
-            raise ReplaceFails(28, "No space left on device")
+            raise ReplaceError(28, "No space left on device")
 
         with mock.patch.object(Path, "replace", exploding), self.assertRaises(OSError):
             save(self._image(), self.destination)
@@ -96,7 +100,7 @@ class IconDownscaleTests(unittest.TestCase):
         from sevendtd_asset_pipeline.icon_render import _downscale
 
         def exploding(self: Path, target: object) -> Path:
-            raise ReplaceFails(28, "No space left on device")
+            raise ReplaceError(28, "No space left on device")
 
         with (
             mock.patch.object(Path, "replace", exploding),

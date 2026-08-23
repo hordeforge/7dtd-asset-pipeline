@@ -23,7 +23,11 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.13
-      - run: uv pip install --system --python 3.13 --editable .
+      # Into a venv, not --system: recent uv refuses to write into its own
+      # managed interpreters (externally-managed error).
+      - run: uv venv --python 3.13
+      - run: uv pip install --editable .
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: make check test
 
   publish:

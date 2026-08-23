@@ -31,8 +31,13 @@ jobs:
           enable-cache: true
       - run: uv python install ${{ matrix.python-version }}
       # Install the core alone: the suite must pass without the optional
-      # capabilities, because that is how most consumers first run it.
-      - run: uv pip install --system --python ${{ matrix.python-version }} --editable .
+      # capabilities, because that is how most consumers first run it. Into a
+      # venv, not --system: recent uv refuses to write into its own managed
+      # interpreters (externally-managed error), which left these jobs red.
+      - run: uv venv --python ${{ matrix.python-version }}
+      - run: uv pip install --editable .
+      # Later steps (and the Makefile's `uv run`) resolve ./.venv from PATH.
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       # Exercise the installed console script, not only the source tree, so a
       # broken entry point or missing package data fails here rather than in a
       # consumer's checkout.
@@ -64,7 +69,9 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-      - run: uv pip install --system --editable .
+      - run: uv venv
+      - run: uv pip install --editable .
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: |
           mkdir -p /tmp/MyMod
           printf '<xml><Name value="MyMod" /></xml>\n' > /tmp/MyMod/ModInfo.xml
@@ -92,7 +99,9 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-      - run: uv pip install --system --editable .
+      - run: uv venv
+      - run: uv pip install --editable .
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: make coverage
       - run: uv run --no-project --with coverage python scripts/coverage_badge.py "$RUNNER_TEMP/coverage.svg"
       - name: Publish the badge to the badges branch

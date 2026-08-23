@@ -139,7 +139,7 @@ def initialize(
             "Unity project to adopt"
         )
 
-    if adopting:
+    if adopting and adopt_project is not None:
         project = Path(adopt_project)
         project = (project if project.is_absolute() else mod_root / project).resolve()
         _check_adoptable(project, mod_root, source_root)
@@ -184,9 +184,9 @@ def initialize(
         created_scripts = _install_editor_scripts(template, project)
     else:
         shutil.copytree(str(template), project)
-        bundle_source = project / "Assets" / "ModAssets" / "Bundle"
-        bundle_source.mkdir(parents=True, exist_ok=True)
-        (bundle_source / ".gitkeep").write_text(
+        bundle_source_dir = project / "Assets" / "ModAssets" / "Bundle"
+        bundle_source_dir.mkdir(parents=True, exist_ok=True)
+        (bundle_source_dir / ".gitkeep").write_text(
             "# Put source assets and their Unity .meta files below this directory.\n",
             encoding="utf-8",
         )
@@ -256,8 +256,8 @@ def _check_adoptable(project: Path, mod_root: Path, source_root: str | None) -> 
         )
     _relative(project, mod_root, "the Unity project")
     if source_root:
-        bundle_source = project / source_root
-        if not bundle_source.is_dir():
+        bundle_source_dir = project / source_root
+        if not bundle_source_dir.is_dir():
             raise PipelineError(
                 f"--source-root {source_root!r} does not exist in {project}. "
                 "It is the folder whose contents become the bundle, relative to the "

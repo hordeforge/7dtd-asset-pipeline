@@ -6,6 +6,7 @@ import argparse
 import importlib
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from .api import Pipeline, call_json
@@ -287,7 +288,7 @@ def _init_next_step(bundle_source: str) -> str:
     return "Next: set SEVEN_DAYS_TO_DIE_DIR and UNITY_EDITOR, then run shamway doctor"
 
 
-def _print_pairs(data: dict) -> None:
+def _print_pairs(data: dict[str, object]) -> None:
     for key, value in data.items():
         print(f"{key}: {value}")
 
@@ -333,14 +334,14 @@ def run(args: argparse.Namespace) -> int:
 
     if args.command == "inspect":
         if args.deep:
-            report = deep_inspect(args.bundle)
+            deep = deep_inspect(args.bundle)
             if args.json:
-                print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+                print(json.dumps(deep.as_dict(), indent=2, sort_keys=True))
             else:
-                print(f"path: {report.path}")
-                print(f"objects: {report.object_count}")
-                print("types: " + ", ".join(f"{k}={v}" for k, v in report.type_counts.items()))
-                for entry in report.entries:
+                print(f"path: {deep.path}")
+                print(f"objects: {deep.object_count}")
+                print("types: " + ", ".join(f"{k}={v}" for k, v in deep.type_counts.items()))
+                for entry in deep.entries:
                     components = ", ".join(f"{k}={v}" for k, v in entry.components.items())
                     detail = f" [{entry.object_count} objects: {components}]" if components else ""
                     print(f"  {entry.asset_stem} ({entry.type}) name={entry.object_name!r}{detail}")
@@ -359,37 +360,37 @@ def run(args: argparse.Namespace) -> int:
             _print_pairs(data)
         return 0
     if args.command == "check-mesh":
-        report = check_mesh(args.mesh, args.max_extent, args.strict)
+        mesh = check_mesh(args.mesh, args.max_extent, args.strict)
         if args.json:
-            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+            print(json.dumps(mesh.as_dict(), indent=2, sort_keys=True))
         else:
-            data = report.as_dict()
+            data = mesh.as_dict()
             for key in ("path", "extents", "geometry_count", "vertex_count", "face_count",
                         "watertight", "gltf_errors", "gltf_warnings"):
                 if data[key] is not None:
                     print(f"{key}: {data[key]}")
-            for note in report.skipped:
+            for note in mesh.skipped:
                 print(f"skipped: {note}")
-            for problem in report.problems:
+            for problem in mesh.problems:
                 print(f"problem: {problem}")
-            print("OK" if report.ok else "FAILED")
-        return 0 if report.ok else 1
+            print("OK" if mesh.ok else "FAILED")
+        return 0 if mesh.ok else 1
     if args.command == "check-sound":
-        report = check_sound(args.clip, args.max_seconds, args.require_mono)
+        sound = check_sound(args.clip, args.max_seconds, args.require_mono)
         if args.json:
-            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+            print(json.dumps(sound.as_dict(), indent=2, sort_keys=True))
         else:
-            data = report.as_dict()
+            data = sound.as_dict()
             for key in ("path", "channels", "sample_rate", "duration_seconds", "peak",
                         "peak_dbfs", "rms", "dc_offset", "clipped_samples",
                         "leading_silence_seconds", "trailing_silence_seconds"):
                 print(f"{key}: {data[key]}")
-            for note in report.notes:
+            for note in sound.notes:
                 print(f"note: {note}")
-            for problem in report.problems:
+            for problem in sound.problems:
                 print(f"problem: {problem}")
-            print("OK" if report.ok else "FAILED")
-        return 0 if report.ok else 1
+            print("OK" if sound.ok else "FAILED")
+        return 0 if sound.ok else 1
     if args.command == "pack":
         if args.game_dir:
             version, source = game_unity_version(args.game_dir.resolve())
@@ -419,9 +420,9 @@ def run(args: argparse.Namespace) -> int:
         return 0
     if args.command == "generate":
         if args.list or not args.generator:
-            for entry in describe_generators():
-                needs = ", ".join(entry["capabilities"]) or "nothing beyond the standard library"
-                print(f"{entry['name']:14} {entry['summary']}")
+            for generator_entry in describe_generators():
+                needs = ", ".join(generator_entry["capabilities"]) or "nothing beyond the standard library"
+                print(f"{generator_entry['name']:14} {generator_entry['summary']}")
                 print(f"{'':14} needs: {needs}")
             print()
             print("Run one with: shamway generate NAME [ARGS...]  (--help works per generator)")
@@ -437,9 +438,9 @@ def run(args: argparse.Namespace) -> int:
             if args.json:
                 print(json.dumps(entries, indent=2, sort_keys=True))
             else:
-                for entry in entries:
-                    mark = " " if entry["available"] == "true" else "!"
-                    print(f"{mark} {entry['topic']:20} {entry['summary']}")
+                for doc_entry in entries:
+                    mark = " " if doc_entry["available"] == "true" else "!"
+                    print(f"{mark} {doc_entry['topic']:20} {doc_entry['summary']}")
                 print()
                 print("Read one with: shamway docs TOPIC")
             return 0
@@ -520,27 +521,27 @@ def run(args: argparse.Namespace) -> int:
             print("Offline gates passed. A fresh-client load is still required for acceptance.")
         return 0
     if args.command == "verify-bundle":
-        report = verify_with_editor(
+        verified = verify_with_editor(
             args.bundle or config.bundle_output,
             config.unity_editor,
             expected_unity_version(config),
             config.build_dir / "verify",
         )
         if args.json:
-            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+            print(json.dumps(verified.as_dict(), indent=2, sort_keys=True))
         else:
-            for asset in report.assets:
+            for asset in verified.assets:
                 detail = f"  [{asset.detail}]" if asset.detail else ""
                 print(f"{asset.key}: {asset.type} named {asset.name!r}{detail}")
-            for problem in report.problems:
+            for problem in verified.problems:
                 print(f"problem: {problem}")
-            print("OK" if report.ok else "FAILED")
-            if report.ok:
+            print("OK" if verified.ok else "FAILED")
+            if verified.ok:
                 print(
                     "A runtime of this revision loaded every asset. That is construction, "
                     "not acceptance: a fresh client and a human look still decide."
                 )
-        return 0 if report.ok else 1
+        return 0 if verified.ok else 1
     if args.command == "stage":
         output, skipped = stage_bundle(config, args.bundle, args.manifest, args.log)
         print(f"OK: {output}")
@@ -554,9 +555,9 @@ def run(args: argparse.Namespace) -> int:
             info = validate_bundle(args.bundle, expected)
             print(f"OK: {info.path} Unity {info.unity_version}; class-142 present")
         else:
-            report = validate_mod(config)
-            print(*report.messages, sep="\n")
-            print(f"OK: bundle and {report.reference_count} reference(s) validated (XML and code_references)")
+            validation = validate_mod(config)
+            print(*validation.messages, sep="\n")
+            print(f"OK: bundle and {validation.reference_count} reference(s) validated (XML and code_references)")
         return 0
     if args.command == "unity-release":
         data = fetch_release(project_unity_version(config.unity_project), args.platform).as_dict()
@@ -566,35 +567,35 @@ def run(args: argparse.Namespace) -> int:
             _print_pairs(data)
         return 0
     if args.command == "status":
-        report = collect_status(config)
+        status_report = collect_status(config)
         if args.json:
-            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+            print(json.dumps(status_report.as_dict(), indent=2, sort_keys=True))
         else:
-            data = report.as_dict()
+            data = status_report.as_dict()
             for key in (
                 "mod_name", "bundle_source", "bundle_path", "bundle_present", "bundle_unity_version",
                 "game_unity_version", "version_matches_game",
                 "bundle_has_assetbundle_object", "asset_count", "reference_count", "valid",
             ):
                 print(f"{key}: {data[key]}")
-            for problem in report.problems:
+            for problem in status_report.problems:
                 print(f"problem: {problem}")
-        return 0 if report.valid else 1
+        return 0 if status_report.valid else 1
     if args.command == "check-icons":
-        report = check_icons(config.mod_root, config.config_dir, args.atlas_root, args.cell)
+        icons = check_icons(config.mod_root, config.config_dir, args.atlas_root, args.cell)
         if args.json:
-            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+            print(json.dumps(icons.as_dict(), indent=2, sort_keys=True))
         else:
-            for icon in report.icons:
+            for icon in icons.icons:
                 coverage = "" if icon.alpha_coverage is None else f" {icon.alpha_coverage:.0%} opaque"
                 print(f"{icon.atlas}/{icon.stem}: {icon.width}x{icon.height} {icon.colour_type}{coverage}")
-            print(f"resolved: {len(report.resolved)}  external: {len(report.external)}")
-            for note in report.notes:
+            print(f"resolved: {len(icons.resolved)}  external: {len(icons.external)}")
+            for note in icons.notes:
                 print(f"note: {note}")
-            for problem in report.problems:
+            for problem in icons.problems:
                 print(f"problem: {problem}")
-            print("OK" if report.ok else "FAILED")
-        return 0 if report.ok else 1
+            print("OK" if icons.ok else "FAILED")
+        return 0 if icons.ok else 1
     if args.command == "render-icon":
         result = render_icon(
             config, args.prefab, args.output, args.size, args.atlas,
@@ -628,8 +629,10 @@ def main(argv: list[str] | None = None) -> int:
     head = arguments[:1]
     if head and head[0] in passthrough:
         module = importlib.import_module(f".{passthrough[head[0]][0]}", __package__)
+        # importlib's attribute access is Any; pin the passthroughs' contract.
+        entrypoint: Callable[[list[str]], int] = module.main
         try:
-            return module.main(arguments[1:] or passthrough[head[0]][1])
+            return entrypoint(arguments[1:] or passthrough[head[0]][1])
         except PipelineError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1

@@ -55,7 +55,10 @@ class Operation:
         return data
 
 
-def _schema(properties: dict[str, Any] | None = None, required: list[str] | None = None) -> dict:
+def _schema(
+    properties: dict[str, Any] | None = None,
+    required: list[str] | None = None,
+) -> dict[str, object]:
     return {
         "type": "object",
         "properties": properties or {},

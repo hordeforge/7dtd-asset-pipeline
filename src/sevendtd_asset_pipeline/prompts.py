@@ -35,6 +35,7 @@ import json
 import sys
 import textwrap
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from .errors import PipelineError
 
@@ -315,6 +316,18 @@ def _wrap(label: str, value: str, width: int = 78) -> str:
     )
 
 
+class PromptResult(TypedDict):
+    """One rendered prompt, as the CLI prints it and tests assert on it."""
+
+    kind: str
+    subject: str
+    key: str
+    key_hex: str
+    prompt: str
+    next: list[str]
+    notes: list[str]
+
+
 def render(
     kind: str,
     subject: str,
@@ -323,7 +336,7 @@ def render(
     key: str = "",
     avoid: tuple[str, ...] = (),
     stem: str = "myModThing",
-) -> dict[str, object]:
+) -> PromptResult:
     """Build one prompt and the commands that consume its output.
 
     `subject` and `avoid` are the author's judgement and are never invented
@@ -384,14 +397,13 @@ def render(
     }
 
 
-def _print(result: dict[str, object]) -> None:
+def _print(result: PromptResult) -> None:
     print(result["prompt"])
-    notes = list(result["notes"])
-    if notes:
+    if result["notes"]:
         print()
-        for note in notes:
+        for note in result["notes"]:
             print(textwrap.fill(note, width=78, initial_indent="- ", subsequent_indent="  "))
-    lane = list(result["next"])
+    lane = result["next"]
     if lane:
         print()
         print("Then, on the image the model returns:")

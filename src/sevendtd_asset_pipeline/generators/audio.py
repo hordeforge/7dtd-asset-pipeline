@@ -30,7 +30,7 @@ from pathlib import Path
 FULL_SCALE = 32767
 
 
-def read_wav(path: Path) -> tuple[array.array, int, int]:
+def read_wav(path: Path) -> tuple[array.array[int], int, int]:
     with wave.open(str(path), "rb") as handle:
         if handle.getsampwidth() != 2:
             raise SystemExit(f"ERROR: {path} is not 16-bit PCM; convert it first")
@@ -40,7 +40,7 @@ def read_wav(path: Path) -> tuple[array.array, int, int]:
         return samples, handle.getnchannels(), handle.getframerate()
 
 
-def write_wav(path: Path, samples: array.array, rate: int, channels: int = 1) -> None:
+def write_wav(path: Path, samples: array.array[int], rate: int, channels: int = 1) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     os.close(descriptor)
@@ -56,7 +56,7 @@ def write_wav(path: Path, samples: array.array, rate: int, channels: int = 1) ->
         temporary_path.unlink(missing_ok=True)
 
 
-def describe(path: Path, samples: array.array, channels: int, rate: int) -> None:
+def describe(path: Path, samples: array.array[int], channels: int, rate: int) -> None:
     frames = len(samples) // channels
     peak = max((abs(value) for value in samples), default=0) / FULL_SCALE
     energy = math.sqrt(sum(value * value for value in samples) / len(samples)) if samples else 0.0
@@ -71,7 +71,7 @@ def describe(path: Path, samples: array.array, channels: int, rate: int) -> None
         print("WARN: the clip is nearly silent", file=sys.stderr)
 
 
-def to_mono(samples: array.array, channels: int) -> array.array:
+def to_mono(samples: array.array[int], channels: int) -> array.array[int]:
     if channels == 1:
         return samples
     mono = array.array("h")
@@ -81,7 +81,7 @@ def to_mono(samples: array.array, channels: int) -> array.array:
     return mono
 
 
-def resample(samples: array.array, source_rate: int, target_rate: int) -> array.array:
+def resample(samples: array.array[int], source_rate: int, target_rate: int) -> array.array[int]:
     """Linear resample. Adequate for conversion; not a mastering-grade filter."""
     if source_rate == target_rate:
         return samples
@@ -97,12 +97,12 @@ def resample(samples: array.array, source_rate: int, target_rate: int) -> array.
     return output
 
 
-def normalize(samples: array.array, peak: float) -> array.array:
+def normalize(samples: array.array[int], peak: float) -> array.array[int]:
     current = max((abs(value) for value in samples), default=0)
     if current == 0:
         return samples
     scale = (peak * FULL_SCALE) / current
-    return array.array("h", (max(-FULL_SCALE, min(FULL_SCALE, int(v * scale))) for v in samples))
+    return array.array[int]("h", (max(-FULL_SCALE, min(FULL_SCALE, int(v * scale))) for v in samples))
 
 
 def main(argv: list[str] | None = None) -> int:

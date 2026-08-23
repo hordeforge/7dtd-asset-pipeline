@@ -36,7 +36,7 @@ import hashlib
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .capabilities import require_capability
 from .errors import PipelineError
@@ -78,8 +78,12 @@ class _Serialized:
     resource: bytes = b""
 
 
-def _node(class_id: int, unity_version: str):
-    """The release type tree for one class at one exact Unity revision."""
+def _node(class_id: int, unity_version: str) -> Any:
+    """The release type tree for one class at one exact Unity revision.
+
+    The node type belongs to UnityPy, an untyped boundary here; callers pass
+    it straight back into that library.
+    """
     require_capability("UnityPy")
     from UnityPy.helpers.Tpk import get_typetree_node
     from UnityPy.helpers.UnityVersion import UnityVersion
@@ -94,7 +98,7 @@ def _node(class_id: int, unity_version: str):
         ) from exc
 
 
-def _write_object(value: dict[str, Any], node) -> bytes:
+def _write_object(value: dict[str, Any], node: Any) -> bytes:
     from UnityPy.helpers.TypeTreeHelper import write_typetree
     from UnityPy.streams import EndianBinaryWriter
 
@@ -106,7 +110,7 @@ def _write_object(value: dict[str, Any], node) -> bytes:
             f"cannot serialize a {node.m_Type} object: {exc}. Every field the "
             "type tree names must be present and of the right shape."
         ) from exc
-    return writer.bytes
+    return cast(bytes, writer.bytes)
 
 
 def _common_strings() -> dict[str, int]:
@@ -126,11 +130,15 @@ def _common_strings() -> dict[str, int]:
     return reverse
 
 
-def _type_tree(node, common: dict[str, int]) -> bytes:
-    """Serialize one class's type tree, as the metadata's per-type payload."""
-    nodes: list = []
+def _type_tree(node: Any, common: dict[str, int]) -> bytes:
+    """Serialize one class's type tree, as the metadata's per-type payload.
 
-    def walk(current, level: int) -> None:
+    The node is UnityPy's own tree object; this repository treats that
+    library as an untyped boundary (see pyproject), so its shape is Any here.
+    """
+    nodes: list[tuple[Any, int]] = []
+
+    def walk(current: Any, level: int) -> None:
         nodes.append((current, level))
         for child in current.m_Children:
             walk(child, level + 1)

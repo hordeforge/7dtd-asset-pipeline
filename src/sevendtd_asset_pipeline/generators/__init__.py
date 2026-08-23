@@ -22,8 +22,17 @@ from __future__ import annotations
 
 import importlib
 from types import ModuleType
+from typing import TypedDict
 
 from ..errors import PipelineError
+
+
+class GeneratorInfo(TypedDict):
+    """One row of the generator table, as `--list` and the schema publish it."""
+
+    name: str
+    summary: str
+    capabilities: list[str]
 
 # name -> (module, one-line summary, optional capabilities it needs)
 GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
@@ -88,7 +97,7 @@ def run(name: str, argv: list[str]) -> int:
         sys.argv[0] = original
 
 
-def describe() -> list[dict[str, object]]:
+def describe() -> list[GeneratorInfo]:
     """The generator table, for `--list` and for the machine-readable schema."""
     return [
         {"name": name, "summary": summary, "capabilities": list(capabilities)}

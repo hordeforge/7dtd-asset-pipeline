@@ -33,7 +33,7 @@ from .build import (
     run_build,
     stage_bundle,
 )
-from .bundle_verify import verify_with_editor
+from .bundle_verify import VerifyReport, verify_with_editor
 from .bundle_writer import pack_directory
 from .capabilities import Capability, capabilities, require_capability
 from .client import AcceptanceRun, LogReport
@@ -153,7 +153,7 @@ class Pipeline:
         harness_dll: Path | str | None = None,
         install: bool = False,
         mods_dir: Path | str | None = None,
-    ):
+    ) -> dict[str, object]:
         """Render (and optionally build) the client-side acceptance provider.
 
         The cases are the mod's own manifest, so a bundle member that nothing
@@ -172,7 +172,7 @@ class Pipeline:
             install_dir,
         )
 
-    def verify_bundle(self, bundle: Path | str | None = None):
+    def verify_bundle(self, bundle: Path | str | None = None) -> VerifyReport:
         """Load a bundle in a real Unity runtime and report what came back.
 
         Needs an editor, and needs nothing else to have used one: this is how a

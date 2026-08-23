@@ -96,7 +96,8 @@ def collect_status(config: PipelineConfig) -> Status:
 
     game_discovered: tuple[str, Path] | None = None
     if config.game_dir:
-        discovered = _record(status, lambda: game_unity_version(config.game_dir))
+        game_dir = config.game_dir
+        discovered = _record(status, lambda: game_unity_version(game_dir))
         if discovered is not None:
             game_discovered = discovered
             status.game_unity_version = discovered[0]

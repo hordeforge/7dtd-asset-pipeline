@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
 import json
 import os
 import re
@@ -51,7 +50,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -117,7 +116,7 @@ def proton_user_data_dir(game_dir: Path, app_id: int = STEAM_APP_ID) -> Path | N
     return prefix / "pfx/drive_c/users/steamuser/AppData/Roaming/7DaysToDie"
 
 
-def client_log_dir(game_dir: Path | None, env: dict[str, str] | None = None) -> Path:
+def client_log_dir(game_dir: Path | None, env: Mapping[str, str] | None = None) -> Path:
     """The directory the client writes `output_log_client__*.txt` into.
 
     `SEVEN_DAYS_TO_DIE_LOG_DIR` overrides the derivation, for a native Windows
@@ -136,7 +135,7 @@ def client_log_dir(game_dir: Path | None, env: dict[str, str] | None = None) -> 
     return user_data / "logs"
 
 
-def user_mods_dir(game_dir: Path | None, env: dict[str, str] | None = None) -> Path:
+def user_mods_dir(game_dir: Path | None, env: Mapping[str, str] | None = None) -> Path:
     """The per-user `Mods/` folder a Proton client loads from.
 
     The game also scans `<install>/Mods/`, but a mod present in both places is
@@ -176,7 +175,7 @@ DEFAULT_LOCK_STALE_SECONDS = 120.0
 LOCK_HEARTBEAT_SECONDS = 30.0
 
 
-def lock_path(env: dict[str, str] | None = None) -> Path:
+def lock_path(env: Mapping[str, str] | None = None) -> Path:
     """The shared client lock: `PLAYTEST_LOCK_FILE`, else 7dtd-playtest's default."""
     environment = os.environ if env is None else env
     override = environment.get(LOCK_ENV, "").strip()
@@ -197,7 +196,7 @@ def read_lock(path: Path) -> dict[str, str]:
     return fields
 
 
-def _stale_seconds(env: dict[str, str] | None = None) -> float:
+def _stale_seconds(env: Mapping[str, str] | None = None) -> float:
     environment = os.environ if env is None else env
     try:
         return float(environment.get(LOCK_STALE_ENV, "") or DEFAULT_LOCK_STALE_SECONDS)
@@ -207,7 +206,7 @@ def _stale_seconds(env: dict[str, str] | None = None) -> float:
 
 def lock_holder(
     path: Path | None = None,
-    env: dict[str, str] | None = None,
+    env: Mapping[str, str] | None = None,
     now: float | None = None,
 ) -> str | None:
     """The session id currently holding the client, or None when it is free.
@@ -234,7 +233,7 @@ def lock_holder(
     return session if age <= _stale_seconds(env) else None
 
 
-def refuse_while_held(action: str, env: dict[str, str] | None = None) -> None:
+def refuse_while_held(action: str, env: Mapping[str, str] | None = None) -> None:
     """Refuse an exclusive-client action while another session holds the lock."""
     environment = os.environ if env is None else env
     holder = lock_holder(env=environment)
@@ -297,6 +296,16 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
     retries transient `OSError`s — dying silently would stale the record
     while the client it guards is still running.
     """
+    try:
+        # Function scope on purpose: fcntl exists only on Unix, and every other
+        # client subcommand (deploy, log, capture against a native Windows
+        # client) must stay importable without it.
+        import fcntl
+    except ImportError as exc:
+        raise PipelineError(
+            "the shared client lock needs flock (fcntl), which only exists on Unix; "
+            "this Proton-host operation cannot run here"
+        ) from exc
     target = path if path is not None else lock_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -511,9 +520,13 @@ def _sink_inputs() -> list[dict[str, object]]:
     if result.returncode != 0:
         raise PipelineError(f"pactl failed: {result.stderr.strip() or result.returncode}")
     try:
-        return json.loads(result.stdout or "[]")
+        parsed = json.loads(result.stdout or "[]")
     except json.JSONDecodeError as exc:
         raise PipelineError(f"pactl produced unparseable JSON: {exc}") from exc
+    # External tool output: name the expected shape instead of trusting it.
+    if not isinstance(parsed, list) or not all(isinstance(item, dict) for item in parsed):
+        raise PipelineError("pactl produced unexpected JSON: expected a list of objects")
+    return parsed
 
 
 def client_sink_inputs(inputs: list[dict[str, object]] | None = None) -> list[int]:
@@ -528,8 +541,13 @@ def client_sink_inputs(inputs: list[dict[str, object]] | None = None) -> list[in
             str(properties.get(key, ""))
             for key in ("application.name", "application.process.binary")
         )
+        # An entry without an integer index is malformed pactl output, not the
+        # game; it can no more be muted than a matching one.
+        raw_index = entry.get("index")
+        if not isinstance(raw_index, int):
+            continue
         if "7daystodie" in haystack.lower():
-            indexes.append(int(entry["index"]))
+            indexes.append(raw_index)
     return indexes
 
 
@@ -557,7 +575,7 @@ def set_client_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
         time.sleep(1)
 
 
-def wireplumber_state_file(env: dict[str, str] | None = None) -> Path:
+def wireplumber_state_file(env: Mapping[str, str] | None = None) -> Path:
     env = os.environ if env is None else env
     state_home = env.get("XDG_STATE_HOME") or str(Path.home() / ".local/state")
     return Path(state_home) / "wireplumber/stream-properties"
@@ -829,7 +847,7 @@ def fresh_client_run(
 # ---------------------------------------------------------------------- CLI
 
 
-def game_dir_from_env(env: dict[str, str] | None = None) -> Path | None:
+def game_dir_from_env(env: Mapping[str, str] | None = None) -> Path | None:
     """`SEVEN_DAYS_TO_DIE_DIR`, or None — the same override every derivation honours."""
     environment = os.environ if env is None else env
     value = environment.get("SEVEN_DAYS_TO_DIE_DIR")
@@ -1018,9 +1036,9 @@ def _capture(args: argparse.Namespace) -> int:
         if not entries:
             print(f"no captures recorded under {root}")
             return 0
-        for entry in entries:
-            print(f"{entry.get('label', '?'):24} {entry.get('file', '?')}")
-            print(f"{'':24} {entry.get('observable') or '(no observable recorded)'}")
+        for record in entries:
+            print(f"{record.get('label', '?'):24} {record.get('file', '?')}")
+            print(f"{'':24} {record.get('observable') or '(no observable recorded)'}")
         print()
         print("A recorded frame is not a verdict. Only a person signs these off.")
         return 0

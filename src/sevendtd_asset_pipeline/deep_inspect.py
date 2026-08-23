@@ -20,7 +20,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 
 from .capabilities import require_capability
 from .errors import PipelineError
@@ -58,16 +58,17 @@ def _load_unitypy() -> ModuleType:
     require_capability("UnityPy")
     import UnityPy
 
-    return UnityPy
+    # follow_imports=skip leaves the capability module Any; the boundary lies here.
+    return cast(ModuleType, UnityPy)
 
 
-def _walk(game_object: Any, depth: int = 0) -> tuple[Counter, int]:
+def _walk(game_object: Any, depth: int = 0) -> tuple[Counter[str], int]:
     """Count components across a prefab's whole hierarchy.
 
     A prefab root usually carries only a Transform; the components that matter
     hang off its children, so a root-only census answers nothing.
     """
-    counts: Counter = Counter()
+    counts: Counter[str] = Counter()
     total = 1
     if depth > 64:  # A malformed hierarchy must not become infinite recursion.
         return counts, total

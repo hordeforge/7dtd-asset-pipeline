@@ -99,6 +99,8 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.11"
+# Regenerable setuptools output; checking it doubles every finding.
+exclude = ["^build/"]
 # Baseline under a full-strict tree: every function is annotated, but strict's
 # disallow-any flags still find ~80 real findings across src and tests.
 # Ratchet: fix those, then flip strict on; these three stay regardless.
@@ -115,17 +117,21 @@ mypy_path = ["src", "tests"]
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-# Optional capabilities and build glue: absent on most hosts, untyped or
-# version-fragile when present. Their attributes are Any; our code is checked.
+# Optional capabilities: absent on most hosts, untyped or version-fragile when
+# present. Their attributes are Any; our code is checked.
 module = [
   "UnityPy", "UnityPy.*",
   "PIL", "PIL.*",
   "numpy", "numpy.*",
   "trimesh", "trimesh.*",
-  "setuptools", "setuptools.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+# Build glue only: setuptools ships types, and setup.py subclasses build_py.
+module = ["setuptools", "setuptools.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

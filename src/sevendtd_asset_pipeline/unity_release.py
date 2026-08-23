@@ -62,7 +62,7 @@ def _md5(integrity: object) -> str | None:
     return digest if re.fullmatch(r"[0-9a-f]{32}", digest) else None
 
 
-def parse_release(payload: dict, version: str, platform: str = "LINUX") -> Release:
+def parse_release(payload: dict[str, object], version: str, platform: str = "LINUX") -> Release:
     results = payload.get("results")
     if not isinstance(results, list) or not results:
         raise PipelineError(f"Unity's release service knows no version {version}")

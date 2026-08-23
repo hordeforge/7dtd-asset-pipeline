@@ -9,6 +9,8 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -464,6 +466,64 @@ class LockTests(unittest.TestCase):
                 [],
                 "a crashed or raced writer left its temporary behind",
             )
+
+
+class PortabilityTests(unittest.TestCase):
+    """The CLI claims to be portable (docs/quickstart.md: Linux, macOS, Windows).
+
+    `fcntl` exists only on Unix, so it must never sit at module scope of
+    anything the console script imports: on Windows one top-level import turns
+    every command, even `--help`, into ModuleNotFoundError.
+    """
+
+    def _run_blocked(self, body: str) -> subprocess.CompletedProcess[str]:
+        """Run `body` in a fresh interpreter where importing fcntl fails.
+
+        `sys.modules[name] = None` is the documented way to make an import of
+        that name raise ModuleNotFoundError, which stands in for a platform
+        (Windows) where the module does not exist at all.
+        """
+        script = "\n".join(
+            (
+                "import sys",
+                "sys.modules['fcntl'] = None",
+                body,
+            )
+        )
+        root = Path(__file__).resolve().parent.parent
+        env = dict(os.environ)
+        source = str(root / "src")
+        env["PYTHONPATH"] = f"{source}{os.pathsep}{env['PYTHONPATH']}" if env.get("PYTHONPATH") else source
+        return subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, env=env, check=False
+        )
+
+    def test_the_cli_imports_without_fcntl(self) -> None:
+        result = self._run_blocked(
+            "import sevendtd_asset_pipeline.client\n"
+            "import sevendtd_asset_pipeline.cli\n"
+            "print('IMPORTED')\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("IMPORTED", result.stdout)
+
+    def test_holding_the_lock_without_fcntl_is_a_named_error(self) -> None:
+        result = self._run_blocked(
+            "import tempfile\n"
+            "from pathlib import Path\n"
+            "from sevendtd_asset_pipeline import client\n"
+            "with tempfile.TemporaryDirectory() as tmp:\n"
+            "    try:\n"
+            "        with client.held_lock('mine-1', Path(tmp) / 'lock'):\n"
+            "            pass\n"
+            "    except client.PipelineError as exc:\n"
+            "        print('PIPELINE-ERROR:', exc)\n"
+            "    else:\n"
+            "        print('NO-ERROR')\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PIPELINE-ERROR:", result.stdout)
+        self.assertNotIn("NO-ERROR", result.stdout)
 
 
 class CliTests(unittest.TestCase):

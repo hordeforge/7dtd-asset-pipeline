@@ -96,7 +96,8 @@ def border_key(image: Image.Image, inset: int = 2) -> tuple[int, int, int]:
 
 
 def distance(pixel: tuple[int, int, int], key: tuple[int, int, int]) -> float:
-    return sum((a - b) ** 2 for a, b in zip(pixel, key, strict=True)) ** 0.5
+    squared = sum((a - b) ** 2 for a, b in zip(pixel, key, strict=True))
+    return squared ** 0.5
 
 
 def key_out(

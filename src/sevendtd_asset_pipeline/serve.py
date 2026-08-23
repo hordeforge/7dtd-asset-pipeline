@@ -41,7 +41,9 @@ def _error(identifier: Any, exc: BaseException) -> dict[str, Any]:
     }
 
 
-def handle(request: Any, resolve: Callable[[], Pipeline | None], allow_writes: bool) -> dict:
+def handle(
+    request: Any, resolve: Callable[[], Pipeline | None], allow_writes: bool
+) -> dict[str, object]:
     """Turn one decoded request into one response. Never raises."""
     if not isinstance(request, dict):
         return _error(None, PipelineError("each request must be a JSON object"))

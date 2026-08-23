@@ -238,7 +238,8 @@ def _game_checks(config: PipelineConfig, project_version: str | None) -> list[Ch
                 Check("WARN", "game", "set SEVEN_DAYS_TO_DIE_DIR for authoritative version checks")
             )
         return checks
-    discovered = _guard(checks, "game", lambda: game_unity_version(config.game_dir))
+    game_dir = config.game_dir
+    discovered = _guard(checks, "game", lambda: game_unity_version(game_dir))
     if discovered is None:
         return checks
     game_version, source = discovered

@@ -21,7 +21,8 @@ def percentage() -> int:
     )
     data = json.loads(out.read_text())
     out.unlink()
-    return round(data["totals"]["percent_covered"])
+    totals = data["totals"]
+    return round(float(totals["percent_covered"]))
 
 
 def colour(pct: int) -> str:

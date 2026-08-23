@@ -48,10 +48,32 @@ Everything below is detail.
 | the generators (`shamway generate …`) | the prompts, seeds, commands, and source art in `assets-src/` |
 | the art-direction, audio, and VFX contracts | this mod's own art direction, if it narrows them |
 | the engine facts, and the gates that encode them | the acceptance evidence for this mod's bundle |
+| proof that the **game reads** every bundle member | proof that the asset **works**: scale, orientation, audibility, behaviour |
 
 The test for which side something belongs on: **would a second, unrelated mod
 want it verbatim?** A blast synthesizer, yes — it is here. *Your* blast, with
 its seed and its design notes, no — that is yours.
+
+### The last row is the one mods get wrong
+
+`shamway acceptance-provider` generates in-client cases from your tracked
+manifest and proves the engine loads every member of your bundle. That is as
+far as this repository can go, because it knows what is *in* the bundle and
+nothing about what any of it is *for*. Every generated case passes on a texture
+that loads upside down, a clip at the wrong pitch, a mesh at ten times scale.
+
+So a mod that ships assets **writes its own scenario cases**: a second
+`IScenarioProvider` with its own suite id, beside the generated one rather than
+edited into it — the generated file is rewritten on every run. Assert what your
+content promises: the item is held at the right scale, the block's collider
+matches its model, the sound group actually fires and carries, the icon
+resolves for the item that names it, the particle system emits and stops. The
+generated cases are the precondition; if `load_<stem>` fails, nothing above it
+means anything.
+
+And no suite retires the person. Passing every case proves the game read your
+bytes and ran your logic, never that the art reads well at inventory scale.
+`shamway client capture` is where that judgement gets filed.
 
 ## What `init` writes into the mod
 

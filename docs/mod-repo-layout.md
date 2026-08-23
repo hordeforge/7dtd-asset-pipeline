@@ -10,7 +10,7 @@ repository — it calls the installed command.
 Install the pipeline once, per machine:
 
 ```bash
-uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/ywy50/7dtd-asset-pipeline'
+uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'
 ```
 
 The `[all]` extra brings Pillow, NumPy, UnityPy and trimesh, which the icon,

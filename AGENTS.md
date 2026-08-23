@@ -18,6 +18,11 @@ records where each 7DTD-specific rule came from.
 
 ## Working on this repository
 
+This repository lives in the **hordeforge** organization
+(`github.com/hordeforge/7dtd-asset-pipeline`), alongside the other `7dtd-*`
+projects. Work here goes on a branch and lands through a pull request; nothing
+is pushed straight to the default branch.
+
 - `scripts/bootstrap` — uv venv + uv pip install --editable, with extras
 - `make check test` — compile, shellcheck, and the unit suite
 

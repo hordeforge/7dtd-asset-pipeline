@@ -36,7 +36,7 @@ scripts/bootstrap
 ```
 
 Or, for a user-wide command with every optional lane, `uv tool install '.[all]'`
-(from a clone) or `uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/ywy50/7dtd-asset-pipeline'`.
+(from a clone) or `uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'`.
 
 Scaffold the pipeline into an existing modlet. The command reads the correct
 Unity version from the installed game:

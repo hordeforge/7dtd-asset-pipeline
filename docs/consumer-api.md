@@ -463,7 +463,7 @@ The offline half needs no Unity, no game install, and no network, so it runs
 on any hosted runner as a pull-request gate:
 
 ```yaml
-- run: uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/ywy50/7dtd-asset-pipeline'
+- run: uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'
 - run: shamway status --json
 - run: shamway validate
 ```

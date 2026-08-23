@@ -57,7 +57,7 @@ class _Spec:
     install: str
 
 
-SOURCE_URL = "git+https://github.com/ywy50/7dtd-asset-pipeline"
+SOURCE_URL = "git+https://github.com/hordeforge/7dtd-asset-pipeline"
 
 
 def installed_as_uv_tool() -> bool:

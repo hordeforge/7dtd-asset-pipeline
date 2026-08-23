@@ -224,7 +224,15 @@ that hides a miss from the eye:
   nothing else reported).
 
 Report it as one line of the form `resolved=N/N icons= models= vfx= sounds=
-misses=none`. To get a new item into the bag for a look, `giveself <item>
+misses=none`. Print that line into the client log, because the log is the one
+channel this pipeline can read back: the client records only *that* a console
+command executed, never its **output**, so a command that ran and reported a
+problem is indistinguishable there from one that worked. Reading the output
+instead needs the client's web API or a dedicated server's telnet console —
+both of which live in the mod, since the command whose answer you want is the
+mod's own. This pipeline deliberately ships neither transport: without a
+mod-side command to call, they can only ask a vanilla console questions that
+say nothing about a mod's assets. To get a new item into the bag for a look, `giveself <item>
 [qty] [quality] [putInInventory]` — the fourth argument defaults to **false**
 and drops the item into the world, which looks exactly like a bad item name.
 

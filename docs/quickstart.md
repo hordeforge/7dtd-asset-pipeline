@@ -103,6 +103,20 @@ configurable — see [Configuration](configuration.md).
 
 ## 4. Unity editor (30-60 minutes, several GB)
 
+Before spending that, check whether this machine needs an editor at all. It
+does not if the mod ships no bundle — XML, loose `UIAtlases/` icons and a DLL
+are a complete modlet — or if the bundle is built elsewhere and only gated and
+staged here:
+
+```bash
+shamway init /path/to/MyMod --bundle-source none
+shamway init /path/to/MyMod --bundle-source external --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+```
+
+Both skip this section entirely; [no-unity.md](no-unity.md) is the full page,
+including what `shamway stage` gates and what it cannot. The rest of this
+section is the default case: this machine builds the bundle.
+
 ```bash
 cd /path/to/MyMod
 /path/to/7dtd-asset-pipeline/scripts/install-unity-editor.sh

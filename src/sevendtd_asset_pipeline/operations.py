@@ -234,12 +234,65 @@ _DEFINITIONS: tuple[Operation, ...] = (
     ),
     Operation(
         name="build",
-        summary="Build, gate, and stage the bundle. With probe=true, builds a throwaway "
-        "cube bundle that proves the environment and stages nothing. This is the only "
-        "operation that writes into the modlet, and only after every gate passes.",
+        summary="Produce, gate and stage the bundle. With bundle_source \"unity\" a local "
+        "editor builds it and probe=true proves the environment with a throwaway cube; with "
+        "\"synthesized\" this tool writes it directly, no editor. Refused for \"external\" "
+        "and \"none\"; use 'stage' there.",
         parameters=_schema({"probe": {"type": "boolean", "default": False}}),
         returns="{bundle: path}",
         cost=MINUTES,
+        writes=True,
+        needs_config=True,
+    ),
+    Operation(
+        name="pack",
+        summary="Synthesize a .unity3d from a directory of textures, clips and text files "
+        "with no Unity at all, plus the membership manifest that records what went in. "
+        "Writes the container, the type trees and every object directly.",
+        parameters=_schema(
+            {
+                "source": {**PATH_PARAM, "description": "directory whose files become assets"},
+                "output": {**PATH_PARAM, "description": "the .unity3d to write"},
+                "unity_version": {"type": "string", "description": "revision to stamp"},
+                "game_dir": {**PATH_PARAM, "description": "read the revision from a game install"},
+                "manifest": {**PATH_PARAM, "description": "default: OUTPUT.manifest"},
+            },
+            required=["source", "output"],
+        ),
+        returns="{bundle, manifest, bytes, assets[], caveats[]}",
+        cost=FAST,
+        writes=True,
+        needs_config=False,
+        capabilities=("UnityPy",),
+    ),
+    Operation(
+        name="verify_bundle",
+        summary="Load a bundle in a real Unity runtime and report every asset it returns. "
+        "The one offline check this pipeline does not also author: it is the engine's own "
+        "loader. Needs an editor; proves construction, never acceptance.",
+        parameters=_schema({"bundle": PATH_PARAM}),
+        returns="VerifyReport: bundle, log, ok, assets[{key, type, name, detail}], problems[]",
+        cost=MINUTES,
+        writes=False,
+        needs_config=True,
+    ),
+    Operation(
+        name="stage",
+        summary="Gate a bundle an editor elsewhere built and stage it into the modlet: the "
+        "same revision, class-142, stem-collision and staging path as 'build', without a "
+        "local Unity. Reports which gates could not run.",
+        parameters=_schema(
+            {
+                "bundle": {**PATH_PARAM, "description": "the built .unity3d to gate and stage"},
+                "manifest": {**PATH_PARAM, "description": "Unity's build manifest; "
+                "defaults to BUNDLE.manifest beside the bundle"},
+                "log": {**PATH_PARAM, "description": "the Unity log that built it; without "
+                "one the disabled-module gate cannot run"},
+            },
+            required=["bundle"],
+        ),
+        returns="{bundle: path, skipped: [gates that did not run]}",
+        cost=FAST,
         writes=True,
         needs_config=True,
     ),
@@ -366,6 +419,13 @@ _DEFINITIONS: tuple[Operation, ...] = (
                 "manifest_dir": {
                     "type": "string",
                     "description": "where the tracked .manifest is committed, relative to the mod",
+                },
+                "bundle_source": {
+                    "type": "string",
+                    "enum": ["unity", "external", "none"],
+                    "default": "unity",
+                    "description": "where the bundle comes from: a local editor, an editor "
+                    "elsewhere, or nowhere because the mod ships none",
                 },
             },
             required=["mod_root"],

@@ -46,6 +46,34 @@ shamway init /path/to/MyMod \
   --game-dir "/path/to/7 Days To Die"
 ```
 
+Unity is optional. A bundle of textures, sounds and text files is **written by
+this tool directly** — no editor, no Unity project, milliseconds instead of
+minutes. A mod that ships no bundle at all needs nothing either, and a bundle
+built on another machine is gated and staged here without an editor:
+
+```bash
+shamway init /path/to/MyMod --bundle-source synthesized --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+shamway build
+```
+
+```bash
+shamway init /path/to/MyMod --bundle-source none
+shamway stage build/mymod.unity3d --manifest build/mymod.unity3d.manifest --log build/unity-build.log
+```
+
+A mesh, prefab, material or shader still needs an editor — a shader in a bundle
+is compiled platform bytecode, and nothing offline produces it. Where an editor
+does exist it can be used the other way round, as a verifier rather than a
+builder:
+
+```bash
+shamway verify-bundle
+```
+
+[Running without Unity](docs/no-unity.md) is the full page, including what the
+gates are worth on a bundle this tool wrote. The rest of this quick start
+builds the bundle with an editor.
+
 Install the game-matched Unity editor and its mandatory Windows Build Support
 (Mono). The revision, changeset, URLs, and checksums come from Unity's official
 release service; sign-in and license activation stay user-owned:
@@ -151,6 +179,19 @@ shamway client capture --list
 - validation of mod names, bundle paths, manifest membership, exact case, and
   bundle-wide file-stem uniqueness;
 - atomic staging of the bundle and its tracked manifest;
+- an optional Unity, four ways: a mod builds with a local editor, **synthesizes
+  the bundle here with no editor at all** (`bundle_source = "synthesized"`, or
+  `shamway pack` outside any mod), has it built elsewhere and gated here by
+  `shamway stage`, or ships no bundle;
+- an editorless bundle writer (`bundle_writer.py`): UnityFS container,
+  SerializedFile v22 with the engine's own per-revision type trees, the
+  class-142 `AssetBundle` object, `Texture2D`, `TextAsset`, and `AudioClip`
+  as PCM16 in a hand-written FSB5 bank — every structure read out of a real
+  artifact first, and each synthesize printing what its gates are worth;
+- `shamway verify-bundle`, which loads a bundle in a real Unity runtime with
+  the engine's own loader: the one offline check this project does not also
+  author, and the inversion that makes an editor a verifier instead of a
+  builder;
 - setup, integration, troubleshooting, authoring, agent-workflow, and release
   documentation, plus an `AGENTS.md` contract for coding agents;
 - reproducible generators for the sound, audio-conversion, icon, cutout, texture, and mesh lanes,
@@ -192,11 +233,15 @@ shamway client capture --list
 - [uv](https://docs.astral.sh/uv/) — every Python step runs through it, and
   `scripts/install-tools.sh` installs it;
 - Python 3.11 or newer for the pipeline CLI (uv provisions one if needed);
+- an installed 7 Days to Die client as read-only version authority.
+
+Only for building a bundle, and only on the machine that builds it (see
+[Running without Unity](docs/no-unity.md)):
+
 - a legal, activated Unity Editor matching the installed game's own bundle
   revision;
 - Unity Windows Build Support (Mono), because the shipped game client loads a
-  Windows-target bundle even when it runs through Proton;
-- an installed 7 Days to Die client as read-only version authority.
+  Windows-target bundle even when it runs through Proton.
 
 Unity credentials and licenses are never stored in scripts, configuration, or
 environment variables by this project.
@@ -206,6 +251,8 @@ environment variables by this project.
 - [Quickstart](docs/quickstart.md) — bare machine to a validated bundle
 - [Mod repo layout](docs/mod-repo-layout.md) — what lives in the mod, what lives here
 - [Setup](docs/setup.md) — Python, game path, Unity, licensing, Windows module
+- [Running without Unity](docs/no-unity.md) — synthesizing a bundle here, a bundle built elsewhere, and a mod with none
+- [Offline bundle builder](docs/offline-bundle-builder.md) — the format research, what shipped, and what the shader wall is
 - [Bundle generation](docs/bundle-generation.md) — the complete build path
 - [Configuration](docs/configuration.md) — every `.shamway.toml` key
 - [Game integration](docs/game-integration.md) — XML URIs, icons, audio, clients

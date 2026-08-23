@@ -18,6 +18,39 @@ If class 142 exists, confirm the revision against the installed game's own
 bundle, that the client is fresh, and that the deployed bytes match the built
 bytes. Offline success still does not prove runtime acceptance.
 
+## “this host does not build the bundle”
+
+`bundle_source` is `"external"`: an editor elsewhere builds this mod's bundle.
+Either bring the built artifact back and gate it here, or tell this machine it
+is the build host:
+
+```bash
+shamway stage build/mymod.unity3d --manifest build/mymod.unity3d.manifest --log build/unity-build.log
+```
+
+```bash
+export SHAMWAY_BUNDLE_SOURCE=unity
+shamway build
+```
+
+The environment variable is machine state, like `UNITY_EDITOR`; the committed
+configuration stays as the mod wants it. See [no-unity.md](no-unity.md).
+
+## `stage` printed “not run:” lines
+
+Nothing failed — those name the gates whose *evidence* was missing. `--log`
+enables the disabled-module and particle-curve-mode gates, and
+`SEVEN_DAYS_TO_DIE_DIR` enables the revision gate. Supply both and stage again;
+an artifact staged without them is less checked than one `build` produced, and
+saying so is the point of the lines.
+
+## “sets bundle_source = "none", but N XML reference(s) load assets from a bundle”
+
+The mod declares that it ships no bundle, and its XML asks the engine to load
+an asset out of one. In a client that is a silent load failure. Either drop the
+references, or give the mod a bundle — [no-unity.md](no-unity.md) has the
+steps for scaffolding one into a mod that started without.
+
 ## Unity logs “module ... is disabled in the build” but exits zero
 
 Add the named `com.unity.modules.*` dependency. `stripEngineCode = false`

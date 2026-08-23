@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import array
 import math
+import sevendtd_asset_pipeline
 import struct
 import tempfile
 import unittest
@@ -447,6 +448,28 @@ class DocumentationTests(unittest.TestCase):
             with self.subTest(entry["topic"]):
                 self.assertEqual("true", entry["available"])
                 self.assertTrue(entry["summary"])
+
+    def test_packaged_pages_are_the_repo_pages(self) -> None:
+        """A wheel ships `src/sevendtd_asset_pipeline/docs/`; a checkout reads `docs/`.
+
+        The two must never disagree: an agent in a mod repo reads the packaged
+        copy while this repository's own rules are edited at the root, and the
+        copy has already drifted once. `setup.py` re-copies on every build, so
+        equality here is cheap to keep and expensive to lose.
+        """
+        from sevendtd_asset_pipeline.docs import TOPICS
+
+        source = Path(__file__).resolve().parents[1] / "docs"
+        if not source.is_dir():
+            self.skipTest("running from a packaged install without the repo docs/")
+        packaged = Path(sevendtd_asset_pipeline.__file__).resolve().parent / "docs"
+        for filename, _summary in TOPICS.values():
+            with self.subTest(filename):
+                self.assertTrue(
+                    (packaged / filename).read_bytes() == (source / filename).read_bytes(),
+                    f"{filename} differs between docs/ and the packaged copy; "
+                    "re-copy it (or rebuild the wheel) so both readers see one page",
+                )
 
 
 class AssetsSourceTreeTests(unittest.TestCase):

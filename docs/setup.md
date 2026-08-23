@@ -89,6 +89,12 @@ Record how that revision was verified in the mod's documentation.
 
 ## 3. Install Unity and Windows Build Support
 
+Skip this whole section if this machine does not build the bundle. A mod that
+declares `bundle_source = "none"` ships no bundle and needs no editor; a mod
+that declares `"external"` has its bundle built elsewhere and gated here with
+`shamway stage`. [Running without Unity](no-unity.md) covers both, including
+what the build host does instead.
+
 The editor revision must match the installed game exactly, and **Windows Build
 Support (Mono)** is mandatory: the shipped client loads a Windows-target bundle
 even when it runs through Proton.

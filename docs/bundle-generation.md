@@ -191,6 +191,22 @@ The CLI:
 An old valid artifact therefore survives a failed build. The command never
 partially copies a candidate into the modlet.
 
+## When the editor is on another machine
+
+Steps 3 to 7 above read files, not an editor, so they run anywhere the built
+artifact can be copied to:
+
+```bash
+shamway stage build/mymod.unity3d --manifest build/mymod.unity3d.manifest --log build/unity-build.log
+```
+
+Bring all three files back: the bundle is the artifact, the manifest is the
+only offline record of membership, and the log is the only place a
+success-while-stripping build admits it. `stage` prints a `not run:` line for
+every gate the missing evidence prevented. [no-unity.md](no-unity.md) covers
+the whole path, including the `SHAMWAY_BUNDLE_SOURCE` the build host sets so
+one committed configuration works on both machines.
+
 ## Determinism
 
 Unity is asked to fully rebuild. For a reproducibility check:

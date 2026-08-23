@@ -41,23 +41,25 @@ no Unity, and no game install.
   `make check test` plus a game-matched `shamway build --probe` when Unity
   is available on the host.
 - Changes to the editor-side C# (`GeneratedAsset.cs`, `IconRenderer.cs`,
-  `ShamwayPreBuild.cs`, `BundleBuilder.cs`) are not covered by the Python suite.
+  `ShamwayPreBuild.cs`, `BundleBuilder.cs`, `BundleVerifier.cs`) are not covered by the Python suite.
   `make check` compiles them against the installed editor's assemblies when
   `mcs` and an editor are present (`scripts/compile-editor-scripts.sh`); run
   that, then state plainly which grade the change reached — compiled, probed,
   or executed by an editor — and never describe a compiled-only change as
   verified.
-- Those four files are what a consuming mod vendors. Adding a fifth means
-  adding it to `scaffold.PIPELINE_EDITOR_SCRIPTS`, or an adopted project silently
-  will not get it.
+- Those files (`BundleBuilder.cs`, `BundleVerifier.cs`, `GeneratedAsset.cs`,
+  `IconRenderer.cs`, `ShamwayPreBuild.cs`) are what a consuming mod vendors.
+  Adding another means adding it to `scaffold.PIPELINE_EDITOR_SCRIPTS`, or an
+  adopted project silently will not get it.
 - New engine facts need a named source: `Data/Config/*.xml` (and `XML.txt`)
   in the installed game, `ilspycmd`/`monodis` on `Assembly-CSharp.dll`
   (`scripts/install-tools.sh --with-research` installs them), or
-  `maci0/7dtd-research`. Record which tool produced the fact. "It seemed to
-  work in game" is not a source and the next session cannot re-verify it; a
-  `strings` hit proves a name exists, not a behaviour. Decompiled evidence
-  beats a wiki or a monorepo doc: `Localization.csv` was documented in the
-  mod root for a year and the engine reads it from `Config/`.
+  `hordeforge/7dtd-engine-research`. Record which tool produced the fact. "It
+  seemed to work in game" is not a source and the next session cannot
+  re-verify it; a `strings` hit proves a name exists, not a behaviour.
+  Decompiled evidence beats a wiki or a monorepo doc: `Localization.csv` was
+  documented in the mod root for a year and the engine reads it from
+  `Config/`.
 - Keep the consumer scaffold standalone. A modlet built with this pipeline
   must never need a relative checkout of this repository, another mod, or a
   sibling project at build time. That is why the generators and the
@@ -88,6 +90,32 @@ stronger evidence than the evidence that introduced it, recorded in
 The offline gates are necessary, not sufficient. Never describe a bundle as
 working, verified, or accepted on offline output alone: acceptance always ends
 with a fresh client and a human look or listen at the changed asset.
+
+Unity is optional; the gates are not. A mod may declare `bundle_source =
+"none"` and ship no bundle, `"external"` and have its bundle built by an editor
+on another machine, or `"synthesized"` and have this tool write the bundle with
+no editor at all. The gates travel with the artifact in every case: `stage`
+prints a `not run:` line for each gate whose evidence (the build log, an
+installed game) did not arrive, and a synthesize prints what its gates are
+worth when the artifact and the checker share an author. Never drop one of
+those lines from a report — an unrun or by-construction gate reads exactly like
+a passed one — and **never call a synthesized bundle "built"**: that word
+carries a claim about who serialized it.
+[docs/no-unity.md](docs/no-unity.md) owns those paths and
+[docs/offline-bundle-builder.md](docs/offline-bundle-builder.md) the writer's
+design and its shader wall.
+
+- Changes to `bundle_writer.py` need the same evidence `unityfs.py` does —
+  fixtures for acceptance *and* rejection — plus a read-back through UnityPy,
+  which parses Unity's format with none of this repository's code. Adding an
+  asset class means adding it to `ASSET_KINDS`, giving it a constructor whose
+  field values came from a real artifact rather than from a wiki, and saying in
+  `docs/research-provenance.md` which artifact. Never invent a field layout: a
+  class without a type tree for the target revision is refused, deliberately.
+- `shamway verify-bundle` is the strongest offline evidence available for a
+  synthesized bundle, because it is the engine's own loader. When an editor is
+  present, run it and say so; when it is not, say that too. It still proves
+  construction, never acceptance.
 
 ## Safety rules
 
@@ -142,6 +170,9 @@ Machine-readable output for agents and CI:
 | `shamway unity-release --json` | official editor URL, changeset, and MD5 for a revision |
 | `shamway refs` | one `source: uri` line per discovered XML reference |
 | `shamway status --json` | whole-mod state; never raises for a mod-state problem |
+| `shamway stage BUNDLE` | gate and stage a bundle an editor elsewhere built; lists the gates its evidence could not support |
+| `shamway pack SRC OUT` | synthesize a bundle from textures, clips and text files, with no editor |
+| `shamway verify-bundle` | load a bundle in a real Unity runtime; needs an editor, proves construction only |
 | `shamway capabilities --json` | optional capabilities, what they unlock, install commands |
 | `shamway inspect --deep --json` | every serialized object and per-prefab components |
 | `shamway check-mesh --json` | authored-mesh extents and glTF conformance |
@@ -200,10 +231,10 @@ and never in a loop:
   interactive desktop for license activation.
 - `shamway build` starts a real Unity editor; a cold project import takes
   minutes.
-- `shamway build` (without `--probe`) and `render-icon` are the only commands
-  that write into the modlet, and `build` only after every offline gate
-  passes; `client deploy`/`launch` write outside it, and `schema` marks all
-  five writers. Use `--probe` for any
+- `shamway build` (without `--probe`), `stage`, and `render-icon` are the only
+  commands that write into the modlet, and the first two only after every
+  offline gate passes; `client deploy`/`launch` write outside it, and `schema`
+  marks all six writers. Use `--probe` for any
   environment question — it never stages anything.
 
 Prefer `doctor`, `inspect`, `refs`, and `validate` when diagnosing. They are

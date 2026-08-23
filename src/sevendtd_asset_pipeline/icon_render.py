@@ -99,6 +99,9 @@ def render_icon(
     padding: float = 1.22,
 ) -> RenderResult:
     """Render `prefab` (a bundle stem or project path) into an atlas PNG."""
+    # It photographs a prefab out of the bundle's source folder, so a mod with
+    # no bundle should hear that, not a complaint about an unset UNITY_EDITOR.
+    config.require_bundle()
     if config.unity_editor is None:
         raise PipelineError("UNITY_EDITOR is not configured; run 'shamway doctor'")
     if not config.unity_editor.is_file() or not os.access(config.unity_editor, os.X_OK):

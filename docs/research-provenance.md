@@ -211,6 +211,78 @@ all four lessons:
 3. class 142 is a required artifact gate;
 4. fresh-client acceptance remains required.
 
+## Bundle-format facts, measured for the editorless writer
+
+Everything `bundle_writer.py` emits was read out of a real artifact before it
+was written, on 2026-08-23, against 7DTD V3.1.0 b14 and Unity 2022.3.62f2.
+Two artifacts were dissected: a bundle the **installed game ships**
+(`Data/Bundles/Standalone/Entities/Entities`, 1563 bytes — small enough to
+decode by hand) and a **reference bundle built by this repository's own
+`BundleBuilder`** from one PNG and one WAV. The tool was a scratch dissector
+over this repository's own `unityfs.py` block decoder, cross-read with UnityPy.
+
+Container, from the shipped bundle:
+
+- `UnityFS` archive **format 8**; engine string `5.x.x`; revision
+  `2022.3.62f2`; flags `0x243` (LZ4HC block, block table at the head,
+  padding bit set);
+- one directory node named `CAB-<32 hex>`, flags 4, holding the serialized
+  file; a texture's pixels live beside it in `CAB-<hex>.resS` and a clip's
+  bank in `CAB-<hex>.resource`.
+
+SerializedFile, from the same file:
+
+- **version 22**; the four legacy header fields are zero and the real
+  `metadata_size`, `file_size` and `data_offset` live in the 28-byte extended
+  header, big-endian, with `metadata_size` counted from the end of the 48-byte
+  header (measured: metadata ended at 4029, declared 3981, 4029 − 48 = 3981);
+- `target_platform` **19** (StandaloneWindows64) and **type trees present**
+  (`has_type_tree = 1`) — so the writer emits them too;
+- type-tree nodes are 32 bytes (`version u16, level u8, typeFlags u8,
+  typeStrOffset u32, nameStrOffset u32, byteSize i32, index i32, metaFlag u32,
+  refTypeHash u64`); an `Array` node carries `typeFlags = 1`; names are offsets
+  into a local string buffer, or into Unity's built-in common string table when
+  the high bit is set (the shipped file uses the common table for nearly every
+  name, and so does the writer);
+- object entries are 4-byte aligned; `byte_start` is relative to
+  `data_offset`, and object data is 8-byte aligned.
+
+Class-142 `AssetBundle` contents, decoded from the shipped bundle with UnityPy:
+`m_RuntimeCompatibility: 1`, `m_PathFlags: 7`, `m_Container` mapping a
+lowercased asset key to `{preloadIndex, preloadSize, asset: PPtr}`,
+`m_MainAsset` a null PPtr, empty `m_Dependencies` and `m_SceneHashes`. These
+are the values the writer emits.
+
+Audio, from the editor-built reference bundle's `.resource` node:
+
+- an `AudioClip` carries **no samples**; `m_Resource` names
+  `archive:/CAB-<hex>/CAB-<hex>.resource` with an offset and size, and the
+  bytes there begin `FSB5`;
+- FSB5 header: magic, version 1, sample count, sample-headers size, name-table
+  size, data size, **mode** (15 = Vorbis in Unity's own output; the writer uses
+  2 = PCM16), then 4 + 4 + 16 + 8 bytes to offset 60;
+- the 64-bit sample header decodes as `bit0 = has chunks`, `bits 1–4 =
+  frequency index`, `bit 5 = channels − 1`, `bits 6–33 = data offset / 32`,
+  `bits 34–63 = sample count`. Decoding Unity's own header returned frequency
+  index 8 (44100), 1 channel, offset 0, **4410 samples** — exactly the WAV that
+  went in, which is what makes the layout trustworthy rather than plausible;
+- the data section begins at `60 + sampleHeadersSize + nameTableSize`, padded
+  by Unity to a 32-byte boundary; the writer pads the same way.
+
+Texture, from the same reference bundle: Unity streams pixels into `.resS`
+with mip maps generated; the writer instead writes `image data` inline with
+`m_StreamData` empty and `m_MipCount: 1`, which the runtime accepts. Unity's
+first pixel row is the **bottom** one — a texture written top-down loads
+without error and renders upside down, so the writer flips.
+
+Runtime confirmation, same day: a synthesized bundle carrying all three classes
+was loaded by a real Unity 2022.3.62f2 runtime through
+`AssetBundle.LoadFromFile` (`shamway verify-bundle`). Every asset returned its
+own type and name, the TextAsset its text, the Texture2D `4x2 RGBA32` with the
+pixels in the right rows, and the AudioClip `channels=1 frequency=44100
+samples=4410`. That is the engine's own loader and its own class definitions,
+not this repository's parser — but it is not 7DTD, and it is not acceptance.
+
 ## Official and community references
 
 - Unity `BuildPipeline.BuildAssetBundles`:

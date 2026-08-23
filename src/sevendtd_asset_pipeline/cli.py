@@ -9,9 +9,9 @@ import sys
 from pathlib import Path
 
 from .api import Pipeline, call_json
-from .build import reject_disabled_modules, run_build
+from .build import SYNTHESIZED_CAVEATS, reject_disabled_modules, run_build, stage_bundle
 from .capabilities import capabilities
-from .config import load_config
+from .config import BUNDLE_SOURCES, load_config
 from .deep_inspect import deep_inspect
 from .doctor import failed, run_doctor
 from .docs import read as read_doc, topics as doc_topics
@@ -64,6 +64,14 @@ def _parser() -> argparse.ArgumentParser:
         "(default Assets/ModAssets/Bundle)",
     )
     init.add_argument(
+        "--bundle-source",
+        choices=sorted(BUNDLE_SOURCES),
+        default="unity",
+        help="where the bundle comes from: unity (a local editor builds it), synthesized "
+        "(this tool writes it, no editor), external (built elsewhere, staged here with "
+        "'shamway stage'), or none (the mod ships no bundle)",
+    )
+    init.add_argument(
         "--manifest-dir",
         help="where the tracked .manifest is committed, relative to the mod "
         "(default tools/shamway/manifests)",
@@ -73,6 +81,44 @@ def _parser() -> argparse.ArgumentParser:
     doctor.add_argument("--json", action="store_true", help="emit machine-readable checks")
     build = commands.add_parser("build", help="build, gate, and stage the configured bundle")
     build.add_argument("--probe", action="store_true", help="build a throwaway cube bundle only")
+    pack = commands.add_parser(
+        "pack",
+        help="write a .unity3d from a directory of textures, clips and text files, with no Unity",
+    )
+    pack.add_argument("source", type=Path, help="directory whose contents become the bundle")
+    pack.add_argument("output", type=Path, help="the .unity3d to write")
+    pack.add_argument(
+        "--unity-version",
+        help="the revision to stamp; defaults to the installed game's via --game-dir",
+    )
+    pack.add_argument("--game-dir", type=Path, help="read the revision from an installed game")
+    pack.add_argument(
+        "--manifest",
+        type=Path,
+        help="also write the membership manifest here (default: OUTPUT.manifest)",
+    )
+
+    verify = commands.add_parser(
+        "verify-bundle",
+        help="load a bundle in a real Unity runtime and report every asset it returns",
+    )
+    verify.add_argument(
+        "bundle", type=Path, nargs="?", help="default: the mod's staged bundle"
+    )
+    verify.add_argument("--json", action="store_true")
+
+    stage = commands.add_parser(
+        "stage", help="gate and stage a bundle an editor elsewhere built (no local Unity)"
+    )
+    stage.add_argument("bundle", type=Path, help="the built .unity3d to gate and stage")
+    stage.add_argument(
+        "--manifest", type=Path, help="Unity's build manifest; default: BUNDLE.manifest beside it"
+    )
+    stage.add_argument(
+        "--log",
+        type=Path,
+        help="the Unity log that built it; without one the disabled-module gate cannot run",
+    )
     validate = commands.add_parser("validate", help="validate the staged bundle and all XML references")
     validate.add_argument("--bundle", type=Path, help="inspect one bundle instead of the mod")
     inspect = commands.add_parser("inspect", help="print UnityFS metadata for one bundle")
@@ -211,6 +257,24 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _init_next_step(bundle_source: str) -> str:
+    """What the person who just scaffolded should do next, per bundle source."""
+    if bundle_source == "none":
+        return "Next: run shamway doctor, then shamway validate. No Unity editor is needed."
+    if bundle_source == "synthesized":
+        return (
+            "Next: put .png, .wav and .txt/.json/.csv files in assets-src/bundle/, then run "
+            "shamway build. No editor is involved, so a fresh client is the acceptance: "
+            "shamway client deploy . && shamway client launch"
+        )
+    if bundle_source == "external":
+        return (
+            "Next: set SEVEN_DAYS_TO_DIE_DIR, then run shamway doctor. Build the bundle where "
+            "an editor lives and bring it back with: shamway stage BUNDLE --manifest M --log L"
+        )
+    return "Next: set SEVEN_DAYS_TO_DIE_DIR and UNITY_EDITOR, then run shamway doctor"
+
+
 def _print_pairs(data: dict) -> None:
     for key, value in data.items():
         print(f"{key}: {value}")
@@ -218,15 +282,22 @@ def _print_pairs(data: dict) -> None:
 
 def run(args: argparse.Namespace) -> int:
     if args.command == "init":
-        if args.game_dir:
+        if args.bundle_source == "none":
+            # No bundle means no editor, so no revision has to be resolved and
+            # neither a game install nor a network is needed to scaffold.
+            version = ""
+        elif args.game_dir:
             version, source = game_unity_version(args.game_dir.resolve())
             print(f"Detected Unity {version} from {source}")
         elif args.unity_version:
             version = args.unity_version
         else:
-            raise PipelineError("init needs --game-dir or --unity-version")
+            raise PipelineError(
+                "init needs --game-dir or --unity-version, or --bundle-source none for a mod "
+                "that ships no bundle"
+            )
         changeset = args.changeset
-        if not changeset:
+        if not changeset and version:
             # Best effort: pinning the revision is valuable, but not worth
             # failing a scaffold over an unreachable network.
             try:
@@ -236,7 +307,7 @@ def run(args: argparse.Namespace) -> int:
                 print("Could not resolve the changeset; Unity will add it on first open")
         created = initialize(
             args.mod_root, args.mod_name, args.bundle_name, version, changeset,
-            args.adopt, args.source_root, args.manifest_dir,
+            args.adopt, args.source_root, args.manifest_dir, args.bundle_source,
         )
         for path in created:
             print(f"created {path}")
@@ -245,7 +316,7 @@ def run(args: argparse.Namespace) -> int:
                 "Adopted an existing Unity project. Mark the mod's own asset generators "
                 "with [ShamwayPreBuild] so 'shamway build' runs them before collecting."
             )
-        print("Next: set SEVEN_DAYS_TO_DIE_DIR and UNITY_EDITOR, then run shamway doctor")
+        print(_init_next_step(args.bundle_source))
         return 0
 
     if args.command == "inspect":
@@ -307,6 +378,28 @@ def run(args: argparse.Namespace) -> int:
                 print(f"problem: {problem}")
             print("OK" if report.ok else "FAILED")
         return 0 if report.ok else 1
+    if args.command == "pack":
+        from .bundle_writer import pack_directory  # noqa: PLC0415
+
+        if args.game_dir:
+            version, source = game_unity_version(args.game_dir.resolve())
+            print(f"Detected Unity {version} from {source}")
+        elif args.unity_version:
+            version = args.unity_version
+        else:
+            raise PipelineError(
+                "pack needs --game-dir or --unity-version: a bundle carries the revision "
+                "it claims to be for, and the installed game is what has to load it"
+            )
+        bundle, manifest_text = pack_directory(args.source, args.output.name, version)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_bytes(bundle)
+        manifest = args.manifest or Path(f"{args.output}.manifest")
+        manifest.write_text(manifest_text, encoding="utf-8")
+        print(f"OK: synthesized {args.output} ({len(bundle)} bytes) and {manifest}")
+        for caveat in SYNTHESIZED_CAVEATS:
+            print(f"note: {caveat}")
+        return 0
     if args.command == "check-log":
         reject_disabled_modules(args.log)
         print(f"OK: no disabled-module warnings in {args.log}")
@@ -407,9 +500,47 @@ def run(args: argparse.Namespace) -> int:
         return 1 if failed(checks) else 0
     if args.command == "build":
         output = run_build(config, args.probe)
-        print(f"OK: {output}")
+        synthesized = config.bundle_source == "synthesized"
+        verb = "synthesized" if synthesized else "built"
+        print(f"OK: {verb} {output}")
+        if synthesized:
+            # Never "built": the word carries a claim about who serialized it.
+            for caveat in SYNTHESIZED_CAVEATS:
+                print(f"note: {caveat}")
         if not args.probe:
             print("Offline gates passed. A fresh-client load is still required for acceptance.")
+        return 0
+    if args.command == "verify-bundle":
+        from .build import expected_unity_version  # noqa: PLC0415
+        from .bundle_verify import verify_with_editor  # noqa: PLC0415
+
+        report = verify_with_editor(
+            args.bundle or config.bundle_output,
+            config.unity_editor,
+            expected_unity_version(config),
+            config.build_dir / "verify",
+        )
+        if args.json:
+            print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+        else:
+            for asset in report.assets:
+                detail = f"  [{asset.detail}]" if asset.detail else ""
+                print(f"{asset.key}: {asset.type} named {asset.name!r}{detail}")
+            for problem in report.problems:
+                print(f"problem: {problem}")
+            print("OK" if report.ok else "FAILED")
+            if report.ok:
+                print(
+                    "A runtime of this revision loaded every asset. That is construction, "
+                    "not acceptance: a fresh client and a human look still decide."
+                )
+        return 0 if report.ok else 1
+    if args.command == "stage":
+        output, skipped = stage_bundle(config, args.bundle, args.manifest, args.log)
+        print(f"OK: {output}")
+        for gate in skipped:
+            print(f"not run: {gate}")
+        print("Offline gates passed. A fresh-client load is still required for acceptance.")
         return 0
     if args.command == "validate":
         expected = game_unity_version(config.game_dir)[0] if config.game_dir else None
@@ -435,7 +566,7 @@ def run(args: argparse.Namespace) -> int:
         else:
             data = report.as_dict()
             for key in (
-                "mod_name", "bundle_path", "bundle_present", "bundle_unity_version",
+                "mod_name", "bundle_source", "bundle_path", "bundle_present", "bundle_unity_version",
                 "game_unity_version", "version_matches_game",
                 "bundle_has_assetbundle_object", "asset_count", "reference_count", "valid",
             ):

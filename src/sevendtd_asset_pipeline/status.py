@@ -27,10 +27,12 @@ from .validation import validate_mod
 class Status:
     mod_name: str
     mod_root: str
-    bundle_name: str
-    bundle_path: str
+    bundle_source: str
+    """Where the bundle comes from: "unity", "external", or "none"."""
+    bundle_name: str | None
+    bundle_path: str | None
     bundle_present: bool
-    manifest_path: str
+    manifest_path: str | None
     manifest_present: bool
     unity_project: str
     source_root: str
@@ -64,14 +66,20 @@ def _record(status: Status, action: Callable[[], _T]) -> _T | None:
 
 
 def collect_status(config: PipelineConfig) -> Status:
+    # A mod with no bundle has no bundle path, no manifest, and no Unity of any
+    # kind; the fields stay in the shape a consumer already parses, reported as
+    # null rather than as a missing file.
+    bundle = config.bundle_output if config.has_bundle else None
+    manifest = config.tracked_manifest if config.has_bundle else None
     status = Status(
         mod_name=config.mod_name,
         mod_root=str(config.mod_root),
-        bundle_name=config.bundle_name,
-        bundle_path=str(config.bundle_output),
-        bundle_present=config.bundle_output.is_file(),
-        manifest_path=str(config.tracked_manifest),
-        manifest_present=config.tracked_manifest.is_file(),
+        bundle_source=config.bundle_source,
+        bundle_name=config.bundle_name or None,
+        bundle_path=str(bundle) if bundle else None,
+        bundle_present=bundle.is_file() if bundle else False,
+        manifest_path=str(manifest) if manifest else None,
+        manifest_present=manifest.is_file() if manifest else False,
         unity_project=str(config.unity_project),
         source_root=config.source_root,
         game_dir=str(config.game_dir) if config.game_dir else None,
@@ -94,8 +102,8 @@ def collect_status(config: PipelineConfig) -> Status:
             status.game_unity_version = discovered[0]
 
     bundle_info = None
-    if status.bundle_present:
-        bundle_info = _record(status, lambda: inspect_bundle(config.bundle_output))
+    if status.bundle_present and bundle is not None:
+        bundle_info = _record(status, lambda: inspect_bundle(bundle))
         if bundle_info is not None:
             status.bundle_unity_version = bundle_info.unity_version
             status.bundle_has_assetbundle_object = bundle_info.has_assetbundle_object
@@ -104,8 +112,8 @@ def collect_status(config: PipelineConfig) -> Status:
                     bundle_info.unity_version == status.game_unity_version
                 )
 
-    if status.manifest_present:
-        assets = _record(status, lambda: manifest_assets(config.tracked_manifest))
+    if status.manifest_present and manifest is not None:
+        assets = _record(status, lambda: manifest_assets(manifest))
         if assets is not None:
             status.assets = assets
             status.asset_count = len(assets)

@@ -11,8 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
-from .capabilities import capabilities
-from .config import PipelineConfig
+from .bundle_writer import collect_sources
+from .capabilities import capabilities, extra_install, has_capability
+from .config import BUNDLE_SOURCES, PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version, validate_game_dir
 from .references import read_mod_name
@@ -79,13 +80,46 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
         else:
             checks.append(Check("OK", "modlet", f"{config.mod_root} ({actual_name})"))
 
-    project_version = _guard(
-        checks, "Unity project", lambda: project_unity_version(config.unity_project)
+    checks.append(
+        Check("OK", "bundle source", f"{config.bundle_source}: {BUNDLE_SOURCES[config.bundle_source]}")
     )
-    if project_version is not None:
-        checks.append(Check("OK", "Unity project", f"{config.unity_project} ({project_version})"))
+    # Everything below this line is about Unity, and a mod that ships no bundle
+    # has no use for any of it. Reporting a missing editor there would be a
+    # standing warning about a tool that configuration says is not part of the
+    # build, which is how a report stops being read.
+    if not config.has_bundle:
+        checks.append(
+            Check("OK", "Unity", "not required: this mod ships no bundle (shamway docs no-unity)")
+        )
+        checks.extend(_game_checks(config, None))
+        checks.extend(_capability_checks())
+        return checks
 
-    dependencies = _guard(checks, "engine modules", lambda: _modules(config.unity_project))
+    if config.bundle_source == "synthesized":
+        checks.extend(_synthesized_checks(config))
+        checks.extend(_game_checks(config, None))
+        checks.extend(_capability_checks())
+        return checks
+
+    # An external build host may own the Unity project as well as the editor,
+    # in which case there is nothing here to check and nothing wrong with that.
+    project_version: str | None = None
+    dependencies: dict[str, str] | None = None
+    if not config.builds_locally and not config.unity_project.is_dir():
+        checks.append(
+            Check(
+                "INFO",
+                "Unity project",
+                f"no project at {config.unity_project}; the build host owns it",
+            )
+        )
+    else:
+        project_version = _guard(
+            checks, "Unity project", lambda: project_unity_version(config.unity_project)
+        )
+        if project_version is not None:
+            checks.append(Check("OK", "Unity project", f"{config.unity_project} ({project_version})"))
+        dependencies = _guard(checks, "engine modules", lambda: _modules(config.unity_project))
     if dependencies is not None:
         missing = [name for name in REQUIRED_MODULES if name not in dependencies]
         if missing:
@@ -106,32 +140,122 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
                 Check("OK", "optional modules", "common audio/image/particle/physics modules enabled")
             )
 
-    if config.game_dir:
-        discovered = _guard(checks, "game", lambda: game_unity_version(config.game_dir))
-        if discovered is not None:
-            game_version, source = discovered
-            if project_version is not None and game_version != project_version:
-                checks.append(
-                    Check(
-                        "FAIL",
-                        "game",
-                        f"Unity project uses {project_version}; installed game bundle uses "
-                        f"{game_version} ({source})",
-                    )
-                )
-            else:
-                checks.append(
-                    Check("OK", "game", f"{config.game_dir}; Unity {game_version} from {source.name}")
-                )
-    else:
-        checks.append(Check("WARN", "game", "set SEVEN_DAYS_TO_DIE_DIR for authoritative version checks"))
+    checks.extend(_game_checks(config, project_version))
 
     if config.unity_editor:
         checks.extend(_editor_checks(config))
-    else:
+    elif config.builds_locally:
         checks.append(Check("WARN", "Unity editor", "set UNITY_EDITOR to build; inspection still works"))
+    else:
+        # An external build host owns the editor. Its absence here is the
+        # configured state, not a defect, so it is reported as information and
+        # the command that replaces `build` is named.
+        checks.append(
+            Check(
+                "INFO",
+                "Unity editor",
+                "not needed here: the bundle is built elsewhere and gated with "
+                "'shamway stage BUNDLE --manifest M --log L'",
+            )
+        )
 
     checks.extend(_capability_checks())
+    return checks
+
+
+def _synthesized_checks(config: PipelineConfig) -> list[Check]:
+    """Readiness for the editorless writer: a revision, a source folder, UnityPy.
+
+    None of the Unity rows apply — there is no project to read a revision from
+    and no editor to run — so this answers the three questions that decide
+    whether `shamway build` can write a bundle here.
+    """
+    checks: list[Check] = []
+    if config.game_dir:
+        pass  # the game row below reports the revision it will use
+    elif config.unity_version:
+        checks.append(
+            Check(
+                "WARN",
+                "Unity revision",
+                f"using {config.unity_version} from {config.config_file.name}; set "
+                "SEVEN_DAYS_TO_DIE_DIR so the installed game answers instead",
+            )
+        )
+    else:
+        checks.append(
+            Check(
+                "FAIL",
+                "Unity revision",
+                "no revision known: set SEVEN_DAYS_TO_DIE_DIR, or record [unity] version "
+                f"in {config.config_file.name}. A bundle carries the revision it claims.",
+            )
+        )
+
+    source = config.bundle_source_dir
+    if not source.is_dir():
+        checks.append(
+            Check("FAIL", "bundle sources", f"no source directory at {source}")
+        )
+    else:
+        found = _guard(checks, "bundle sources", lambda: collect_sources(source))
+        if found is not None:
+            kinds = ", ".join(sorted({path.suffix.lower() for path in found}))
+            checks.append(
+                Check("OK", "bundle sources", f"{len(found)} asset(s) in {source} ({kinds})")
+            )
+
+    if has_capability("UnityPy"):
+        checks.append(
+            Check("OK", "writer", "UnityPy is installed; type trees for this revision are available")
+        )
+    else:
+        checks.append(
+            Check(
+                "FAIL",
+                "writer",
+                "the editorless writer needs UnityPy for the engine's own type trees: "
+                + extra_install("inspect"),
+            )
+        )
+    return checks
+
+
+def _game_checks(config: PipelineConfig, project_version: str | None) -> list[Check]:
+    """The installed game: the authority on the revision, and the client's home.
+
+    With `project_version` the game's revision is held against the project's.
+    Without one — a mod that ships no bundle — the directory is still worth
+    reporting, because `client deploy` and `client launch` are derived from it.
+    """
+    checks: list[Check] = []
+    if not config.game_dir:
+        if project_version is None:
+            checks.append(
+                Check("INFO", "game", "set SEVEN_DAYS_TO_DIE_DIR for client deployment and launch")
+            )
+        else:
+            checks.append(
+                Check("WARN", "game", "set SEVEN_DAYS_TO_DIE_DIR for authoritative version checks")
+            )
+        return checks
+    discovered = _guard(checks, "game", lambda: game_unity_version(config.game_dir))
+    if discovered is None:
+        return checks
+    game_version, source = discovered
+    if project_version is not None and game_version != project_version:
+        checks.append(
+            Check(
+                "FAIL",
+                "game",
+                f"Unity project uses {project_version}; installed game bundle uses "
+                f"{game_version} ({source})",
+            )
+        )
+    else:
+        checks.append(
+            Check("OK", "game", f"{config.game_dir}; Unity {game_version} from {source.name}")
+        )
     return checks
 
 

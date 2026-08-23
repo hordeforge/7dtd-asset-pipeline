@@ -9,6 +9,7 @@ schema_version = 1
 mod_root = "."
 mod_name = "ExampleMod"
 bundle_name = "examplemod.unity3d"
+bundle_source = "unity"
 unity_project = "tools/shamway/UnityProject"
 source_root = "Assets/ModAssets/Bundle"
 build_dir = ".shamway/build"
@@ -31,9 +32,10 @@ directory = ""
 | `schema_version` | Configuration contract. Must be `1`. |
 | `mod_root` | Deployable 7DTD modlet root containing `ModInfo.xml`. |
 | `mod_name` | Exact `ModInfo.xml` `<Name value>` and `@modfolder(...)` id. |
-| `bundle_name` | Lowercase staged file name ending in `.unity3d`. |
+| `bundle_name` | Lowercase staged file name ending in `.unity3d`. Must be empty when `bundle_source = "none"`. |
+| `bundle_source` | Where the bundle comes from: `"unity"` (a local editor builds it), `"synthesized"` (this tool writes it directly, no editor), `"external"` (an editor elsewhere builds it and `shamway stage` gates it here), or `"none"` (the mod ships no bundle). Default `"unity"`. See [no-unity.md](no-unity.md). |
 | `unity_project` | Non-deployed Unity project owned by the mod. |
-| `source_root` | Unity `AssetDatabase` path whose files become members. |
+| `source_root` | The folder whose files become bundle members. With `bundle_source = "unity"` it is a Unity `AssetDatabase` path *inside the project*; with `"synthesized"` there is no project, so it is read against the mod root (scaffolded as `assets-src/bundle`). |
 | `build_dir` | Ignored raw output and Unity log directory. |
 | `manifest_dir` | Tracked copy of Unity's per-bundle manifest. |
 | `resources_dir` | Modlet destination for the deployed bundle. |
@@ -41,7 +43,7 @@ directory = ""
 | `target` | Unity `BuildTarget`; use `StandaloneWindows64` for normal 7DTD clients. |
 | `code_references` | Bundle stems the mod's own C# loads (`DataLoader.LoadAsset`, a particle Lights prefab, a scripted clip). No XML names them, so `validate` sees them only when listed; each is checked for membership, uniqueness, and exact case like an XML reference. Stem only, no extension. |
 | `unity.editor` | Optional machine path; `UNITY_EDITOR` overrides it. |
-| `unity.version` | Human-readable scaffold record only; the pipeline never reads it. `ProjectSettings/ProjectVersion.txt` and the installed game's bundles are authoritative. |
+| `unity.version` | The revision recorded at scaffold time. With a Unity project it is a human-readable record only — `ProjectSettings/ProjectVersion.txt` and the installed game's bundles are authoritative. With `bundle_source = "synthesized"` there is no project file, so the editorless writer falls back to this value when no game directory is configured, and `doctor` warns that it did. |
 | `game.directory` | Optional machine path; `SEVEN_DAYS_TO_DIE_DIR` overrides it. |
 
 Commit the TOML file, Unity project source/settings, `.meta` files, tracked
@@ -55,6 +57,7 @@ Machine-local paths never go in the TOML. The pipeline reads these, and no
 | Variable | Meaning |
 |---|---|
 | `SEVEN_DAYS_TO_DIE_DIR` | the installed client, containing `Data/Config/items.xml`; read-only evidence |
+| `SHAMWAY_BUNDLE_SOURCE` | `unity` or `external`: where *this machine* gets the bundle from, overriding `bundle_source`. It cannot give a mod a bundle it does not have, or take one away — that stays the mod's decision, in the file |
 | `UNITY_EDITOR` | the game-matched editor executable |
 | `SEVEN_DAYS_TO_DIE_LOG_DIR` | overrides where `shamway client` looks for `output_log_client__*.txt` (derived from the game dir's Steam library on Proton hosts otherwise) |
 | `SEVEN_DAYS_TO_DIE_MODS_DIR` | overrides the per-user `Mods/` folder `shamway client deploy` writes to |

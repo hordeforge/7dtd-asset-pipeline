@@ -2,6 +2,11 @@ schema_version = 1
 mod_root = "."
 mod_name = "ExampleMod"
 bundle_name = "examplemod.unity3d"
+
+# "unity" (a local editor builds it), "external" (built elsewhere, gated and
+# staged here with `shamway stage`), or "none" (the mod ships no bundle).
+bundle_source = "unity"
+
 unity_project = "tools/shamway/UnityProject"
 source_root = "Assets/ModAssets/Bundle"
 build_dir = ".shamway/build"

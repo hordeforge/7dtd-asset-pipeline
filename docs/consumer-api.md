@@ -42,7 +42,7 @@ returns, and three fields a caller needs before running anything:
 | Field | Meaning |
 |---|---|
 | `cost` | `instant`, `fast`, `seconds`, or `minutes` — `minutes` starts Unity |
-| `writes` | whether it modifies files; `build`, `init`, `render_icon`, `client_deploy`, and `client_launch` do |
+| `writes` | whether it modifies files; `build`, `pack`, `stage`, `init`, `render_icon`, `client_deploy`, and `client_launch` do |
 | `needs_config` | whether it must run inside a scaffolded modlet |
 | `capabilities` | optional tools it requires, e.g. `["UnityPy"]` |
 
@@ -150,6 +150,9 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `validate [--bundle PATH]` | no | no | no | bundle + all XML references |
 | `build --probe` | no | yes | no | prove the environment; stages nothing |
 | `build` | no | yes | **yes** | build, gate, stage bundle + manifest |
+| `stage BUNDLE [--manifest M] [--log L]` | no | **no** | **yes** | gate and stage a bundle an editor elsewhere built |
+| `pack SOURCE OUTPUT` | no | **no** | **yes** | synthesize a .unity3d from textures, clips and text files |
+| `verify-bundle [BUNDLE]` | no | yes | no | load it in a real runtime and report every asset |
 | `init MOD_ROOT` | no | no | **yes** | scaffold into a modlet, or `--adopt` its existing Unity project |
 | `capabilities [--json]` | no | no | no | optional capabilities and how to install them |
 | `inspect --deep [--json]` | no | no | no | every serialized object (needs UnityPy) |
@@ -165,8 +168,12 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `schema` / `call NAME` / `serve` | no | no | per operation | the machine-readable surface |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |
 
-`build` and `render-icon` are the only commands that write into the modlet, and
-`build` only after every offline gate passes. `render-icon` needs a **graphics
+`build`, `stage` and `render-icon` are the only commands that write into the
+modlet, and the first two only after every offline gate passes. `stage` is
+`build` without the editor: it takes an artifact built elsewhere through the
+same gates, reports in `skipped[]` whichever gates its evidence could not
+support, and stages atomically. See [no-unity.md](no-unity.md), which also
+covers `bundle_source = "none"` for a mod that ships no bundle at all. `render-icon` needs a **graphics
 device** — it never passes `-nographics`, because that combination silently
 produces a blank image; run it under `xvfb-run -a` on a headless host.
 
@@ -391,6 +398,9 @@ pipeline.call("inspect_deep")             # same dispatch as `call` and `serve`
 | `.check_log(path)` | raises if the log shows stripped modules |
 | `.unity_release(version=None)` | `Release` (uses the network) |
 | `.build(probe=False)` | staged bundle `Path` |
+| `.stage(bundle, manifest=None, log=None)` | `(staged Path, skipped gates)`; no Unity needed |
+| `.pack(source, output, unity_version=None, game_dir=None)` | `{bundle, manifest, bytes, assets, caveats}`; no Unity needed |
+| `.verify_bundle(bundle=None)` | `VerifyReport`; needs an editor |
 | `.client_where(game_dir=None)` | the client's per-user paths, as a dict |
 | `.client_deploy(mods_dir=None, mod_name=None, replace=True)` | `{destination, copied}` (writes outside the modlet) |
 | `.client_launch(run_seconds=None, mute=False, mod_name=None, …)` | `AcceptanceRun` (starts a real client) |
@@ -430,6 +440,8 @@ if has_capability("UnityPy"):
 | `collect_status(config)` | `Status`; the non-raising orientation call |
 | `run_doctor(config)` / `failed(checks)` | `list[Check]` and its verdict |
 | `run_build(config, probe=False)` | build, gate, stage; returns the bundle path |
+| `stage_bundle(config, bundle, manifest=None, log=None)` | gate and stage a bundle built elsewhere |
+| `pack_directory(source_dir, bundle_name, unity_version)` | synthesize a bundle and its manifest, with no editor |
 | `validate_mod(config)` | `ValidationReport` over bundle and XML |
 | `validate_bundle(path, expected_version=None)` | one bundle's gates |
 | `inspect_bundle(path)` | `BundleInfo` without any gate |
@@ -460,3 +472,12 @@ on any hosted runner as a pull-request gate:
 its manifest, an XML reference to an asset nobody built, a case mismatch, a
 stem collision. Keep `build` on an authoring host with a licensed Unity; it is
 not a CI step.
+
+If a build host *does* exist elsewhere — a machine or runner with the
+game-matched editor and a licence you arranged there — the artifact comes back
+through `shamway stage`, which runs the same gates without an editor:
+
+```yaml
+- run: shamway stage build/mymod.unity3d --manifest build/mymod.unity3d.manifest --log build/unity-build.log
+- run: shamway validate
+```

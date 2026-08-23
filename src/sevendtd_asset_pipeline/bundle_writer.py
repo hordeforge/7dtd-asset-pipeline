@@ -1,0 +1,633 @@
+"""Write a Unity asset bundle without Unity.
+
+`unityfs.py` reads the container; this writes one. It is the other half of the
+same format, and it exists so that a mod whose assets are textures, text and
+sound can produce `Resources/<name>.unity3d` on a machine with no editor —
+CI, a headless agent host, a laptop that will never install several gigabytes
+of Unity.
+
+What it emits is the structure Unity itself emits, established by dissecting
+the bundles the installed game ships (`docs/research-provenance.md`):
+
+    UnityFS header, format 8, revision <the game's own>
+      block table: one uncompressed block
+      directory:   CAB-<hex>  and, when a clip is present, CAB-<hex>.resource
+    SerializedFile version 22, little-endian metadata, type trees written
+      types:    one per class, with the release type tree for this revision
+      objects:  8-byte aligned, byte_start relative to data_offset
+      data:     each object serialized by walking its own type tree
+
+The type trees come from UnityPy's per-version database, which is why this
+backend declares the `UnityPy` capability: a type tree is the engine's own
+field layout for a class at an exact revision, and guessing one is how a
+bundle becomes a silent load failure. The same library then serializes each
+object by walking that tree, so the field order, array shape and alignment
+rules are the ones a reader of Unity's format already agrees on.
+
+The proof boundary is narrow and stated in `docs/no-unity.md`: this writes
+containers and objects for a bounded set of classes. It does not replace
+Unity's importers, its shader compiler, or its prefab serialization, and an
+offline parse of what it wrote proves construction, never acceptance.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import struct
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from .capabilities import require_capability
+from .errors import PipelineError
+
+ASSET_BUNDLE = 142
+TEXT_ASSET = 49
+TEXTURE_2D = 28
+AUDIO_CLIP = 83
+
+SERIALIZED_VERSION = 22
+# BuildTarget.StandaloneWindows64. The shipped client loads a Windows-target
+# bundle even under Proton, which is why the whole pipeline defaults to it.
+STANDALONE_WINDOWS64 = 19
+
+
+@dataclass
+class BundleObject:
+    """One serialized object: its class, its name, and its typetree fields."""
+
+    class_id: int
+    name: str
+    fields: dict[str, Any]
+    resource: bytes = b""
+    """Bytes to append to the bundle's `.resource` stream.
+
+    An AudioClip does not carry its samples in the object; it carries an offset
+    and a length into a resource stream stored beside the serialized file. The
+    builder appends these bytes and patches the object's offset, because only
+    the builder knows the final layout.
+    """
+    resource_field: tuple[str, ...] = ()
+    """Path to the `StreamedResource` sub-object whose offset must be patched."""
+
+
+@dataclass
+class _Serialized:
+    metadata: bytes
+    data: bytes
+    resource: bytes = b""
+
+
+def _node(class_id: int, unity_version: str):
+    """The release type tree for one class at one exact Unity revision."""
+    require_capability("UnityPy")
+    from UnityPy.helpers.Tpk import get_typetree_node  # noqa: PLC0415
+    from UnityPy.helpers.UnityVersion import UnityVersion  # noqa: PLC0415
+
+    try:
+        return get_typetree_node(class_id, UnityVersion.from_str(unity_version))
+    except Exception as exc:  # noqa: BLE001 - any lookup failure is one message
+        raise PipelineError(
+            f"no type tree for class {class_id} at Unity {unity_version}: {exc}. "
+            "The type tree is the engine's own field layout; without it this "
+            "backend will not guess one."
+        ) from exc
+
+
+def _write_object(value: dict[str, Any], node) -> bytes:
+    from UnityPy.helpers.TypeTreeHelper import write_typetree  # noqa: PLC0415
+    from UnityPy.streams import EndianBinaryWriter  # noqa: PLC0415
+
+    writer = EndianBinaryWriter(endian="<")
+    try:
+        write_typetree(value, node, writer)
+    except Exception as exc:  # noqa: BLE001 - a field mismatch is one message
+        raise PipelineError(
+            f"cannot serialize a {node.m_Type} object: {exc}. Every field the "
+            "type tree names must be present and of the right shape."
+        ) from exc
+    return writer.bytes
+
+
+def _common_strings() -> dict[str, int]:
+    """Unity's built-in type-tree string table, reversed into name -> offset.
+
+    Unity writes a type tree's field and type names as offsets: into the local
+    string buffer, or — with the high bit set — into this table it already has
+    in memory. Real bundles use it for nearly every name, so this writer does
+    too; a local copy would work, and would also be the first structural
+    difference from Unity's own output that a diff would show.
+    """
+    from UnityPy.helpers.Tpk import get_common_strings  # noqa: PLC0415
+
+    reverse: dict[str, int] = {}
+    for offset, text in get_common_strings().items():
+        reverse.setdefault(text, offset)
+    return reverse
+
+
+def _type_tree(node, common: dict[str, int]) -> bytes:
+    """Serialize one class's type tree, as the metadata's per-type payload."""
+    nodes: list = []
+
+    def walk(current, level: int) -> None:
+        nodes.append((current, level))
+        for child in current.m_Children:
+            walk(child, level + 1)
+
+    walk(node, 0)
+
+    strings = bytearray()
+    offsets: dict[str, int] = {}
+
+    def string_offset(text: str) -> int:
+        if text in common:
+            return common[text] | 0x80000000
+        if text not in offsets:
+            offsets[text] = len(strings)
+            strings.extend(text.encode("utf-8") + b"\x00")
+        return offsets[text]
+
+    body = bytearray()
+    for index, (current, level) in enumerate(nodes):
+        # An array node is flagged, not inferred from its name, because the
+        # reader uses the flag to decide the size-prefixed layout.
+        type_flags = 1 if current.m_Type == "Array" else 0
+        body.extend(
+            struct.pack(
+                "<HBBIIiiIQ",
+                current.m_Version,
+                level,
+                type_flags,
+                string_offset(current.m_Type),
+                string_offset(current.m_Name),
+                current.m_ByteSize if current.m_ByteSize is not None else -1,
+                index,
+                current.m_MetaFlag or 0,
+                0,
+            )
+        )
+    return struct.pack("<II", len(nodes), len(strings)) + bytes(body) + bytes(strings)
+
+
+def _align(data: bytearray, boundary: int) -> None:
+    data.extend(b"\x00" * ((-len(data)) % boundary))
+
+
+def _serialize(
+    objects: list[BundleObject], unity_version: str, target: int, cab: str
+) -> _Serialized:
+    """Build the SerializedFile metadata and data sections."""
+    class_ids: list[int] = []
+    for obj in objects:
+        if obj.class_id not in class_ids:
+            class_ids.append(obj.class_id)
+
+    common = _common_strings()
+    trees = {class_id: _node(class_id, unity_version) for class_id in class_ids}
+
+    resource = bytearray()
+    for obj in objects:
+        if not obj.resource:
+            continue
+        # Resource offsets are only knowable once every clip has a place, so
+        # the object is patched here rather than by whoever described it.
+        target_field: Any = obj.fields
+        for key in obj.resource_field[:-1]:
+            target_field = target_field[key]
+        streamed = target_field[obj.resource_field[-1]]
+        streamed["m_Source"] = f"archive:/{cab}/{cab}.resource"
+        streamed["m_Offset"] = len(resource)
+        streamed["m_Size"] = len(obj.resource)
+        resource.extend(obj.resource)
+        _align(resource, 16)
+
+    data = bytearray()
+    entries: list[tuple[int, int, int, int]] = []
+    for index, obj in enumerate(objects, start=1):
+        _align(data, 8)
+        start = len(data)
+        data.extend(_write_object(obj.fields, trees[obj.class_id]))
+        entries.append((index, start, len(data) - start, class_ids.index(obj.class_id)))
+
+    metadata = bytearray()
+    metadata.extend(unity_version.encode("utf-8") + b"\x00")
+    metadata.extend(struct.pack("<i", target))
+    metadata.append(1)  # type trees are written; the game's own bundles do
+    metadata.extend(struct.pack("<I", len(class_ids)))
+    for class_id in class_ids:
+        metadata.extend(struct.pack("<ibh", class_id, 0, -1))
+        # The old type hash Unity stores is a compatibility record for the
+        # tree that follows it. The tree is written in full, so a reader has
+        # the layout regardless; this is left zero deliberately.
+        metadata.extend(bytes(16))
+        metadata.extend(_type_tree(trees[class_id], common))
+        metadata.extend(struct.pack("<I", 0))  # no type dependencies
+    metadata.extend(struct.pack("<I", len(entries)))
+    for path_id, start, size, type_index in entries:
+        _align(metadata, 4)
+        metadata.extend(struct.pack("<qQii", path_id, start, size, type_index))
+    metadata.extend(struct.pack("<I", 0))  # script types
+    metadata.extend(struct.pack("<I", 0))  # externals
+    metadata.extend(struct.pack("<I", 0))  # reference types
+    metadata.extend(b"\x00")  # userInformation
+
+    return _Serialized(bytes(metadata), bytes(data), bytes(resource))
+
+
+def _serialized_file(serialized: _Serialized) -> bytes:
+    """Wrap metadata and data in the SerializedFile header (version 22)."""
+    header_size = 48
+    metadata_size = len(serialized.metadata)
+    data_offset = header_size + metadata_size
+    data_offset += (-data_offset) % 8
+    file_size = data_offset + len(serialized.data)
+    header = bytearray()
+    # The four legacy fields are zero from version 22 on; the real values live
+    # in the extended header below, which is where a reader of a modern file
+    # looks. Both are big-endian: only the metadata that follows honours the
+    # endianness byte.
+    header.extend(struct.pack(">IIII", 0, 0, SERIALIZED_VERSION, 0))
+    header.append(0)  # little-endian metadata
+    header.extend(bytes(3))
+    header.extend(struct.pack(">IqqQ", metadata_size, file_size, data_offset, 0))
+    body = bytearray(header)
+    body.extend(serialized.metadata)
+    body.extend(b"\x00" * (data_offset - len(body)))
+    body.extend(serialized.data)
+    return bytes(body)
+
+
+def _cab_name(bundle_name: str) -> str:
+    """A stable CAB id.
+
+    Unity generates one per build; deriving it from the bundle name keeps two
+    builds of unchanged inputs byte-identical, which is what makes a rebuild
+    reviewable in git.
+    """
+    return "CAB-" + hashlib.md5(bundle_name.encode("utf-8")).hexdigest()  # noqa: S324
+
+
+def _container(
+    revision: str, nodes: list[tuple[str, bytes]]
+) -> bytes:
+    """Assemble the UnityFS archive around one or more directory nodes."""
+    payload = bytearray()
+    directory: list[tuple[int, int, int, str]] = []
+    for name, content in nodes:
+        # Flag 4 marks the serialized file; the resource stream beside it
+        # carries none, exactly as the directory of a Unity-built bundle does.
+        flags = 0 if name.endswith(".resource") else 4
+        directory.append((len(payload), len(content), flags, name))
+        payload.extend(content)
+
+    table = bytearray(bytes(16))  # the uncompressed-data hash Unity leaves zero
+    table.extend(struct.pack(">I", 1))
+    table.extend(struct.pack(">IIH", len(payload), len(payload), 0))  # one stored block
+    table.extend(struct.pack(">I", len(directory)))
+    for offset, size, flags, name in directory:
+        table.extend(struct.pack(">QQI", offset, size, flags))
+        table.extend(name.encode("utf-8") + b"\x00")
+
+    header = bytearray(b"UnityFS\x00")
+    header.extend(struct.pack(">I", 8))  # archive format 8, as the game ships
+    header.extend(b"5.x.x\x00")
+    header.extend(revision.encode("utf-8") + b"\x00")
+    size_offset = len(header)
+    header.extend(bytes(20))
+    header.extend(b"\x00" * ((-len(header)) % 16))
+    # Flags 0x40: the block table sits at the head of the archive, uncompressed.
+    struct.pack_into(
+        ">QIII", header, size_offset,
+        len(header) + len(table) + len(payload), len(table), len(table), 0x40,
+    )
+    return bytes(header) + bytes(table) + bytes(payload)
+
+
+def build_bundle(
+    objects: list[BundleObject],
+    unity_version: str,
+    bundle_name: str,
+    target: int = STANDALONE_WINDOWS64,
+) -> bytes:
+    """Write a loadable `.unity3d` containing `objects`, with no editor.
+
+    The class-142 `AssetBundle` object is added here rather than by the
+    caller: it is the container the runtime asks for, its `m_Container` table
+    is what makes each asset reachable by name, and a bundle that lacks it is
+    the exact failure every gate in this repository exists to catch.
+    """
+    if not objects:
+        raise PipelineError("a bundle needs at least one asset")
+    stems = [obj.name for obj in objects]
+    duplicates = {stem for stem in stems if stems.count(stem) > 1}
+    if duplicates:
+        raise PipelineError(
+            "two assets would answer the same name: " + ", ".join(sorted(duplicates))
+        )
+
+    cab = _cab_name(bundle_name)
+    # The AssetBundle object is written first so it takes path id 1, as Unity's
+    # own bundles do, and so every container entry can name a later id.
+    container = [
+        (
+            obj.name.lower(),
+            {
+                "preloadIndex": 0,
+                "preloadSize": 0,
+                "asset": {"m_FileID": 0, "m_PathID": index},
+            },
+        )
+        for index, obj in enumerate(objects, start=2)
+    ]
+    bundle_object = BundleObject(
+        class_id=ASSET_BUNDLE,
+        name=bundle_name,
+        fields={
+            "m_Name": bundle_name,
+            "m_PreloadTable": [],
+            "m_Container": container,
+            "m_MainAsset": {
+                "preloadIndex": 0,
+                "preloadSize": 0,
+                "asset": {"m_FileID": 0, "m_PathID": 0},
+            },
+            "m_RuntimeCompatibility": 1,
+            "m_AssetBundleName": bundle_name,
+            "m_Dependencies": [],
+            "m_IsStreamedSceneAssetBundle": False,
+            "m_ExplicitDataLayout": 0,
+            "m_PathFlags": 7,
+            "m_SceneHashes": [],
+        },
+    )
+    serialized = _serialize([bundle_object, *objects], unity_version, target, cab)
+    nodes = [(cab, _serialized_file(serialized))]
+    if serialized.resource:
+        nodes.append((f"{cab}.resource", serialized.resource))
+    return _container(unity_version, nodes)
+
+
+# -- assets -----------------------------------------------------------------
+#
+# One constructor per class this backend can write. Each returns the object in
+# the shape its type tree expects; the values that are not obvious were read
+# back out of a bundle a real editor built from the same source file, so the
+# defaults are Unity's, not invented (docs/research-provenance.md).
+
+# FMOD's sample-rate table, indexed by the sample header's 4-bit field. A rate
+# outside it needs a frequency chunk; the pipeline rejects it instead and says
+# how to resample, because a silently retuned clip is worse than a refusal.
+FSB5_FREQUENCIES = {
+    8000: 1, 11000: 2, 11025: 3, 16000: 4, 22050: 5,
+    24000: 6, 32000: 7, 44100: 8, 48000: 9, 96000: 10,
+}
+FSB5_PCM16 = 2
+AUDIO_PCM = 0
+TEXTURE_RGBA32 = 4
+
+
+def text_asset(name: str, text: str) -> BundleObject:
+    """A TextAsset: the mod's own data files, readable with `LoadAsset<TextAsset>`."""
+    return BundleObject(TEXT_ASSET, name, {"m_Name": name, "m_Script": text})
+
+
+def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
+    """A Texture2D from a PNG, uncompressed RGBA32 with its pixels inline.
+
+    Unity streams texture pixels into a side file and generates mip maps; both
+    are optimisations, and neither is required for the runtime to accept the
+    texture. Inline `image data` with `m_StreamData` empty is the shape every
+    Unity reader (including the engine's own) treats as complete.
+
+    `readable` keeps a CPU copy of the pixels, which is Unity's own default of
+    off: it doubles the texture's memory and only a mod that reads pixels from
+    script needs it.
+    """
+    require_capability("pillow")
+    from PIL import Image  # noqa: PLC0415
+
+    try:
+        with Image.open(png) as handle:
+            image = handle.convert("RGBA")
+            width, height = image.size
+            # Unity's first row is the bottom one; a texture written top-down
+            # loads fine and renders upside down, which no gate would catch.
+            pixels = image.transpose(Image.FLIP_TOP_BOTTOM).tobytes()
+    except OSError as exc:
+        raise PipelineError(f"cannot read texture {png}: {exc}") from exc
+
+    return BundleObject(
+        TEXTURE_2D,
+        name,
+        {
+            "m_Name": name,
+            "m_ForcedFallbackFormat": 4,
+            "m_DownscaleFallback": False,
+            "m_IsAlphaChannelOptional": False,
+            "m_Width": width,
+            "m_Height": height,
+            "m_CompleteImageSize": len(pixels),
+            "m_MipsStripped": 0,
+            "m_TextureFormat": TEXTURE_RGBA32,
+            "m_MipCount": 1,
+            "m_IsReadable": readable,
+            "m_IsPreProcessed": False,
+            "m_IgnoreMipmapLimit": False,
+            "m_MipmapLimitGroupName": "",
+            "m_StreamingMipmaps": False,
+            "m_StreamingMipmapsPriority": 0,
+            "m_ImageCount": 1,
+            "m_TextureDimension": 2,
+            "m_TextureSettings": {
+                "m_FilterMode": 1,
+                "m_Aniso": 1,
+                "m_MipBias": 0.0,
+                "m_WrapU": 0,
+                "m_WrapV": 0,
+                "m_WrapW": 0,
+            },
+            "m_LightmapFormat": 0,
+            "m_ColorSpace": 1,
+            "m_PlatformBlob": [],
+            "image data": pixels,
+            "m_StreamData": {"offset": 0, "size": 0, "path": ""},
+        },
+    )
+
+
+def _fsb5_pcm16(pcm: bytes, channels: int, rate: int) -> bytes:
+    """Wrap raw PCM in the FMOD sound bank Unity's audio resource always is.
+
+    An AudioClip object carries no samples: it carries an offset into a
+    resource stream that the runtime hands to FMOD, and FMOD reads an FSB5
+    container there. The layout below was read out of the `.resource` stream of
+    a bundle this repository's own editor built (`FSB5`, version 1, one sample,
+    the 64-bit sample header's frequency/channel/offset/sample-count fields).
+    """
+    index = FSB5_FREQUENCIES.get(rate)
+    if index is None:
+        supported = ", ".join(str(value) for value in sorted(FSB5_FREQUENCIES))
+        raise PipelineError(
+            f"{rate} Hz cannot be written without a frequency chunk; FMOD's table "
+            f"holds {supported}. Resample first: "
+            "ffmpeg -i in.wav -ar 44100 out.wav"
+        )
+    if channels not in (1, 2):
+        raise PipelineError(
+            f"{channels}-channel audio needs a channel chunk; write mono or stereo"
+        )
+    samples = len(pcm) // (2 * channels)
+    sample_header = struct.pack(
+        "<Q", (index << 1) | ((channels - 1) << 5) | (samples << 34)
+    )
+    # FMOD reads the data section at 60 + sampleHeadersSize + nameTableSize;
+    # Unity pads that start to 32, so the same padding is applied here.
+    padding = (-(60 + len(sample_header))) % 32
+    headers_size = len(sample_header) + padding
+    data = pcm + b"\x00" * ((-len(pcm)) % 32)
+    header = b"FSB5" + struct.pack(
+        "<IIIIII", 1, 1, headers_size, 0, len(data), FSB5_PCM16
+    )
+    header += struct.pack("<I", 1) + bytes(4) + bytes(16) + bytes(8)
+    return header + sample_header + bytes(padding) + data
+
+
+def audio_clip(name: str, wav: Path) -> BundleObject:
+    """An AudioClip from a mono/stereo 16-bit WAV, stored uncompressed.
+
+    `shamway check-sound` gates the clip itself; this only carries it. Unity
+    would encode to Vorbis, which needs an encoder and changes the samples a
+    listener signed off on. PCM is larger and is exactly what was authored.
+    """
+    import wave  # noqa: PLC0415
+
+    try:
+        with wave.open(str(wav), "rb") as handle:
+            channels = handle.getnchannels()
+            rate = handle.getframerate()
+            width = handle.getsampwidth()
+            frames = handle.readframes(handle.getnframes())
+    except (OSError, wave.Error) as exc:
+        raise PipelineError(f"cannot read clip {wav}: {exc}") from exc
+    if width != 2:
+        raise PipelineError(
+            f"{wav.name} is {width * 8}-bit; write 16-bit PCM "
+            "(ffmpeg -i in.wav -c:a pcm_s16le out.wav)"
+        )
+    samples = len(frames) // (2 * channels)
+    return BundleObject(
+        AUDIO_CLIP,
+        name,
+        {
+            "m_Name": name,
+            "m_LoadType": 0,
+            "m_Channels": channels,
+            "m_Frequency": rate,
+            "m_BitsPerSample": 16,
+            "m_Length": samples / rate if rate else 0.0,
+            "m_IsTrackerFormat": False,
+            "m_Ambisonic": False,
+            "m_SubsoundIndex": 0,
+            "m_PreloadAudioData": False,
+            "m_LoadInBackground": False,
+            "m_Legacy3D": True,
+            "m_Resource": {"m_Source": "", "m_Offset": 0, "m_Size": 0},
+            "m_CompressionFormat": AUDIO_PCM,
+        },
+        resource=_fsb5_pcm16(frames, channels, rate),
+        resource_field=("m_Resource",),
+    )
+
+
+# -- the source directory ---------------------------------------------------
+
+# What a file below the bundle source folder becomes. The extension decides,
+# because the alternative is a per-asset declaration file that drifts from the
+# folder it describes. Anything else is refused by name rather than skipped
+# quietly: a source file nobody built is exactly the kind of silence this
+# pipeline exists to remove.
+ASSET_KINDS: dict[str, str] = {
+    ".png": "Texture2D",
+    ".wav": "AudioClip",
+    ".txt": "TextAsset",
+    ".json": "TextAsset",
+    ".csv": "TextAsset",
+}
+IGNORED_NAMES = {".gitkeep", ".gitignore"}
+IGNORED_SUFFIXES = {".meta"}
+
+
+def collect_sources(source_dir: Path) -> list[Path]:
+    """Every buildable file below `source_dir`, sorted for a reproducible build."""
+    if not source_dir.is_dir():
+        raise PipelineError(
+            f"no bundle source directory at {source_dir}. It is the folder whose "
+            "contents become the bundle; create it and put the mod's textures, "
+            "clips and text files in it."
+        )
+    found: list[Path] = []
+    unknown: list[str] = []
+    for path in sorted(source_dir.rglob("*")):
+        if not path.is_file() or path.name in IGNORED_NAMES or path.suffix in IGNORED_SUFFIXES:
+            continue
+        if path.suffix.lower() not in ASSET_KINDS:
+            unknown.append(str(path.relative_to(source_dir)))
+            continue
+        found.append(path)
+    if unknown:
+        kinds = ", ".join(sorted(ASSET_KINDS))
+        raise PipelineError(
+            "this backend cannot build " + ", ".join(unknown[:5]) + f"; it writes {kinds}. "
+            "A mesh, prefab, material or shader still needs Unity — see "
+            "'shamway docs no-unity'."
+        )
+    if not found:
+        raise PipelineError(f"{source_dir} holds no assets to build")
+    return found
+
+
+def object_for(path: Path) -> BundleObject:
+    """Turn one source file into the object its extension names."""
+    stem = path.stem
+    suffix = path.suffix.lower()
+    if suffix == ".png":
+        return texture_2d(stem, path)
+    if suffix == ".wav":
+        return audio_clip(stem, path)
+    try:
+        return text_asset(stem, path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as exc:
+        raise PipelineError(f"cannot read text asset {path}: {exc}") from exc
+
+
+def render_manifest(bundle_name: str, assets: list[str]) -> str:
+    """Unity's own manifest shape, so one validator serves both backends.
+
+    `validate` reads membership from the tracked manifest and knows nothing
+    about which backend produced the bundle. Emitting the same file keeps the
+    stem, case and reference gates working unchanged.
+    """
+    lines = [
+        "ManifestFileVersion: 0",
+        f"AssetBundleManifest: {bundle_name}",
+        "Assets:",
+        *[f"- {asset}" for asset in assets],
+        "Dependencies: []",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def pack_directory(
+    source_dir: Path, bundle_name: str, unity_version: str, target: int = STANDALONE_WINDOWS64
+) -> tuple[bytes, str]:
+    """Build a bundle from a directory of source files, with no editor.
+
+    Returns the bundle bytes and the manifest text that records what went into
+    it, which is the pair `build` stages together.
+    """
+    sources = collect_sources(source_dir)
+    objects = [object_for(path) for path in sources]
+    bundle = build_bundle(objects, unity_version, bundle_name, target)
+    members = [f"{source_dir.name}/{path.relative_to(source_dir).as_posix()}" for path in sources]
+    return bundle, render_manifest(bundle_name, members)

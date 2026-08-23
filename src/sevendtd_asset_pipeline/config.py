@@ -13,6 +13,21 @@ from .errors import PipelineError
 CONFIG_NAME = ".shamway.toml"
 VALID_BUNDLE = re.compile(r"^[a-z0-9][a-z0-9._-]*\.unity3d$")
 
+# Where the mod's bundle comes from. This is the one key that decides whether a
+# Unity editor has to exist on this machine at all, so every Unity-touching
+# surface (doctor, build, status, validate) reads it rather than guessing from
+# whether UNITY_EDITOR happens to be set.
+BUNDLE_SOURCES = {
+    "unity": "a local editor builds it: shamway build",
+    "synthesized": "this tool writes it directly, with no editor: shamway build",
+    "external": "an editor elsewhere builds it; this host gates and stages it: shamway stage",
+    "none": "the mod ships no bundle; XML, loose atlas icons and DLLs only",
+}
+# The sources that build here. They differ in what starts the build, not in
+# what gates it afterwards.
+LOCAL_BUNDLE_SOURCES = ("unity", "synthesized")
+BUNDLE_SOURCE_ENV = "SHAMWAY_BUNDLE_SOURCE"
+
 
 @dataclass(frozen=True)
 class PipelineConfig:
@@ -27,6 +42,15 @@ class PipelineConfig:
     resources_dir: Path
     config_dir: Path
     target: str
+    bundle_source: str
+    unity_version: str | None
+    """The revision from `[unity] version`.
+
+    Only the editorless backend reads it, and only when no game is configured:
+    with a Unity project the revision comes from `ProjectVersion.txt`, and with
+    a game install it comes from a shipped bundle's own header. Both are better
+    evidence than a string in a configuration file.
+    """
     unity_editor: Path | None
     game_dir: Path | None
     code_references: tuple[str, ...] = ()
@@ -42,11 +66,52 @@ class PipelineConfig:
     """
 
     @property
+    def has_bundle(self) -> bool:
+        """Whether this mod ships a `.unity3d` at all.
+
+        A mod of XML and loose `UIAtlases/` PNGs is a complete 7DTD modlet and
+        never needs Unity. Saying so here is what keeps the bundle gates from
+        reporting the absence of a file the mod was never meant to have.
+        """
+        return self.bundle_source != "none"
+
+    @property
+    def builds_locally(self) -> bool:
+        """Whether `shamway build` produces the bundle on this machine."""
+        return self.bundle_source in LOCAL_BUNDLE_SOURCES
+
+    @property
+    def needs_editor(self) -> bool:
+        """Whether anything in this mod's build path starts a Unity editor."""
+        return self.bundle_source == "unity"
+
+    @property
+    def bundle_source_dir(self) -> Path:
+        """The folder whose contents become the bundle.
+
+        With a Unity project `source_root` is a path inside it, because that is
+        what the editor collects. Without one there is no project to be inside,
+        so the same key is read against the mod root.
+        """
+        if self.bundle_source == "unity":
+            return self.unity_project / self.source_root
+        return self.mod_root / self.source_root
+
+    def require_bundle(self) -> None:
+        if not self.has_bundle:
+            raise PipelineError(
+                f"{self.config_file.name} sets bundle_source = \"none\", so this mod has no "
+                "bundle. Set it to \"unity\" or \"external\" and give it a bundle_name to add one."
+            )
+
+    @property
     def bundle_output(self) -> Path:
+        self.require_bundle()
         return self.resources_dir / self.bundle_name
 
     @property
     def tracked_manifest(self) -> Path:
+        self.require_bundle()
         return self.manifest_dir / f"{self.bundle_name}.manifest"
 
 
@@ -60,6 +125,33 @@ def _path(base: Path, value: object, field: str) -> Path:
 def _optional_path(base: Path, value: object, env_name: str) -> Path | None:
     raw = os.environ.get(env_name) or (value if isinstance(value, str) else "")
     return _path(base, raw, env_name) if raw else None
+
+
+def _machine_bundle_source(configured: str) -> str:
+    """Let the machine say where *this* host gets the bundle from.
+
+    Whether a mod has a bundle is the mod's business and lives in the file.
+    Whether an editor exists on this particular machine is not: the same
+    committed configuration is checked out on a build host with an editor and
+    on a laptop or agent box without one, exactly like `UNITY_EDITOR`. So
+    `SHAMWAY_BUNDLE_SOURCE` chooses between "unity" and "external" and may
+    never invent or remove a bundle.
+    """
+    override = os.environ.get(BUNDLE_SOURCE_ENV, "").strip()
+    if not override:
+        return configured
+    if override not in ("unity", "synthesized", "external"):
+        raise PipelineError(
+            f"{BUNDLE_SOURCE_ENV} may only be 'unity', 'synthesized' or 'external' (it says "
+            f"where this machine gets the bundle from), not {override!r}"
+        )
+    if configured == "none":
+        raise PipelineError(
+            f"{BUNDLE_SOURCE_ENV}={override} cannot apply: the configuration says this mod "
+            "ships no bundle. Whether a mod has a bundle is the mod's decision, not the "
+            "machine's; change bundle_source in the configuration to add one."
+        )
+    return override
 
 
 def find_config(start: Path | None = None) -> Path:
@@ -87,10 +179,23 @@ def load_config(path: Path | None = None) -> PipelineConfig:
     base = config_file.parent
     mod_root = _path(base, data.get("mod_root", "."), "mod_root")
     mod_name = data.get("mod_name")
-    bundle_name = data.get("bundle_name")
+    bundle_name = data.get("bundle_name", "")
+    bundle_source = data.get("bundle_source", "unity")
     if not isinstance(mod_name, str) or not mod_name.strip():
         raise PipelineError("mod_name must be a non-empty string")
-    if not isinstance(bundle_name, str) or not VALID_BUNDLE.fullmatch(bundle_name):
+    if bundle_source not in BUNDLE_SOURCES:
+        options = ", ".join(f"{name!r} ({why})" for name, why in BUNDLE_SOURCES.items())
+        raise PipelineError(f"bundle_source must be one of: {options}")
+    bundle_source = _machine_bundle_source(bundle_source)
+    if bundle_source == "none":
+        # A name for a file the mod does not ship would be a lie every other
+        # surface then has to reason about, so it is rejected rather than ignored.
+        if bundle_name:
+            raise PipelineError(
+                'bundle_source = "none" means the mod ships no bundle, so bundle_name '
+                f"must be empty, not {bundle_name!r}"
+            )
+    elif not isinstance(bundle_name, str) or not VALID_BUNDLE.fullmatch(bundle_name):
         raise PipelineError(
             "bundle_name must be a lowercase filesystem-safe name ending in .unity3d"
         )
@@ -103,6 +208,10 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         isinstance(item, str) and item.strip() for item in code_references
     ):
         raise PipelineError("code_references must be a list of non-empty asset stems")
+    if code_references and bundle_source == "none":
+        raise PipelineError(
+            'code_references name assets inside a bundle, but bundle_source = "none"'
+        )
 
     config = PipelineConfig(
         config_file=config_file,
@@ -116,6 +225,8 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         resources_dir=_path(mod_root, data.get("resources_dir", "Resources"), "resources_dir"),
         config_dir=_path(mod_root, data.get("config_dir", "Config"), "config_dir"),
         target=str(data.get("target", "StandaloneWindows64")),
+        bundle_source=bundle_source,
+        unity_version=str(unity.get("version") or "") or None,
         unity_editor=_optional_path(base, unity.get("editor"), "UNITY_EDITOR"),
         game_dir=_optional_path(base, game.get("directory"), "SEVEN_DAYS_TO_DIE_DIR"),
         code_references=tuple(item.strip() for item in code_references),
@@ -136,6 +247,7 @@ def render_config(
     unity_project: str = "tools/shamway/UnityProject",
     source_root: str = "Assets/ModAssets/Bundle",
     manifest_dir: str = "tools/shamway/manifests",
+    bundle_source: str = "unity",
 ) -> str:
     """Render `.shamway.toml`.
 
@@ -143,12 +255,83 @@ def render_config(
     project keeps it where it is: adoption is a configuration change, not a
     file move. Moving a Unity project means moving every `.meta` with it, and
     a mistake there re-imports every asset under a new GUID.
+
+    `bundle_source` decides whether the rendered configuration describes a mod
+    that builds its own bundle, stages one built elsewhere, or has none — the
+    only key that decides whether this machine needs a Unity editor.
     """
+    if bundle_source == "none":
+        return f'''# Paths are relative to this file unless absolute.
+schema_version = 1
+mod_root = "."
+mod_name = "{mod_name}"
+
+# This mod ships no Unity asset bundle: XML, loose UIAtlases/ PNGs, and DLLs
+# only. No Unity editor is needed to build, validate or ship it. Adding a
+# bundle later means setting bundle_source = "unity" (or "external"), giving it
+# a bundle_name, and scaffolding a Unity project. See `shamway docs no-unity`.
+bundle_source = "none"
+
+resources_dir = "Resources"
+config_dir = "Config"
+
+[game]
+# Prefer SEVEN_DAYS_TO_DIE_DIR. The installed game is read-only reference.
+directory = ""
+'''
+    if bundle_source == "synthesized":
+        return f'''# Paths are relative to this file unless absolute.
+schema_version = 1
+mod_root = "."
+mod_name = "{mod_name}"
+bundle_name = "{bundle_name}"
+
+# This mod's bundle is written by shamway itself: no Unity editor, no Unity
+# project. `source_root` is the folder whose contents become the bundle, and it
+# is read against this file rather than against a project that does not exist.
+# What can be synthesized and what still needs an editor: `shamway docs no-unity`.
+bundle_source = "synthesized"
+source_root = "{source_root}"
+
+build_dir = ".shamway/build"
+manifest_dir = "{manifest_dir}"
+resources_dir = "Resources"
+config_dir = "Config"
+target = "StandaloneWindows64"
+
+# Bundle stems the mod's C# loads directly. No XML names them, so `validate`
+# only sees them if they are listed here. Stem only, exact case, no extension.
+code_references = []
+
+[unity]
+# No editor is used. The revision is still recorded, because a bundle carries
+# the revision it claims to be for; SEVEN_DAYS_TO_DIE_DIR overrides it with the
+# installed game's own answer, which is the better evidence.
+version = "{unity_version}"
+
+[game]
+# Prefer SEVEN_DAYS_TO_DIE_DIR. The installed game is read-only reference.
+directory = ""
+'''
+    external = bundle_source == "external"
+    editor_note = (
+        "# Built by an editor elsewhere (CI, another machine) and staged here with\n"
+        "# `shamway stage BUNDLE --manifest M --log L`. UNITY_EDITOR is not needed\n"
+        "# on this host; the build host still needs the revision below."
+        if external
+        else "# Prefer the UNITY_EDITOR environment variable for machine-local paths."
+    )
     return f'''# Paths are relative to this file unless absolute.
 schema_version = 1
 mod_root = "."
 mod_name = "{mod_name}"
 bundle_name = "{bundle_name}"
+
+# Where the bundle comes from: "unity" (a local editor builds it), "external"
+# (an editor elsewhere builds it and `shamway stage` gates it here), or "none"
+# (the mod ships no bundle). See `shamway docs no-unity`.
+bundle_source = "{bundle_source}"
+
 unity_project = "{unity_project}"
 source_root = "{source_root}"
 build_dir = ".shamway/build"
@@ -163,7 +346,7 @@ target = "StandaloneWindows64"
 code_references = []
 
 [unity]
-# Prefer the UNITY_EDITOR environment variable for machine-local paths.
+{editor_note}
 editor = ""
 version = "{unity_version}"
 

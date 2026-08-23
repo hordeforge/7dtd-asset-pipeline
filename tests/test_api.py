@@ -40,7 +40,10 @@ class ManifestTests(unittest.TestCase):
     def test_the_writing_operations_are_exactly_the_expected_set(self) -> None:
         """A caller decides what is safe to run from `writes`, so guard the set."""
         writers = {name for name, op in OPERATIONS.items() if op.writes}
-        self.assertEqual({"build", "init", "render_icon", "client_deploy", "client_launch"}, writers)
+        self.assertEqual(
+            {"build", "pack", "stage", "init", "render_icon", "client_deploy", "client_launch"},
+            writers,
+        )
 
 
 class DispatchTests(unittest.TestCase):

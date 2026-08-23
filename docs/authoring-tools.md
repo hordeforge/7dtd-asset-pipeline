@@ -52,6 +52,26 @@ dependency for asset-generation scripts, not for the bundle pipeline itself.
 
 - Official export API: <https://trimesh.org/trimesh.exchange.export.html>
 
+### gltfpack — mesh optimization before import
+
+`gltfpack` (from meshoptimizer) quantizes positions, normals and UVs and
+reorders indices for vertex-cache locality, shrinking a glTF by large factors
+with a documented quality knob (`-cc`, `-vpq`, `-vtn`). Run it between export
+and validation when bundle size matters; keep the unoptimized glTF as the
+editable source.
+
+- Official repository: <https://github.com/zeux/meshoptimizer>
+
+### AssetRipper — full vanilla reference extraction
+
+AssetRipper exports complete prefab hierarchies, materials, meshes and
+textures from an installed game into readable project form — stronger than
+object-list inspection when a mod needs to study how vanilla wires a material
+or a particle graph. Read-only against the install, reference only: never
+copy exported vanilla assets into a mod.
+
+- Official repository: <https://github.com/AssetRipper/AssetRipper>
+
 ### Khronos glTF Validator — interchange gate
 
 When Blender/OpenSCAD/scripts emit glTF or GLB, run the Khronos validator
@@ -92,6 +112,26 @@ derivative in a single script.
 
 - Pillow documentation: <https://pillow.readthedocs.io/en/stable/>
 - ImageDraw: <https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html>
+
+### Compressonator and bc7enc — texture size planning
+
+Block compression (DXT1/DXT5, BC7) is what Unity's importer applies and what
+the editorless writer does not: synthesized textures ship as raw RGBA32.
+Compressonator (GPUOpen, CLI) and bc7enc produce the compressed blocks and,
+before any writer support exists, answer the planning question — how much a
+texture set would shrink by moving it to the editor path.
+
+- Compressonator: <https://github.com/GPUOpen-Tools/compressonator>
+- bc7enc: <https://github.com/richgel999/bc7_enc_rdo>
+
+### python-fsb5 — FSB5 decoding for reference
+
+The game stores every clip as an FSB5 bank inside `.resource` streams;
+python-fsb5 decodes those to WAV so a sound designer can hear exactly what a
+vanilla clip contains, at its true rate and channel count. Read-only,
+reference use.
+
+- Official repository: <https://github.com/HearthSim/python-fsb5>
 
 ## Audio
 

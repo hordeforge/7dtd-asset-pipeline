@@ -125,6 +125,24 @@ evidence, and evidence that is only ever local is evidence nobody else can
 check — but they are never part of the deployable modlet either way. If you do
 commit them, commit them somewhere other than `.local/`.
 
+## A mod with no bundle, or one built elsewhere
+
+Everything above assumes the mod owns a Unity project and builds its bundle
+here. Two other shapes are supported and change what `init` writes:
+
+- `--bundle-source synthesized` — the bundle is written by shamway itself. No
+  Unity project is created; `source_root` points at `assets-src/bundle/` in the
+  mod, and every `.png`, `.wav` and `.txt`/`.json`/`.csv` there becomes one
+  asset. Meshes, prefabs and materials cannot be synthesized.
+- `--bundle-source none` — the mod ships no bundle at all (XML, loose
+  `UIAtlases/` PNGs, a DLL). No Unity project is created, `Makefile.assets`
+  has no build targets, and no editor is needed for any part of the mod.
+- `--bundle-source external` — the layout is unchanged, including the Unity
+  project, but the editor lives on another machine; `shamway stage` gates and
+  stages what it built.
+
+See [no-unity.md](no-unity.md).
+
 ## Adopting a mod that already has a Unity project
 
 A mod with assets already has a Unity project, its own editor scripts, and a

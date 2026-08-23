@@ -3,6 +3,8 @@
 Things that need a human, a licence, or a machine this session cannot reach.
 Each entry says what is blocked, why, exactly what to run, and how to confirm
 it worked. Nothing here blocks writing code; it blocks *proving* code.
+Capability gaps — things no one has built yet, with the tools that would close
+them — live in [improvements.md](improvements.md) instead of here.
 
 Keep this file honest: delete an entry once its verification passes, and add
 one the moment something is claimed but not verified.
@@ -105,6 +107,76 @@ shamway check-icons
 `UIAtlases/ItemIconAtlas/`, showing the prefab lit from three sides on a
 transparent background, and `check-icons` accepts it. A uniform transparent
 square means the render had no graphics device.
+
+### 5. No externally built bundle has made the round trip
+
+**Not blocked:** `shamway stage` itself. It runs the artifact gates the local
+build runs — class-142, revision, stem collisions, the build-log gate when a
+log is supplied — and the unit suite exercises acceptance and each rejection
+against generated UnityFS fixtures, including that a rejected candidate leaves
+the previously staged bundle in place.
+
+**Blocks only this:** the claim that the *round trip* works. No bundle built by
+an editor on a different machine has been carried back and staged here, and the
+build-host half (`SHAMWAY_BUNDLE_SOURCE=unity` on a host whose committed
+configuration says `external`) has never run on a second machine.
+
+**You run,** on the host with the editor:
+
+```bash
+export SHAMWAY_BUNDLE_SOURCE=unity
+shamway build
+```
+
+then copy `Resources/<name>.unity3d`, `tools/shamway/manifests/<name>.manifest`
+and `.shamway/build/bundle/unity-build.log` to the machine without an editor,
+and there:
+
+```bash
+shamway stage <name>.unity3d --manifest <name>.manifest --log unity-build.log
+shamway validate
+```
+
+**Confirms it worked:** `stage` prints `OK:` with no `not run:` line (both the
+log and `SEVEN_DAYS_TO_DIE_DIR` were present), `validate` passes, and the
+bundle then loads in a fresh client per entry 3.
+
+### 6. No synthesized bundle has been loaded by a client
+
+**Not blocked:** the writer itself, and more of it than expected. A bundle
+`shamway build` synthesized with no editor in its path — `Texture2D`,
+`AudioClip` and `TextAsset` — was loaded on 2026-08-23 by a real Unity
+2022.3.62f2 runtime through `AssetBundle.LoadFromFile`, and every object
+deserialized with the engine's own class definitions: the text came back, the
+texture as `4x2 RGBA32` with its rows the right way up, and FMOD decoded the
+hand-written FSB5 bank to `channels=1 frequency=44100 samples=4410`. That is
+`shamway verify-bundle`, and it is repeatable on any host with an editor.
+
+**Blocks only this:** the claim that **7 Days to Die** loads one. A Unity
+runtime of the same revision is not the game: it does not exercise
+`DataLoader.ParseDataPathIdentifier`, `AssetBundleManager._get`'s stem
+reduction, or the block/sound systems that consume the result. And on a
+synthesized bundle the class-142 and stem gates are true by construction, so
+the fresh client is not a confirmation step here — it is the acceptance. The
+mode is exposed anyway, at the user's direction, which is a deliberate
+deviation from the phase-4 bar in
+[offline-bundle-builder.md](offline-bundle-builder.md); every synthesize prints
+what its gates are worth.
+
+**You run:** in a mod with `bundle_source = "synthesized"`, an XML reference to
+one of its assets, and a client installed:
+
+```bash
+shamway build
+shamway validate
+shamway client deploy .
+shamway client launch --mod-name MyMod
+```
+
+**Confirms it worked:** the client log carries `Loaded Mod: MyMod` with no
+bundle-load, incompatibility or wrong-name lines, and the asset itself is
+right when a person looks at or listens to it — a texture that is the right
+way up, a clip at the right pitch.
 
 ## Verified, for contrast
 

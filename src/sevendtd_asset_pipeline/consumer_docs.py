@@ -48,7 +48,8 @@ Exit code 0 means valid. Start here rather than reading files.
 | `shamway check-icons` | instant | atlas cells and every icon key: `CustomIcon`, `display_entry icon=`, and item/block names |
 | `shamway validate` | fast | bundle + every XML reference + `code_references` |
 | `shamway build --probe` | minutes | proves the environment; stages nothing |
-| `shamway build` | minutes | builds, gates, and stages the bundle |
+| `shamway build` | minutes (seconds when synthesized) | produces, gates, and stages the bundle |
+| `shamway stage BUNDLE` | fast | gates and stages a bundle an editor elsewhere built; no Unity here |
 | `shamway render-icon STEM` | minutes | renders a prefab into its atlas cell |
 | `shamway client where` | instant | where the installed client loads mods from and logs to |
 | `shamway client deploy .` | fast | copy the deployable modlet there (outside the game install) |
@@ -329,11 +330,70 @@ class 142 is missing, the cause is an engine module, not a build option.
 """
 
 
-def render_agent_guide(mod_name: str, bundle_name: str) -> str:
+# The guide below assumes the common case: this mod builds its own bundle with
+# a local editor. When it does not, the difference is stated at the top rather
+# than woven through every section, so an agent reads one authoritative
+# paragraph instead of discovering the exception in a table row.
+BUNDLE_SOURCE_BANNERS = {
+    "synthesized": """> **This mod's bundle is written by shamway itself, with no Unity.**
+> `.shamway.toml` sets `bundle_source = "synthesized"`: `shamway build` reads
+> the source folder and writes `Resources/{bundle_name}` directly — no editor,
+> no Unity project, seconds not minutes. Every file in the source folder becomes
+> one asset named by its stem: `.png` a Texture2D, `.wav` an AudioClip (16-bit
+> PCM, a rate from FMOD's table), `.txt`/`.json`/`.csv` a TextAsset. A mesh,
+> prefab, material or shader **cannot** be synthesized and is refused by name.
+> `shamway build` prints what its gates are worth on its own output; never
+> repeat its result as "built", and never drop those notes from a report. With
+> an editor present, `shamway verify-bundle` loads the result in a real runtime.
+> A fresh client is the acceptance, not a confirmation. Details:
+> `shamway docs no-unity`.
+
+""",
+    "external": """> **This mod does not build its bundle here.** `.shamway.toml` sets
+> `bundle_source = "external"`: an editor elsewhere (CI, another machine)
+> builds `Resources/{bundle_name}`, and this host gates and stages the result.
+> `shamway build` and `shamway render-icon` are refused. Use
+> `shamway stage BUNDLE --manifest M --log L` instead; it runs the same
+> artifact gates and the build-log gate, and stages atomically. Everything
+> else below applies unchanged. Details: `shamway docs no-unity`.
+
+""",
+    "none": """> **This mod ships no Unity asset bundle.** `.shamway.toml` sets
+> `bundle_source = "none"`: the mod is XML, loose `UIAtlases/` PNGs, and DLLs,
+> which is a complete 7DTD modlet. No Unity editor is needed for any part of
+> it. Ignore the bundle rows below — `build`, `stage`, `render-icon`,
+> `inspect` and `inspect --deep` do not apply, and `validate` checks that no
+> XML asks for a bundle this mod does not have. The icon, XML, deployment and
+> fresh-client rules all still apply. Adding a bundle later: `shamway docs
+> no-unity`.
+
+""",
+}
+
+
+def render_agent_guide(mod_name: str, bundle_name: str, bundle_source: str = "unity") -> str:
     """Fill the guide's placeholders.
 
     Deliberately not `str.format`: this document contains JSON examples, and
     every brace in them would have to be doubled, which is a trap that breaks
     scaffolding the moment someone adds an example without noticing.
     """
-    return AGENT_GUIDE.replace("{mod_name}", mod_name).replace("{bundle_name}", bundle_name)
+    banner = BUNDLE_SOURCE_BANNERS.get(bundle_source, "")
+    guide = AGENT_GUIDE
+    if banner:
+        title, rest = guide.split("\n", 1)
+        guide = f"{title}\n\n{banner}{rest.lstrip()}"
+    if bundle_source == "none":
+        # The facts at the top of the guide are the first thing anyone reads;
+        # leaving Unity paths there would contradict the banner immediately.
+        guide = guide.replace(
+            "This mod builds its Unity asset bundle with **shamway**",
+            "This mod is scaffolded and validated with **shamway**",
+        ).replace(
+            "- Bundle: `Resources/{bundle_name}`\n"
+            "- Unity project: `tools/shamway/UnityProject`\n"
+            "- Bundle membership: `tools/shamway/UnityProject/Assets/ModAssets/Bundle/`\n",
+            '- Bundle: none (`bundle_source = "none"`); no Unity project, no editor\n',
+        )
+        bundle_name = "(none)"
+    return guide.replace("{mod_name}", mod_name).replace("{bundle_name}", bundle_name)

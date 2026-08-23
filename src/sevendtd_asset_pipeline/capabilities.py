@@ -83,8 +83,13 @@ REGISTRY: tuple[_Spec, ...] = (
         name="UnityPy",
         kind="module",
         probe="UnityPy",
-        unlocks=("shamway inspect --deep",),
-        purpose="list every serialized object and per-prefab component in a built bundle",
+        unlocks=(
+            "shamway inspect --deep",
+            "shamway pack",
+            'shamway build with bundle_source = "synthesized"',
+        ),
+        purpose="read every serialized object in a bundle, and supply the engine's own "
+        "per-revision type trees to the editorless bundle writer",
         install=extra_install("inspect"),
     ),
     _Spec(
@@ -125,6 +130,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="PIL",
         unlocks=(
             "shamway render-icon",
+            "shamway pack (textures)",
             "shamway generate icon",
             "shamway generate cutout",
             "shamway generate texture-maps",

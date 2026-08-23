@@ -47,6 +47,30 @@ assets-status:
 	shamway status
 """
 
+# A mod with no bundle has nothing to build, so the build targets are left out
+# rather than left in to fail: a Makefile target that always errors teaches
+# whoever runs it to stop trusting the file.
+BUNDLE_FREE_MAKEFILE_TARGETS = """.PHONY: assets-validate assets-icons assets-doctor assets-status
+
+assets-validate:
+	shamway validate
+	shamway check-icons
+
+assets-icons:
+	shamway check-icons
+
+assets-doctor:
+	shamway doctor
+
+assets-status:
+	shamway status
+"""
+
+# The Unity-owning modes. "none" means the mod ships no bundle at all, so no
+# project is scaffolded, no editor script is vendored, and no revision is
+# pinned; "external" still scaffolds the project, because the build host needs
+# it in the repository even though this machine will never open it.
+
 
 def default_bundle_name(mod_name: str) -> str:
     stem = re.sub(r"[^a-z0-9._-]+", "-", mod_name.lower()).strip("-._")
@@ -58,11 +82,17 @@ def default_bundle_name(mod_name: str) -> str:
 # replaces them. A mod's own editor scripts belong in a folder of their own.
 PIPELINE_EDITOR_SCRIPTS = (
     "BundleBuilder.cs",
+    "BundleVerifier.cs",
     "GeneratedAsset.cs",
     "IconRenderer.cs",
     "ShamwayPreBuild.cs",
 )
 EDITOR_FOLDER = "Assets/SevenDaysToDieAssetPipeline/Editor"
+
+# Where a mod that has no Unity project keeps the files its bundle is made of.
+# It sits beside the other editable sources rather than in the deployable part
+# of the modlet, because the sources themselves never ship.
+SYNTHESIZED_SOURCE_ROOT = "assets-src/bundle"
 
 
 def initialize(
@@ -74,19 +104,34 @@ def initialize(
     adopt_project: Path | str | None = None,
     source_root: str | None = None,
     manifest_dir: str | None = None,
+    bundle_source: str = "unity",
 ) -> list[Path]:
     """Create the pipeline inside a modlet, or adopt the Unity project it has.
 
     With `adopt_project`, no project template is copied and no
     `ProjectVersion.txt` or package manifest is touched: those already exist and
     are the mod's. Only the pipeline-owned editor scripts are installed.
+
+    With `bundle_source="none"` the mod ships no bundle: no Unity project is
+    created, nothing is vendored into one, and the mod needs no editor to be
+    built, validated or shipped.
     """
     mod_root = mod_root.resolve()
     if not mod_root.is_dir():
         raise PipelineError(f"mod root does not exist: {mod_root}")
     config_path = mod_root / CONFIG_NAME
     makefile = mod_root / "Makefile.assets"
+    bundle_free = bundle_source == "none"
+    synthesized = bundle_source == "synthesized"
     adopting = adopt_project is not None
+    if adopting and (bundle_free or synthesized):
+        reason = (
+            "ships no bundle" if bundle_free else "writes its bundle without an editor"
+        )
+        raise PipelineError(
+            f'bundle_source "{bundle_source}" means the mod {reason}, so there is no '
+            "Unity project to adopt"
+        )
 
     if adopting:
         project = Path(adopt_project)
@@ -95,7 +140,8 @@ def initialize(
     else:
         project = mod_root / "tools" / "shamway" / "UnityProject"
 
-    guarded = [config_path, makefile] + ([] if adopting else [project])
+    projectless = bundle_free or synthesized
+    guarded = [config_path, makefile] + ([] if adopting or projectless else [project])
     existing = [path for path in guarded if path.exists()]
     if existing:
         raise PipelineError(
@@ -105,9 +151,13 @@ def initialize(
         )
     if mod_name is None:
         mod_name = read_mod_name(mod_root / "ModInfo.xml")
-    bundle_name = bundle_name or default_bundle_name(mod_name)
+    bundle_name = "" if bundle_free else (bundle_name or default_bundle_name(mod_name))
+    # Without a Unity project there is nothing for source_root to be relative
+    # to, so it names a folder in the mod itself.
+    if synthesized and not source_root:
+        source_root = SYNTHESIZED_SOURCE_ROOT
 
-    relative_project = _relative(project, mod_root, "the Unity project")
+    relative_project = "" if projectless else _relative(project, mod_root, "the Unity project")
     config_path.write_text(
         render_config(
             mod_name,
@@ -116,12 +166,15 @@ def initialize(
             unity_project=relative_project,
             source_root=source_root or "Assets/ModAssets/Bundle",
             manifest_dir=manifest_dir or "tools/shamway/manifests",
+            bundle_source=bundle_source,
         ),
         encoding="utf-8",
     )
 
     template = files("sevendtd_asset_pipeline").joinpath("templates/UnityProject")
-    if adopting:
+    if projectless:
+        created_scripts = []
+    elif adopting:
         created_scripts = _install_editor_scripts(template, project)
     else:
         shutil.copytree(str(template), project)
@@ -141,18 +194,38 @@ def initialize(
         version_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
         created_scripts = []
 
-    makefile.write_text(MAKEFILE_TARGETS, encoding="utf-8")
+    makefile.write_text(
+        BUNDLE_FREE_MAKEFILE_TARGETS if bundle_free else MAKEFILE_TARGETS, encoding="utf-8"
+    )
+    if synthesized:
+        # The folder the writer reads. Created now, with a note in it, because
+        # an empty configured path is the first thing a build would fail on.
+        bundle_sources = mod_root / (source_root or SYNTHESIZED_SOURCE_ROOT)
+        bundle_sources.mkdir(parents=True, exist_ok=True)
+        keep = bundle_sources / ".gitkeep"
+        if not keep.exists():
+            keep.write_text(
+                "# Every file here becomes a bundle asset: .png -> Texture2D,\n"
+                "# .wav -> AudioClip, .txt/.json/.csv -> TextAsset. The file stem is\n"
+                "# the name the game loads it by. See `shamway docs no-unity`.\n",
+                encoding="utf-8",
+            )
     # The mod is where an agent actually works, so the rules travel with the
     # scaffold rather than living only in this repository.
     guide = mod_root / "tools" / "shamway" / "AGENTS.md"
     guide.parent.mkdir(parents=True, exist_ok=True)
-    guide.write_text(render_agent_guide(mod_name, bundle_name), encoding="utf-8")
+    guide.write_text(render_agent_guide(mod_name, bundle_name, bundle_source), encoding="utf-8")
     # Editable sources and their provenance need a home outside the Unity
     # bundle folder, or they end up either unrecorded or accidentally shipped.
     # Created without clobbering: a mod may already have art here.
     assets_src = create_assets_src(mod_root, mod_name, bundle_name)
     # Report the editor folder on adoption and the whole project on a fresh
     # scaffold: in both cases it is what the caller now owns and should commit.
+    if projectless:
+        touched_paths = [config_path, makefile, guide, assets_src]
+        if synthesized:
+            touched_paths.insert(1, mod_root / (source_root or SYNTHESIZED_SOURCE_ROOT))
+        return touched_paths
     touched = created_scripts[0] if adopting else project
     return [config_path, touched, makefile, guide, assets_src]
 

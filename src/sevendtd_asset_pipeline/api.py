@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from . import client
-from .build import reject_disabled_modules, run_build
+from .build import reject_disabled_modules, run_build, stage_bundle
 from .client import AcceptanceRun, LogReport
 from .capabilities import Capability, capabilities, require_capability
 from .config import PipelineConfig, load_config
@@ -71,6 +71,7 @@ class Pipeline:
         adopt_project: Path | str | None = None,
         source_root: str | None = None,
         manifest_dir: str | None = None,
+        bundle_source: str = "unity",
     ) -> tuple[Pipeline, list[Path]]:
         """Create the pipeline inside an existing modlet and return it, ready to use.
 
@@ -83,12 +84,14 @@ class Pipeline:
         """
         if game_dir is not None:
             unity_version = game_unity_version(Path(game_dir).resolve())[0]
-        if not unity_version:
-            raise PipelineError("scaffolding needs game_dir or unity_version")
+        if not unity_version and bundle_source != "none":
+            raise PipelineError(
+                'scaffolding needs game_dir or unity_version, unless bundle_source is "none"'
+            )
         root = Path(mod_root)
         created = initialize(
-            root, mod_name, bundle_name, unity_version, changeset,
-            adopt_project, source_root, manifest_dir,
+            root, mod_name, bundle_name, unity_version or "", changeset,
+            adopt_project, source_root, manifest_dir, bundle_source,
         )
         return cls.discover(root), created
 
@@ -134,6 +137,22 @@ class Pipeline:
         if not self.config.game_dir:
             return None
         return game_unity_version(self.config.game_dir)[0]
+
+    def verify_bundle(self, bundle: Path | str | None = None):
+        """Load a bundle in a real Unity runtime and report what came back.
+
+        Needs an editor, and needs nothing else to have used one: this is how a
+        synthesized bundle gets a check that this repository did not write.
+        """
+        from .build import expected_unity_version  # noqa: PLC0415
+        from .bundle_verify import verify_with_editor  # noqa: PLC0415
+
+        return verify_with_editor(
+            Path(bundle) if bundle else self.config.bundle_output,
+            self.config.unity_editor,
+            expected_unity_version(self.config),
+            self.config.build_dir / "verify",
+        )
 
     def check_log(self, log: Path | str) -> None:
         """Raise if a Unity log reports success while stripping engine modules."""
@@ -211,6 +230,44 @@ class Pipeline:
             mute=mute,
             steam_bin=steam_bin,
             log_dir=Path(log_dir) if log_dir else None,
+        )
+
+    def stage(
+        self,
+        bundle: Path | str,
+        manifest: Path | str | None = None,
+        log: Path | str | None = None,
+    ) -> tuple[Path, list[str]]:
+        """Gate a bundle built elsewhere and stage it. Needs no Unity on this host.
+
+        Returns the staged path and the gates that could not run, which a
+        caller must report: an unrun gate reads exactly like a passed one.
+        """
+        return stage_bundle(
+            self.config,
+            Path(bundle),
+            Path(manifest) if manifest else None,
+            Path(log) if log else None,
+        )
+
+    def pack(
+        self,
+        source: Path | str,
+        output: Path | str,
+        unity_version: str | None = None,
+        game_dir: Path | str | None = None,
+        manifest: Path | str | None = None,
+    ) -> dict[str, Any]:
+        """Synthesize a bundle from a directory of assets, with no editor."""
+        return _pack(
+            {
+                "source": str(source),
+                "output": str(output),
+                "unity_version": unity_version,
+                "game_dir": str(game_dir) if game_dir else None,
+                "manifest": str(manifest) if manifest else None,
+            },
+            self.config.game_dir,
         )
 
     def build(self, probe: bool = False) -> Path:
@@ -332,6 +389,11 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     ),
     "unity_release": lambda self, p: self.unity_release(p.get("version"), p.get("platform", "LINUX")),
     "build": lambda self, p: {"bundle": str(self.build(p.get("probe", False)))},
+    "pack": lambda self, p: _pack(p, self.config.game_dir),
+    "verify_bundle": lambda self, p: self.verify_bundle(p.get("bundle")),
+    "stage": lambda self, p: _stage_result(
+        self.stage(p["bundle"], p.get("manifest"), p.get("log"))
+    ),
     "init": lambda self, p: _init(p),
     "client_where": lambda self, p: self.client_where(p.get("game_dir")),
     "client_deploy": lambda self, p: self.client_deploy(
@@ -407,6 +469,48 @@ def _sound_params(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
+    """Synthesize a bundle outside any mod configuration.
+
+    The revision is not defaulted to something current: the caller names it, or
+    an installed game answers. A bundle carries the revision it claims to be
+    for, and a wrong one loads as "not compatible with this newer version".
+    """
+    from .build import SYNTHESIZED_CAVEATS  # noqa: PLC0415
+    from .bundle_writer import pack_directory  # noqa: PLC0415
+
+    source = Path(params["source"])
+    output = Path(params["output"])
+    version = params.get("unity_version")
+    directory = Path(params["game_dir"]) if params.get("game_dir") else game_dir
+    if not version and directory:
+        version = game_unity_version(directory)[0]
+    if not version:
+        raise PipelineError(
+            "pack needs 'unity_version' or 'game_dir': a bundle carries the revision it "
+            "claims to be for, and the installed game is what has to load it"
+        )
+    bundle, manifest_text = pack_directory(source, output.name, version)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(bundle)
+    manifest = Path(params["manifest"]) if params.get("manifest") else Path(f"{output}.manifest")
+    manifest.write_text(manifest_text, encoding="utf-8")
+    from .references import manifest_assets  # noqa: PLC0415
+
+    return {
+        "bundle": str(output),
+        "manifest": str(manifest),
+        "bytes": len(bundle),
+        "assets": manifest_assets(manifest),
+        "caveats": list(SYNTHESIZED_CAVEATS),
+    }
+
+
+def _stage_result(staged: tuple[Path, list[str]]) -> dict[str, Any]:
+    bundle, skipped = staged
+    return {"bundle": str(bundle), "skipped": skipped}
+
+
 def _check_log_result(log: Path) -> dict[str, bool]:
     reject_disabled_modules(log)
     return {"ok": True}
@@ -430,6 +534,7 @@ def _init(params: dict[str, Any]) -> dict[str, Any]:
         adopt_project=params.get("adopt_project"),
         source_root=params.get("source_root"),
         manifest_dir=params.get("manifest_dir"),
+        bundle_source=params.get("bundle_source", "unity"),
     )
     return {"created": [str(path) for path in created]}
 
@@ -446,6 +551,7 @@ _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
         p["version"] if p.get("version") else _needs_version(), p.get("platform", "LINUX")
     ),
     "init": _init,
+    "pack": lambda p: _pack(p, None),
     "client_where": lambda p: _client_where(
         Path(p["game_dir"]) if p.get("game_dir") else client.game_dir_from_env()
     ),

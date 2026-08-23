@@ -247,5 +247,187 @@ class PipelineTests(unittest.TestCase):
             load_config(config_file)
 
 
+MANIFEST = (
+    "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n"
+)
+
+
+class UnityOptionalTests(unittest.TestCase):
+    """The two ways a mod exists without a Unity editor on this machine.
+
+    `bundle_source = "external"` keeps the bundle and every gate that reads it,
+    and moves only the editor elsewhere. `bundle_source = "none"` drops the
+    bundle entirely, which is what an XML-and-icons modlet actually is.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        (self.root / "ModInfo.xml").write_text(
+            '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+        )
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _external_mod(self) -> tuple[object, Path, Path]:
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="external")
+        config = load_config(self.root / CONFIG_NAME)
+        built = self.root / "elsewhere"
+        built.mkdir()
+        bundle = built / "example.unity3d"
+        bundle.write_bytes(unityfs_bundle([1, 142]))
+        manifest = built / "example.unity3d.manifest"
+        manifest.write_text(MANIFEST, encoding="utf-8")
+        return config, bundle, manifest
+
+    def test_stage_gates_and_stages_a_bundle_built_elsewhere(self) -> None:
+        from sevendtd_asset_pipeline.build import stage_bundle
+
+        config, bundle, _ = self._external_mod()
+        staged, skipped = stage_bundle(config, bundle)
+        self.assertEqual(config.bundle_output, staged)
+        self.assertEqual(bundle.read_bytes(), staged.read_bytes())
+        self.assertEqual(MANIFEST, config.tracked_manifest.read_text())
+        # An unrun gate must be reported, or it reads exactly like a passed one.
+        self.assertTrue(any("build-log gate" in note for note in skipped))
+        self.assertTrue(any("game-revision gate" in note for note in skipped))
+
+    def test_stage_runs_the_build_log_gate_when_the_log_travels_with_the_bundle(self) -> None:
+        from sevendtd_asset_pipeline.build import stage_bundle
+
+        config, bundle, _ = self._external_mod()
+        log = self.root / "elsewhere" / "unity-build.log"
+        log.write_text(
+            "AssetBundle is not supported because the module Asset Bundle is disabled "
+            "in the build\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(PipelineError, "stripped engine-module classes"):
+            stage_bundle(config, bundle, log=log)
+        self.assertFalse(config.bundle_output.exists())
+
+    def test_stage_rejects_a_bundle_without_the_class_142_object(self) -> None:
+        from sevendtd_asset_pipeline.build import stage_bundle
+
+        config, bundle, _ = self._external_mod()
+        bundle.write_bytes(unityfs_bundle([1]))
+        with self.assertRaisesRegex(PipelineError, "class-142"):
+            stage_bundle(config, bundle)
+        self.assertFalse(config.bundle_output.exists())
+
+    def test_stage_demands_the_manifest_that_describes_the_bundle(self) -> None:
+        from sevendtd_asset_pipeline.build import stage_bundle
+
+        config, bundle, manifest = self._external_mod()
+        manifest.unlink()
+        with self.assertRaisesRegex(PipelineError, "no build manifest beside the bundle"):
+            stage_bundle(config, bundle)
+
+    def test_build_refuses_to_start_an_editor_for_an_external_bundle(self) -> None:
+        from sevendtd_asset_pipeline.build import run_build
+
+        config, _, _ = self._external_mod()
+        with self.assertRaisesRegex(PipelineError, "shamway stage"):
+            run_build(config)
+
+    def test_a_bundle_free_mod_scaffolds_and_validates_without_unity(self) -> None:
+        from sevendtd_asset_pipeline.doctor import failed, run_doctor
+
+        created = initialize(self.root, None, None, "", bundle_source="none")
+        self.assertNotIn(
+            "UnityProject", " ".join(str(path) for path in created)
+        )
+        self.assertFalse((self.root / "tools" / "shamway" / "UnityProject").exists())
+        config = load_config(self.root / CONFIG_NAME)
+        self.assertFalse(config.has_bundle)
+        (self.root / "Config").mkdir()
+        report = validate_mod(config)
+        self.assertIn("no bundle declared", report.messages[0])
+        checks = run_doctor(config)
+        self.assertFalse(failed(checks))
+        # Nothing may nag about an editor this mod does not use.
+        self.assertNotIn("Unity editor", {check.name for check in checks})
+
+    def test_a_bundle_free_mod_rejects_xml_that_loads_from_a_bundle(self) -> None:
+        initialize(self.root, None, None, "", bundle_source="none")
+        config = load_config(self.root / CONFIG_NAME)
+        config.config_dir.mkdir()
+        (config.config_dir / "items.xml").write_text(
+            '<configs><append xpath="/items"><item name="x"><property name="Meshfile" '
+            'value="#@modfolder(ExampleMod):Resources/example.unity3d?exampleThing.prefab" />'
+            "</item></append></configs>",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(PipelineError, "load assets from a bundle"):
+            validate_mod(config)
+
+    def test_a_bundle_free_config_rejects_a_bundle_name(self) -> None:
+        initialize(self.root, None, None, "", bundle_source="none")
+        config_file = self.root / CONFIG_NAME
+        # Inserted at the top: a key appended after the file's last [table]
+        # would belong to that table, not to the document.
+        config_file.write_text(
+            config_file.read_text().replace(
+                'mod_root = "."', 'mod_root = "."\nbundle_name = "example.unity3d"'
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(PipelineError, "must be empty"):
+            load_config(config_file)
+
+    def test_the_staged_bundle_paths_refuse_to_answer_without_a_bundle(self) -> None:
+        # A caller that asks for the path anyway gets the configuration's own
+        # answer, not a path into a directory that will never hold the file.
+        initialize(self.root, None, None, "", bundle_source="none")
+        config = load_config(self.root / CONFIG_NAME)
+        with self.assertRaisesRegex(PipelineError, 'bundle_source = "none"'):
+            _ = config.bundle_output
+        with self.assertRaisesRegex(PipelineError, 'bundle_source = "none"'):
+            _ = config.tracked_manifest
+
+    def test_the_machine_may_override_where_the_bundle_is_built(self) -> None:
+        # The same committed configuration is checked out on a build host with
+        # an editor and on a machine without one.
+        import os
+
+        from sevendtd_asset_pipeline.config import BUNDLE_SOURCE_ENV
+
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="external")
+        os.environ[BUNDLE_SOURCE_ENV] = "unity"
+        try:
+            self.assertTrue(load_config(self.root / CONFIG_NAME).builds_locally)
+            os.environ[BUNDLE_SOURCE_ENV] = "none"
+            with self.assertRaisesRegex(PipelineError, "may only be"):
+                load_config(self.root / CONFIG_NAME)
+        finally:
+            os.environ.pop(BUNDLE_SOURCE_ENV, None)
+
+    def test_the_machine_may_not_give_a_bundle_free_mod_a_bundle(self) -> None:
+        import os
+
+        from sevendtd_asset_pipeline.config import BUNDLE_SOURCE_ENV
+
+        initialize(self.root, None, None, "", bundle_source="none")
+        os.environ[BUNDLE_SOURCE_ENV] = "unity"
+        try:
+            with self.assertRaisesRegex(PipelineError, "ships no bundle"):
+                load_config(self.root / CONFIG_NAME)
+        finally:
+            os.environ.pop(BUNDLE_SOURCE_ENV, None)
+
+    def test_an_unknown_bundle_source_is_rejected_with_the_alternatives(self) -> None:
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        config_file = self.root / CONFIG_NAME
+        config_file.write_text(
+            config_file.read_text().replace(
+                'bundle_source = "unity"', 'bundle_source = "somehow"'
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(PipelineError, "bundle_source must be one of"):
+            load_config(config_file)
+
+
 if __name__ == "__main__":
     unittest.main()

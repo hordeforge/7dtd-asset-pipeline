@@ -123,8 +123,19 @@ two a person did.
 
 def render_readme(mod_name: str, bundle_name: str) -> str:
     rows = "\n".join(f"| `{name}/` | {purpose} |" for name, purpose in LANES.items())
+    text = README
+    if not bundle_name:
+        # A mod with no bundle still needs this tree: its icons and their
+        # provenance are the whole authoring lane.
+        text = text.replace(
+            "the deployable artifacts are the bundle\nat `Resources/{bundle_name}`, the PNGs under `UIAtlases/`, and nothing else.",
+            "the deployable artifacts are the PNGs\nunder `UIAtlases/`, the XML under `Config/`, and nothing else.",
+        ).replace(
+            "only a *selected* output is\ncopied into `tools/shamway/UnityProject/Assets/ModAssets/Bundle/`, so an\nunfinished asset cannot ship merely by sitting in the wrong folder.",
+            "only a *selected* output is\ncopied into `UIAtlases/`, so an unfinished asset cannot ship merely by\nsitting in the wrong folder.",
+        )
     return (
-        README.replace("{mod_name}", mod_name)
+        text.replace("{mod_name}", mod_name)
         .replace("{bundle_name}", bundle_name)
         .replace("{lane_rows}", rows)
     )

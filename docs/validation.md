@@ -48,6 +48,47 @@ every item or block that sets no `CustomIcon`, because that is the engine's
 default sprite lookup. A key this mod does not provide is reported, never
 failed: referencing a vanilla key is normal.
 
+### When this tool wrote the bundle itself
+
+Every gate in the table above still runs against a synthesized bundle, and the
+revision gate still means exactly what it meant: it rejects a bundle written
+for an engine the installed game does not use. Two others change character,
+because an artifact and a checker with the same author cannot cross-examine
+each other, and one cannot run at all:
+
+| Gate | On a synthesized bundle |
+|---|---|
+| class-142 container | true by construction — structural, not independent evidence |
+| stem uniqueness | reads the membership record this build wrote, same caveat |
+| disabled-module log gate | cannot run: no editor, so no log, and nothing was stripped |
+| Unity revision | unchanged and independent |
+| every XML reference gate | unchanged: they read the mod's XML, not the artifact's author |
+
+`build` prints those three as `note:` lines on every synthesize, and calls the
+result **synthesized**, never *built*. What restores independent evidence is
+`shamway verify-bundle`, which loads the artifact in a real Unity runtime with
+the engine's own loader and class definitions — the only offline check here
+that this repository did not also author. It needs an editor, which is exactly
+what the backend exists to avoid, so it is optional and its absence is
+reported rather than assumed away.
+
+Acceptance is unchanged and matters more: a fresh client and a person.
+
+### When the bundle was built somewhere else
+
+`shamway stage` runs this same table minus the two gates that read the *build*
+rather than the artifact. The class-142, revision, stem-uniqueness and
+atomic-staging gates are identical, because they parse the file that will
+ship. The disabled-module and particle-curve log gates run only when the Unity
+log travels with the bundle (`--log`), and the revision gate only when
+`SEVEN_DAYS_TO_DIE_DIR` names an installed game. Whatever could not run is
+printed as a `not run:` line and returned in `skipped[]`, because an unrun gate
+that goes unmentioned reads exactly like a passed one.
+
+A mod that declares no bundle (`bundle_source = "none"`) has one gate in
+total: no XML may load an asset out of a bundle the mod does not ship.
+[no-unity.md](no-unity.md) covers both cases.
+
 ### What `validate` discovers, and what it cannot
 
 `validate` scans the *text* of `Config/**/*.xml`. Two consequences:

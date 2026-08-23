@@ -125,6 +125,30 @@ def _check_code_reference(config: PipelineConfig, stem: str, stems: dict[str, li
     return f"OK {where}: {stem}"
 
 
+def _validate_bundle_free(config: PipelineConfig) -> ValidationReport:
+    """Gate a mod that declares no bundle.
+
+    There is no artifact to parse, so the whole gate is the one mistake this
+    configuration makes possible: XML that asks the engine to load an asset out
+    of a bundle the mod does not ship. In the client that is a silent load
+    failure, not an error the player can act on.
+    """
+    references = discover_references(config.config_dir)
+    if references:
+        detail = "; ".join(
+            f"{reference.source.relative_to(config.mod_root)}: {reference.uri}"
+            for reference in references[:5]
+        )
+        raise PipelineError(
+            f"{config.config_file.name} sets bundle_source = \"none\", but "
+            f"{len(references)} XML reference(s) load assets from a bundle: {detail}. "
+            "Either remove the references or give the mod a bundle."
+        )
+    return ValidationReport(
+        (f"OK {config.mod_name}: no bundle declared, and no XML asks for one",), 0
+    )
+
+
 def validate_mod(
     config: PipelineConfig,
     *,
@@ -143,6 +167,8 @@ def validate_mod(
         raise PipelineError(
             f"ModInfo.xml Name is {actual_mod_name!r}, configuration says {config.mod_name!r}"
         )
+    if not config.has_bundle:
+        return _validate_bundle_free(config)
     if game_version is not None:
         expected_version: str | None = game_version[0]
     elif config.game_dir:

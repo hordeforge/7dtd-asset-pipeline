@@ -5,6 +5,31 @@ whether a correctly loaded clip is actually heard. Audio has more silent
 failure modes than any other lane: a clip that loads, resolves, and validates
 can still be inaudible, and nothing offline will say so.
 
+## Two ways a clip reaches the bundle
+
+Unity's importer encodes a WAV to Vorbis and stores the bank in the bundle's
+`.resource` stream. The editorless backend (`bundle_source = "synthesized"`)
+stores the clip as **16-bit PCM inside an FSB5 bank** it writes itself: larger,
+and exactly the samples that were authored and signed off on, with no encoder
+in between. FMOD in a real Unity runtime decodes it (see
+[research-provenance.md](research-provenance.md) for the measurement).
+
+Two constraints come from FMOD's own sample header, and both are refused rather
+than worked around, because a clip that plays at the wrong pitch passes every
+other gate:
+
+- the sample rate must be one FMOD's table names — 8000, 11000, 11025, 16000,
+  22050, 24000, 32000, 44100, 48000 or 96000;
+- the clip must be 16-bit, mono or stereo.
+
+```bash
+ffmpeg -i in.wav -ar 44100 -ac 1 -c:a pcm_s16le out.wav
+```
+
+```bash
+shamway check-sound out.wav
+```
+
 ## Quick start
 
 Synthesize a clip, gate it, put it in the bundle, and wire it:

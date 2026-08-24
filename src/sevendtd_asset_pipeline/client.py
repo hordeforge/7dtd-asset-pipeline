@@ -33,7 +33,7 @@ what was on screen, and then hands the verdict to a person.
 
 The facts it encodes come from the source project's playtest harness and
 `docs/environment.md`, confirmed on a Proton client of V 3.1.0 b14; see
-docs/validation.md and docs/research-provenance.md.
+docs/validation.md and docs/research/research-provenance.md.
 """
 
 from __future__ import annotations

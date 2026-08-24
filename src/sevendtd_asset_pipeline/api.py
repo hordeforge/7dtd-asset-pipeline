@@ -344,7 +344,7 @@ class Pipeline:
         """One house-style image-generation prompt, and the lane that follows it.
 
         Needs no config and no mod: an agent can render a prompt before the
-        modlet exists. The style contract behind it is `docs/art-direction.md`.
+        modlet exists. The style contract behind it is `docs/authoring/art-direction.md`.
         """
         return render_prompt(kind, subject, role, palette, key, tuple(avoid), stem)
 

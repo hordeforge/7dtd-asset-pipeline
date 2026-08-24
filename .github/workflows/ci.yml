@@ -46,7 +46,7 @@ jobs:
       - run: make check test
 
   macos:
-    # docs/quickstart.md claims the CLI itself is portable beyond Linux; this
+    # docs/getting-started/quickstart.md claims the CLI itself is portable beyond Linux; this
     # job is that claim's only mechanical evidence. Lint, typecheck, and the
     # shell-script gates stay on Linux: they pin analyzer versions once, and
     # shellcheck is not part of the macOS runner image. One Python version,

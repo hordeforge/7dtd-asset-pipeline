@@ -87,7 +87,7 @@ that goes unmentioned reads exactly like a passed one.
 
 A mod that declares no bundle (`bundle_source = "none"`) has one gate in
 total: no XML may load an asset out of a bundle the mod does not ship.
-[no-unity.md](no-unity.md) covers both cases.
+[no-unity.md](bundles/no-unity.md) covers both cases.
 
 ### What `validate` discovers, and what it cannot
 
@@ -272,7 +272,7 @@ What each of those knows:
   not negotiate rich presence.
 - **Audio.** `--mute` mutes the client's PipeWire/Pulse sink input at the OS
   layer (never a game setting) and unmutes it again before returning. A
-  listening run is never muted; see [audio.md](audio.md), which also covers
+  listening run is never muted; see [audio.md](authoring/audio.md), which also covers
   the saved WirePlumber state that keeps a muted game silent afterwards.
 
 `launch` and `log` exit 0 only when every positive line was found and no
@@ -370,4 +370,4 @@ shamway client capture held-nuke --file ~/Pictures/screenshot.png \
 Audio has no equivalent artefact, and pretending otherwise would be worse than
 the gap: a waveform is not a listen. Record the clip's `check-sound` numbers,
 the sound group, and the fact that a person listened on a fresh client — see
-[audio.md](audio.md), "Acceptance".
+[audio.md](authoring/audio.md), "Acceptance".

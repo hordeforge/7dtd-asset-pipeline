@@ -14,7 +14,7 @@ namespace SevenDaysToDie.AssetPipeline
     /// mode. Unity's material inspector performs side effects that assigning
     /// fields from a script does not, so a script-built material can carry a
     /// correct-looking texture that the shader never samples. Every trap
-    /// encoded here corresponds to an entry in docs/troubleshooting.md.
+    /// encoded here corresponds to an entry in docs/runbooks/troubleshooting.md.
     /// </summary>
     public static class GeneratedAsset
     {

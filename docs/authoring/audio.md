@@ -12,7 +12,7 @@ Unity's importer encodes a WAV to Vorbis and stores the bank in the bundle's
 stores the clip as **16-bit PCM inside an FSB5 bank** it writes itself: larger,
 and exactly the samples that were authored and signed off on, with no encoder
 in between. FMOD in a real Unity runtime decodes it (see
-[research-provenance.md](research-provenance.md) for the measurement).
+[research-provenance.md](../research/research-provenance.md) for the measurement).
 
 Two constraints come from FMOD's own sample header, and both are refused rather
 than worked around, because a clip that plays at the wrong pitch passes every
@@ -60,7 +60,7 @@ A `sounds.xml` `ClipName` may point at a mod-folder bundle URI, because
 `Audio.Manager.LoadAudio` resolves it through the same
 `DataLoader.LoadAsset<AudioClip>` path that block models and item meshes use.
 The URI form and its four contractual pieces are in
-[game-integration.md](game-integration.md); the same stem, case, and uniqueness
+[game-integration.md](../game-integration.md); the same stem, case, and uniqueness
 rules apply, and `shamway validate` checks a `ClipName` exactly as it
 checks a `Model`, because it discovers every bundle URI under `Config/**/*.xml`
 without caring which file or property it came from.
@@ -107,7 +107,7 @@ therefore omits it unless you pass `--noise`.
 ## The three ways a loaded clip stays silent
 
 Each of these is a real engine behaviour, decompiled from V 3.1.0 b14 (see
-[research-provenance.md](research-provenance.md)). All three pass every offline
+[research-provenance.md](../research/research-provenance.md)). All three pass every offline
 gate.
 
 **1. `maxDistance` on the AudioSource prefab.** `LoadAudio` plays nothing at
@@ -298,7 +298,7 @@ sound group, by frequency: blocks `SoundPlace`, `SoundPickup`, `OpenSound`,
 `SoundHolster`, `SoundUnholster`, `SoundJammed`, `SoundTick`; entities
 `SoundHurt`, `SoundDeath`, `SoundAttack`, `SoundAlert`, `SoundRandom`,
 `SoundSense`, `SoundGiveUp`, `StartSound`, `StopSound`. A typo in any of them
-is silent in game; the in-process check in [validation.md](validation.md)
+is silent in game; the in-process check in [validation.md](../validation.md)
 looks each one up in `Audio.Manager.audioData`.
 
 ## Countdown ticks

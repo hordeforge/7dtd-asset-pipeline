@@ -430,7 +430,7 @@ GUIDANCE = """# Paste into Config/sounds.xml, then: shamway validate
 # to the AI director, and a mod sound layered on top of a vanilla event that
 # already reports its own noise would call the horde twice for one event.
 #
-# See docs/audio.md."""
+# See docs/authoring/audio.md."""
 
 
 def sounds_xml(args: argparse.Namespace) -> int:

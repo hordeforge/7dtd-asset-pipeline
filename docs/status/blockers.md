@@ -71,7 +71,7 @@ client, and load each changed asset by its real URI. The plumbing exists now
 (`shamway client deploy`, `shamway client launch --mod-name …`, which refuses
 a running client and classifies the log this launch wrote); what is missing
 is a human running it against a pipeline-built bundle. See
-[validation.md](validation.md) and [release-checklist.md](release-checklist.md).
+[validation.md](../validation.md) and [release-checklist.md](../runbooks/release-checklist.md).
 
 **Confirms it worked:** the asset renders or sounds correct, and the client log
 has no bundle-load, incompatibility, wrong-name, shader, or particle errors.

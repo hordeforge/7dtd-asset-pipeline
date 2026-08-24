@@ -1,6 +1,6 @@
 """Render a house-style image-generation prompt, and the lane that follows it.
 
-`docs/art-direction.md` is the style contract, and it is written to be read.
+`docs/authoring/art-direction.md` is the style contract, and it is written to be read.
 This module is the same contract in executable form, for the case the contract
 was written for: an agent in a mod repository that needs a prompt *now* and
 would otherwise improvise one.
@@ -17,7 +17,7 @@ skeleton is assembled here rather than recalled:
 
 The output is the prompt to hand to whatever image model the session has, plus
 the exact commands that turn its result into a deployable asset. This ships no
-image model and picks none — see `docs/art-direction.md`, "Producing the source
+image model and picks none — see `docs/authoring/art-direction.md`, "Producing the source
 image".
 
 What this deliberately does not do is choose the *subject*. A prompt is only as
@@ -41,7 +41,7 @@ from .errors import PipelineError
 
 # The key colour is a colour the subject cannot contain, because the cutout
 # works by colour distance: a magenta key behind a magenta warning light
-# removes the light. `docs/art-direction.md`, "Choosing the key colour".
+# removes the light. `docs/authoring/art-direction.md`, "Choosing the key colour".
 KEYS: dict[str, tuple[str, str]] = {
     "magenta": ("#ff00ff", "the default: olive, steel, charcoal, earth, yellow subjects"),
     "green": ("#00ff00", "the subject contains magenta, pink, or hot red"),

@@ -34,7 +34,7 @@ shamway build
 ```
 
 The environment variable is machine state, like `UNITY_EDITOR`; the committed
-configuration stays as the mod wants it. See [no-unity.md](no-unity.md).
+configuration stays as the mod wants it. See [no-unity.md](../bundles/no-unity.md).
 
 ## `stage` printed “not run:” lines
 
@@ -48,7 +48,7 @@ saying so is the point of the lines.
 
 The mod declares that it ships no bundle, and its XML asks the engine to load
 an asset out of one. In a client that is a silent load failure. Either drop the
-references, or give the mod a bundle — [no-unity.md](no-unity.md) has the
+references, or give the mod a bundle — [no-unity.md](../bundles/no-unity.md) has the
 steps for scaffolding one into a mod that started without.
 
 ## Unity logs “module ... is disabled in the build” but exits zero
@@ -113,7 +113,7 @@ A material whose keyword was never enabled is not merely "unchanged": in the
 client it renders flat and green-tinged, which is the signature to look for.
 Inspector-looking fields alone are insufficient for script-generated
 materials; `GeneratedAsset.StandardMaterial` and `EmissiveMaterial` set the
-keywords, and the `.mat` grep in [vfx.md](vfx.md) is how to read them back.
+keywords, and the `.mat` grep in [vfx.md](../authoring/vfx.md) is how to read them back.
 
 ## Transparent particles appear as opaque cards
 
@@ -139,7 +139,7 @@ behaviours can still silence it, and all three pass every offline gate:
   to `-1` — never;
 - an unknown sound-group name does not error; it simply never plays.
 
-See [audio.md](audio.md). Check the clip itself first with
+See [audio.md](../authoring/audio.md). Check the clip itself first with
 `shamway check-sound`, which rejects silence, near-silence, clipping, and
 DC offset.
 

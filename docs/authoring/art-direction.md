@@ -3,7 +3,7 @@
 How to make a 2D asset that looks like it belongs in 7 Days to Die, and how to
 write the prompt that gets it. This page is the style contract; the mechanics
 of building and validating are in [agent-workflows.md](agent-workflows.md) and
-[game-integration.md](game-integration.md).
+[game-integration.md](../game-integration.md).
 
 Everything here applies to a coding agent and a human equally. An agent
 generating art without it produces the same failure every time: technically
@@ -103,7 +103,7 @@ That last rule has a trap behind it in XML, not in art: `ItemClassesFromXml`
 and `BlocksFromXml` copy every parent property an `Extends` `param1` list does
 not name, so *not restating* `Meshfile`, `Model`, `CustomIcon` or `TintColor`
 does not stop them being inherited. See
-[game-integration.md](game-integration.md).
+[game-integration.md](../game-integration.md).
 
 ## Study the game's own art first
 

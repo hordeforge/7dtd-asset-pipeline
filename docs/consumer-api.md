@@ -174,7 +174,7 @@ Every command exits `0` on success and non-zero on failure, printing one
 modlet, and the first two only after every offline gate passes. `stage` is
 `build` without the editor: it takes an artifact built elsewhere through the
 same gates, reports in `skipped[]` whichever gates its evidence could not
-support, and stages atomically. See [no-unity.md](no-unity.md), which also
+support, and stages atomically. See [no-unity.md](bundles/no-unity.md), which also
 covers `bundle_source = "none"` for a mod that ships no bundle at all. `render-icon` needs a **graphics
 device** — it never passes `-nographics`, because that combination silently
 produces a blank image; run it under `xvfb-run -a` on a headless host.

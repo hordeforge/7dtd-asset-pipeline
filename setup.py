@@ -34,8 +34,10 @@ class build_py(_build_py):  # type: ignore[misc]  # noqa: N801 - setuptools requ
         if SOURCE_DOCS.is_dir():
             shutil.rmtree(staged, ignore_errors=True)
             staged.mkdir(parents=True, exist_ok=True)
-            for page in sorted(SOURCE_DOCS.glob("*.md")):
-                shutil.copy2(page, staged / page.name)
+            for page in sorted(SOURCE_DOCS.rglob("*.md")):
+                target = staged / page.relative_to(SOURCE_DOCS)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(page, target)
         # The host scripts ship the same way, so `shamway script NAME` works
         # in a mod that has no checkout of this repository.
         staged_scripts = ROOT / "src" / PACKAGE / "scripts"

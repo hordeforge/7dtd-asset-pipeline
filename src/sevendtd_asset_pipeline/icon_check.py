@@ -169,7 +169,7 @@ def inspect_icon(path: Path, atlas: str, cell: int = DEFAULT_CELL) -> IconFile:
     if coverage is not None and coverage > 0.995 and has_alpha:
         problems.append(
             "the alpha channel is fully opaque; the subject was never cut out of its "
-            "background (see docs/art-direction.md, 'Cutting the background out')"
+            "background (see docs/authoring/art-direction.md, 'Cutting the background out')"
         )
     return IconFile(
         atlas=atlas,

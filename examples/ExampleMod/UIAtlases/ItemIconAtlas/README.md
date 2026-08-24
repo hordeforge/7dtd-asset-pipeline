@@ -14,4 +14,4 @@ shamway generate cutout key ../../assets-src/icons/thing-src.png \
 shamway check-icons
 ```
 
-Art direction and the prompt patterns: `docs/art-direction.md` in the pipeline.
+Art direction and the prompt patterns: `docs/authoring/art-direction.md` in the pipeline.

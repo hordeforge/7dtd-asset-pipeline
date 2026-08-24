@@ -40,7 +40,7 @@ files and the engine reads them directly:
 
 - `Config/**/*.xml` — every XPath patch;
 - `UIAtlases/<AtlasName>/<name>.png` — item icons, packed into a runtime atlas
-  by folder name (see [game-integration.md](game-integration.md));
+  by folder name (see [game-integration.md](../game-integration.md));
 - `Config/Localization.csv`;
 - a Harmony DLL at the mod root.
 
@@ -144,7 +144,7 @@ was read out of a real artifact rather than guessed:
   this repository's editor built from the same WAV.
 
 Provenance for each of those is in
-[research-provenance.md](research-provenance.md); the design record, the prior
+[research-provenance.md](../research/research-provenance.md); the design record, the prior
 art surveyed, and what is not attempted are in
 [offline-bundle-builder.md](offline-bundle-builder.md).
 
@@ -215,7 +215,7 @@ The load is proven. 7 Days to Die V 3.1.0 b14 opened a bundle this tool
 serialized with no editor in its path and returned both objects through
 `DataLoader.LoadAsset<T>`, requested by stem, with FMOD decoding the
 hand-written FSB5 bank to `channels=1 frequency=44100 samples=20727`. The log
-lines and what each one covers are in [blockers.md](blockers.md) entry 6.
+lines and what each one covers are in [blockers.md](../status/blockers.md) entry 6.
 
 The look is done too, once: on the same day a reviewer aimed and fired in the
 client and reported the texture rendering as a centred, circular ring and the

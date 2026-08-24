@@ -288,9 +288,64 @@ def _case(stem: str, kind: str) -> str:
 """
 
 
+def _staged_case(prefab_stem: str) -> str:
+    """A case that puts the prefab in front of the camera and holds it.
+
+    Every other case here answers *did it load*, and a bundle whose prop is
+    invisible passes all of them - which is how a shader that renders nothing
+    survived every gate this repository has. `CaseDef.Staged` holds the scene
+    and announces itself, so a screenshot loop can photograph the frame and a
+    person, or another graphics API, can be compared against it.
+
+    The prefab is instantiated directly rather than placed as a block: the
+    question is whether *this bundle's* renderer draws, and a block adds the
+    game's own placement, rotation and collision on top of the thing under
+    test.
+    """
+    name = _cs_body(prefab_stem)
+    variable = _identifier(prefab_stem)
+    return f"""
+        GameObject {variable}Staged = null;
+        queue.Add(CaseDef.Staged(label, "look_{name}", new[] {{ "capture", "bundle" }},
+            stage: ctx =>
+            {{
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?{name}");
+                if (prefab == null)
+                {{
+                    Report.Info("{name}: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }}
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {{
+                    Report.Info("{name}: no local player, so there is no camera to stage in front of");
+                    return false;
+                }}
+                // An arm's length ahead and at eye height, so the frame is the
+                // prop rather than the ground it would otherwise sit on.
+                var eye = player.position + Vector3.up * 1.6f;
+                var ahead = player.transform.forward;
+                {variable}Staged = UnityEngine.Object.Instantiate(prefab);
+                {variable}Staged.transform.position = eye + ahead * 1.2f;
+                {variable}Staged.transform.rotation =
+                    Quaternion.LookRotation(-ahead, Vector3.up);
+                var renderers = {variable}Staged.GetComponentsInChildren<Renderer>(true);
+                Report.Info("{name}: staged at " + {variable}Staged.transform.position
+                    + " with " + renderers.Length + " renderer(s)");
+                // A prefab with no renderer cannot be photographed into evidence.
+                return renderers.Length > 0;
+            }},
+            holdSeconds: 12f,
+            fail: "could not stage {name} in front of the camera"));
+"""
+
+
 def render(plan_: ProviderPlan) -> dict[str, str]:
     """The provider's files, as `filename -> text`."""
     cases = "".join(_case(stem, kind) for stem, kind in plan_.stems)
+    # One staged frame per prefab: the only case here that can fail on a bundle
+    # whose every member loads and whose prop is invisible.
+    cases += "".join(_staged_case(stem) for stem, kind in plan_.stems if kind == "GameObject")
     mod_name = _cs_body(plan_.mod_name)
     source = _template("AcceptanceProvider.cs.in").format(
         MOD_NAME=mod_name,

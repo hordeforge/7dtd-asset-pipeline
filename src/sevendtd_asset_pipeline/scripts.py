@@ -45,6 +45,10 @@ SCRIPTS: dict[str, tuple[str, str]] = {
         "playtest-synthesized.sh",
         "self test: build a bundle with no editor and prove a live client loads every object",
     ),
+    "playtest-capture": (
+        "playtest-capture.sh",
+        "photograph the frame a staged acceptance case holds, so a look needs no person watching",
+    ),
 }
 
 

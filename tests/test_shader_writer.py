@@ -18,9 +18,9 @@ import struct
 import subprocess
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 from sevendtd_asset_pipeline import bundle_writer, shader_blob
 from sevendtd_asset_pipeline.bundle_writer import (
@@ -636,3 +636,68 @@ class VulkanSubProgramTests(unittest.TestCase):
             platforms = [p.platform for p in shader_blob.unlit_textured().platforms]
         self.assertNotIn(shader_blob.SHADER_COMPILER_PLATFORM_VULKAN, platforms)
         self.assertIn(shader_blob.SHADER_COMPILER_PLATFORM_D3D11, platforms)
+
+
+class DescriptorSetTests(unittest.TestCase):
+    """Unity binds constant buffers in descriptor set 1, not set 0.
+
+    A translator such as `vkd3d-compiler` puts every resource in set 0. Unity's
+    own Vulkan modules, decoded from a shipped bundle, put a texture in set 0
+    and a constant buffer in **set 1** - so a module that follows the
+    translator's convention collides with the set Unity reserves for resources,
+    and the runtime refuses it. It refuses it silently: the shader loads, no log
+    line says anything, and the prop draws in the magenta error shader.
+
+    `spirv-val` passes on the module either way, which is why this needed a live
+    client on `-force-vulkan` to find at all.
+    """
+
+    def _spirv(self, hlsl: str, profile: str) -> bytes:
+        if not has_capability("vkd3d-compiler"):
+            self.skipTest("vkd3d-compiler that reads HLSL is not installed")
+        return shader_blob.compile_spirv(shader_blob.compile_hlsl(hlsl, profile))
+
+    @staticmethod
+    def _descriptor_sets(spirv: bytes) -> dict[int, int]:
+        """`{id: descriptor set}` for every decorated variable."""
+        words = struct.unpack(f"<{len(spirv) // 4}I", spirv)
+        sets: dict[int, int] = {}
+        index = 5
+        while index < len(words):
+            length, opcode = words[index] >> 16, words[index] & 0xFFFF
+            if length < 1:
+                break
+            if opcode == 71 and length >= 4 and words[index + 2] == 34:
+                sets[words[index + 1]] = words[index + 3]
+            index += length
+        return sets
+
+    def test_constant_buffers_move_to_set_one(self) -> None:
+        spirv = self._spirv(shader_blob.UNLIT_VERTEX_HLSL, "vs_4_0")
+        before = set(self._descriptor_sets(spirv).values())
+        after = set(self._descriptor_sets(shader_blob.unity_descriptor_sets(spirv)).values())
+        self.assertEqual(before, {0}, "vkd3d puts everything in set 0")
+        self.assertEqual(
+            after,
+            {shader_blob.UNITY_SET_CONSTANT_BUFFERS},
+            "the vertex program's only resources are constant buffers",
+        )
+
+    def test_textures_and_samplers_stay_in_set_zero(self) -> None:
+        spirv = self._spirv(shader_blob.UNLIT_FRAGMENT_HLSL, "ps_4_0")
+        after = set(self._descriptor_sets(shader_blob.unity_descriptor_sets(spirv)).values())
+        self.assertEqual(
+            after,
+            {shader_blob.UNITY_SET_RESOURCES},
+            "a texture and its sampler belong to the set Unity reserves for resources",
+        )
+
+    def test_the_rewrite_changes_nothing_but_the_set(self) -> None:
+        spirv = self._spirv(shader_blob.UNLIT_VERTEX_HLSL, "vs_4_0")
+        rewritten = shader_blob.unity_descriptor_sets(spirv)
+        self.assertEqual(len(rewritten), len(spirv), "the module keeps its length")
+        self.assertEqual(rewritten[:20], spirv[:20], "the SPIR-V header is untouched")
+        differing = sum(1 for a, b in zip(spirv, rewritten, strict=True) if a != b)
+        self.assertLessEqual(
+            differing, 8, "only the descriptor-set literals should differ, one byte each"
+        )

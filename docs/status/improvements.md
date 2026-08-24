@@ -105,20 +105,32 @@ What is open, with the pieces already on the shelf:
 3. the smallest possible shader: one unlit textured pass, HLSL compiled by
    `vkd3d-compiler`, wrapped in the container above. `shamway verify-bundle`
    is the gate — a real runtime reports `Shader.isSupported`, which is the
-   first mechanical answer to "did this work";
+   first mechanical answer to "did this work". **In progress**: the HLSL
+   compiles to real DXBC and the container is decoded, but a 38-byte
+   per-sub-program descriptor between the code array and the `DXBC` magic is
+   not decoded yet, and two samples cannot decode it honestly. Dump the same
+   region across shaders with different input signatures and texture counts;
+   that is what shows which bytes track what;
 4. only then a `Material` that binds it, and only then a claim about rendering
    — which, as everywhere else here, ends at a person looking at a client.
 
 Steps 3 and 4 are what remain. Nothing before them is speculative any more.
 
-**What is genuinely unknown** (unknown, not impossible): whether 7DTD's
-rendering path accepts a minimally-authored pass, which keyword variants the
-engine demands, and what `m_CommonParameters` a hand-compiled shader must
-declare for the engine to bind its constant buffers. Each is a measurement
-against the game's own bundles, not a barrier. The code-blob header itself is
-no longer among them — it decoded on 2026-08-24 as eight `u32`s
-(`m_Version`, `m_ProgramType`, three instruction-count stats, a requirements
-word, a keyword count, a code length) and the table is in
+**What is genuinely unknown** (unknown, not impossible), in the order it
+blocks work:
+
+1. the **38-byte per-sub-program descriptor** between the code array and the
+   `DXBC` magic — `02 00 04 00` on a vertex program, `02 01 01 01` on a
+   fragment one, then 34 zeros. Two samples cannot decode it; more can;
+2. what `m_CommonParameters` a hand-compiled shader must declare for the
+   engine to bind its constant buffers;
+3. whether 7DTD's rendering path accepts a minimally-authored pass, and which
+   keyword variants it demands.
+
+Each is a measurement against the game's own bundles, not a barrier. Two
+things that *were* on this list are now off it: the code-blob header decoded
+as eight `u32`s, and `m_PlayerSubPrograms` always declares four groups with
+only index 3 populated (ten samples). Both tables are in
 [research-provenance.md](../research/research-provenance.md).
 
 Until it is built, a mod with a prefab or a material uses `bundle_source =

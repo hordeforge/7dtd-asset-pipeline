@@ -481,12 +481,45 @@ then the code array, and which document the third record `u32` as `segment`
 for Unity 2019.3+ — independent confirmation of the 12-byte stride measured
 above. Two parsers of a format are a specification for a writer of it.
 
-What that leaves genuinely unknown, and therefore *unchecked* rather than
-impossible: whether 7DTD's rendering path accepts a minimally-authored pass,
-which keyword variants the engine demands, and the exact `m_CommonParameters`
-binding a hand-compiled shader needs. Those are the next measurements, not a
-wall. Progress and the route live in
-[status/improvements.md](../status/improvements.md).
+Two further things were settled on 2026-08-24, and one deliberately was not.
+
+**Settled: the bytecode has an open-source producer.** `vkd3d-compiler`
+compiled an unlit vertex/fragment pair to real `DXBC` containers (magic
+verified) with `-b dxbc-tpf -p vs_4_0` and `ps_4_0`; `dxbc-tpf` is its
+*default* target for HLSL. `m_ProgramType` 15 and 17 are `DX11VertexSM40` and
+`DX11PixelSM40`, so shader model 4.0 is both what the game carries and what
+vkd3d emits. No Unity anywhere in that path.
+
+**Settled: the `m_PlayerSubPrograms` grouping.** All ten shaders in
+`Entities/trees` declare exactly **four** groups and populate only index
+**3**, whatever their platform count (always 3) or tier counts (1 to 6). That
+is an empirical rule over ten samples, not an understood semantic — what the
+other three slots mean is unknown — but it is what a writer should reproduce.
+
+**Not settled: the 38 bytes between the code array and the `DXBC` magic.**
+Following the field order AssetStudio and UnityPy both read — version, program
+type, three stat ints, a requirements word, a keyword count, then a
+length-prefixed byte array — the code array starts at offset 32 and its length
+word at 28 reads 3326 (vertex) and 570 (fragment). But `DXBC` begins at byte
+**70** in both, and the bytes between are `02 00 04 00` (vertex) or
+`02 01 01 01` (fragment) followed by 34 zeros. Neither length reconciles with
+the record size the way a bare byte array would — `3392 − 70 = 3322` against
+3326, and `612 − 70 = 542` against 570, different deltas — so it is not a
+constant prefix either.
+
+That prefix is a per-sub-program descriptor this project has **not decoded**,
+and two samples cannot decode it honestly. It is the one structural thing still
+in the way, and it is narrow: everything around it is measured. The next step
+is more samples — the same dump across shaders with different input signatures
+and texture counts, which is what would show which bytes track what. Until
+then this project does not claim to know it and does not guess: a mis-bound
+sub-program is a shader that loads and renders wrong, which is exactly the
+failure class this repository refuses to ship.
+
+Behind it, still unmeasured: whether 7DTD's rendering path accepts a
+minimally-authored pass, which keyword variants the engine demands, and the
+exact `m_CommonParameters` binding a hand-compiled shader needs. Progress and
+the route live in [status/improvements.md](../status/improvements.md).
 
 Runtime confirmation, same day: a synthesized bundle carrying all three classes
 was loaded by a real Unity 2022.3.62f2 runtime through

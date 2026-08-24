@@ -947,6 +947,48 @@ class DocumentationTests(unittest.TestCase):
                 )
 
 
+class SelfTestFixtureTests(unittest.TestCase):
+    """`examples/SelfTestMod` is a fixture, so it has to stay a working modlet.
+
+    It is committed rather than generated because a mod that exists only inside
+    one script run cannot be inspected after a failure, diffed against a
+    previous build, or deployed by hand. That only holds if it stays complete:
+    scaffolded, with its sources, its XML and its build outputs together.
+    """
+
+    FIXTURE = Path(__file__).resolve().parents[1] / "examples" / "SelfTestMod"
+
+    def test_the_fixture_is_a_scaffolded_modlet_with_its_outputs(self) -> None:
+        for relative in (
+            "ModInfo.xml",
+            ".shamway.toml",
+            "Config/blocks.xml",
+            "README.md",
+            "assets-src/bundle/shamwaySelfTestProp.glb",
+            "assets-src/bundle/shamwaySelfTestProp_albedo.png",
+            "UIAtlases/ItemIconAtlas/shamwaySelfTestPropBlock.png",
+            "Resources/shamwayselftest.unity3d",
+            "tools/shamway/manifests/shamwayselftest.unity3d.manifest",
+        ):
+            with self.subTest(relative):
+                self.assertTrue((self.FIXTURE / relative).is_file(), relative)
+
+    def test_the_fixture_is_synthesized_and_names_no_block_class(self) -> None:
+        """The two things about it that are load-bearing for what it proves."""
+        config = (self.FIXTURE / ".shamway.toml").read_text(encoding="utf-8")
+        self.assertIn('bundle_source = "synthesized"', config)
+        blocks = (self.FIXTURE / "Config" / "blocks.xml").read_text(encoding="utf-8")
+        self.assertNotIn('name="Class"', blocks)
+        self.assertIn("Shape", blocks)
+
+    def test_its_committed_bundle_carries_the_whole_prefab_chain(self) -> None:
+        """A stale committed bundle would make the live run prove nothing."""
+        from sevendtd_asset_pipeline.unityfs import inspect_bundle
+
+        info = inspect_bundle(self.FIXTURE / "Resources" / "shamwayselftest.unity3d")
+        self.assertTrue(info.has_assetbundle_object, "no class-142 object")
+
+
 class AssetsSourceTreeTests(unittest.TestCase):
     def test_readme_names_every_lane_and_resolves_placeholders(self) -> None:
         for membership in (None, "assets-src/bundle"):

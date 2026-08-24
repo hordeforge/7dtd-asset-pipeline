@@ -1,0 +1,37 @@
+# Paths are relative to this file unless absolute.
+schema_version = 1
+mod_root = "."
+mod_name = "ShamwaySelfTest"
+bundle_name = "shamwayselftest.unity3d"
+
+# This mod's bundle is written by shamway itself: no Unity editor, no Unity
+# project. `source_root` is the folder whose contents become the bundle, and it
+# is read against this file rather than against a project that does not exist.
+# What can be synthesized and what still needs an editor: `shamway docs no-unity`.
+bundle_source = "synthesized"
+source_root = "assets-src/bundle"
+
+build_dir = ".shamway/build"
+manifest_dir = "tools/shamway/manifests"
+resources_dir = "Resources"
+config_dir = "Config"
+target = "StandaloneWindows64"
+
+# Block-compress textures to DXT1 (opaque, 8x smaller) or DXT5 (alpha, 4x).
+# Off because it is lossy: turn it on deliberately, then look at the result.
+# Every texture's sides must then be a multiple of four.
+compress_textures = false
+
+# Bundle stems the mod's C# loads directly. No XML names them, so `validate`
+# only sees them if they are listed here. Stem only, exact case, no extension.
+code_references = []
+
+[unity]
+# No editor is used. The revision is still recorded, because a bundle carries
+# the revision it claims to be for; SEVEN_DAYS_TO_DIE_DIR overrides it with the
+# installed game's own answer, which is the better evidence.
+version = "2022.3.62f2"
+
+[game]
+# Prefer SEVEN_DAYS_TO_DIE_DIR. The installed game is read-only reference.
+directory = ""

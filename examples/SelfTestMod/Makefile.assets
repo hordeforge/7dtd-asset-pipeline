@@ -1,0 +1,20 @@
+.PHONY: assets assets-probe assets-validate assets-doctor assets-status assets-icons
+
+assets:
+	shamway build
+
+assets-probe:
+	shamway build --probe
+
+assets-validate:
+	shamway validate
+	shamway check-icons
+
+assets-icons:
+	shamway check-icons
+
+assets-doctor:
+	shamway doctor
+
+assets-status:
+	shamway status

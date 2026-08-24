@@ -260,17 +260,24 @@ shamway script playtest-acceptance --reuse-save
 ### The editorless path has its own live-client regression
 
 `playtest-acceptance` accepts *a mod*. What proves **this pipeline** still
-works is a second script that brings its own:
+works is a second script with a mod of its own — `examples/SelfTestMod`,
+committed in this repository, built in place, its `Resources/` and manifest
+committed beside its sources the way any consuming mod commits them:
 
 ```bash
 shamway script playtest-synthesized
 ```
 
-It generates a throwaway modlet in a temporary directory, authors a mesh and a
-texture into it, builds the bundle with no editor, wires a block `Model` at the
-prefab, runs the whole thing through a live client, and then asserts by value —
-not by case name — the four things that could each be wrong while every offline
-gate passed:
+It builds that modlet with no editor, deploys it, runs it through a live
+client, and then asserts by value — not by case name — the four things that
+could each be wrong while every offline gate passed:
+
+The mod is a fixture rather than something the script invents, because a mod
+that exists only inside one run cannot be inspected after a failure, diffed
+against a previous build, or deployed by hand. Its prop is asymmetric on all
+three axes and textured with a glyph that reads wrong mirrored and an arrow
+that reads wrong upside-down, so the half a suite cannot judge is at least
+easy for a person to judge.
 
 | Assertion | The failure it catches |
 |---|---|

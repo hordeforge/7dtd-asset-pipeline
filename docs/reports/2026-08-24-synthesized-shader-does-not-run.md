@@ -88,20 +88,57 @@ Linux editor creates. The game runs **d3d11** through Proton, so the two are
 different code paths and a fix for one is not evidence for the other. Both are
 written by `shader_blob.py`.
 
-1. **Done, and it found something.** The GLCore record layout is decoded in
+1. **Done.** The GLCore record layout is decoded in
    [research-provenance.md](../research/research-provenance.md), "The GLCore
    sub-program record". `source_blob()` and `UNLIT_GLSL` both match stock in
-   shape. What does not match is the **program type on the parameter records**:
-   every parameter record in a stock GLCore blob is type `2`, and this writer
-   emits types `3` and `1`, plus the same GLSL twice as two type-6 records.
-   Decide that by decoding a stock type-2 record and comparing it against
-   `ParameterBlob.to_bytes()` — it is either per-stage and legal, or it is the
-   answer.
-2. Re-check whether the bind-channel block, recorded as the fix for this exact
+   shape, and an apparent mismatch in parameter-record "types" turned out to be
+   a misread field: word1 is a **buffer count** on a parameter record, not a
+   program type. That lead is withdrawn there.
+
+   What the decode did surface: a stock GLCore sub-program describes **one
+   `$Globals` buffer of individual uniform members**, matching GLSL that
+   declares plain `uniform vec4 hlslcc_...`. This writer emits the d3d11 shape
+   unchanged — `UnityPerDraw` and `UnityPerFrame` as constant buffers — beside
+   GLSL that declares plain uniforms. The two disagree about how the uniforms
+   are bound.
+
+   **Tested, and it is not the cause.** Giving the GLCore platform a parameter
+   blob describing a single `$Globals` of individual uniform members — the
+   stock shape — changed nothing: `isSupported=False` and `Failed to load
+   GpuProgram from binary shader data` as before, with the control cube reading
+   a healthy `38.8% / 2.4%` in the same frame, so the negative is trustworthy.
+   The change was reverted rather than kept on the grounds of being
+   "more correct": it is unverified either way, and the one hard thing in this
+   writer is the last place to carry an unverified edit.
+2. **The GLSL is not the fault — bisected.** A stock shader's GLCore source
+   (`Nature/SpeedTree Billboard`, 8251 chars) was substituted into this
+   writer's container and rebuilt. The runtime answered exactly as before:
+
+   ```text
+   Failed to load GpuProgram from binary shader data in 'Shamway/Unlit'.
+   VERIFY-SHADER: 'Shamway/Unlit' isSupported=False ... device=OpenGLCore
+   VERIFY-DRAWN-CONTROL: built-in cube covered=38.8% zoomed-out=2.4%
+   ```
+
+   Known-good source in this container still fails, so the missing
+   `HLSLCC_ENABLE_UNIFORM_BUFFERS` preamble and `UNITY_LOCATION`/`UNITY_BINDING`
+   macros are not it, and neither is anything else about `UNLIT_GLSL`. This is
+   the same bisect shape that cracked the d3d11 blob: stock contents inside a
+   synthesized container isolate the container.
+
+   What is left is the **wiring around the source**: the record indices a
+   `PlatformBlob` publishes (`vertex_blob_index`, `vertex_parameter_index` and
+   their fragment counterparts), `stageCounts`, the pass's `m_ProgramMask` and
+   `m_State`, and whether GLCore wants one shared record rather than the two
+   identical type-6 records this writer emits.
+
+   Note that `passes` is not a clue: it reads 1 headless and 3 with a device
+   because an unsupported shader reports the substituted error shader's passes.
+3. Re-check whether the bind-channel block, recorded as the fix for this exact
    `Failed to load GpuProgram` message, ever helped. It was validated against a
    headless `isSupported`, which cannot fail, so its evidence is as weak as the
    claim it supported.
-3. Only then the d3d11 path, which needs a Windows or Proton-hosted editor to
+4. Only then the d3d11 path, which needs a Windows or Proton-hosted editor to
    measure offline at all — or the live client, which is now a slow loop rather
    than the only one.
 

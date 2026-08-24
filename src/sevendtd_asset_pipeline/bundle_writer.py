@@ -1343,6 +1343,18 @@ def object_for(path: Path, compress_textures: bool = False) -> BundleObject:
         raise PipelineError(f"cannot read text asset {path}: {exc}") from exc
 
 
+def _has_uv(geometry: BundleObject) -> bool:
+    """Whether a written `Mesh` carries a UV0 channel.
+
+    Read back off the object the writer just produced rather than re-reading
+    the file, so it answers for the bytes that will actually ship.
+    """
+    channels = geometry.fields["m_VertexData"]["m_Channels"]
+    # Channel 4 is UV0 in Unity's vertex-channel table; a dimension of zero is
+    # the channel being absent rather than present and empty.
+    return len(channels) > CHANNEL_UV0 and bool(channels[CHANNEL_UV0].get("dimension"))
+
+
 def prefab_objects(mesh_path: Path, texture_stems: set[str]) -> list[BundleObject]:
     """The Mesh, Material and prefab one mesh source file becomes.
 
@@ -1356,8 +1368,24 @@ def prefab_objects(mesh_path: Path, texture_stems: set[str]) -> list[BundleObjec
     mesh_key = f"{stem}{MESH_SUFFIX}"
     material_key = f"{stem}{MATERIAL_SUFFIX}"
     albedo = f"{stem}{ALBEDO_SUFFIX}"
+    geometry = mesh(mesh_key, mesh_path)
+    if albedo in texture_stems and not _has_uv(geometry):
+        # An author who named `<stem>_albedo` asked for that texture to be on
+        # this prop. Without a UV channel the shader has nothing to sample, so
+        # it draws a flat colour and every gate still passes: the mesh loads,
+        # the material loads, the texture loads. Refused rather than noted,
+        # because the intent is unambiguous and the result is not what was
+        # asked for. Blender's glTF exporter drops a UV layer no material
+        # samples, which is how a whole generator's output arrived UV-less.
+        raise PipelineError(
+            f"{mesh_path.name} has no UV channel, but {albedo} is here to be its texture. "
+            "Nothing would sample it: the prop would draw one flat colour and every gate "
+            "would still pass. Export the mesh with UVs (in Blender, give it a material "
+            "so glTF keeps TEXCOORD_0), or remove the texture if the prop is meant to be "
+            "untextured."
+        )
     return [
-        mesh(mesh_key, mesh_path),
+        geometry,
         material(
             material_key,
             UNLIT_SHADER_NAME,

@@ -880,25 +880,52 @@ def scan_log(path: Path, mod_name: str | None) -> LogReport:
     return scan_log_text(text, mod_name, str(path))
 
 
-def latest_client_log(log_dir: Path, written_after: float | None = None) -> Path:
+# How long a client may take to write its first log line before the absence is
+# treated as a failure to start. Measured on a Proton host: Steam's shim, the
+# prefix and the engine's own startup put ten to twenty seconds between the
+# launch returning and the log existing. Zero wait made "the client did not
+# start" the standard answer for a client that had started perfectly.
+LOG_APPEARS_WITHIN_SEC = 60.0
+
+
+def latest_client_log(
+    log_dir: Path,
+    written_after: float | None = None,
+    wait_seconds: float = 0.0,
+) -> Path:
     """The newest client log, optionally required to post-date a launch.
 
     The client rewrites its log on every start, so a log older than the launch
     means this launch never got as far as logging — and a report quoting line
     numbers from a live log is only meaningful for the run that produced it.
+
+    `wait_seconds` polls for that log to appear instead of demanding it be
+    there already. Launching returns as soon as Steam has been handed the
+    request, which is well before the client has opened its log, so a caller
+    that checked immediately reported a healthy client as one that never
+    started — the opposite of what happened, in the one message someone would
+    act on.
     """
     if not log_dir.is_dir():
         raise PipelineError(f"client log directory does not exist: {log_dir}")
-    logs = sorted(log_dir.glob(LOG_GLOB), key=lambda path: path.stat().st_mtime)
+    deadline = time.monotonic() + max(0.0, wait_seconds)
+    while True:
+        logs = sorted(log_dir.glob(LOG_GLOB), key=lambda path: path.stat().st_mtime)
+        newest = logs[-1] if logs else None
+        if newest is not None and (
+            written_after is None or newest.stat().st_mtime >= written_after
+        ):
+            return newest
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(1.0)
     if not logs:
         raise PipelineError(f"no {LOG_GLOB} in {log_dir}")
-    newest = logs[-1]
-    if written_after is not None and newest.stat().st_mtime < written_after:
-        raise PipelineError(
-            f"{newest} predates this launch; the client did not start or did not log. "
-            "Is Steam running? Grep the previous log for SteamAPI_Init."
-        )
-    return newest
+    waited = f" after waiting {wait_seconds:.0f}s" if wait_seconds else ""
+    raise PipelineError(
+        f"{logs[-1]} predates this launch{waited}; the client did not start or did "
+        "not log. Is Steam running? Grep the previous log for SteamAPI_Init."
+    )
 
 
 # --------------------------------------------------------------- acceptance
@@ -975,7 +1002,14 @@ def fresh_client_run(
                     # unmuted state, not the mute.
                     set_client_mute(False, wait_seconds=5)
                     unmuted = True
-            newest = latest_client_log(logs, written_after=started_at)
+            # An untimed launch hands the client to the person and returns, so
+            # the log has to be waited for rather than demanded; a timed run
+            # has already slept past it and finds it immediately.
+            newest = latest_client_log(
+                logs,
+                written_after=started_at,
+                wait_seconds=0.0 if run_seconds else LOG_APPEARS_WITHIN_SEC,
+            )
         finally:
             if run_seconds:
                 # Anything raised between muting and here — a stop that failed,

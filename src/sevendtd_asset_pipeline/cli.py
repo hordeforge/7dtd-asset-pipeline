@@ -122,6 +122,13 @@ def _parser() -> argparse.ArgumentParser:
         "verify-bundle",
         help="load a bundle in a real Unity runtime and report every asset it returns",
     )
+    verify.add_argument(
+        "--draw",
+        action="store_true",
+        help="also photograph each prefab and report the fraction of the frame it "
+        "filled: the only offline answer to whether it rasterizes. Needs a real "
+        "graphics device — run under 'xvfb-run -a' on a headless host",
+    )
     verify.add_argument("bundle", type=Path, nargs="?", help="default: the mod's staged bundle")
     verify.add_argument("--json", action="store_true")
 
@@ -592,6 +599,7 @@ def run(args: argparse.Namespace) -> int:
             config.unity_editor,
             expected_unity_version(config),
             config.build_dir / "verify",
+            draw=args.draw,
         )
         if args.json:
             print(json.dumps(verified.as_dict(), indent=2, sort_keys=True))

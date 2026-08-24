@@ -222,6 +222,8 @@ stronger evidence than the evidence that introduced it, recorded in
 | game-matched engine revision | a bundle aimed at a revision the installed game does not load |
 | file-stem collision rejection | assets made unreachable by 7DTD's stem-only lookup |
 | atlas-cell and `CustomIcon` checks | icons the bundle gates cannot see at all |
+| block `Class` resolution | a `Class` naming no engine type, which aborts the whole XML file |
+| mesh UVs behind a texture | an albedo nothing can sample, drawn as one flat colour |
 | clip format checks | a clip that is stereo, silent, clipping, or DC-offset |
 | fresh-client acceptance | everything an offline parse cannot prove |
 
@@ -274,6 +276,13 @@ design, its shader lane, and what is still unbuilt inside it.
   synthesized bundle, because it is the engine's own loader. When an editor is
   present, run it and say so; when it is not, say that too. It still proves
   construction, never acceptance.
+- **Never quote `Shader.isSupported` from a headless run.** `verify-bundle`
+  passes `-nographics`, where there is no device to compile a sub-program
+  against and the value is `true` for a shader that does not run — this
+  repository recorded exactly that as proof a synthesized shader worked, and it
+  was not. Use `xvfb-run -a shamway verify-bundle --draw`, which drops
+  `-nographics`, prints the graphics device beside the verdict, and photographs
+  each prefab to answer *does it rasterize* rather than *does it load*.
 
 ## Safety rules
 

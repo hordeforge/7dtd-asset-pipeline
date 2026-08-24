@@ -298,11 +298,25 @@ them still wants `unity` or `external`. **An unlit prop is unaffected by
 scene lighting** — it draws at full brightness at midnight, which is a look
 decision, not a defect.
 
-A real Unity 2022.3.62f2 runtime reports the result supported:
+**The shader does not run yet, and this page said otherwise.** The lines below
+were measured under `-nographics`, where there is no device to compile a
+sub-program against, so `isSupported` is not a verdict:
 
 ```text
-VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=1
-VERIFY-MATERIAL: 'prop_mat' shader='Shamway/Unlit' shaderSupported=True _MainTex=prop_albedo
+VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=1     # -nographics: meaningless
+VERIFY-SHADER: 'Shamway/Unlit' isSupported=False passes=3    # real device: the answer
+VERIFY-MATERIAL: ... shaderSupported=False _MainTex=<unbound>
+```
+
+A block whose `Model` is a synthesized prefab therefore **places in 7DTD and
+renders nothing** — no error, no magenta, an invisible block. Everything around
+the shader is sound: the container, the prefab, the mesh, the material and the
+`PPtr` chain are all read back correctly by a runtime and by the game itself.
+
+Get the real answer with a graphics device:
+
+```bash
+xvfb-run -a shamway verify-bundle --draw
 ```
 
 That is the engine's own loader and its own verdict, and it is still **a load,

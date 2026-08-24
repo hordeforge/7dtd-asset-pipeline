@@ -50,6 +50,7 @@ rest read the artifact and the mod's own XML, and run on every path.
 | Icon key case | a `CustomIcon` whose case differs from the filename stem it ships | recursive XML scan against `UIAtlases/` |
 | Clip format | stereo, unexpected sample rate, silence, near-silence, clipping, DC offset | WAV frames |
 | Mesh extents/conformance | a mesh authored in the wrong unit, or invalid glTF | trimesh and the Khronos validator |
+| Block `Class` resolves | a `Class` naming no engine type, which aborts the whole XML file | `Block<value>` against the installed game's own type table (`monodis`) |
 
 Icons are **not** bundle members — `ModManager.LoadUiAtlases` packs
 `UIAtlases/<Atlas>/*.png` at runtime — so `validate` cannot see them and
@@ -58,6 +59,36 @@ Icons are **not** bundle members — `ModManager.LoadUiAtlases` packs
 every item or block that sets no `CustomIcon`, because that is the engine's
 default sprite lookup. A key this mod does not provide is reported, never
 failed: referencing a vanilla key is normal.
+
+### `isSupported` is not a verdict without a graphics device
+
+`shamway verify-bundle` runs the editor with `-nographics`, which is right for
+everything it checks by loading. It is **wrong** for one thing: with no device,
+Unity has nothing to compile a shader sub-program against, and
+`Shader.isSupported` comes back `true` for a shader that does not run. The same
+bundle, same editor:
+
+```text
+isSupported=True  passes=1   device=Null          # -nographics
+isSupported=False passes=3   device=OpenGLCore    # a real device
+```
+
+This repository recorded the first line as evidence that a synthesized shader
+runs. It was not evidence of that, and the claim is withdrawn everywhere it
+appeared. `verify-bundle` now prints the device beside the verdict and says
+outright that a headless answer is not one.
+
+```bash
+xvfb-run -a shamway verify-bundle --draw
+```
+
+`--draw` drops `-nographics`, photographs each prefab, and reports what
+fraction of the frame it filled — the only offline answer to *does it
+rasterize*, as opposed to *does it load*. It renders a built-in cube through
+the same camera as a control and **refuses to report a number at all** when
+that control misbehaves: an early version of this probe reported 100% coverage
+for the cube and the bundle alike, and would have convicted a shader of the
+probe's own bug.
 
 ### The absence of an editor is itself gated
 
@@ -118,6 +149,38 @@ that goes unmentioned reads exactly like a passed one.
 A mod that declares no bundle (`bundle_source = "none"`) has one gate in
 total: no XML may load an asset out of a bundle the mod does not ship.
 [no-unity.md](bundles/no-unity.md) covers all four cases.
+
+### A block `Class` is engine API, not mod data
+
+`<property name="Class" value="X" />` names a **C# type in the game's
+assembly**, resolved as `Block` + `X`. A value that names no such type does not
+fail that block — it aborts the file:
+
+```text
+ERR XML loader: Loading and parsing 'blocks.xml' failed
+EXC Class 'Decoration' not found on block shamwayPropProofBlock!
+```
+
+Every other block in that file is lost with it, `items.xml` fails next, saved
+block ids stop matching, `TileEntityComposite.read` floods the log, and world
+load ends in a `NullReferenceException`. The mod reads as catastrophically
+broken and the cause is one invented word.
+
+No bundle gate can see it: the URI resolves, the manifest is complete, the
+prefab loads. So `validate` checks the value against the engine's own type
+table, read with `monodis` from `Assembly-CSharp.dll` — never against a list
+kept here, which would be wrong the day the engine adds a class and would fail
+a mod for using something real. Verified: every `Class` value the shipped
+`blocks.xml` uses resolves to a `Block<X>` type, with no exceptions.
+
+Without `monodis` the check falls back to the `Class` values vanilla's own
+config uses, which is *weaker* — a real class no vanilla block needs is absent
+from it — and the refusal names which source answered. With no game directory
+at all it prints a `not run:` line rather than passing, because an unrun gate
+must never read like a passed one.
+
+This gate exists because an invented `Class="Decoration"` passed `validate`,
+shipped to a client, and was found by reading the log.
 
 ### What `validate` discovers, and what it cannot
 
@@ -227,17 +290,24 @@ shamway script playtest-acceptance --reuse-save
 ### The editorless path has its own live-client regression
 
 `playtest-acceptance` accepts *a mod*. What proves **this pipeline** still
-works is a second script that brings its own:
+works is a second script with a mod of its own — `examples/SelfTestMod`,
+committed in this repository, built in place, its `Resources/` and manifest
+committed beside its sources the way any consuming mod commits them:
 
 ```bash
 shamway script playtest-synthesized
 ```
 
-It generates a throwaway modlet in a temporary directory, authors a mesh and a
-texture into it, builds the bundle with no editor, wires a block `Model` at the
-prefab, runs the whole thing through a live client, and then asserts by value —
-not by case name — the four things that could each be wrong while every offline
-gate passed:
+It builds that modlet with no editor, deploys it, runs it through a live
+client, and then asserts by value — not by case name — the four things that
+could each be wrong while every offline gate passed:
+
+The mod is a fixture rather than something the script invents, because a mod
+that exists only inside one run cannot be inspected after a failure, diffed
+against a previous build, or deployed by hand. Its prop is asymmetric on all
+three axes and textured with a glyph that reads wrong mirrored and an arrow
+that reads wrong upside-down, so the half a suite cannot judge is at least
+easy for a person to judge.
 
 | Assertion | The failure it catches |
 |---|---|

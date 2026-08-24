@@ -108,8 +108,17 @@ def verify_with_editor(
     unity_version: str,
     work_dir: Path,
     timeout: int = 900,
+    draw: bool = False,
 ) -> VerifyReport:
-    """Run a batch-mode editor that loads `bundle` and reads every asset in it."""
+    """Run a batch-mode editor that loads `bundle` and reads every asset in it.
+
+    `draw` additionally photographs each prefab and reports how much of the
+    frame it filled, which is the only offline answer to "does it rasterize" —
+    a prefab whose shader reads its matrices from the wrong offsets loads
+    perfectly and draws somewhere the camera is not. It needs a real graphics
+    device (so no `-nographics`, and `xvfb-run -a` on a headless host), which
+    is why it is opt-in rather than the default.
+    """
     if editor is None:
         raise PipelineError(
             "verifying a bundle in a real runtime needs an editor: set UNITY_EDITOR. "
@@ -124,10 +133,16 @@ def verify_with_editor(
     work_dir.mkdir(parents=True, exist_ok=True)
     project = _scratch_project(work_dir, unity_version)
     log = work_dir / "verify.log"
+    # `-nographics` makes Camera.Render() draw nothing rather than fail, so a
+    # run that wants to know whether the prefab *rasterizes* must not pass it.
+    # Everything else this verifier does is a load, which needs no device, so
+    # the fast headless path stays the default and drawing is opted into.
+    graphics = [] if draw else ["-nographics"]
     command = [
         str(editor),
         "-batchmode",
-        "-nographics",
+        *graphics,
+        *(["-shamwayDraw"] if draw else []),
         "-projectPath",
         str(project),
         "-executeMethod",

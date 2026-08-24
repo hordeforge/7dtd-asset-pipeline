@@ -1,0 +1,16 @@
+<configs>
+    <append xpath="/blocks">
+        <!-- Deliberately minimal: Shape + Model is what a synthesized prefab
+             needs, and every extra property here would be one more thing that
+             could explain a failure. No Class: a model block has none, and an
+             invented one aborts the whole file (see docs/validation.md). -->
+        <block name="shamwaySelfTestPropBlock">
+            <property name="CreativeMode" value="Player" />
+            <property name="Material" value="Mwood" />
+            <property name="Shape" value="ModelEntity" />
+            <property name="Model" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestProp.prefab" />
+            <property name="CustomIcon" value="shamwaySelfTestPropBlock" />
+            <property name="EconomicValue" value="10" />
+        </block>
+    </append>
+</configs>

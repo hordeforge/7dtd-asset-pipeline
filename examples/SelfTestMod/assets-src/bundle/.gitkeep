@@ -1,0 +1,6 @@
+# Every file here becomes a bundle asset: .png -> Texture2D,
+# .wav -> AudioClip, .txt/.json/.csv -> TextAsset, and a mesh
+# (.glb/.gltf/.obj/.stl/.ply) -> a prefab with its mesh, material and
+# shader. The file stem is the name the game loads it by; a texture
+# named <stem>_albedo is bound to that prefab's material.
+# See `shamway docs no-unity`.

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+    <Name value="ShamwaySelfTest" />
+    <DisplayName value="Shamway self test" />
+    <Version value="1.0.0" />
+    <Description value="The pipeline's own acceptance fixture: a prop written with no Unity editor." />
+    <Author value="hordeforge" />
+</xml>

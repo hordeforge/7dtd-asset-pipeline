@@ -478,6 +478,22 @@ behind `#ifdef VERTEX` / `#ifdef FRAGMENT`).
 
 ### What the runtime said about a synthesized shader
 
+> **Correction, 2026-08-24 (later the same day).** The `isSupported=true` below
+> was measured with `-nographics`, where there is no device to compile a
+> sub-program against and the value means nothing. Re-measured with a real
+> graphics device, the same bundle reports **`isSupported=False`**, `passes=3`,
+> and the material's `_MainTex=<unbound>`:
+>
+> ```text
+> VERIFY-SHADER: 'Shamway/Unlit' isSupported=False passes=3 ... device=OpenGLCore
+> VERIFY-FAIL: shamway/unlit loaded but the runtime reports it unsupported
+> ```
+>
+> The synthesized shader **does not run**. A block using it places in 7DTD and
+> renders nothing, which is how this was found. `verify-bundle` now prints the
+> graphics device beside the verdict and refuses to call the headless answer a
+> verdict at all; `verify-bundle --draw` is the measurement that has one.
+
 `shamway verify-bundle` on a real Unity **2022.3.62f2** editor, the
 game-matched revision, against a bundle this writer produced:
 

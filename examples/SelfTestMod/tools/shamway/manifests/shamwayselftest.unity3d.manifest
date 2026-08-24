@@ -1,0 +1,6 @@
+ManifestFileVersion: 0
+AssetBundleManifest: shamwayselftest.unity3d
+Assets:
+- bundle/shamwaySelfTestProp.glb
+- bundle/shamwaySelfTestProp_albedo.png
+Dependencies: []

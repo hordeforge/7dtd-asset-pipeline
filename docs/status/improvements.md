@@ -116,7 +116,13 @@ the AGENTS.md rule that came out of it.
 | `Shader` (class 48) | **built** — `bundle_writer.shader`, `shader_blob.py` |
 | `Material` (class 21) | **built** — `bundle_writer.material` |
 | prefabs in the source-directory lane | **built** — `bundle_writer.prefab_objects`; a mesh file becomes prefab + mesh + material, sharing one shader |
-| runtime evidence | a real 2022.3.62f2 editor reports `Shader.isSupported = true` and the material naming its texture |
+| runtime evidence | **withdrawn** — `isSupported = true` was measured under `-nographics`, where there is no device and the value is not a verdict. With a real device: `isSupported=False`, `_MainTex=<unbound>`. The shader **does not run** |
+
+**What is built is the container, not a working shader.** The `Shader` and
+`Material` objects serialize, load, and wire to the prefab by name — a runtime
+reads the whole chain. The pass itself does not compile on a real device, so a
+prop using it draws nothing in 7DTD. That is the open end of this row, and it
+is the next thing to measure with `shamway verify-bundle --draw`.
 
 **What is deliberately not built.** The pass is unlit, textured, opaque and
 variant-free. Lit, shadowed, transparent, cut-out, normal-mapped, instanced

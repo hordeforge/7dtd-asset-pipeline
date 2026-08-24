@@ -141,7 +141,18 @@ jobs:
           # mesh` would be the authoring command, but it shells out to Blender,
           # which this runner has no reason to install: what is under test is
           # the writer reading an interchange file, not how the file was made.
-          python -c "import trimesh; trimesh.creation.box(extents=(0.4, 0.4, 0.4)).export('assets-src/bundle/myModThing.glb')"
+          # With UV0: the writer refuses a mesh that has an albedo beside it
+          # and nothing to sample it with, because that combination draws one
+          # flat colour while every gate still passes. trimesh's primitives
+          # carry no UVs, so the fixture supplies them like a real export.
+          python - <<'MESH'
+          import numpy, trimesh
+          box = trimesh.creation.box(extents=(0.4, 0.4, 0.4))
+          span = box.vertices.max(axis=0) - box.vertices.min(axis=0)
+          uv = (box.vertices[:, :2] - box.vertices[:, :2].min(axis=0)) / span[:2]
+          box.visual = trimesh.visual.TextureVisuals(uv=numpy.asarray(uv, dtype=float))
+          box.export("assets-src/bundle/myModThing.glb")
+          MESH
           python -c "from PIL import Image; Image.new('RGBA', (64, 64), (120, 60, 40, 255)).save('assets-src/bundle/myModThing_albedo.png')"
           printf '%s\n' \
             '<configs><append xpath="/blocks"><block name="myModBlock">' \

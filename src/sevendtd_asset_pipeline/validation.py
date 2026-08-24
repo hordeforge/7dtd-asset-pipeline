@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import PipelineConfig
+from .engine_classes import block_classes, declared_block_classes
 from .errors import PipelineError
 from .game import game_unity_version
 from .references import (
@@ -167,8 +168,10 @@ def validate_mod(
         raise PipelineError(
             f"ModInfo.xml Name is {actual_mod_name!r}, configuration says {config.mod_name!r}"
         )
+    class_messages = check_block_classes(config)
     if not config.has_bundle:
-        return _validate_bundle_free(config)
+        report = _validate_bundle_free(config)
+        return ValidationReport(report.messages + tuple(class_messages), report.reference_count)
     if game_version is not None:
         expected_version: str | None = game_version[0]
     elif config.game_dir:
@@ -186,4 +189,42 @@ def validate_mod(
     resolved: dict[str, Path | None] = {}
     messages = [_check_reference(config, ref, stems, resolved, owned) for ref in references]
     messages += [_check_code_reference(config, stem, stems) for stem in config.code_references]
+    messages += class_messages
     return ValidationReport(tuple(messages), len(references) + len(config.code_references))
+
+
+def check_block_classes(config: PipelineConfig) -> list[str]:
+    """Refuse a block whose `Class` names no engine type.
+
+    `Class` is not mod data: the engine resolves it to a C# type named
+    `Block<value>`, and one it cannot find aborts the whole XML file. What the
+    player then sees is not "one bad block" — it is `blocks.xml` failing to
+    parse, `items.xml` failing after it, every save's block ids no longer
+    matching, `TileEntityComposite.read` flooding the log, and world load
+    ending in a NullReferenceException. Nothing in a bundle gate can see it:
+    the URI resolves, the manifest is complete, the prefab loads.
+
+    Returns one line per block checked. A mod that names no `Class` at all is
+    the common case and costs nothing.
+    """
+    declared = declared_block_classes(config.config_dir)
+    if not declared:
+        return []
+    try:
+        legal, source = block_classes(config.game_dir)
+    except PipelineError as exc:
+        # The repository's own rule: an unrun gate must never read like a
+        # passed one. This is the `not run:` shape the staging gates use.
+        return [f"not run: block Class check ({exc})"]
+    unknown = [(block, value, path) for block, value, path in declared if value not in legal]
+    if unknown:
+        block, value, path = unknown[0]
+        near = sorted(name for name in legal if name.lower().startswith(value[:3].lower()))
+        suggestion = f" Did you mean one of: {', '.join(near[:5])}?" if near else ""
+        raise PipelineError(
+            f"{path.name}: block {block!r} sets Class={value!r}, which names no engine class "
+            f"(the engine resolves it as Block{value}). Checked against {source}. A block "
+            f"with an unresolvable Class makes the engine abort the whole file, so every "
+            f"other block in it is lost too.{suggestion} Most model blocks set no Class at all."
+        )
+    return [f"OK {path.name}: block {block} Class={value}" for block, value, path in declared]

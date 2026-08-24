@@ -17,6 +17,7 @@ import struct
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 from sevendtd_asset_pipeline import shader_blob
 from sevendtd_asset_pipeline.bundle_writer import (
@@ -126,7 +127,7 @@ class CompileTests(unittest.TestCase):
 @needs_unitypy
 @needs_vkd3d
 class ShaderObjectTests(unittest.TestCase):
-    def read_back(self, objects: list, name: str = "shaders.unity3d"):
+    def read_back(self, objects: list[Any], name: str = "shaders.unity3d") -> dict[str, Any]:
         import UnityPy
 
         with tempfile.TemporaryDirectory() as work:
@@ -230,7 +231,7 @@ class RejectionTests(unittest.TestCase):
 class SourceLaneTests(unittest.TestCase):
     """A mesh source file becomes a prefab only where a shader compiler exists."""
 
-    def pack(self, work: Path):
+    def pack(self, work: Path) -> collections.Counter[str]:
         import UnityPy
 
         from sevendtd_asset_pipeline.bundle_writer import pack_directory

@@ -19,6 +19,7 @@ import shutil
 import struct
 import subprocess
 import tempfile
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -310,7 +311,7 @@ def dxbc_chunks(data: bytes) -> dict[str, bytes]:
     return chunks
 
 
-def _walk_tokens(data: bytes):
+def _walk_tokens(data: bytes) -> Iterator[tuple[int, int]]:
     """Yield `(opcode, operand_word)` for each instruction in a DXBC container."""
     chunks = dxbc_chunks(data)
     code = chunks.get("SHDR") or chunks.get("SHEX")
@@ -345,7 +346,7 @@ def temp_register_count(data: bytes) -> int:
     """
     for opcode, operand in _walk_tokens(data):
         if opcode == _OP_DCL_TEMPS:
-            return operand
+            return int(operand)
     return 0
 
 

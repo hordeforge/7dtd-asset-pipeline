@@ -1277,8 +1277,8 @@ ASSET_KINDS: dict[str, str] = {
     # vector and layered formats. Both are optional, and a source in one of
     # these is refused by name with the install line when its tool is absent —
     # never skipped, and never silently downgraded.
-    **{suffix: "AudioClip" for suffix in transcode.AUDIO_SUFFIXES},
-    **{suffix: "Texture2D" for suffix in transcode.IMAGE_SUFFIXES},
+    **dict.fromkeys(transcode.AUDIO_SUFFIXES, "AudioClip"),
+    **dict.fromkeys(transcode.IMAGE_SUFFIXES, "Texture2D"),
 }
 MESH_SUFFIXES = tuple(suffix for suffix, kind in ASSET_KINDS.items() if kind == "Mesh")
 IGNORED_NAMES = {".gitkeep", ".gitignore"}

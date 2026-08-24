@@ -18,10 +18,16 @@ import unittest
 from pathlib import Path
 
 from sevendtd_asset_pipeline import transcode
+from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.errors import PipelineError
 
 has_ffmpeg = shutil.which("ffmpeg") is not None
 has_magick = shutil.which("magick") or shutil.which("convert")
+# Two of the image tests read the result back with Pillow, which is an
+# optional capability of its own: ImageMagick rasterizes, Pillow inspects.
+# Gating the class on the rasterizer alone made those two fail on a host that
+# had one and not the other.
+has_pillow = has_capability("pillow")
 
 SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" '
@@ -51,8 +57,10 @@ class PassThroughTests(unittest.TestCase):
 class AudioTests(unittest.TestCase):
     def encode(self, directory: Path, name: str) -> Path:
         source = directory / name
+        # ffmpeg by name is deliberate: has_ffmpeg gates this class on the
+        # same PATH lookup the pipeline itself uses.
         subprocess.run(
-            [
+            [  # noqa: S607
                 "ffmpeg",
                 "-nostdin",
                 "-v",
@@ -98,21 +106,28 @@ class AudioTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             source = self.encode(Path(directory), "beep.ogg")
-            with transcode.as_wav(source, rate=22050) as decoded:
-                with wave.open(str(decoded), "rb") as handle:
-                    self.assertEqual(22050, handle.getframerate())
+            with (
+                transcode.as_wav(source, rate=22050) as decoded,
+                wave.open(str(decoded), "rb") as handle,
+            ):
+                self.assertEqual(22050, handle.getframerate())
 
     def test_a_file_ffmpeg_cannot_read_fails_with_its_own_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "broken.ogg"
             source.write_bytes(b"not an ogg stream at all")
-            with self.assertRaisesRegex(PipelineError, "ffmpeg could not convert"):
-                with transcode.as_wav(source):
-                    pass
+            with (
+                self.assertRaisesRegex(PipelineError, "ffmpeg could not convert"),
+                transcode.as_wav(source),
+            ):
+                pass
 
 
 @unittest.skipUnless(bool(has_magick), "rasterizing vector art needs ImageMagick")
 class ImageTests(unittest.TestCase):
+    """Rasterization through ImageMagick; the size checks also need Pillow."""
+
+    @unittest.skipUnless(has_pillow, "reading the raster back needs Pillow")
     def test_an_svg_rasterizes_at_density_over_ninety_six(self) -> None:
         """SVG's user unit is 1/96 inch, so the scale factor is density/96.
 
@@ -129,10 +144,13 @@ class ImageTests(unittest.TestCase):
                 with Image.open(rendered) as image:
                     self.assertEqual((160, 160), image.size)
 
-            with transcode.as_png(source, density=96) as rendered:
-                with Image.open(rendered) as image:
-                    self.assertEqual((40, 40), image.size)
+            with (
+                transcode.as_png(source, density=96) as rendered,
+                Image.open(rendered) as image,
+            ):
+                self.assertEqual((40, 40), image.size)
 
+    @unittest.skipUnless(has_pillow, "reading the raster back needs Pillow")
     def test_a_rasterized_svg_keeps_its_transparent_background(self) -> None:
         # Without -background none, ImageMagick fills SVG transparency white,
         # which reaches the atlas as an opaque card behind every icon.
@@ -141,9 +159,11 @@ class ImageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "glyph.svg"
             source.write_text(SVG, encoding="utf-8")
-            with transcode.as_png(source, density=96) as rendered:
-                with Image.open(rendered) as image:
-                    self.assertEqual(0, image.convert("RGBA").getpixel((1, 1))[3])
+            with (
+                transcode.as_png(source, density=96) as rendered,
+                Image.open(rendered) as image,
+            ):
+                self.assertEqual(0, image.convert("RGBA").getpixel((1, 1))[3])
 
 
 if __name__ == "__main__":

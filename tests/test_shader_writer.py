@@ -12,6 +12,7 @@ What it proved is recorded in docs/research/research-provenance.md.
 
 from __future__ import annotations
 
+import collections
 import struct
 import tempfile
 import unittest
@@ -215,6 +216,59 @@ class RejectionTests(unittest.TestCase):
             build_bundle(
                 [shader(UNLIT_SHADER_NAME), shader(UNLIT_SHADER_NAME)], REVISION, "x.unity3d"
             )
+
+
+@needs_unitypy
+class SourceLaneTests(unittest.TestCase):
+    """A mesh source file becomes a prefab only where a shader compiler exists."""
+
+    def pack(self, work: Path):
+        from sevendtd_asset_pipeline.bundle_writer import pack_directory
+
+        import UnityPy
+
+        bundle, _manifest = pack_directory(work, "lane.unity3d", REVISION)
+        path = work / "out.unity3d"
+        path.write_bytes(bundle)
+        env = UnityPy.load(str(path))
+        return collections.Counter(obj.type.name for obj in env.objects)
+
+    def source_tree(self, work: Path) -> None:
+        import trimesh
+
+        trimesh.creation.box(extents=(1, 1, 1)).export(work / "prop.glb")
+        one_pixel_png(work / "prop_albedo.png")
+
+    @unittest.skipUnless(has_capability("trimesh"), "the mesh lane needs trimesh")
+    @needs_vkd3d
+    def test_a_mesh_becomes_a_prefab_with_a_material_and_a_shader(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            work = Path(raw)
+            self.source_tree(work)
+            kinds = self.pack(work)
+        self.assertEqual(kinds["GameObject"], 1, "the prefab the game resolves")
+        self.assertEqual(kinds["Mesh"], 1)
+        self.assertEqual(kinds["Material"], 1)
+        self.assertEqual(kinds["Shader"], 1, "one shader shared across the bundle")
+
+    @unittest.skipUnless(has_capability("trimesh"), "the mesh lane needs trimesh")
+    def test_without_a_shader_compiler_the_lane_writes_the_bare_mesh(self) -> None:
+        """The previous behaviour, kept: packing less, not failing."""
+        import shutil
+        import unittest.mock
+
+        real = shutil.which
+        with tempfile.TemporaryDirectory() as raw:
+            work = Path(raw)
+            self.source_tree(work)
+            with unittest.mock.patch(
+                "shutil.which",
+                lambda name, *a, **k: None if name == "vkd3d-compiler" else real(name, *a, **k),
+            ):
+                kinds = self.pack(work)
+        self.assertEqual(kinds["Mesh"], 1)
+        self.assertEqual(kinds["Shader"], 0)
+        self.assertEqual(kinds["GameObject"], 0)
 
 
 if __name__ == "__main__":

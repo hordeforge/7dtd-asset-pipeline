@@ -182,6 +182,13 @@ stem** because that is the name the game resolves:
 
 A texture named `prop_albedo` in the same source tree is bound to that
 material's `_MainTex`; without one the material draws Unity's built-in white.
+
+**This lane needs `vkd3d-compiler`.** Without it the writer packs the bare
+`Mesh` it always did rather than refusing the build — a mesh-only bundle is
+still reachable through `LoadAsset<Mesh>`, and a mod that packed yesterday
+keeps packing. The difference is visible in `shamway capabilities` and
+`shamway doctor`, never silent in the artifact's behaviour: a bundle either
+has a prefab or it does not.
 The suffix is a convention, not a guess — the prefab has to own `prop`, so the
 texture cannot also be called `prop`, and the stem-collision gate would reject
 it if it were.

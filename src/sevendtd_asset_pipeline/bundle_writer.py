@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import block_compress, shader_blob, transcode
-from .capabilities import require_capability
+from .capabilities import has_capability, require_capability
 from .errors import PipelineError
 
 ASSET_BUNDLE = 142
@@ -1408,10 +1408,20 @@ def pack_directory(
     sources = collect_sources(source_dir)
     meshes = [path for path in sources if path.suffix.lower() in MESH_SUFFIXES]
     texture_stems = {path.stem for path in sources if path.suffix.lower() == ".png"}
-    objects = [object_for(path, compress_textures) for path in sources if path not in meshes]
-    for path in meshes:
-        objects.extend(prefab_objects(path, texture_stems))
-    if meshes:
+    # The prefab lane needs a shader compiler. Without one this writes the
+    # bare `Mesh` it always did rather than failing: a mesh-only bundle is
+    # still reachable through `LoadAsset<Mesh>`, and refusing to pack a mod
+    # that packed yesterday would be a worse answer than packing less of it.
+    # `shamway capabilities` and `doctor` are where the difference shows.
+    prefabs = bool(meshes) and has_capability("vkd3d-compiler")
+    objects = [
+        object_for(path, compress_textures)
+        for path in sources
+        if not (prefabs and path in meshes)
+    ]
+    if prefabs:
+        for path in meshes:
+            objects.extend(prefab_objects(path, texture_stems))
         # One shader serves every material in the bundle; it carries no
         # per-material state, so a second copy would only be a second name.
         objects.append(shader(UNLIT_SHADER_NAME))

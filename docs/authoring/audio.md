@@ -252,6 +252,15 @@ overlapping shatter reflections plus a 32–520 Hz rolling thunder bed beginning
 160 ms after the front. The thunder decays over 2.6 seconds, so the event
 unfolds instead of collapsing into one dominant hit.
 
+That balance was a strong target-game near-pass: the layered shatter and
+thunder finally read as one large event, but the short low-mid thump remained
+slightly too forward while deeper impact was missing. The next revision shifts
+the descending boom from 108→44 Hz to 92→38 Hz, slows its attack to 55 ms,
+reduces its second harmonic and gain, and further lowers the shock and crack.
+It adds an independent 62→44 Hz plus 43→34 Hz bass-pressure layer with a 65 ms
+attack and 1.75-second decay. This adds deep impact without creating another
+short knock.
+
 The near `blast` voice itself no longer treats sparse high-band debris as a
 main layer. A target-game reviewer rejected that output as “just crackling,”
 not a bomb or blast. Its replacement uses a wider bipolar pressure hit, a

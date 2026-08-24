@@ -677,6 +677,14 @@ boom, and short-crack mix gains. It spends the recovered headroom on three
 overlapping delayed copies of the dense shatter front and a separately filtered
 32–520 Hz rolling thunder bed with a 160 ms onset and 2.6-second decay.
 
+The target-game repeat judged that design “way better,” validating its layered
+structure, but still heard too much short low-mid thump and too little deep
+impact. The next revision moves the primary sweep down from 108→44 Hz to
+92→38 Hz, slows its attack, reduces its second harmonic and mix gain, and
+further lowers the shock/crack. A separately phased 62→44 Hz plus 43→34 Hz
+pressure layer rises over 65 ms and decays over 1.75 seconds, supplying the
+missing depth without another abrupt transient.
+
 The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
 `ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
 `Origin.position` internally. A caller must pass one absolute world coordinate;

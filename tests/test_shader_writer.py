@@ -18,6 +18,7 @@ import struct
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from typing import Any
 
@@ -586,3 +587,52 @@ class CBufferLayoutGateTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(PipelineError, "unity_MatrixVP is declared at byte 208"):
             shader_blob.assert_cbuffer_layout(self._dxbc(), (moved,))
+
+
+class VulkanSubProgramTests(unittest.TestCase):
+    """Platform 18: two SMOL-V modules behind a 176-byte header.
+
+    Decoded from shipped 2022.3 bundles. The invariants here are the ones
+    measured across four stock shaders, so a record that breaks one is wrong
+    before any runtime sees it.
+    """
+
+    def test_the_record_satisfies_every_measured_invariant(self) -> None:
+        fragment, vertex = b"F" * 391, b"V" * 4123
+        record = shader_blob.vulkan_code_blob(fragment, vertex)
+        self.assertEqual(struct.unpack_from("<I", record, 4)[0], shader_blob.VULKAN_PROGRAM)
+        payload_length = struct.unpack_from("<I", record, 28)[0]
+        payload = record[32 : 32 + payload_length]
+        word0, section_a, section_b, header, a_payload, word5 = struct.unpack_from(
+            "<6I", payload, 0
+        )
+        self.assertEqual(word0, 0x02000061)
+        self.assertEqual(
+            section_a + section_b,
+            payload_length,
+            "the two section sizes sum to the payload length in every stock record",
+        )
+        self.assertEqual(header, shader_blob.VULKAN_SECTION_HEADER)
+        self.assertEqual(a_payload, section_a - shader_blob.VULKAN_SECTION_HEADER)
+        self.assertEqual(word5, 0)
+        self.assertEqual(struct.unpack_from("<I", payload, 19 * 4)[0], 1)
+
+    def test_both_sections_carry_their_module(self) -> None:
+        fragment, vertex = b"F" * 391, b"V" * 4123
+        payload_length = struct.unpack_from(
+            "<I", shader_blob.vulkan_code_blob(fragment, vertex), 28
+        )[0]
+        record = shader_blob.vulkan_code_blob(fragment, vertex)
+        payload = record[32 : 32 + payload_length]
+        section_a = struct.unpack_from("<I", payload, 4)[0]
+        self.assertEqual(payload[shader_blob.VULKAN_SECTION_HEADER :][: len(fragment)], fragment)
+        self.assertEqual(payload[section_a:][: len(vertex)], vertex)
+
+    def test_the_platform_is_absent_without_the_encoder(self) -> None:
+        """A host without the codec builds what it always did, rather than failing."""
+        if not has_capability("vkd3d-compiler"):
+            self.skipTest("vkd3d-compiler that reads HLSL is not installed")
+        with mock.patch.object(shader_blob, "smolv_library", return_value=None):
+            platforms = [p.platform for p in shader_blob.unlit_textured().platforms]
+        self.assertNotIn(shader_blob.SHADER_COMPILER_PLATFORM_VULKAN, platforms)
+        self.assertIn(shader_blob.SHADER_COMPILER_PLATFORM_D3D11, platforms)

@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from . import shader_blob
 from .errors import PipelineError
 
 
@@ -132,6 +133,16 @@ def _vkd3d_reads_hlsl(path: str) -> str | None:
     return None
 
 
+def _zmolv_present(_probe: str) -> str | None:
+    """Whether the SMOL-V encoder can actually be loaded, not merely imported."""
+    if shader_blob.smolv_library() is None:
+        return (
+            "the zmol-v shared library is not on this host, so a synthesized shader "
+            "carries no Vulkan sub-program"
+        )
+    return None
+
+
 REGISTRY: tuple[_Spec, ...] = (
     _Spec(
         name="UnityPy",
@@ -174,6 +185,18 @@ REGISTRY: tuple[_Spec, ...] = (
         # In the base set, not --with-authoring: it belongs to the default
         # build path rather than to an optional art lane.
         install="shamway script install-tools",
+    ),
+    _Spec(
+        name="libzmolv",
+        kind="module",
+        probe="sevendtd_asset_pipeline.shader_blob",
+        usable=_zmolv_present,
+        unlocks=("a Vulkan sub-program in a synthesized shader (ShaderCompilerPlatform 18)",),
+        purpose="compress the SPIR-V a Vulkan sub-program carries into the SMOL-V Unity "
+        "stores. A client running Vulkan has no sub-program to create without it; every "
+        "other graphics API is unaffected",
+        install="build https://github.com/ywy50/zmol-v with 'zig build' and set "
+        "ZMOLV_LIBRARY to the shared library it writes",
     ),
     _Spec(
         name="glslangValidator",

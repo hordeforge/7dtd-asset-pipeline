@@ -53,6 +53,72 @@ inconsistent by construction — the stock parameter blob beside it names stock'
 uniforms, not ours. It isolates nothing, and no conclusion was drawn from it.
 The GLSL fix rests on `glslangValidator` alone, which needs no Unity at all.
 
+## After the record fix: the program loads and does not rasterize
+
+Two probes were added to `BundleVerifier.cs` to split the remaining fault, both
+reported every `--draw` run:
+
+- **`VERIFY-DRAWN-MATERIAL`** puts the bundle's own material on the *built-in
+  cube*. A built-in mesh that vanishes under this material accuses the
+  material; one that draws accuses the mesh.
+- **`VERIFY-DRAWNOW`** sets the pass by hand and calls `Graphics.DrawMeshNow`,
+  bypassing culling, sorting and `LightMode` pass selection entirely.
+
+What they say:
+
+```text
+VERIFY-PASS: passCount=1 SetPass(0)=True lightMode='<none>' renderType='Opaque'
+VERIFY-DRAWNOW: direct SetPass+DrawMeshNow covered=0.0%
+VERIFY-DRAWN-MATERIAL: built-in cube wearing 'shamwaySelfTestProp_mat' covered=0.0%
+VERIFY-DRAWN-CONTROL: built-in cube covered=38.8% zoomed-out=2.4%
+```
+
+The built-in cube draws at 38.8% with its own material and **0.0% wearing
+ours**, and a hand-issued draw of that same built-in mesh is also 0.0%. So:
+
+- the **mesh is not the fault** — a built-in cube fails under this material;
+- the **renderer is not the fault** — bypassing it changes nothing;
+- **culling, sorting and pass selection are not the fault** — `DrawMeshNow`
+  skips all three;
+- the pass is **usable**: `SetPass(0)` returns `True`.
+
+The narrowed statement is therefore: **the GPU program loads, the pass sets up,
+and the program rasterizes no fragments.** That is a much smaller target than
+"the prop is invisible", and it is where the next session should start.
+
+`Material.GetTag("LightMode")` reading `<none>` is **not** evidence of anything:
+`GetTag` reads *subshader* tags and `LightMode` is a *pass* tag, so it reads
+`<none>` for stock shaders too. It is printed for context, not as a finding.
+
+### Every pre-fix negative result is void
+
+This matters more than any single entry below. Until the record tail was fixed,
+**every** GLCore record this writer produced was eight bytes short, so every
+experiment run against it failed for that reason whatever else it changed. The
+eliminations recorded in the numbered list — the `$Globals` shape, the shared
+source record, the keyword plumbing, the pass `m_State.m_Name` — were all
+measured in that state and none of them are evidence.
+
+Two have been **re-run** against the fixed writer, with the control cube healthy
+in the same frame, and both are still negative:
+
+| Re-tested after the fix | Result |
+|---|---|
+| `$Globals` of individual uniform members for GLCore instead of the d3d11 cbuffers | still `0.0%` |
+| one shared source record, both stages at the same index (stock's shape) | still `0.0%` |
+
+Two further single-variable tests, also against the fixed writer:
+
+| Tried | Result |
+|---|---|
+| a vertex shader ignoring **every** uniform, writing clip space directly | still `0.0%` — so it is not the transform, the matrices, or uniform binding |
+| removing the leading blank line before `#ifdef VERTEX`, so the source starts exactly as stock's does | still `0.0%`; reverted rather than kept, being neutral |
+
+The remaining structural differences from stock, none yet tested against the
+fixed writer, are in the source preamble: stock GLCore carries
+`HLSLCC_ENABLE_UNIFORM_BUFFERS`, `UNITY_LOCATION`/`UNITY_BINDING` and a
+`GL_ARB_shader_bit_encoding` guard that this writer's GLSL does not.
+
 ## Evidence
 
 Same bundle, same editor (2022.3.62f2), one difference:

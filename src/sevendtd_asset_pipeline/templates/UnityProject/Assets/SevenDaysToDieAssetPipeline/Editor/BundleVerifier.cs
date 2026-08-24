@@ -136,6 +136,62 @@ namespace SevenDaysToDie.AssetPipeline
                 double controlNear = Coverage(camera, target, readback);
                 camera.orthographicSize = framed * 5.6f;
                 double controlFar = Coverage(camera, target, readback);
+
+                // A second control, wearing the bundle's own material on the
+                // built-in cube. Between the two, a zero splits cleanly: a
+                // built-in mesh that vanishes under this material accuses the
+                // material and its shader; one that draws accuses the mesh.
+                Material worn = null;
+                foreach (Renderer each in instance.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (each.sharedMaterial != null) { worn = each.sharedMaterial; break; }
+                }
+                double wornNear = -1.0;
+                if (worn != null)
+                {
+                    // Ask the runtime whether the pass can be set up at all.
+                    // `SetPass` returning false is the difference between "the
+                    // shader loaded" and "the shader can draw", which
+                    // `isSupported` does not distinguish.
+                    Debug.Log("VERIFY-PASS: passCount=" + worn.passCount +
+                              " SetPass(0)=" + worn.SetPass(0) +
+                              " lightMode='" + worn.GetTag("LightMode", false, "<none>") +
+                              "' renderType='" + worn.GetTag("RenderType", false, "<none>") + "'");
+                    // Bypass the renderer entirely: set the pass by hand and
+                    // issue the draw. This skips culling, sorting and
+                    // LightMode pass selection, so it separates "the program
+                    // does not rasterize" from "the renderer never issued the
+                    // draw" - two faults that look identical from coverage.
+                    try
+                    {
+                        Mesh cubeMesh = control.GetComponent<MeshFilter>().sharedMesh;
+                        RenderTexture prev2 = RenderTexture.active;
+                        RenderTexture.active = target;
+                        GL.Clear(true, true, new Color(0f, 0f, 0f, 0f));
+                        GL.PushMatrix();
+                        GL.LoadIdentity();
+                        GL.LoadProjectionMatrix(Matrix4x4.Ortho(-1f, 1f, -1f, 1f, -10f, 10f));
+                        worn.SetPass(0);
+                        Graphics.DrawMeshNow(cubeMesh, Matrix4x4.identity);
+                        GL.PopMatrix();
+                        readback.ReadPixels(new Rect(0f, 0f, DrawProbePixels, DrawProbePixels), 0, 0);
+                        readback.Apply();
+                        RenderTexture.active = prev2;
+                        int lit = 0;
+                        foreach (Color32 px in readback.GetPixels32()) { if (px.a > 8) { lit++; } }
+                        Debug.Log("VERIFY-DRAWNOW: direct SetPass+DrawMeshNow covered=" +
+                                  (100.0 * lit / (DrawProbePixels * DrawProbePixels)).ToString("0.0") + "%");
+                    }
+                    catch (Exception drawNowFailed)
+                    {
+                        Debug.Log("VERIFY-DRAWNOW: not measured (" + drawNowFailed.Message + ")");
+                    }
+                    control.GetComponent<Renderer>().sharedMaterial = worn;
+                    camera.orthographicSize = framed * 1.4f;
+                    wornNear = Coverage(camera, target, readback);
+                    Debug.Log("VERIFY-DRAWN-MATERIAL: built-in cube wearing '" + worn.name +
+                              "' covered=" + wornNear.ToString("0.0") + "%");
+                }
                 instance.SetActive(true);
 
                 Debug.Log("VERIFY-DRAWN-CONTROL: built-in cube covered=" +

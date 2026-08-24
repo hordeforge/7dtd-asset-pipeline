@@ -53,6 +53,69 @@ inconsistent by construction — the stock parameter blob beside it names stock'
 uniforms, not ours. It isolates nothing, and no conclusion was drawn from it.
 The GLSL fix rests on `glslangValidator` alone, which needs no Unity at all.
 
+## The program loads, and is never executed
+
+The sharpest statement this investigation has reached, from one asymmetry:
+
+| The GLSL this writer emits | Coverage |
+|---|---|
+| **deliberately broken** (a syntax error injected into the vertex half) | **38.8%** — Unity substitutes its magenta error shader, which draws |
+| **valid** (compiles under `glslangValidator`) | **0.0%** |
+
+A shader that fails to compile draws. The one that compiles does not. So the
+draw path, the camera, the mesh and the material are all working, and the
+fallback proves it in the same frame — what does nothing is *our program*,
+after it loads successfully.
+
+That is not a fallback and not a rasterization failure downstream. Unity
+reports `isSupported=True` and `SetPass(0)=True`, and then the program runs as
+a no-op.
+
+The strongest form of the test: a vertex stage that reads **no** inputs and no
+uniforms, emitting a large triangle from `gl_VertexID`, with a fragment stage
+writing **constant opaque red**. Both halves verified to compile before the
+run. It cannot produce zero pixels if it executes at all:
+
+```text
+VERIFY-DRAWNOW: direct SetPass+DrawMeshNow covered=0.0%
+VERIFY-DRAWN-MATERIAL: built-in cube wearing 'shamwaySelfTestProp_mat' covered=0.0%
+VERIFY-DRAWN-CONTROL: built-in cube covered=38.8% zoomed-out=2.4%
+```
+
+Two hypotheses die here. It is **not** the vertex transform or uniform binding
+(the program reads neither), and it is **not** an alpha-zero write from an
+unbound sampler (the fragment writes alpha 1 unconditionally, and `Coverage`
+counts `alpha > 8`).
+
+### A check that would have cost one command
+
+`glslangValidator` compiles the GLSL halves offline, with no editor and no
+device, and names the line and the reason. The runtime names neither. It is now
+a registered capability and a test — `GLSLCompilesTests` — that fails with the
+original bug's own message when the extension line is removed:
+
+```text
+ERROR: 0:14: 'location' : not supported for this version or the enabled extensions
+```
+
+### Two false positives, and what caused both
+
+Both were "it draws now!" results that were nothing of the kind, and both came
+from the same mistake: splitting `shader_blob.py` on `#ifdef VERTEX` /
+`#ifdef FRAGMENT` to patch a half, when **the file's own docstrings contain
+those strings**. The split landed in prose, the patch went into the wrong
+`void main`, and the resulting shader was broken — so Unity drew the error
+shader at exactly the control's 38.8%, which reads like success.
+
+The tell was available and initially missed: 38.8% is *identical* to the
+control cube's number, because it **is** the control cube, wearing magenta. A
+real result would not match the control to the decimal.
+
+What fixed the method, and is now the rule for this lane: **patch the
+`UNLIT_GLSL` literal by index, and validate both halves with
+`glslangValidator` before every editor run.** A run whose shader was not
+verified to compile proves nothing in either direction.
+
 ## After the record fix: the program loads and does not rasterize
 
 Two probes were added to `BundleVerifier.cs` to split the remaining fault, both

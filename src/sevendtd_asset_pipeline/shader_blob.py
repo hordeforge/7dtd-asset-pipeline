@@ -110,6 +110,10 @@ UNITY_PER_FRAME = CBuffer(
     368,
     (
         CBufferMember("glstate_lightmodel_ambient", 0),
+        CBufferMember("unity_AmbientSky", 16),
+        CBufferMember("unity_AmbientEquator", 32),
+        CBufferMember("unity_AmbientGround", 48),
+        CBufferMember("unity_IndirectSpecColor", 64),
         CBufferMember("glstate_matrix_projection", 80, rows=4, columns=4, is_matrix=True),
         CBufferMember("unity_MatrixV", 144, rows=4, columns=4, is_matrix=True),
         CBufferMember("unity_MatrixInvV", 208, rows=4, columns=4, is_matrix=True),
@@ -133,6 +137,19 @@ cbuffer UnityPerDraw : register(b0)
 cbuffer UnityPerFrame : register(b1)
 {
     float4 glstate_lightmodel_ambient;
+    // Unity's own UnityPerFrame carries four ambient float4s here. This shader
+    // reads none of them, and they still have to occupy their 64 bytes: the
+    // runtime fills the buffer to *its* layout, and the bytecode reads it by
+    // offset. Omitting them packed everything after this point 64 bytes early,
+    // so `unity_MatrixVP` compiled to offset 208 while Unity writes it at 272 -
+    // the shader sampled the tail of `unity_MatrixInvV` as its view-projection
+    // matrix, put the geometry nowhere, and drew nothing. No error, on d3d11
+    // only: GLSL binds uniforms by name, so OpenGL Core was immune and the
+    // same bundle rendered there. `assert_cbuffer_layout` now refuses this.
+    float4 unity_AmbientSky;
+    float4 unity_AmbientEquator;
+    float4 unity_AmbientGround;
+    float4 unity_IndirectSpecColor;
     float4x4 glstate_matrix_projection;
     float4x4 unity_MatrixV;
     float4x4 unity_MatrixInvV;
@@ -402,6 +419,76 @@ def declaration_counts(data: bytes) -> tuple[int, int, int]:
     return srv, cbuffer, sampler
 
 
+def compiled_cbuffer_layout(dxbc: bytes) -> dict[str, dict[str, int]]:
+    """`{buffer: {member: byte offset}}` as the compiler actually packed it.
+
+    Read from the DXBC's `RDEF` chunk, which is the bytecode's own account of
+    where it will look - not what the HLSL author believed.
+    """
+    rdef = dxbc_chunks(dxbc).get("RDEF")
+    if rdef is None:
+        return {}
+
+    def cstr(offset: int) -> str:
+        return rdef[offset : rdef.index(b"\x00", offset)].decode("ascii", "replace")
+
+    buffers: dict[str, dict[str, int]] = {}
+    count, table = struct.unpack_from("<2I", rdef, 0)
+    for i in range(count):
+        name_at, members, member_table, _size, _flags, _kind = struct.unpack_from(
+            "<6I", rdef, table + i * 24
+        )
+        fields: dict[str, int] = {}
+        for m in range(members):
+            member_at, offset, _size2, _f, _t, _d = struct.unpack_from(
+                "<6I", rdef, member_table + m * 24
+            )
+            fields[cstr(member_at)] = offset
+        buffers[cstr(name_at)] = fields
+    return buffers
+
+
+def assert_cbuffer_layout(dxbc: bytes, buffers: tuple[CBuffer, ...]) -> None:
+    """Refuse bytecode that reads a constant buffer at different offsets than declared.
+
+    The runtime fills a constant buffer to **its** layout and the bytecode reads
+    it **by offset**, so the HLSL must reproduce Unity's member order byte for
+    byte - padding members it never reads included. Get it wrong and there is no
+    error anywhere: the shader loads, the pass sets up, and it samples the wrong
+    bytes.
+
+    This gate exists because that happened. `UnityPerFrame` omitted Unity's four
+    ambient `float4`s, so everything after them packed 64 bytes early and
+    `unity_MatrixVP` compiled to offset 208 while the runtime writes it at 272.
+    The vertex shader read the tail of `unity_MatrixInvV` as its view-projection
+    matrix and put every vertex nowhere. **Only on d3d11**: GLSL binds uniforms
+    by name, so the OpenGL Core sub-program out of the same writer rendered
+    correctly, and a live client showed an invisible block on its default API
+    and a correct one under `-force-glcore`.
+
+    An offline check that reads the bytecode's own `RDEF` is the cheapest place
+    to catch it; the alternative is a human looking at a block on two graphics
+    APIs.
+    """
+    compiled = compiled_cbuffer_layout(dxbc)
+    for buffer in buffers:
+        packed = compiled.get(buffer.name)
+        if packed is None:
+            continue  # the shader does not reference this buffer at all
+        for member in buffer.members:
+            actual = packed.get(member.name)
+            if actual is None:
+                continue
+            if actual != member.index:
+                raise PipelineError(
+                    f"{buffer.name}.{member.name} is declared at byte {member.index} but the "
+                    f"compiled bytecode reads it at {actual}. The runtime fills this buffer to "
+                    "its own layout, so the shader would read the wrong bytes and draw nothing, "
+                    "with no error and only on d3d11. Add the members Unity has between them, "
+                    "even ones this shader never reads."
+                )
+
+
 def program_data(dxbc: bytes, gs_input_primitive: int = 0) -> bytes:
     """Unity's 38-byte DX11 header followed by the DXBC container."""
     srv, cbuffer, sampler = declaration_counts(dxbc)
@@ -658,6 +745,9 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
         fragment_source = fragment_source.replace("_MainTex", texture_property)
     vertex_dxbc = compile_hlsl(UNLIT_VERTEX_HLSL, "vs_4_0")
     fragment_dxbc = compile_hlsl(fragment_source, "ps_4_0")
+    # Cheap, and it is the difference between a prop that draws on every
+    # graphics API and one that draws on OpenGL only.
+    assert_cbuffer_layout(vertex_dxbc, (UNITY_PER_DRAW, UNITY_PER_FRAME))
 
     vertex_parameters = ParameterBlob(
         buffers=(UNITY_PER_DRAW, UNITY_PER_FRAME),

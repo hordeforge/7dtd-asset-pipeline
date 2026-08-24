@@ -25,9 +25,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import numpy as np
-from PIL import Image, ImageFilter
-
 from sevendtd_asset_pipeline.colour import (
     check_texture,
     linear_to_srgb,
@@ -35,6 +32,18 @@ from sevendtd_asset_pipeline.colour import (
     srgb_to_linear,
 )
 from sevendtd_asset_pipeline.errors import PipelineError
+
+# numpy and Pillow are optional extras, and the base CI job installs neither.
+# Importing them at module scope made this whole file an ImportError there
+# rather than a skip, which turned a green suite red for a reason that had
+# nothing to do with the change under test.
+try:  # pragma: no cover - exercised by whether the extra is installed
+    import numpy as np
+    from PIL import Image, ImageFilter
+
+    HAVE_IMAGING = True
+except ImportError:  # pragma: no cover
+    HAVE_IMAGING = False
 
 # The material colour from the incident, exactly as an asset builder writes it.
 MATERIAL_COLOUR = (0.46, 0.39, 0.15)
@@ -59,6 +68,7 @@ def _tileable_noise(size: int, seed: int) -> np.ndarray:
     return shaped / peak if peak > 1e-9 else shaped
 
 
+@unittest.skipUnless(HAVE_IMAGING, "the colour lane needs numpy and Pillow")
 class TransferFunctionTests(unittest.TestCase):
     def test_round_trips(self) -> None:
         # Away from the breakpoint the pair is exact to floating point.
@@ -94,6 +104,7 @@ class TransferFunctionTests(unittest.TestCase):
         self.assertEqual(material_colour_to_albedo_bytes(MATERIAL_COLOUR), (117, 99, 38))
 
 
+@unittest.skipUnless(HAVE_IMAGING, "the colour lane needs numpy and Pillow")
 class ColourMatchTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -149,6 +160,7 @@ class ColourMatchTests(unittest.TestCase):
             check_texture(self.root / "absent.png", matches=MATERIAL_COLOUR)
 
 
+@unittest.skipUnless(HAVE_IMAGING, "the colour lane needs numpy and Pillow")
 class TilingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -203,6 +215,7 @@ class TilingTests(unittest.TestCase):
         self.assertTrue(any("tiling not checked" in note for note in report.notes))
 
 
+@unittest.skipUnless(HAVE_IMAGING, "the colour lane needs numpy and Pillow")
 class DeterminismTests(unittest.TestCase):
     def test_same_file_gives_the_same_report_twice(self) -> None:
         with tempfile.TemporaryDirectory() as name:

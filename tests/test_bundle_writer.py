@@ -16,7 +16,7 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from sevendtd_asset_pipeline import bundle_writer
 from sevendtd_asset_pipeline.bundle_writer import (
@@ -518,7 +518,7 @@ class PrefabColliderTests(unittest.TestCase):
     a box is the shape there is a real artifact for.
     """
 
-    AABB = {
+    AABB: ClassVar[dict[str, dict[str, float]]] = {
         "m_Center": {"x": 0.0, "y": 0.25, "z": 0.0},
         "m_Extent": {"x": 0.15, "y": 0.25, "z": 0.1},
     }

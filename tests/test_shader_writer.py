@@ -540,3 +540,49 @@ class RenderStateSentinelTests(unittest.TestCase):
         mask = self._state()["rtBlend0"]["colMask"]
         self.assertEqual(mask["val"], 15.0)
         self.assertEqual(mask["name"], bundle_writer.NO_PROPERTY)
+
+
+class CBufferLayoutGateTests(unittest.TestCase):
+    """The bytecode must read a constant buffer where the runtime fills it.
+
+    Unity fills a constant buffer to **its** layout and the bytecode reads it
+    **by offset**, so the HLSL has to reproduce Unity's member order byte for
+    byte - including members the shader never reads.
+
+    This is the gate for a bug that was invisible on one graphics API and fatal
+    on another: `UnityPerFrame` omitted Unity's four ambient `float4`s, so
+    everything after them packed 64 bytes early and `unity_MatrixVP` compiled to
+    offset 208 while the runtime writes it at 272. The vertex shader read the
+    tail of `unity_MatrixInvV` as its view-projection matrix and put every
+    vertex nowhere. No error anywhere, and only on d3d11 - GLSL binds by name,
+    so the OpenGL Core sub-program from the same writer drew correctly.
+    """
+
+    def _dxbc(self) -> bytes:
+        if not has_capability("vkd3d-compiler"):
+            self.skipTest("vkd3d-compiler that reads HLSL is not installed")
+        return shader_blob.compile_hlsl(shader_blob.UNLIT_VERTEX_HLSL, "vs_4_0")
+
+    def test_the_shipped_shader_reads_every_matrix_where_unity_writes_it(self) -> None:
+        packed = shader_blob.compiled_cbuffer_layout(self._dxbc())
+        self.assertEqual(
+            packed["UnityPerFrame"]["unity_MatrixVP"],
+            272,
+            "Unity writes the view-projection matrix at byte 272 of UnityPerFrame",
+        )
+        self.assertEqual(packed["UnityPerDraw"]["unity_ObjectToWorld"], 0)
+
+    def test_the_gate_accepts_the_shipped_shader(self) -> None:
+        shader_blob.assert_cbuffer_layout(
+            self._dxbc(), (shader_blob.UNITY_PER_DRAW, shader_blob.UNITY_PER_FRAME)
+        )
+
+    def test_a_buffer_whose_members_moved_is_refused(self) -> None:
+        """The bug itself: one member declared somewhere the bytecode does not read."""
+        moved = shader_blob.CBuffer(
+            "UnityPerFrame",
+            368,
+            (shader_blob.CBufferMember("unity_MatrixVP", 208, rows=4, columns=4, is_matrix=True),),
+        )
+        with self.assertRaisesRegex(PipelineError, "unity_MatrixVP is declared at byte 208"):
+            shader_blob.assert_cbuffer_layout(self._dxbc(), (moved,))

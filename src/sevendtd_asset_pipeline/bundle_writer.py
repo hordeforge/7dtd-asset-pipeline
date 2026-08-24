@@ -58,6 +58,7 @@ GAME_OBJECT = 1
 TRANSFORM = 4
 MESH_FILTER = 33
 MESH_RENDERER = 23
+BOX_COLLIDER = 65
 SHADER = 48
 MATERIAL = 21
 
@@ -770,7 +771,10 @@ def mesh(name: str, source: Path) -> BundleObject:
 
 
 def mesh_prefab(
-    name: str, mesh_key: str, material_keys: tuple[str, ...] = ()
+    name: str,
+    mesh_key: str,
+    material_keys: tuple[str, ...] = (),
+    aabb: dict[str, Any] | None = None,
 ) -> list[BundleObject]:
     """A `GameObject` with a `Transform`, `MeshFilter` and `MeshRenderer`.
 
@@ -791,6 +795,22 @@ def mesh_prefab(
     caller is told so by `build.py` rather than being silently handed an
     invisible prefab; a material needs a shader, which is
     `docs/status/improvements.md` 4b.
+
+    With an `aabb`, the prefab also gets a `BoxCollider` covering the mesh. A
+    prefab without one is **walked through**: 7DTD's `ModelEntity` block takes
+    its collision from the model, so a block whose prefab has no collider
+    places, stacks, and stops nothing. Reported from a live client on
+    2026-08-24 and confirmed there. The field layout is a real `BoxCollider`
+    read out of the game's `Entities/trees` bundle, class 65 - including
+    `m_IncludeLayers`/`m_ExcludeLayers` and `m_LayerOverridePriority`, which
+    2022.3 added and an older layout omits.
+
+    A box rather than a `MeshCollider`: the game's own bundles carry `Box`,
+    `Capsule` and `Sphere` colliders and **no** `MeshCollider` at all, so a box
+    is what there is an artifact for. It is also the cheaper collider, and an
+    exact hull for the boxy props this writer makes. A sculpted mesh gets a
+    box that over-covers it, which is a real limitation and belongs in
+    `docs/status/improvements.md` rather than in a silent surprise.
     """
     game_object = f"{name}:go"
     transform = f"{name}:transform"
@@ -803,6 +823,7 @@ def mesh_prefab(
                     {"component": Ref(transform)},
                     {"component": Ref(f"{name}:filter")},
                     {"component": Ref(f"{name}:renderer")},
+                    *([{"component": Ref(f"{name}:collider")}] if aabb else []),
                 ],
                 "m_Layer": 0,
                 "m_Name": name,
@@ -867,6 +888,34 @@ def mesh_prefab(
             },
             key=f"{name}:renderer",
             in_container=False,
+        ),
+        *(
+            [
+                BundleObject(
+                    BOX_COLLIDER,
+                    "",
+                    {
+                        "m_GameObject": Ref(game_object),
+                        "m_Material": NULL_PPTR,
+                        "m_IncludeLayers": {"m_Bits": 0},
+                        "m_ExcludeLayers": {"m_Bits": 0},
+                        "m_LayerOverridePriority": 0,
+                        "m_IsTrigger": False,
+                        "m_ProvidesContacts": False,
+                        "m_Enabled": True,
+                        "m_Size": {
+                            "x": float(aabb["m_Extent"]["x"]) * 2.0,
+                            "y": float(aabb["m_Extent"]["y"]) * 2.0,
+                            "z": float(aabb["m_Extent"]["z"]) * 2.0,
+                        },
+                        "m_Center": dict(aabb["m_Center"]),
+                    },
+                    key=f"{name}:collider",
+                    in_container=False,
+                )
+            ]
+            if aabb
+            else []
         ),
     ]
 
@@ -1413,7 +1462,7 @@ def prefab_objects(mesh_path: Path, texture_stems: set[str]) -> list[BundleObjec
             UNLIT_SHADER_NAME,
             albedo if albedo in texture_stems else None,
         ),
-        *mesh_prefab(stem, mesh_key, (material_key,)),
+        *mesh_prefab(stem, mesh_key, (material_key,), geometry.fields["m_LocalAABB"]),
     ]
 
 

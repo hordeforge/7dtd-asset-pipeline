@@ -235,7 +235,7 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
     for time, grit in zip(times, shock_noise, strict=True):
         positive = math.exp(-time / 0.035)
         negative = 0.55 * math.exp(-(time - 0.05) / 0.065) if time >= 0.05 else 0.0
-        shock.append(math.tanh((positive - negative) * 2.0 + grit * math.exp(-time / 0.11) * 0.5))
+        shock.append((positive - negative) * 0.72 + grit * math.exp(-time / 0.09) * 0.28)
 
     # Pressure wave: an exponential sweep from 70 Hz to 22 Hz over three
     # seconds. Below about 25 Hz it is felt more than heard, which is the point.
@@ -273,23 +273,39 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
     for index in range(offset, len(times)):
         age = (index - offset) / RATE
         reflected[index] = body_band[index - offset] * math.exp(-age / 0.22)
-    return normalize(
-        remove_dc(
-            fade_tail(
-                [
-                    math.tanh(value * 1.35)
-                    for value in mix(
-                        (1.45, shock),
-                        (0.9, sweep),
-                        (0.85, body),
-                        (0.5, reflected),
-                        (0.8, rumble),
-                    )
-                ],
-                1.5,
-            )
-        )
+
+    fracture_band = lowpass(highpass(white, 700.0), 6800.0, passes=2)
+    fracture = [
+        value
+        * min(time / 0.003, 1.0)
+        * math.exp(-time / 0.28)
+        * (0.76 + 0.24 * math.sin(2.0 * math.pi * (37.0 * time + 8.0 * time * time)))
+        for value, time in zip(fracture_band, times, strict=True)
+    ]
+    fracture_returns = [0.0] * len(times)
+    for delay, gain in ((0.16, 0.42), (0.39, 0.24)):
+        delay_samples = int(delay * RATE)
+        for index in range(delay_samples, len(times)):
+            fracture_returns[index] += fracture[index - delay_samples] * gain
+
+    thunder_band = lowpass(highpass(white, 38.0), 460.0, passes=2)
+    thunder = []
+    for value, time in zip(thunder_band, times, strict=True):
+        age = max(time - 0.12, 0.0)
+        shape = 0.0 if time < 0.12 else min(age / 0.08, 1.0) * math.exp(-age / 1.45)
+        thunder.append(value * shape * (0.78 + 0.22 * math.sin(2.0 * math.pi * 2.1 * age)))
+
+    mixed = mix(
+        (0.82, shock),
+        (0.86, sweep),
+        (0.78, body),
+        (0.38, reflected),
+        (0.72, fracture),
+        (0.48, fracture_returns),
+        (0.88, thunder),
+        (0.72, rumble),
     )
+    return normalize(remove_dc(fade_tail(compress(mixed), 1.5)))
 
 
 def nuclear_blast(duration: float, generator: random.Random) -> list[float]:

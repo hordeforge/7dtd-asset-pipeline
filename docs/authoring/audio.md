@@ -282,6 +282,15 @@ dense 45–850 Hz body, one reflected report, soft saturation, and the rolling
 rumble. `nuclear-blast` remains distinct through its broader pressure wall,
 multiple heavy returns, and longer coda.
 
+The later nuclear-blast listening passes exposed a reusable weakness in that
+regular `blast` revision: a large conventional explosion also needs its hit
+balanced against a dense fracture front and rolling low returns. The near
+regular voice now removes its two `tanh` stages, uses clean peak-envelope
+compression, adds a coherent 700–6,800 Hz fracture burst with two reflections,
+and adds a shorter 38–460 Hz thunder bed. These layers are deliberately shorter
+and less massive than `nuclear-blast`; the generic voice must not become a
+nuclear detonation.
+
 If the mod plays the distant clip from code, delay it by `distance / 343`
 seconds. A nuclear blast heard instantly two kilometres away reads as a bug
 even to a player who could not say why.

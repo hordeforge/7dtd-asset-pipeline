@@ -134,11 +134,49 @@ written by `shader_blob.py`.
 
    Note that `passes` is not a clue: it reads 1 headless and 3 with a device
    because an unsupported shader reports the substituted error shader's passes.
-3. Re-check whether the bind-channel block, recorded as the fix for this exact
+3. **The real error is `Incompatible keyword states`, and it comes first.**
+   The one-line `Failed to load GpuProgram` is not the whole message. The
+   editor log carries a second error immediately before it, which the earlier
+   greps had filtered out with the stack traces:
+
+   ```text
+   329: Incompatible keyword states
+   337: Failed to load GpuProgram from binary shader data in 'Shamway/Unlit'.
+   ```
+
+   Four things are eliminated around it, each measured with the control cube
+   reading a healthy `38.8% / 2.4%` in the same frame:
+
+   | Tried | Result |
+   |---|---|
+   | stock GLCore GLSL inside this container | fails identically — the source is not it |
+   | one shared source record, both stages pointing at it (stock's shape, `stageCounts=1`) instead of two identical records | no change |
+   | a `$Globals` parameter blob of individual uniforms instead of the d3d11 cbuffers | no change |
+   | a bundle containing **only** the `Shader` — no material, no prefab | both errors still appear, so the material is not involved |
+   | a non-empty keyword space (`m_KeywordNames=["DIRECTIONAL"]`, one flag) | no change |
+
+   The last one was worth trying because every stock shader carries 25–38
+   keyword names and this writer carries **none**:
+
+   ```text
+   stock Nature/SpeedTree Billboard  keywordNames=26 keywordFlags=26 subshaders=2
+   stock Standard                    keywordNames=37 keywordFlags=37 subshaders=2
+   ours  Shamway/Unlit               keywordNames=0  keywordFlags=0  subshaders=1
+   ```
+
+   A single keyword is evidently not enough, but the gap is real and the error
+   names keyword state, so the next thing to compare is the *whole* keyword
+   plumbing against a stock shader: `m_KeywordFlags` values, the per-sub-program
+   `m_KeywordIndices`, and the keyword count carried inside the code record
+   itself (stock's GLCore record declares `1 × "DIRECTIONAL"`, this writer's
+   declares zero). Those three have to agree with each other, and only one of
+   them has been touched.
+
+4. Re-check whether the bind-channel block, recorded as the fix for this exact
    `Failed to load GpuProgram` message, ever helped. It was validated against a
    headless `isSupported`, which cannot fail, so its evidence is as weak as the
    claim it supported.
-4. Only then the d3d11 path, which needs a Windows or Proton-hosted editor to
+5. Only then the d3d11 path, which needs a Windows or Proton-hosted editor to
    measure offline at all — or the live client, which is now a slow loop rather
    than the only one.
 

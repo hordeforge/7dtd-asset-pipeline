@@ -20,6 +20,7 @@ or an operational failure and its recovery
 
 ## Conventions
 
+- Start from [TEMPLATE.md](TEMPLATE.md).
 - Files are numbered `NNNN-<short-title>.md`; take the next free number.
 - The title is phrased as the **choice made**, not as the question:
   "Synthesize bundles without an editor", not "How do we build without

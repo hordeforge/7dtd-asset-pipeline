@@ -57,9 +57,10 @@ Every behaviour change updates the documentation in the same commit that makes
 it — in **whichever** repository the change lands, this one or a sibling. A new
 command goes in this file's command table and in the page that owns its
 subject; a new operation goes in `operations.OPERATIONS`; a new doc page goes
-in `docs.TOPICS`; a new host script goes in `scripts.SCRIPTS`; a new engine
-fact goes in [docs/research/research-provenance.md](docs/research/research-provenance.md) with
-the tool that produced it. An undocumented capability is one the next session
+in `docs.TOPICS` and in its directory's `README.md`; a new host script goes in
+`scripts.SCRIPTS`; a new engine fact goes in
+[docs/research/research-provenance.md](docs/research/research-provenance.md)
+with the tool that produced it. An undocumented capability is one the next session
 will rebuild from scratch, and an undocumented gate is one it will delete.
 
 - `scripts/bootstrap` — uv sync from the committed lockfile, with extras
@@ -112,8 +113,15 @@ no Unity, and no game install.
   belongs here; anything mod-specific belongs in the mod. See
   [docs/mod-repo-layout.md](docs/mod-repo-layout.md).
 - Adding a generator means adding it to `generators.GENERATORS`; adding a doc
-  page means adding it to `docs.TOPICS`. The tests fail when either drifts, and
-  both are published in `shamway schema`.
+  page means adding it to `docs.TOPICS` and to the `README.md` index of the
+  directory it lands in. The tests fail when any of those drifts, and the
+  first two are published in `shamway schema`.
+- `docs/` is categorized: every subdirectory is a genre with its own
+  `README.md`, and every genre that takes new pages carries a `TEMPLATE.md`
+  to start from — an ADR for a decision made, an RFC for one still open, a
+  PRD for behaviour not built yet, a runbook for a recurring procedure, a
+  research page for an engine fact, a report for an investigation.
+  [docs/README.md](docs/README.md) is the index, served as `shamway docs index`.
 
 ## Gates you must not weaken
 

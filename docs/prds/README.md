@@ -8,6 +8,7 @@ work around.
 
 ## Conventions
 
+- Start from [TEMPLATE.md](TEMPLATE.md).
 - Files are numbered `NNNN-<short-title>.md`; take the next free number.
 - State the consuming surface (`shamway <command>`, an operation name, or a
   gate) and which gates the change must not weaken — see AGENTS.md's gate

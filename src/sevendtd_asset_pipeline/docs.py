@@ -27,6 +27,7 @@ from .errors import PipelineError
 # docs root and carry their subdirectory; the categories themselves are
 # described in docs/README.md.
 TOPICS: dict[str, tuple[str, str]] = {
+    "index": ("README.md", "what each documentation category holds, and where to start"),
     "mod-repo-layout": ("mod-repo-layout.md", "what lives in the mod repo and what lives here"),
     "sibling-repos": (
         "sibling-repos.md",

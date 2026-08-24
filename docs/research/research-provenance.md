@@ -555,6 +555,24 @@ CI gates both states: `.github/workflows/ci.yml` installs the packaged 1.2,
 asserts the degradation, then builds vkd3d 1.19 from source and asserts the
 whole prefab chain.
 
+**The source build takes the release tarball, not a git clone**, and that is a
+measurement too. A clone fails on this host and on a runner alike:
+
+```text
+widl is required to generate include/vkd3d_dxgibase.h
+libs/vkd3d-shader/hlsl.h:25:10: fatal error: vkd3d_d3dx9shader.h: No such file or directory
+```
+
+`widl` is Wine's IDL compiler, so a clone build drags in Wine to generate
+headers. `dl.winehq.org/vkd3d/source/vkd3d-1.19.tar.xz` ships those headers and
+a pre-generated `configure`; built on 2026-08-24 against Khronos SPIRV-Headers
+and Vulkan-Headers with nothing else, it produced
+`vkd3d shader compiler version 1.19` listing `hlsl` among its source types.
+WineHQ publishes a GPG `.sign` beside each tarball but no checksum file, so
+`install-tools.sh` pins the SHA-256 it verifies
+(`034613605baab8ba84674f8d272cf22b5e86bc6bc03fc5728ef9bce07308baa6`) and
+refuses a version override that arrives without one.
+
 ## Class-table prefix window, measured for the offline reader
 
 Measured 2026-08-24 against the installed game's own bundles (V3.1.0 b14) with

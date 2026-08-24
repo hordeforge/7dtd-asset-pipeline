@@ -325,12 +325,21 @@ distribution:
 shamway script install-tools --with-vkd3d-source
 ```
 
-It fetches the pinned vkd3d tag, builds `vkd3d-compiler`, installs it under
+It downloads WineHQ's release tarball, verifies its SHA-256 against a digest
+recorded in the script, builds `vkd3d-compiler`, installs it under
 `/opt/vkd3d`, and prints the line to add to `PATH`. On a host that already has
-a usable compiler it does nothing and says so, so it is safe to pass anywhere —
-`VKD3D_SOURCE_VERSION` and `VKD3D_SOURCE_PREFIX` override the pin and the
-location. CI runs this exact command, so the recipe is gated rather than
-merely written down.
+a usable compiler it does nothing and says so, so it is safe to pass anywhere.
+
+Two details worth knowing. It uses the **release tarball, not a git clone**:
+a clone needs Wine's `widl` to generate `vkd3d_d3dx9shader.h` and fails without
+it, while the tarball ships the generated headers and `configure`, so the build
+needs only a C toolchain, flex, bison, and the Vulkan and SPIRV headers — no
+Wine anywhere. And overriding `VKD3D_SOURCE_VERSION` also needs
+`VKD3D_SOURCE_SHA256`, because the script will not install a download it cannot
+verify; `VKD3D_SOURCE_PREFIX` moves the install location.
+
+CI runs this exact command, so the recipe is gated rather than merely written
+down.
 
 Ask the registry which state this host is in — it probes the binary's own
 `--print-source-types` rather than comparing versions, and reports a

@@ -109,8 +109,8 @@ def extra_install(extra: str) -> str:
 # beats comparing a version string: it is the same question the writer asks.
 VKD3D_HLSL_HINT = (
     "it is older than vkd3d 1.3 and cannot read HLSL source, which is what this "
-    "writer compiles (Debian and Ubuntu package 1.2). Install a newer vkd3d, or "
-    "build vkd3d-shader from https://gitlab.winehq.org/wine/vkd3d"
+    "writer compiles (Debian and Ubuntu package 1.2). Build a usable one with: "
+    "shamway script install-tools --with-vkd3d-source"
 )
 
 

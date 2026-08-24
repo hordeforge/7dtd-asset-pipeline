@@ -21,6 +21,13 @@ CHECK_ONLY=0
 # against, and a compiler that changes under a build changes the bytes it emits.
 VKD3D_SOURCE_VERSION="${VKD3D_SOURCE_VERSION:-1.19}"
 VKD3D_SOURCE_PREFIX="${VKD3D_SOURCE_PREFIX:-/opt/vkd3d}"
+# The release tarball, not a git clone: a clone needs Wine's `widl` to generate
+# vkd3d_d3dx9shader.h and friends, while the tarball ships them pre-generated
+# along with `configure`. Measured - a clone build fails at
+# `libs/vkd3d-shader/hlsl.h:25: vkd3d_d3dx9shader.h: No such file or directory`,
+# and the tarball builds with a C toolchain and Khronos headers alone.
+VKD3D_PINNED_VERSION="1.19"
+VKD3D_PINNED_SHA256="034613605baab8ba84674f8d272cf22b5e86bc6bc03fc5728ef9bce07308baa6"
 
 usage() {
 	cat <<'HELP'
@@ -108,11 +115,15 @@ NOTES
 
       scripts/install-tools.sh --with-vkd3d-source
 
-    That fetches the pinned vkd3d tag, builds vkd3d-compiler, installs it under
-    /opt/vkd3d, and tells you the one line to add to PATH. Override the pin with
-    VKD3D_SOURCE_VERSION and the location with VKD3D_SOURCE_PREFIX. It is a
-    no-op on a host that already has a usable compiler, so it is safe to pass on
-    any distribution.
+    That downloads WineHQ's release tarball for the pinned version, verifies its
+    SHA-256 against a digest recorded in this script, builds vkd3d-compiler,
+    installs it under /opt/vkd3d, and tells you the one line to add to PATH.
+    The tarball rather than a git clone on purpose: a clone needs Wine's widl to
+    generate headers, and the tarball ships them. Override the location with
+    VKD3D_SOURCE_PREFIX; overriding VKD3D_SOURCE_VERSION also needs
+    VKD3D_SOURCE_SHA256, because this script does not install a download it
+    cannot verify. It is a no-op on a host that already has a usable compiler,
+    so it is safe to pass on any distribution.
 
     Without a usable compiler nothing breaks: a mesh is packed as a bare Mesh
     and 'shamway build' prints a note saying which it wrote.
@@ -297,7 +308,8 @@ collect_apt() {
 	# predates the HLSL support this writer needs, so `apt install
 	# vkd3d-compiler` puts a binary on PATH that cannot do the job. `--check`
 	# reports it as MISS with the reason, and the shader lane degrades with a
-	# printed note rather than failing. See VKD3D_SOURCE_NOTE below.
+	# printed note rather than failing. --with-vkd3d-source builds a usable
+	# one; see the NOTES section of --help.
 	:
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
@@ -458,43 +470,74 @@ install_uv() {
 # package where that is >= 1.3, and this build where it is not. Kept in the same
 # script so "how do I get the shader lane" has one answer everywhere.
 build_vkd3d_from_source() {
-	local version="$VKD3D_SOURCE_VERSION" prefix="$VKD3D_SOURCE_PREFIX" workspace
+	local version="$VKD3D_SOURCE_VERSION" prefix="$VKD3D_SOURCE_PREFIX"
+	local workspace url archive expected actual
 	if has_vkd3d_hlsl; then
 		echo "OK: vkd3d-compiler already reads HLSL ($(command -v vkd3d-compiler)); nothing to build"
 		return
 	fi
+	# WineHQ publishes a GPG .sign beside each tarball but no checksum file, so
+	# the digest is pinned here. An overridden version has no pin, and this
+	# script does not install unverified downloads - the same rule
+	# install-unity-editor.sh follows.
+	expected="${VKD3D_SOURCE_SHA256:-}"
+	if [[ -z "$expected" ]]; then
+		if [[ "$version" != "$VKD3D_PINNED_VERSION" ]]; then
+			echo "ERROR: no checksum known for vkd3d $version." >&2
+			echo "       Pass VKD3D_SOURCE_SHA256=<sha256 of vkd3d-$version.tar.xz>," >&2
+			echo "       or leave VKD3D_SOURCE_VERSION at $VKD3D_PINNED_VERSION." >&2
+			return 1
+		fi
+		expected="$VKD3D_PINNED_SHA256"
+	fi
+	case "$(uname -s)" in
+		Linux) ;;
+		*)
+			echo "ERROR: this source build is scripted for Linux only." >&2
+			echo "       Build vkd3d $version from https://gitlab.winehq.org/wine/vkd3d" >&2
+			return 1
+			;;
+	esac
 	local build_deps=()
 	if command -v pacman >/dev/null 2>&1; then
-		build_deps=(base-devel git flex bison vulkan-headers spirv-headers)
+		build_deps=(base-devel flex bison vulkan-headers spirv-headers)
 		$SUDO pacman -S --needed --noconfirm "${build_deps[@]}"
 	elif command -v apt-get >/dev/null 2>&1; then
-		build_deps=(build-essential git autoconf automake libtool pkg-config flex bison
-			libvulkan-dev spirv-headers)
+		build_deps=(build-essential pkg-config flex bison libvulkan-dev spirv-headers xz-utils curl)
 		$SUDO apt-get update
 		$SUDO apt-get install -y "${build_deps[@]}"
 	elif command -v dnf >/dev/null 2>&1; then
-		build_deps=(gcc make git autoconf automake libtool pkgconf flex bison
-			vulkan-headers spirv-headers)
+		build_deps=(gcc make pkgconf flex bison vulkan-headers spirv-headers xz curl)
 		$SUDO dnf install -y "${build_deps[@]}"
 	elif command -v zypper >/dev/null 2>&1; then
-		build_deps=(gcc make git autoconf automake libtool pkg-config flex bison
-			vulkan-headers spirv-headers)
+		build_deps=(gcc make pkg-config flex bison vulkan-headers spirv-headers xz curl)
 		$SUDO zypper --non-interactive install "${build_deps[@]}"
 	else
 		echo "ERROR: cannot install build dependencies on this package manager." >&2
-		echo "       Install a C toolchain, git, flex, bison, Vulkan and SPIRV headers," >&2
-		echo "       then build vkd3d $version from https://gitlab.winehq.org/wine/vkd3d" >&2
+		echo "       Install a C toolchain, flex, bison, and the Vulkan and SPIRV" >&2
+		echo "       headers, then build vkd3d $version from" >&2
+		echo "       https://gitlab.winehq.org/wine/vkd3d" >&2
 		return 1
 	fi
 	workspace="$(mktemp -d)"
-	# Cleaned up on every exit, including a failed configure: a half-built tree
+	# Removed on every exit, including a failed configure: a half-built tree
 	# under /tmp is the kind of thing a later run silently reuses.
 	trap 'rm -rf "$workspace"' RETURN
-	git clone --depth 1 --branch "vkd3d-$version" \
-		https://gitlab.winehq.org/wine/vkd3d.git "$workspace/vkd3d"
+	url="https://dl.winehq.org/vkd3d/source/vkd3d-$version.tar.xz"
+	archive="$workspace/vkd3d-$version.tar.xz"
+	echo "Downloading $url"
+	curl -fsSL --retry 3 -o "$archive" "$url"
+	actual="$(sha256sum "$archive" | cut -d' ' -f1)"
+	if [[ "$actual" != "$expected" ]]; then
+		echo "ERROR: checksum mismatch for vkd3d-$version.tar.xz" >&2
+		echo "       expected $expected" >&2
+		echo "       actual   $actual" >&2
+		return 1
+	fi
+	echo "OK: checksum verified"
+	tar xJf "$archive" -C "$workspace"
 	(
-		cd "$workspace/vkd3d"
-		./autogen.sh
+		cd "$workspace/vkd3d-$version"
 		./configure --prefix="$prefix" --disable-tests --disable-demos
 		make -j"$(nproc 2>/dev/null || echo 2)"
 		$SUDO make install

@@ -8,8 +8,9 @@ optional video-review provider capability in `capabilities.REGISTRY`, and a
 motion-kind field on the `acceptance-provider` manifest (`acceptance.py`). No
 current command sends a clip or a frame sequence to a model, and no
 `acceptance-provider`-generated case does anything but load an asset once.
-Companion to `0001-contextual-model-audio-review.md`, mirroring its shape for
-sight instead of hearing, and to
+Companion to
+[0001-contextual-model-audio-review.md](0001-contextual-model-audio-review.md),
+mirroring its shape for sight instead of hearing, and to
 [`7dtd-playtest`'s video-capture and video-review
 plans](https://github.com/hordeforge/7dtd-playtest/blob/main/docs/ASSET_VIDEO_FEEDBACK_LOOP.md),
 which this PRD is the asset-pipeline half of.
@@ -27,9 +28,11 @@ that pops at an angle the render never sampled.
 
 `7dtd-playtest` (a sibling repository this project already generates
 acceptance scenarios for, via `shamway acceptance-provider`) is adding an
-in-engine, multi-frame staged clip capability
-(`CaseDef.StagedClip`, see its `docs/INGAME_VIDEO_CAPTURE.md`) and a vision-
-model review of the result (`docs/VIDEO_MODEL_FEEDBACK.md`). That capability
+in-engine, multi-frame staged clip capability (`CaseDef.StagedClip`, see its
+[docs/INGAME_VIDEO_CAPTURE.md](https://github.com/hordeforge/7dtd-playtest/blob/main/docs/INGAME_VIDEO_CAPTURE.md))
+and a vision-model review of the result
+([docs/VIDEO_MODEL_FEEDBACK.md](https://github.com/hordeforge/7dtd-playtest/blob/main/docs/VIDEO_MODEL_FEEDBACK.md)).
+That capability
 answers "does this motion look right" for a playtest suite generally. This
 PRD is about the one thing only this project can add: connecting a reviewed
 clip back to the exact generation parameters that produced the candidate, so

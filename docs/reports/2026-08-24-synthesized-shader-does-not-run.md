@@ -88,11 +88,15 @@ Linux editor creates. The game runs **d3d11** through Proton, so the two are
 different code paths and a fix for one is not evidence for the other. Both are
 written by `shader_blob.py`.
 
-1. Compare a **stock** GLCore sub-program record against the one
-   `source_blob()` writes, the way the d3d11 container was originally decoded.
-   The format is documented upstream in `hordeforge/7dtd-engine-research`,
-   `docs/shader-subprogram-blob.md`; the index layout is not the naive
-   `(index, offset, length)` triple assumed on the first attempt.
+1. **Done, and it found something.** The GLCore record layout is decoded in
+   [research-provenance.md](../research/research-provenance.md), "The GLCore
+   sub-program record". `source_blob()` and `UNLIT_GLSL` both match stock in
+   shape. What does not match is the **program type on the parameter records**:
+   every parameter record in a stock GLCore blob is type `2`, and this writer
+   emits types `3` and `1`, plus the same GLSL twice as two type-6 records.
+   Decide that by decoding a stock type-2 record and comparing it against
+   `ParameterBlob.to_bytes()` — it is either per-stage and legal, or it is the
+   answer.
 2. Re-check whether the bind-channel block, recorded as the fix for this exact
    `Failed to load GpuProgram` message, ever helped. It was validated against a
    headless `isSupported`, which cannot fail, so its evidence is as weak as the

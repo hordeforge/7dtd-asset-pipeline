@@ -639,6 +639,62 @@ case above passes on a prop that draws mirrored, face-down, or in the wrong
 place entirely. [status/blockers.md](../status/blockers.md) entry 6 holds that,
 and it is the only thing left on this lane.
 
+### The GLCore sub-program record, read out of the game's own bundles
+
+**Measured 2026-08-24** with UnityPy and `lz4.block` against the shipped
+`Nature/SpeedTree Billboard`, whose blob carries a `ShaderCompilerPlatform`
+15 (`GLCore`) entry. The blob's record table is
+`u32 count` then `count × (u32 offset, u32 length, u32 segment)`, which is what
+`assemble_blob()` writes — an earlier reading of it as
+`(index, offset, length)` was simply wrong and produced a zero-length record.
+
+A GLCore **code** record is:
+
+```text
+u32  BLOB_VERSION (202012090)
+u32  program type (6 = GL_CORE_32)
+u32  ×4 zero
+u32  keyword count
+     per keyword: u32 length, bytes, pad to 4      e.g. 1 × "DIRECTIONAL"
+u32  source length
+     GLSL source, pad to 4
+```
+
+The source carries **both stages in one record**, which is why `stageCounts`
+for GLCore is 1 where d3d11 is 2:
+
+```glsl
+#ifdef VERTEX
+#version 150
+#extension GL_ARB_explicit_attrib_location : require
+...
+#endif
+#ifdef FRAGMENT
+...
+```
+
+`source_blob()` writes that layout with a keyword count of zero, and
+`UNLIT_GLSL` has the same `#ifdef` shape, so neither is obviously wrong.
+
+**One discrepancy is measured and not yet explained.** Every parameter record
+in the stock GLCore blob is program type **2** — the histogram across the whole
+blob is `{2: 236, 6: 334}`, nothing else. This writer emits its two parameter
+records as types **3** and **1**, and emits the same GLSL source twice as two
+type-6 records:
+
+```text
+stock GLCore : types {2 × 236, 6 × 334}
+this writer  : types [3, 1, 6, 6]
+```
+
+That is a fact about the bytes, not yet a diagnosis: the parameter types may be
+per-stage and legal, or they may be why the runtime answers `Failed to load
+GpuProgram from binary shader data`. Deciding it needs the stock type-2 record
+decoded and compared against `ParameterBlob.to_bytes()`, which is the next
+measurement rather than a change to make now.
+[reports/2026-08-24-synthesized-shader-does-not-run.md](../reports/2026-08-24-synthesized-shader-does-not-run.md)
+holds the failure this belongs to.
+
 ## Class-table prefix window, measured for the offline reader
 
 Measured 2026-08-24 against the installed game's own bundles (V3.1.0 b14) with

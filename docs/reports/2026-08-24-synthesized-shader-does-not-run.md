@@ -109,6 +109,88 @@ direction.
 `m_KeywordIndices` names the subset it is compiled for, with `[]` being the
 base variant.
 
+## Confirmed: the fault is the Shader object this writer serializes
+
+This supersedes the sections below it. They are kept because their eliminations
+still hold, but the target has moved off the shader *source* entirely.
+
+Four measurements, each with its own control in the same frame:
+
+```text
+VERIFY-DRAWN-BUILTIN-MAT: built-in cube wearing a fresh Unlit/Texture material covered=38.8%
+VERIFY-DRAWN-SWAPPED:     the bundle's material wearing Unlit/Color covered=38.8%
+VERIFY-DRAWN-MATERIAL:    built-in cube wearing 'shamwaySelfTestProp_mat' covered=0.0%
+VERIFY-DRAWN-CONTROL:     built-in cube covered=38.8% zoomed-out=2.4%
+```
+
+- `BUILTIN-MAT` **validates the probe**: a material Unity built itself, on the
+  same cube, through the same path, reads 38.8%. So a zero from this path is a
+  real zero. It was added *before* any conclusion was drawn from one.
+- `SWAPPED` **clears the `Material`**: the bundle's own material, with
+  `Unlit/Color` assigned onto it, draws. Its properties, its texture binding and
+  its render queue are all fine.
+
+Then the two that settle it.
+
+**A stock shader, serialized by this writer, does not draw.** `Legacy
+Shaders/Transparent/Cutout/VertexLit` was taken whole out of the installed game
+and written into this writer's bundle in place of ours:
+
+```text
+VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=3 renderQueue=2450 properties=6 device=OpenGLCore
+VERIFY-DRAWN-MATERIAL: built-in cube wearing 'shamwaySelfTestProp_mat' covered=0.0%
+```
+
+Three passes, render queue 2450, six properties - unmistakably the stock
+shader, loading correctly, drawing nothing.
+
+**A shader loaded from the game's own bundle does draw.** The control that
+proves the harness is not the problem. `Data/Bundles/Standalone` is a
+*directory*, which is why an earlier attempt was refused by
+`bundle.is_file()`; the bundle is the 650 MB file
+`Standalone/Entities/trees`, read straight out of the install:
+
+```text
+VERIFY-DRAWN-MATERIAL: built-in cube wearing 'Azalea_TintSSS' covered=43.2%
+VERIFY-DRAWNOW:        direct SetPass+DrawMeshNow covered=14.0%
+VERIFY-DRAWN:          azalea.spm covered=14.7% zoomed-out=0.3%
+VERIFY-DRAWN-CONTROL:  built-in cube covered=57.1% zoomed-out=3.6%
+```
+
+A bundle-loaded shader renders - on the cube, through the renderer, and through
+a hand-issued `SetPass` + `DrawMeshNow` - and that bundle's prefab draws its own
+geometry, with coverage falling as the camera pulls back the way a real object's
+does.
+
+Putting the two together:
+
+> Bundle-loaded shaders render. This writer's `Shader` object does not, and
+> neither does a **stock** shader's content once this writer has serialized it.
+> The fault is in the serialization of the `Shader` object - not in the GLSL,
+> not in the `Material`, not in the mesh, and not in the harness.
+
+The two bugs fixed earlier today were real, and are what made the shader
+**load**. They were never going to make it **draw**: the same failure survives
+content this writer did not author.
+
+### Caveats, stated rather than omitted
+
+- Not every material in the game bundle draws: the first sampled, `Billboard`,
+  read `0.0%`. Billboard shaders need per-instance setup a bare cube does not
+  give them, so that zero is expected and is evidence of nothing.
+- Still OpenGLCore only. **d3d11 remains unmeasured**, and it is what the game
+  actually runs.
+- The `Shader` object's *parsed form* matches stock field for field (see below),
+  so whatever is wrong is not a field this report has compared.
+
+### A probe rule this cost
+
+`verify-bundle` writes its log to a fixed path, so a **failed run leaves the
+previous run's log in place** and every grep against it still succeeds. Numbers
+were read off exactly such a stale log once during this work and had to be
+discarded. Check the log's timestamp or the command's exit status before reading
+it, and prefer a control in the *same* frame over a comparison across runs.
+
 ### Still untested
 
 - the GLSL **preamble**: stock carries `HLSLCC_ENABLE_UNIFORM_BUFFERS`,

@@ -174,8 +174,24 @@ one that made it invisible — every field of the pass's render state carried
 wrote no colour channels. `verify-bundle --draw` now reports
 `covered=38.8% zoomed-out=2.4%` for that prop **on OpenGLCore, in an editor**.
 
-**Live client, 2026-08-24: the d3d11 sub-program is the open blocker, and
-nothing else is.** A human placed the block in a running client: invisible
+**Signed off on OpenGL Core, 2026-08-24.** A human placed a synthesized prop in
+a live client on a fresh save and confirmed all four marks of the orientation
+card: the arrow points **up**, the orange bar runs along the **bottom**, the
+blue stripes are on the **left and right** edges, and the **R is readable**. No
+rotation, no mirroring, no stretch, and the block stops the player.
+
+That is the first synthesized bundle - written with no Unity editor - to be
+*looked at* and found correct in the game. Every gate in this repository can be
+passed by a texture that loads upside down; this one was checked by eye against
+a card built to expose exactly that, and it passed. The frame is filed under
+`.local/acceptance/` with its observable.
+
+Two real bugs were found by that look and by nothing else: the prefab had no
+collider, so blocks could be walked through; and the mesh carried Blender's
+cube-cross atlas UVs, so a single albedo arrived as six fragments and then, once
+that was fixed, a quarter turn out of true.
+
+**Still the open blocker: the d3d11 sub-program, and nothing else.** A human placed the block in a running client: invisible
 under the default d3d11-through-DXVK, and **visible, textured and solid** when
 the same client is relaunched with `-force-glcore`. One variable between the
 two runs.

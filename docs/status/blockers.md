@@ -160,16 +160,26 @@ texture, and the prefab resolving both (see the verified entry below).
 `shamway check-icons` accepts what `shamway generate mesh-icon` writes —
 measured at `160x160 rgba 53% opaque` on a generated crate.
 
+**The mechanical half is closed, 2026-08-24** — see the verified entry below.
+7 Days to Die resolves the synthesized prefab, its mesh, its material and its
+texture through the game's own `DataLoader`, on a freshly generated world.
+
 **Blocks:** the claim that any of it is *right*. **Nothing synthesized past a
-texture and a clip has been in front of a person, and no synthesized prefab
-has been drawn at all** — `isSupported` is the runtime saying it could compile
-the sub-program, not that a single pixel was rasterized. Three failures are
-live and none is visible offline: a mesh whose winding or up-axis is wrong
-loads perfectly and looks mirrored or face-down, which is exactly what the
-writer's conversions exist to prevent; an unlit pass whose constant-buffer
-offsets are wrong draws the geometry in the wrong place rather than failing;
-and a clay-rendered icon either reads as an item at 160 px beside vanilla art
-or reads as a grey blob.
+texture and a clip has been in front of a person, and no synthesized prefab has
+been drawn at all.** A live `LoadAsset<GameObject>` returning a prefab with
+`renderers=1` says the engine built the object graph; it does not say one pixel
+was rasterized, and the case would pass identically on a prop that draws
+nowhere. Three failures are live and none is visible offline or in the suite: a
+mesh whose winding or up-axis is wrong loads perfectly and looks mirrored or
+face-down, which is exactly what the writer's conversions exist to prevent; an
+unlit pass whose constant-buffer offsets are wrong draws the geometry in the
+wrong place rather than failing; and a clay-rendered icon either reads as an
+item at 160 px beside vanilla art or reads as a grey blob.
+
+A deployable mod for exactly this look is at hand: `ShamwayPropProof` places
+`shamwayPropProofBlock`, whose model is the synthesized prefab — asymmetric at
+0.30 x 0.20 x 0.50 m, textured with a large **R** and an up-arrow, so mirrored
+and upside-down are both unmistakable.
 
 **You run,** in a mod whose `assets-src/bundle/` holds a mesh, with XML that
 loads it:
@@ -242,6 +252,32 @@ These were open and are now closed, so the list above stays meaningful:
   and the index buffer all decoded as intended. That is the engine's loader,
   not this repository's parser — and it is still not 7DTD and still not a
   look.
+
+- **7 Days to Die loads a synthesized prefab, material, mesh and texture.** On
+  2026-08-24, on a **freshly generated world** (`fresh-save removed
+  .../Saves/Navezgane/PlaytestNav`), V.3.10.14 resolved every member of a
+  bundle this repository serialized with no editor anywhere in its path,
+  through the game's own `DataLoader.LoadAsset<T>`:
+
+  ```text
+  shamwayPropProof: shamwayPropProof children=0 renderers=1
+  shamwayPropProof_mesh: shamwayPropProof_mesh vertices=24 submeshes=1 bounds=(0.30, 0.50, 0.20)
+  shamwayPropProof_mat: shamwayPropProof_mat shader=Shamway/Unlit
+  shamwayPropProof_albedo: shamwayPropProof_albedo 256x256 RGBA32
+  SUMMARY pass=5 fail=0 skip=0 total=5
+  ```
+
+  Four things that could each have been wrong and were not: the prefab answers
+  to the source file's **stem**, which is the name `Meshfile` and block `Model`
+  resolve; it carries its renderer (`renderers=1`, not an empty `GameObject`);
+  the mesh's bounds are what was authored, so the vertex stream and index
+  buffer survived; and the material names `Shamway/Unlit`, the shader this
+  writer compiled with `vkd3d-compiler` — so the engine followed a
+  cross-object `PPtr` chain the writer resolved by name. A fifth case asked for
+  a stem the bundle does not contain and got null, so those passes are not a
+  loader answering everything.
+
+  **This is a load, not a look**, and entry 6 above stays open for that reason.
 
 - **A shader, a material and a whole prefab reach a bundle with no editor.**
   Also on 2026-08-24. The chain a `Meshfile` or a block `Model` actually

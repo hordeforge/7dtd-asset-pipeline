@@ -458,6 +458,20 @@ together: generate, build, deploy, hand off to the harness.
 shamway script playtest-acceptance
 ```
 
+It regenerates the save every run — a reused world is state from the last one,
+and this run is meant to prove what *this* build does. `--reuse-save` opts out
+for a quick loop, and a report that used it has to say so.
+
+To prove the **writer** rather than a particular mod, there is a self test that
+brings its own modlet — generated in a temporary directory, built with no
+editor, run through a live client, and asserted by value:
+
+```bash
+shamway script playtest-synthesized
+```
+
+[validation.md](../validation.md) lists what each of its assertions catches.
+
 ```bash
 shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
 ```

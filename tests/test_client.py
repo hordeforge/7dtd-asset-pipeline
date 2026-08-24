@@ -439,6 +439,47 @@ class LockTests(unittest.TestCase):
                 client.refuse_while_held("deploy into the shared Mods folder", env=env)
             self.assertIn("other-20260823-120000-abc", str(raised.exception))
 
+    def test_hold_refuses_a_foreign_command_and_never_runs_it(self) -> None:
+        """`client hold` is the guard for writers this package does not own.
+
+        A shell script copying the harness mods in, or a person's one-off `cp`,
+        bypasses `deploy`'s lock entirely and lands in whatever run holds the
+        client. That happened: a session cleared 7dtd-playtest and
+        7dtd-fastconnect out of the shared Mods folder while another session's
+        client was live. The command must not run at all when the lock is held
+        by someone else — refusing after the write would be no guard.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp),
+                running="yes",
+                session="other-20260823-120000-abc",
+                heartbeat=self._stamp(5),
+            )
+            witness = Path(tmp) / "the-command-ran"
+            env = {client.LOCK_ENV: str(path)}
+            stderr = io.StringIO()
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = client.main(["hold", "--", "touch", str(witness)])
+            self.assertNotEqual(0, code, "a refused hold must exit non-zero")
+            self.assertIn("other-20260823-120000-abc", stderr.getvalue())
+            self.assertFalse(witness.exists(), "the guarded command ran despite the refusal")
+
+    def test_hold_runs_the_command_when_the_lock_is_free(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "playtest_running"
+            witness = Path(tmp) / "the-command-ran"
+            with mock.patch.dict(os.environ, {client.LOCK_ENV: str(path)}, clear=False):
+                code = client.main(["hold", "--", "touch", str(witness)])
+            self.assertEqual(0, code)
+            self.assertTrue(witness.exists())
+            # And the lock it took for the write is given back, or the next
+            # session waits on a holder that already finished.
+            self.assertNotEqual("yes", client.read_lock(path).get("running"))
+
     def test_the_holding_session_is_not_refused_against_itself(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._lock(Path(tmp), running="yes", session="mine-1", heartbeat=self._stamp(5))

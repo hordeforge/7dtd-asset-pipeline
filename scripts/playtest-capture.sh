@@ -37,13 +37,20 @@ while (($#)); do
     esac
 done
 
-logs="$(shamway client where --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["logs"])')"
+logs="$(shamway client where --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["log_dir"])')"
 started="$(date +%s)"
 seen=""
 
-# The newest log is the run's, but only once the run has started writing it.
+# The newest log, but only if this run wrote it. A client log lives at a fixed
+# path and a finished run leaves its own behind, so without this the first poll
+# photographs whatever the *previous* run staged - a mistake this project has
+# already made once, reading numbers off a stale log and believing them.
 newest_log() {
-    ls -t "$logs"/output_log_client_*.txt 2>/dev/null | head -1
+    local candidate
+    candidate="$(ls -t "$logs"/output_log_client_*.txt 2>/dev/null | head -1)" || return 1
+    [[ -n "$candidate" ]] || return 1
+    [[ "$(stat -c %Y "$candidate")" -ge "$started" ]] || return 1
+    printf '%s\n' "$candidate"
 }
 
 while true; do

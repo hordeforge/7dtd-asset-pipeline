@@ -23,6 +23,7 @@ from sevendtd_asset_pipeline.bundle_writer import (
     build_bundle,
     collect_sources,
     mesh,
+    mesh_prefab,
     pack_directory,
     render_manifest,
     text_asset,
@@ -360,6 +361,74 @@ class MeshTests(unittest.TestCase):
         written.write_bytes(bundle)
         self.assertIn(43, inspect_bundle(written).class_ids)
         self.assertIn("bundle/myModThing.obj", manifest_text)
+
+
+@needs_unitypy
+@needs_trimesh
+class PrefabTests(unittest.TestCase):
+    """Cross-object references, and the prefab they exist for.
+
+    A real 2022.3.62f2 runtime loaded this graph and resolved it
+    (`components=3 mesh=... materials=0`); these hold the wiring offline.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def build(self) -> dict[int, list[dict[str, Any]]]:
+        import UnityPy
+
+        source = write_obj(self.root / "myModThing.obj")
+        objects = [
+            mesh("myModThing", source),
+            *mesh_prefab("myModProp", "myModThing"),
+        ]
+        bundle = self.root / "prefab.unity3d"
+        bundle.write_bytes(build_bundle(objects, REVISION, "prefab.unity3d"))
+        found: dict[int, list[dict[str, Any]]] = {}
+        self.ids: dict[int, int] = {}
+        for obj in UnityPy.load(str(bundle)).objects:
+            found.setdefault(int(obj.type.value), []).append(obj.read_typetree())
+            self.ids.setdefault(int(obj.type.value), obj.path_id)
+        return found
+
+    def test_every_component_points_back_at_its_game_object(self) -> None:
+        objects = self.build()
+        game_object = self.ids[1]
+        for class_id in (4, 33, 23):
+            self.assertEqual(
+                game_object,
+                objects[class_id][0]["m_GameObject"]["m_PathID"],
+                f"class {class_id} lost its GameObject",
+            )
+
+    def test_the_mesh_filter_resolves_to_the_mesh_in_the_same_bundle(self) -> None:
+        objects = self.build()
+        self.assertEqual(self.ids[43], objects[33][0]["m_Mesh"]["m_PathID"])
+        self.assertNotEqual(0, objects[33][0]["m_Mesh"]["m_PathID"])
+
+    def test_components_stay_out_of_the_container_but_the_prefab_does_not(self) -> None:
+        objects = self.build()
+        container = dict(objects[142][0]["m_Container"])
+        # Only loadable assets are addressable; four objects, two entries.
+        self.assertEqual(["mymodprop", "mymodthing"], sorted(container))
+
+    def test_a_reference_to_an_absent_object_is_refused_by_name(self) -> None:
+        # A null PPtr is a prefab that loads and draws nothing, so the writer
+        # will not emit one by accident.
+        with self.assertRaisesRegex(PipelineError, "absentMesh"):
+            build_bundle(mesh_prefab("myModProp", "absentMesh"), REVISION, "dangling.unity3d")
+
+    def test_two_objects_may_not_share_a_reference_key(self) -> None:
+        source = write_obj(self.root / "myModThing.obj")
+        objects = [mesh("myModThing", source), mesh("myModOther", source)]
+        objects[1].key = "myModThing"
+        with self.assertRaisesRegex(PipelineError, "reference key"):
+            build_bundle(objects, REVISION, "collide.unity3d")
 
 
 class ManifestTests(unittest.TestCase):

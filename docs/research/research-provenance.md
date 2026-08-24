@@ -360,6 +360,36 @@ glTF runtime for Unity apply. It has no evidence in the artifact above because
 a mirrored mesh is a perfectly valid `Mesh` object; the test that holds it is
 `test_the_right_handed_source_is_converted_rather_than_mirrored`.
 
+### Prefab objects: GameObject, Transform, MeshFilter, MeshRenderer
+
+Measured 2026-08-24 with UnityPy against `Entities/trees`, one real prefab of
+each class. `bundle_writer.mesh_prefab` reproduces these values:
+
+- `GameObject`: `m_Component` is a list of `{"component": PPtr}`, plus
+  `m_Layer`, `m_Name`, `m_Tag` and `m_IsActive`. The name lives here and
+  nowhere else in the group;
+- `Transform`: `m_GameObject` back-pointer, identity `m_LocalRotation`
+  (`w: 1.0`), zero position, unit scale, `m_Children`, and a null `m_Father`
+  for a root;
+- `MeshFilter`: two PPtrs, `m_GameObject` and `m_Mesh`, and nothing else;
+- `MeshRenderer`: 26 fields, of which the ones that are not obvious were taken
+  rather than guessed — `m_LightmapIndex: 65535` and
+  `m_LightmapIndexDynamic: 65535` are Unity's "no lightmap" sentinel, not
+  missing data; `m_RayTracingMode: 2`; `m_LightProbeUsage: 1`;
+  `m_ReflectionProbeUsage: 1`; `m_RenderingLayerMask: 1`;
+  `m_LightmapTilingOffset` is `(1, 1, 0, 0)`; `m_Materials` is a PPtr list.
+
+Components carry **no name** and are absent from the class-142 container in
+the game's own bundles, so the writer marks them `in_container=False`. Only
+the `GameObject` is addressable, which matches what
+`DataLoader.LoadAsset<GameObject>` asks for.
+
+Runtime confirmation, same day: a real Unity 2022.3.62f2 runtime loaded a
+synthesized prefab through `shamway verify-bundle` and resolved its graph —
+`components=3 mesh=shamwayProbeMesh materials=0 children=0`. The renderer
+found the synthesized `Mesh` through the `MeshFilter`; `materials=0` is the
+honest state of the lane, and an empty renderer draws nothing.
+
 ### A material's shader: what is measured closed, and what is not
 
 **Correction, 2026-08-24.** An earlier version of this section concluded that

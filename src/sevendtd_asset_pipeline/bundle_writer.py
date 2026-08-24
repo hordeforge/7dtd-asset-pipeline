@@ -47,11 +47,36 @@ TEXT_ASSET = 49
 TEXTURE_2D = 28
 AUDIO_CLIP = 83
 MESH = 43
+GAME_OBJECT = 1
+TRANSFORM = 4
+MESH_FILTER = 33
+MESH_RENDERER = 23
 
 SERIALIZED_VERSION = 22
 # BuildTarget.StandaloneWindows64. The shipped client loads a Windows-target
 # bundle even under Proton, which is why the whole pipeline defaults to it.
 STANDALONE_WINDOWS64 = 19
+
+
+@dataclass(frozen=True)
+class Ref:
+    """A placeholder for a `PPtr` to another object in the same bundle.
+
+    Path ids are assigned by `build_bundle`, so a constructor cannot know the
+    id of the object it wants to point at — a `Material` needs its `Shader`, a
+    `MeshFilter` its `Mesh`, a `GameObject` its components. Constructors put a
+    `Ref(key)` where the PPtr goes and the builder substitutes
+    `{"m_FileID": 0, "m_PathID": ...}` once every id is known.
+
+    A `Ref` to a key no object declares is a hard error rather than a null
+    PPtr: a null reference is how a prefab loads perfectly and renders
+    nothing, which is the class of silence this writer exists to remove.
+    """
+
+    key: str
+
+
+NULL_PPTR = {"m_FileID": 0, "m_PathID": 0}
 
 
 @dataclass
@@ -61,6 +86,20 @@ class BundleObject:
     class_id: int
     name: str
     fields: dict[str, Any]
+    key: str = ""
+    """What `Ref` uses to point at this object; defaults to `name`.
+
+    Components have no name of their own — every `Transform` in a bundle is
+    called `""` — so they need an identity that is not their name, and one
+    that never reaches the container table.
+    """
+    in_container: bool = True
+    """Whether this object is addressable by name in the class-142 table.
+
+    Assets are; the components hanging off a prefab are not. Unity's own
+    bundles list only the loadable assets, and a component in that table would
+    be a second name the stem-collision gate has to police for no gain.
+    """
     resource: bytes = b""
     """Bytes to append to the bundle's `.resource` stream.
 
@@ -178,6 +217,32 @@ def _type_tree(node: Any, common: dict[str, int]) -> bytes:
             )
         )
     return struct.pack("<II", len(nodes), len(strings)) + bytes(body) + bytes(strings)
+
+
+def _resolve_refs(value: Any, path_ids: dict[str, int], owner: str) -> Any:
+    """Replace every `Ref` in a field tree with the PPtr it stands for.
+
+    A dangling `Ref` is refused by name here rather than written as a null
+    PPtr, because Unity treats a null reference as "no material", "no mesh",
+    "no shader" — it loads, it draws nothing, and no offline gate sees it.
+    """
+    if isinstance(value, Ref):
+        try:
+            return {"m_FileID": 0, "m_PathID": path_ids[value.key]}
+        except KeyError:
+            known = ", ".join(sorted(path_ids)) or "nothing"
+            raise PipelineError(
+                f"{owner!r} references {value.key!r}, which this bundle does not "
+                f"contain; it holds {known}. A null reference would load and draw "
+                "nothing, so it is refused here instead."
+            ) from None
+    if isinstance(value, dict):
+        return {key: _resolve_refs(item, path_ids, owner) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_resolve_refs(item, path_ids, owner) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_resolve_refs(item, path_ids, owner) for item in value)
+    return value
 
 
 def _align(data: bytearray, boundary: int) -> None:
@@ -332,26 +397,45 @@ def build_bundle(
     """
     if not objects:
         raise PipelineError("a bundle needs at least one asset")
-    counts = Counter(obj.name for obj in objects)
+    named = [obj for obj in objects if obj.in_container]
+    counts = Counter(obj.name for obj in named)
     duplicates = {stem for stem, count in counts.items() if count > 1}
     if duplicates:
         raise PipelineError(
             "two assets would answer the same name: " + ", ".join(sorted(duplicates))
         )
+    keys = Counter(obj.key or obj.name for obj in objects)
+    collided = {key for key, count in keys.items() if count > 1}
+    if collided:
+        raise PipelineError("two objects share a reference key: " + ", ".join(sorted(collided)))
 
     cab = _cab_name(bundle_name)
     # The AssetBundle object is written first so it takes path id 1, as Unity's
     # own bundles do, and so every container entry can name a later id.
+    path_ids = {(obj.key or obj.name): index for index, obj in enumerate(objects, start=2)}
+    objects = [
+        BundleObject(
+            class_id=obj.class_id,
+            name=obj.name,
+            fields=cast("dict[str, Any]", _resolve_refs(obj.fields, path_ids, obj.name)),
+            key=obj.key,
+            in_container=obj.in_container,
+            resource=obj.resource,
+            resource_field=obj.resource_field,
+        )
+        for obj in objects
+    ]
     container = [
         (
             obj.name.lower(),
             {
                 "preloadIndex": 0,
                 "preloadSize": 0,
-                "asset": {"m_FileID": 0, "m_PathID": index},
+                "asset": {"m_FileID": 0, "m_PathID": path_ids[obj.key or obj.name]},
             },
         )
-        for index, obj in enumerate(objects, start=2)
+        for obj in objects
+        if obj.in_container
     ]
     bundle_object = BundleObject(
         class_id=ASSET_BUNDLE,
@@ -650,6 +734,108 @@ def mesh(name: str, source: Path) -> BundleObject:
             "m_StreamData": {"offset": 0, "size": 0, "path": ""},
         },
     )
+
+
+def mesh_prefab(
+    name: str, mesh_key: str, material_keys: tuple[str, ...] = ()
+) -> list[BundleObject]:
+    """A `GameObject` with a `Transform`, `MeshFilter` and `MeshRenderer`.
+
+    This is what 7DTD's `Meshfile` and block `Model` actually resolve —
+    `DataLoader.LoadAsset<GameObject>`, not `LoadAsset<Mesh>` — so a mesh in a
+    bundle is only reachable from XML once a prefab points at it.
+
+    Returns the four objects as a group because they reference each other by
+    `Ref`; hand the whole list to `build_bundle`. Only the `GameObject` is
+    addressable by name, exactly as Unity's own bundles list it.
+
+    Every field value below was read out of a real prefab in the game's
+    `Entities/trees` bundle (`docs/research/research-provenance.md`), not
+    invented — including the ones that look like noise, such as
+    `m_LightmapIndex: 65535` meaning "no lightmap" and `m_RayTracingMode: 2`.
+
+    **`material_keys` may be empty, and an empty renderer draws nothing.** The
+    caller is told so by `build.py` rather than being silently handed an
+    invisible prefab; a material needs a shader, which is
+    `docs/status/improvements.md` 4b.
+    """
+    game_object = f"{name}:go"
+    transform = f"{name}:transform"
+    return [
+        BundleObject(
+            GAME_OBJECT,
+            name,
+            {
+                "m_Component": [
+                    {"component": Ref(transform)},
+                    {"component": Ref(f"{name}:filter")},
+                    {"component": Ref(f"{name}:renderer")},
+                ],
+                "m_Layer": 0,
+                "m_Name": name,
+                "m_Tag": 0,
+                "m_IsActive": True,
+            },
+            key=game_object,
+        ),
+        BundleObject(
+            TRANSFORM,
+            "",
+            {
+                "m_GameObject": Ref(game_object),
+                "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                "m_LocalPosition": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "m_LocalScale": {"x": 1.0, "y": 1.0, "z": 1.0},
+                "m_Children": [],
+                "m_Father": NULL_PPTR,
+            },
+            key=transform,
+            in_container=False,
+        ),
+        BundleObject(
+            MESH_FILTER,
+            "",
+            {"m_GameObject": Ref(game_object), "m_Mesh": Ref(mesh_key)},
+            key=f"{name}:filter",
+            in_container=False,
+        ),
+        BundleObject(
+            MESH_RENDERER,
+            "",
+            {
+                "m_GameObject": Ref(game_object),
+                "m_Enabled": True,
+                "m_CastShadows": 1,
+                "m_ReceiveShadows": 1,
+                "m_DynamicOccludee": 1,
+                "m_StaticShadowCaster": 0,
+                "m_MotionVectors": 1,
+                "m_LightProbeUsage": 1,
+                "m_ReflectionProbeUsage": 1,
+                "m_RayTracingMode": 2,
+                "m_RayTraceProcedural": 0,
+                "m_RenderingLayerMask": 1,
+                "m_RendererPriority": 0,
+                # 65535 is Unity's "no lightmap", not a missing value.
+                "m_LightmapIndex": 65535,
+                "m_LightmapIndexDynamic": 65535,
+                "m_LightmapTilingOffset": {"x": 1.0, "y": 1.0, "z": 0.0, "w": 0.0},
+                "m_LightmapTilingOffsetDynamic": {"x": 1.0, "y": 1.0, "z": 0.0, "w": 0.0},
+                "m_Materials": [Ref(key) for key in material_keys],
+                "m_StaticBatchInfo": {"firstSubMesh": 0, "subMeshCount": 0},
+                "m_StaticBatchRoot": NULL_PPTR,
+                "m_ProbeAnchor": NULL_PPTR,
+                "m_LightProbeVolumeOverride": NULL_PPTR,
+                "m_SortingLayerID": 0,
+                "m_SortingLayer": 0,
+                "m_SortingOrder": 0,
+                "m_AdditionalVertexStreams": NULL_PPTR,
+                "m_EnlightenVertexStream": NULL_PPTR,
+            },
+            key=f"{name}:renderer",
+            in_container=False,
+        ),
+    ]
 
 
 def _empty_compressed_mesh() -> dict[str, Any]:

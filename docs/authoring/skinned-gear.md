@@ -143,16 +143,139 @@ In order, because each step rules out everything before it:
    `No GearBoneMap found on root <name>, falling back to collecting all bones
    from SMRs under <part>`. That line naming your prefab and your part is proof
    of load, layout and graft in one.
-2. **Is the geometry what you think?** Log the mesh bounds in the generator. A
-   deliberately absurd probe dimension that does not change the frame means the
-   mesh never reached the game, and the usual cause is a build-time cache
-   skipping regeneration.
-3. **Did the bones rebind?** Read the renderer off the wearer: bone count,
-   null count, names, `rootBone`, `localBounds`. Nulls mean a name mismatch;
-   correct names with a piece that does not move means the `Origin` fault.
-4. **Only then**, dimensions.
+2. **Is the geometry what you think?** `Helpers.GraftedMeshes(player, prefix)`
+   (7dtd-playtest) gives the mod-authored meshes on the wearer as
+   `name=vertexCount`. **Compare those counts against the generator's own build
+   log**, which should print them when it writes each mesh. Equal counts prove
+   the client is running the build you just made; anything else is a stale
+   bundle, and the usual causes are a build-time cache skipping regeneration or
+   a staged copy that was never refreshed.
+
+   Make this an *assertion* in a case, not something you check by eye. Every
+   other thing a suite can assert about worn armor is satisfied without the
+   garment — the item equips whether or not its prefab loaded, and the wearer
+   has a rig whether or not anything grafted — so without this a suite goes
+   green, produces frames, and says nothing about whether your meshes were in
+   them. One project spent an afternoon judging geometry from pictures that had
+   never been shown to contain it.
+3. **Did the bones rebind?** `Helpers.GraftReport(player, prefix)` gives bone
+   count, null count, names, `rootBone` and `localBounds` per renderer. Nulls
+   mean a name mismatch; correct names with a piece that does not move means the
+   `Origin` fault; collapsed bounds is neither.
+4. **Only then**, dimensions — and see "Fitting it to the body" below, because
+   most of what looks like a dimension problem is a clearance problem.
+
+**Keep the client log with the run.** It is the only place steps 1 and 3 are
+recorded, and the client truncates it on its next launch — so a run stops being
+explainable the moment anybody starts the game again, including the person
+opening the frames to look at it. `capture_frames.sh` copies it next to the
+frames.
+
+## Fitting it to the body
+
+Everything above gets a garment onto the wearer. This is about making it look
+like clothing once it is there, and it is where the time actually goes: one
+suit took roughly fifteen client runs, of which two were mechanism faults and
+the rest were fit.
+
+### The bind pose says where the joints are, not where the body is
+
+This is the whole difficulty, and it is not obvious because the bind pose is
+*exact*. It gives joint positions to six decimal places, and a garment built
+faithfully to them sits **inside** the mesh wrapped around those joints. Skin
+comes through at the shoulders, the chest, the crotch, the face.
+
+The fix is a clearance: how far the fabric stands off the figure the bind pose
+describes. Two constants, not a dozen radii:
+
+```csharp
+private const float BodyClearance = 0.032f;   // torso
+private const float LimbClearance = 0.026f;   // arms and legs need less
+```
+
+One knob per group is the point. A client run can then move the whole garment
+at once and you learn something from every frame; tuning radius by radius
+against a photograph is how three passes get spent finding out nothing.
+
+A torso ring has to clear a chest, a back, and whatever the wearer is carrying.
+An arm is a cylinder about 100 mm across. Giving limbs the torso's clearance
+produced 190 mm sleeves and a suit that read as inflated — a pressure suit, not
+a coverall.
+
+### A renderer's bounds are not a measurement of the part you care about
+
+`Helpers.RigBounds` (7dtd-playtest) reports each skinned renderer's local AABB,
+and it is the obvious place to look for "how wide is the body". It is a trap.
+
+A whole-body renderer's box is bounded by whatever sticks out furthest, and in
+an A-pose that is **the toes and the hands**. One reading of
+`extents=(0.413, 0.739, 0.279)` treated 0.279 as chest depth and produced a
+garment 0.53 m front to back — a barrel. The same file had already rejected the
+same reasoning for width, correctly noting that 0.413 is arms; and then applied
+it to depth anyway, in the same session.
+
+If you want a chest measurement, the torso bones are all at one z and the body
+is roughly symmetric about it. Start from the joint and add clearance.
+
+### Anything lying on a curved shell must be built from that shell's profile
+
+Two rules, and both were learned by doing the opposite.
+
+**A flat quad on a curved surface does not work.** Its centre nearly touches and
+its edges stand well off — on a head, a 90 mm half-width panel against a 114 mm
+half-width skull leaves the edges floating 58 mm out while the middle clears by
+10. The shell then bulges through the middle and the feature renders as a
+U-shaped cut-out. Moving it forward or back does not help: the depth was never
+the fault, the flatness was. Build a **partial ring off the same profile**,
+inflated a few millimetres, and every vertex comes from the same ellipse as the
+surface beneath it.
+
+**A band that wraps a profile must be authored from that profile's numbers at
+the same height.** A belt authored at half-width 0.178 against a torso that had
+since grown to 0.191 sat 13 mm inside the fabric and surfaced only where the
+torso happened to narrow — reading as a belt clipping through the suit, when it
+was the suit clipping through the belt. Derive the band from the profile, or
+leave a note beside it saying to retune it when the profile moves.
+
+### Seams are not stripes
+
+Tape at 6% of a limb's length, standing 8 mm proud, is not a seam. It is a
+band, and a garment wearing several of them reads as striped sportswear. Three
+things made them read as taped industrial gear instead:
+
+- narrower — about 3.5% of the limb, 3 mm proud
+- **only where two pieces of gear actually meet**: wrists, ankles, the collar
+- nowhere in the middle of a thigh or an upper arm, because there is nothing
+  there for a seam to seal, and a band there is a stripe by definition
+
+### Segment count
+
+Sixteen segments around a ring is a reasonable default for a prop and wrong for
+a garment. A 16-sided tube 0.48 m across has 90 mm facets, and worn, a torso
+reads as flat panels with hard edges between them. Clothing is also the one
+asset a player looks at from a metre away for hours. Twenty-four costs about
+half again as many vertices on meshes under a thousand.
+
+### A rig joint is not always where you would put a seam
+
+A shoulder ring is perpendicular to the nearly-horizontal Shoulder→Arm segment,
+so it lies in a vertical plane, and its *radius* reaches across the chest and up
+past the neck. Widened to bridge an armpit gap, it drove a disc straight through
+the torso and rendered as a hard diagonal slab across the upper back.
+
+Check what plane a ring actually lies in before growing it. The armpit was the
+torso's job — the torso already reached past the arm joint — not the sleeve's.
+
+### An open tube shows its own inside
+
+Cap the ends of anything the wearer's body does not fill. An uncapped sleeve
+renders as a pale hollow exactly where a hand should be, and it is very
+convincing as "the wearer's hand is poking through the glove". A cap is only
+ever visible if the piece that should cover it does not, which is that piece's
+problem.
 
 ## Order of work
+
 
 1. Read the bone names off a running client and write them down.
 2. Model and skin in Blender to an armature using those names.

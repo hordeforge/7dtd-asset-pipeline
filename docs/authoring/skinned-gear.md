@@ -7,8 +7,11 @@ wearer, and the engine binds it to the player's skeleton at the moment it is
 equipped. That changes what has to be authored, and it closes the editorless
 lane, so it gets its own page.
 
-**Status: the contract is verified against the installed build; this lane has
-not yet produced a shipped garment.** The engine behaviour below is reversed
+**Status: walked end to end on 2026-08-24.** A mod-authored garment now loads
+from a mod's own bundle, grafts onto the player rig, deforms with the body and
+follows it through a full turn. The two faults that took the longest to find
+are in "What bites" below; neither is in the engine research, because neither
+is visible from IL. The engine behaviour below is reversed
 from IL in
 [`hordeforge/7dtd-engine-research`](https://github.com/hordeforge/7dtd-engine-research),
 `docs/sdcs-character-gear.md`, which is the authority and carries the IL
@@ -103,8 +106,51 @@ So `#@modfolder(<Mod>):Resources/<bundle>.unity3d?<prefab>.prefab` reaches a
 mod's own bundle here exactly as it does for a `Meshfile`. Marker substitution
 runs before the load and leaves a URI containing no `{sex}` alone.
 
-Still true: **no mod has shipped a garment through this path**, so the loading
-is settled and the deformation is not.
+A garment has now shipped through this path, so the loading and the
+deformation are both settled.
+
+## What bites
+
+Both of these produce a garment that *looks* buried inside the body: a thin
+strip down each flank and nothing else. That reading is a trap. It invites
+widening and deepening the mesh, which changes nothing, because the dimensions
+were never the problem.
+
+**The prefab needs an `Origin` above its bone chain.** `SDCSUtils.MatchRigs`
+resolves `Origin` on both the source and the target before walking the
+hierarchy, and the wearer's own `Hips` hangs off one. A prefab whose chain
+starts at `Hips` under the prefab root gives that walk nothing to match. The
+failure is quiet and convincing: the garment loads, the renderer reports the
+right number of correctly named **non-null** bones and a sensible bounds, and
+the piece then stands still in world space while the wearer moves underneath
+it. Nothing logs.
+
+*You will only catch this by turning the subject.* From a fixed camera a
+garment that ignores the wearer's rotation is indistinguishable from one that
+fits badly. `CaseDef.Staged`'s `onHold` callback in `7dtd-playtest` exists for
+this.
+
+**Winding.** A generated tube whose triangles face inward is culled entirely,
+and all you see is the far side's interior showing through at the silhouette —
+two thin vertical strips, exactly the same symptom. Check the winding before
+touching a single dimension.
+
+## Diagnosing one that does not appear
+
+In order, because each step rules out everything before it:
+
+1. **Does the engine load it?** Without a `GearBoneMap` it logs
+   `No GearBoneMap found on root <name>, falling back to collecting all bones
+   from SMRs under <part>`. That line naming your prefab and your part is proof
+   of load, layout and graft in one.
+2. **Is the geometry what you think?** Log the mesh bounds in the generator. A
+   deliberately absurd probe dimension that does not change the frame means the
+   mesh never reached the game, and the usual cause is a build-time cache
+   skipping regeneration.
+3. **Did the bones rebind?** Read the renderer off the wearer: bone count,
+   null count, names, `rootBone`, `localBounds`. Nulls mean a name mismatch;
+   correct names with a piece that does not move means the `Origin` fault.
+4. **Only then**, dimensions.
 
 ## Order of work
 

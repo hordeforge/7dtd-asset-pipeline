@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from . import block_compress
 from .capabilities import require_capability
 from .errors import PipelineError
 
@@ -515,8 +516,10 @@ def text_asset(name: str, text: str) -> BundleObject:
     return BundleObject(TEXT_ASSET, name, {"m_Name": name, "m_Script": text})
 
 
-def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
-    """A Texture2D from a PNG, uncompressed RGBA32 with its pixels inline.
+def texture_2d(
+    name: str, png: Path, readable: bool = False, compress: bool = False
+) -> BundleObject:
+    """A Texture2D from a PNG, with its pixels inline.
 
     Unity streams texture pixels into a side file and generates mip maps; both
     are optimisations, and neither is required for the runtime to accept the
@@ -526,6 +529,13 @@ def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
     `readable` keeps a CPU copy of the pixels, which is Unity's own default of
     off: it doubles the texture's memory and only a mod that reads pixels from
     script needs it.
+
+    `compress` block-compresses to `DXT1` when the image is fully opaque and
+    `DXT5` when it is not — 8x and 4x smaller than RGBA32, and what Unity's
+    own importer would have done. It is **off by default and lossy**: this
+    project does not silently change what an author signed off on, and the
+    quality achieved is reported by the caller rather than assumed. Both sides
+    must be a multiple of four, which a block format cannot avoid.
     """
     require_capability("pillow")
     from PIL import Image
@@ -536,11 +546,20 @@ def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
             width, height = image.size
             # Unity's first row is the bottom one; a texture written top-down
             # loads fine and renders upside down, which no gate would catch.
-            pixels = image.transpose(Image.FLIP_TOP_BOTTOM).tobytes()
+            flipped = image.transpose(Image.FLIP_TOP_BOTTOM)
+            pixels = flipped.tobytes()
     except (OSError, ValueError, Image.DecompressionBombError) as exc:
         # DecompressionBombError subclasses Exception directly, and some decode
         # paths raise ValueError, so OSError alone let both escape as tracebacks.
         raise PipelineError(f"cannot read texture {png}: {exc}") from exc
+
+    texture_format = TEXTURE_RGBA32
+    if compress:
+        require_capability("numpy")
+        import numpy
+
+        raw = numpy.frombuffer(pixels, dtype="uint8").reshape(height, width, 4)
+        pixels, texture_format = block_compress.compress(raw, alpha=bool((raw[..., 3] < 255).any()))
 
     return BundleObject(
         TEXTURE_2D,
@@ -554,7 +573,7 @@ def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
             "m_Height": height,
             "m_CompleteImageSize": len(pixels),
             "m_MipsStripped": 0,
-            "m_TextureFormat": TEXTURE_RGBA32,
+            "m_TextureFormat": texture_format,
             "m_MipCount": 1,
             "m_IsReadable": readable,
             "m_IsPreProcessed": False,
@@ -990,12 +1009,12 @@ def collect_sources(source_dir: Path) -> list[Path]:
     return found
 
 
-def object_for(path: Path) -> BundleObject:
+def object_for(path: Path, compress_textures: bool = False) -> BundleObject:
     """Turn one source file into the object its extension names."""
     stem = path.stem
     suffix = path.suffix.lower()
     if suffix == ".png":
-        return texture_2d(stem, path)
+        return texture_2d(stem, path, compress=compress_textures)
     if suffix == ".wav":
         return audio_clip(stem, path)
     if suffix in MESH_SUFFIXES:
@@ -1046,7 +1065,11 @@ def write_artifact(path: Path, payload: bytes | str) -> None:
 
 
 def pack_directory(
-    source_dir: Path, bundle_name: str, unity_version: str, target: int = STANDALONE_WINDOWS64
+    source_dir: Path,
+    bundle_name: str,
+    unity_version: str,
+    target: int = STANDALONE_WINDOWS64,
+    compress_textures: bool = False,
 ) -> tuple[bytes, str]:
     """Build a bundle from a directory of source files, with no editor.
 
@@ -1054,7 +1077,7 @@ def pack_directory(
     it, which is the pair `build` stages together.
     """
     sources = collect_sources(source_dir)
-    objects = [object_for(path) for path in sources]
+    objects = [object_for(path, compress_textures) for path in sources]
     bundle = build_bundle(objects, unity_version, bundle_name, target)
     members = [f"{source_dir.name}/{path.relative_to(source_dir).as_posix()}" for path in sources]
     return bundle, render_manifest(bundle_name, members)

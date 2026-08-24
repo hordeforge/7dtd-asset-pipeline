@@ -143,16 +143,40 @@ derivative in a single script.
 - Pillow documentation: <https://pillow.readthedocs.io/en/stable/>
 - ImageDraw: <https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html>
 
-### Compressonator and bc7enc — texture size planning
+### Block compression — built in for BC1/BC3, external for BC7
 
-Block compression (DXT1/DXT5, BC7) is what Unity's importer applies and what
-the editorless writer does not: synthesized textures ship as raw RGBA32.
-Compressonator (GPUOpen, CLI) and bc7enc produce the compressed blocks and,
-before any writer support exists, answer the planning question — how much a
-texture set would shrink by moving it to the editor path.
+The editorless writer compresses textures itself, with no extra tool:
+`compress_textures = true` in `.shamway.toml`, or
+`shamway pack --compress-textures`, encodes BC1 (`DXT1`, 8x smaller) when the
+image is fully opaque and BC3 (`DXT5`, 4x) when it is not. Off by default,
+because it is lossy.
 
-- Compressonator: <https://github.com/GPUOpen-Tools/compressonator>
-- bc7enc: <https://github.com/richgel999/bc7_enc_rdo>
+```bash
+shamway pack assets-src/bundle build/mymod.unity3d --compress-textures --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+```
+
+Both sides must be a multiple of four; a block format cannot express anything
+else, and the writer refuses rather than padding, since padding moves every
+atlas cell built on the old size.
+
+**BC7 is the one worth an external tool.** It has eight block modes and a
+partition table, so a mediocre Python encoder would be worse than the good BC1
+one already here. These are the current CLIs, none of them packaged by Arch,
+Debian or Fedora — each means building from source, so reach for one when a
+mod's texture budget actually demands it:
+
+- [bc7enc_rdo](https://github.com/richgel999/bc7_enc_rdo) — BC1–7 with
+  rate-distortion optimization, a further 10–50% off after LZ;
+- [Compressonator](https://github.com/GPUOpen-Tools/compressonator) — GPUOpen,
+  CLI and library, widest format coverage;
+- [ISPCTextureCompressor](https://github.com/GameTechDev/ISPCTextureCompressor)
+  — Intel's SIMD encoders, the quality/speed reference other tools embed;
+- [ctt](https://github.com/cwfitzgerald/ctt) — one front end over bc7e, ISPC,
+  AMD and astcenc, if you want to compare them.
+
+Judge the result with a **composited** PSNR, never a raw one: a transparent
+pixel's colour is renderer noise, and grading it makes a good encoder look
+broken (`shamway docs improvements`, gap 4).
 
 ### python-fsb5 — FSB5 decoding for reference
 

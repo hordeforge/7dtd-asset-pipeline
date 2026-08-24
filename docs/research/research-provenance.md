@@ -1283,3 +1283,37 @@ What is eliminated around it, each measured in a live client on
 So: the container is right, the wiring is right, the modules are valid SPIR-V
 compiled the way Unity compiles them, and what remains unlike Unity's is the
 parameter description beside them.
+
+
+## The Vulkan hash IS validated - a correction
+
+**Measured 2026-08-25**, with the automated capture loop, and it corrects an
+earlier conclusion on this page.
+
+The decisive pair, both run in a live client on `-force-vulkan` with the frame
+machine-captured:
+
+| Record | Modules | Hash | Result |
+|---|---|---|---|
+| stock's | stock's | stock's | **renders** |
+| **ours** | **stock's** | zero | **magenta** (measured `(255, 22, 255)`) |
+
+The two records' heads are byte-identical (`ver, 25, six zeros, length`) and
+their size tables agree word for word. With the *same* SMOL-V modules inside
+both, the only remaining difference is the 32-byte field at words 20..27 - so
+**Unity validates it**, and a mismatch is rejected silently: no log line, the
+error shader substituted.
+
+The earlier entry that "our modules with stock's hash still went magenta" and
+called the hash *not* the cause was measured while the record still had other
+defects in flight, and its inference is withdrawn - the same
+negative-observation trap this repository keeps writing down.
+
+What is now known about the field: it is two 16-byte halves; it is derived from
+the module content; it is not MD5, SHA-1, SHA-256, BLAKE2 or zero-seeded
+SpookyHash V2 of either module, both concatenated, or the payload. The next
+route is not more guessing: Unity ships `UnityPlayer.dll`'s hashing in the
+player, and the function that reads this record can be found in a disassembly
+of the Vulkan GfxDevice - or the hash can be brute-checked against seeded
+SpookyHash with the section sizes as seeds, which is one script rather than a
+session.

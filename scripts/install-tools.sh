@@ -44,6 +44,7 @@ BASE TOOLS
 WITH --with-authoring
   blender            Headless mesh authoring, conversion, and turntables
   openscad           Parametric hard-surface geometry
+  vkd3d-compiler     HLSL to DXBC, for the editorless shader and material lane
   imagemagick        Icons, masks, channel packing, contact sheets
   ffmpeg             Audio conversion, normalization, and synthesis
   xvfb               A virtual display for shamway render-icon, which
@@ -149,6 +150,7 @@ run_check() {
 	if ((WITH_AUTHORING)); then
 		report blender "mesh authoring" have blender
 		report openscad "parametric geometry" have openscad
+		report vkd3d-compiler "HLSL to DXBC (shaders, materials)" have vkd3d-compiler
 		report magick "icons and textures" have magick
 		report ffmpeg "audio" have ffmpeg
 		report xvfb-run "icon rendering on a headless host" have xvfb-run
@@ -206,6 +208,7 @@ collect_pacman() {
 		have magick || PACKAGES+=(imagemagick)
 		have ffmpeg || PACKAGES+=(ffmpeg)
 		have xvfb-run || PACKAGES+=(xorg-server-xvfb)
+		have vkd3d-compiler || PACKAGES+=(vkd3d)
 	fi
 	if ((WITH_UNITY_PREREQS)); then
 		have curl || PACKAGES+=(curl)
@@ -237,6 +240,7 @@ collect_apt() {
 		have magick || PACKAGES+=(imagemagick)
 		have ffmpeg || PACKAGES+=(ffmpeg)
 		have xvfb-run || PACKAGES+=(xvfb)
+		have vkd3d-compiler || PACKAGES+=(vkd3d-dev)
 	fi
 	if ((WITH_UNITY_PREREQS)); then
 		have curl || PACKAGES+=(curl)

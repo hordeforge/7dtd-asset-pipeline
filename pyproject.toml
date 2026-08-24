@@ -134,6 +134,7 @@ module = [
   "numpy", "numpy.*",
   "trimesh", "trimesh.*",
   "fsb5", "fsb5.*",
+  "lz4", "lz4.*",
   "texture2ddecoder",
 ]
 ignore_missing_imports = true

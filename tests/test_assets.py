@@ -365,8 +365,9 @@ class GeneratorTests(unittest.TestCase):
 
         from sevendtd_asset_pipeline.generators.sound import bomb_whistle
 
-        first = bomb_whistle(1.0, random.Random(7), 1100.0, 360.0)
-        second = bomb_whistle(1.0, random.Random(7), 1100.0, 360.0)
+        # A fixed seed is the point: the same seed must give the same clip.
+        first = bomb_whistle(1.0, random.Random(7), 1100.0, 360.0)  # noqa: S311
+        second = bomb_whistle(1.0, random.Random(7), 1100.0, 360.0)  # noqa: S311
         self.assertEqual(first, second)
         self.assertEqual(44_100, len(first))
 

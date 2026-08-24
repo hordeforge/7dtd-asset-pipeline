@@ -27,13 +27,14 @@ Three questions decide it:
 1. Does any XML ask the engine to load an asset out of a bundle — a
    `Meshfile`, a block `Model`, a `sounds.xml` `ClipName`, an XUi mesh? If not,
    the mod needs no bundle: `none`.
-2. Is everything in that bundle a texture, a sound, a text file or a **mesh**?
-   Then `synthesized` writes it here, with no editor and no project.
-3. Otherwise the bundle contains a **material or a shader**, and an editor
-   has to serialize it: `unity` if one lives on this machine, `external` if it
-   lives on another. A prefab is writable offline, but with no material it
-   draws nothing, so a mod whose prefabs must be *visible* is in this case
-   too.
+2. Is everything in that bundle a texture, a sound, a text file or a **mesh**
+   — or a **prefab** built from one of those meshes? Then `synthesized`
+   writes it here, with no editor and no project: a mesh source file becomes a
+   prefab with a material and a shared unlit shader, all synthesized.
+3. Otherwise the bundle needs a shader this writer does not author — anything
+   lit, transparent, normal-mapped, animated or multi-pass — and an editor has
+   to compile it: `unity` if one lives on this machine, `external` if it lives
+   on another.
 
 The rest of this page takes them in that order.
 
@@ -163,17 +164,62 @@ consequences of the paragraph below rather than of effort.
 
 A `Mesh` is a mesh, not a model. 7DTD's `Meshfile` and block `Model` resolve
 through `DataLoader.LoadAsset<GameObject>` — a **prefab**, which needs a
-renderer, which needs a material, which needs a shader. A synthesized `Mesh`
-is reachable from a Harmony DLL through `LoadAsset<Mesh>`, and is the geometry
-half of a model.
+renderer, which needs a material, which needs a shader. This writer now builds
+that whole chain, so a mesh source file produces a loadable model rather than
+its geometry half.
 
-`bundle_writer.mesh_prefab` writes the other half — `GameObject`, `Transform`,
-`MeshFilter`, `MeshRenderer` — and a real 2022.3.62f2 runtime resolves the
-graph. It is deliberately **not** wired into the source folder, because the
-renderer has no material to point at and an empty renderer draws nothing.
-Shipping that would be an asset that loads, passes every gate, and shows the
-player nothing. The material is the last piece
-([improvements.md](../status/improvements.md) 4b).
+### What a mesh source file becomes
+
+One mesh file `prop.glb` produces four objects, and the **prefab takes the
+stem** because that is the name the game resolves:
+
+| Object | Name | Why |
+|---|---|---|
+| `GameObject` prefab | `prop` | what `Meshfile` and `Model` ask for |
+| `Mesh` | `prop_mesh` | the prefab owns the stem, so the mesh cannot |
+| `Material` | `prop_mat` | the renderer's one material slot |
+| `Shader` | `Shamway/Unlit` | one per bundle, shared by every material |
+
+A texture named `prop_albedo` in the same source tree is bound to that
+material's `_MainTex`; without one the material draws Unity's built-in white.
+
+**This lane needs `vkd3d-compiler`.** Without it the writer packs the bare
+`Mesh` it always did rather than refusing the build — a mesh-only bundle is
+still reachable through `LoadAsset<Mesh>`, and a mod that packed yesterday
+keeps packing. The difference is visible in `shamway capabilities` and
+`shamway doctor`, never silent in the artifact's behaviour: a bundle either
+has a prefab or it does not.
+The suffix is a convention, not a guess — the prefab has to own `prop`, so the
+texture cannot also be called `prop`, and the stem-collision gate would reject
+it if it were.
+
+### The shader it writes, and the ones it does not
+
+One pass: an unlit textured pass, d3d11 and OpenGLCore, no keyword variants,
+no hardware tiers. The HLSL is compiled by
+[`vkd3d-compiler`](https://gitlab.winehq.org/wine/vkd3d) to the same shader
+model 4 `DXBC` the game's own sub-programs carry, and wrapped in the container
+documented in `hordeforge/7dtd-engine-research`,
+[`docs/shader-subprogram-blob.md`](https://github.com/hordeforge/7dtd-engine-research/blob/main/docs/shader-subprogram-blob.md).
+No Unity is involved in producing it.
+
+What it deliberately is not: lit, shadowed, transparent, cut-out,
+normal-mapped, instanced, or multi-pass. Those need keyword variants and
+constant buffers this writer does not declare, and a prop that needs one of
+them still wants `unity` or `external`. **An unlit prop is unaffected by
+scene lighting** — it draws at full brightness at midnight, which is a look
+decision, not a defect.
+
+A real Unity 2022.3.62f2 runtime reports the result supported:
+
+```text
+VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=1
+VERIFY-MATERIAL: 'prop_mat' shader='Shamway/Unlit' shaderSupported=True _MainTex=prop_albedo
+```
+
+That is the engine's own loader and its own verdict, and it is still **a load,
+not a look**: nobody has yet watched this shader draw. See
+[research-provenance.md](../research/research-provenance.md).
 
 ```bash
 shamway build

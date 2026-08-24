@@ -142,8 +142,8 @@ here without waiting on anyone.
 | `bundle_source = "synthesized"`, gates, staging | `build.synthesize_bundle` | built; prints what its gates are worth |
 | `shamway pack`, `shamway verify-bundle` | `cli.py`, `bundle_verify.py` | built |
 | `Mesh` (one submesh, position + normal + UV0, from any file trimesh reads) | `bundle_writer.mesh` | built 2026-08-24; a real 2022.3.62f2 runtime read both a UV-mapped and a UV-less mesh back at the authored vertex counts and bounds |
-| prefab: `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer`, and `Ref` for cross-object PPtrs | `bundle_writer.mesh_prefab` | built 2026-08-24; a real 2022.3.62f2 runtime resolved the graph. Not wired into the source folder: with no material the renderer draws nothing |
-| material, shader | — | **not built**; a gap with a known route, not a wall — see below |
+| prefab: `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer`, and `Ref` for cross-object PPtrs | `bundle_writer.mesh_prefab`, `bundle_writer.prefab_objects` | built 2026-08-24; a real 2022.3.62f2 runtime resolved the graph, and the source folder now wires one per mesh file with its material |
+| material, shader | `bundle_writer.material`, `bundle_writer.shader`, `shader_blob.py` | built 2026-08-24; a real 2022.3.62f2 runtime reports `Shader.isSupported = true` and the material naming its texture. See below — the wall was never a wall |
 
 The mesh lane was the half of this row that the format allowed, and the
 prediction above held: the layout is fully documented, `check-mesh` already
@@ -166,16 +166,35 @@ shaders and all are internal, and the game's own bundles embed theirs with
 game's assets. A synthesized prefab with no valid shader renders magenta, and
 no offline gate sees that.
 
-What is **not** measured, and was wrongly presented as settled: whether a
-shader can be *authored* offline. `vkd3d-compiler` compiles HLSL to SM4/SM5
-DXBC and `glslangValidator` emits SPIR-V — the two bytecode formats this
-revision's sub-programs carry — and the sub-program blob container has since
-been decoded out of the game's own bundle. So this row is **unbuilt with a
-known route**, tracked in `status/improvements.md`, not closed.
+**Update, 2026-08-24: the route was walked and the row is built.** The
+paragraph that used to sit here called shader authoring "unbuilt with a known
+route". It is now built, which is the second correction this one decision has
+needed and the clearest possible argument for the rule: the original
+"impossible" was wrong, and even the cautious restatement understated what a
+few days of format work reached.
 
-Two routes stay recorded and unattempted, both for the same reason — each one
-can only be judged by a client that renders it, and a magenta prop is the
-exact silence this pipeline exists to remove:
+`vkd3d-compiler` compiles the pass's HLSL to shader model 4 `DXBC` — the exact
+bytecode `DX11VertexSM40` and `DX11PixelSM40` carry — and the container around
+it is documented upstream in `hordeforge/7dtd-engine-research`,
+[`docs/shader-subprogram-blob.md`](https://github.com/hordeforge/7dtd-engine-research/blob/main/docs/shader-subprogram-blob.md),
+decoded there over three changes: the code blob and its 38-byte program-data
+header, the parameter blob, and the bind-channel block. No Unity anywhere in
+the path.
+
+The scope that is built is deliberately one pass: **unlit, textured, opaque,
+no keyword variants**. Lit, transparent, cut-out, normal-mapped, instanced and
+multi-pass shaders are still an editor's job, and a mod that needs one wants
+`unity` or `external`. That is a narrower claim than "shaders work", and it is
+the claim the evidence supports.
+
+**The borrowing finding above stands and was not re-tested.** Both borrowing
+routes remain closed; what changed is that a mod no longer needs to borrow
+one, because it can author its own.
+
+Two borrowing routes stay recorded and unattempted. Authoring made them
+unnecessary rather than disproving them, and each could still only be judged by
+a client that renders it — a magenta prop is the exact silence this pipeline
+exists to remove:
 
 - **clone-and-patch**, above: harvest a complete vanilla `Material` from the
   installed game read-only and patch texture PPtrs and colours. Its shader

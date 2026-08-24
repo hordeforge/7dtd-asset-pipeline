@@ -45,8 +45,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 
-from . import block_compress, transcode
-from .capabilities import require_capability
+from . import block_compress, shader_blob, transcode
+from .capabilities import has_capability, require_capability
 from .errors import PipelineError
 
 ASSET_BUNDLE = 142
@@ -58,6 +58,20 @@ GAME_OBJECT = 1
 TRANSFORM = 4
 MESH_FILTER = 33
 MESH_RENDERER = 23
+SHADER = 48
+MATERIAL = 21
+
+UNLIT_SHADER_NAME = "Shamway/Unlit"
+"""The one shader the editorless writer emits, shared by every material."""
+
+ALBEDO_SUFFIX = "_albedo"
+"""A mesh `X` binds the texture `X_albedo` when one is in the same source tree.
+
+A convention rather than a guess: the prefab has to own the mesh's stem,
+because that is the name 7DTD resolves, so the texture cannot also be called
+`X`. The suffix keeps both addressable and keeps the stem-collision gate
+meaningful.
+"""
 
 SERIALIZED_VERSION = 22
 # BuildTarget.StandaloneWindows64. The shipped client loads a Windows-target
@@ -852,6 +866,293 @@ def mesh_prefab(
     ]
 
 
+def _float_value(value: float) -> dict[str, Any]:
+    """Unity's `SerializedShaderFloatValue`: a constant, or a named property."""
+    return {"val": float(value), "name": ""}
+
+
+def _blend_state(colour_mask: float = 15.0) -> dict[str, Any]:
+    """One render target's blend state: opaque `One`/`Zero`, all channels."""
+    return {
+        "srcBlend": _float_value(1.0),
+        "destBlend": _float_value(0.0),
+        "srcBlendAlpha": _float_value(1.0),
+        "destBlendAlpha": _float_value(0.0),
+        "blendOp": _float_value(0.0),
+        "blendOpAlpha": _float_value(0.0),
+        "colMask": _float_value(colour_mask),
+    }
+
+
+def _stencil_op() -> dict[str, Any]:
+    """Stencil disabled: keep on every outcome, compare always (8)."""
+    return {
+        "pass": _float_value(0.0),
+        "fail": _float_value(0.0),
+        "zFail": _float_value(0.0),
+        "comp": _float_value(8.0),
+    }
+
+
+def _shader_state(name: str) -> dict[str, Any]:
+    """An opaque, depth-tested, back-face-culled pass state.
+
+    Field names and their scales are the engine's: `zTest` 4 is `LEqual`,
+    `culling` 2 is `Back`, and the stencil comparison 8 is `Always`. They were
+    read out of the stock `Entities/trees` shaders rather than chosen.
+    """
+    state: dict[str, Any] = {"m_Name": name}
+    for index in range(8):
+        state[f"rtBlend{index}"] = _blend_state()
+    state.update(
+        {
+            "rtSeparateBlend": False,
+            "zClip": _float_value(1.0),
+            "zTest": _float_value(4.0),
+            "zWrite": _float_value(1.0),
+            "culling": _float_value(2.0),
+            "conservative": _float_value(0.0),
+            "offsetFactor": _float_value(0.0),
+            "offsetUnits": _float_value(0.0),
+            "alphaToMask": _float_value(0.0),
+            "stencilOp": _stencil_op(),
+            "stencilOpFront": _stencil_op(),
+            "stencilOpBack": _stencil_op(),
+            "stencilReadMask": _float_value(255.0),
+            "stencilWriteMask": _float_value(255.0),
+            "stencilRef": _float_value(0.0),
+            "fogStart": _float_value(0.0),
+            "fogEnd": _float_value(0.0),
+            "fogDensity": _float_value(0.0),
+            "fogColor": {
+                "x": _float_value(0.0),
+                "y": _float_value(0.0),
+                "z": _float_value(0.0),
+                "w": _float_value(0.0),
+                "name": "",
+            },
+            "fogMode": 0,
+            "gpuProgramID": 0,
+            "m_Tags": {"tags": []},
+            "m_LOD": 0,
+            "lighting": False,
+        }
+    )
+    return state
+
+
+def _empty_program() -> dict[str, Any]:
+    """A `SerializedProgram` for a stage this pass does not use."""
+    return {
+        "m_SubPrograms": [],
+        "m_PlayerSubPrograms": [],
+        "m_ParameterBlobIndices": [],
+        "m_CommonParameters": {
+            "m_VectorParams": [],
+            "m_MatrixParams": [],
+            "m_TextureParams": [],
+            "m_BufferParams": [],
+            "m_ConstantBuffers": [],
+            "m_ConstantBufferBindings": [],
+            "m_UAVParams": [],
+            "m_Samplers": [],
+        },
+        "m_SerializedKeywordStateMask": [],
+    }
+
+
+def _program(variants: list[tuple[int, int, int]]) -> dict[str, Any]:
+    """A `SerializedProgram` holding one variant per platform.
+
+    `variants` is `(gpu_program_type, blob_index, parameter_index)` per
+    platform, in the same order as the shader's `platforms` list.
+
+    `m_PlayerSubPrograms` declares four groups and fills only index 3. That is
+    what all ten stock `Entities/trees` shaders do, whatever their platform or
+    tier count. The filled group **mixes platforms** — each entry's
+    `m_BlobIndex` addresses its own platform's blob — and
+    `m_ParameterBlobIndices` runs parallel to it position by position, rather
+    than being a list of parameter blobs in its own right. Both are recorded
+    in engine-research `docs/shader-subprogram-blob.md`. What the other three
+    groups mean is not decoded, so they stay empty rather than being guessed.
+    """
+    program = _empty_program()
+    program["m_PlayerSubPrograms"] = [
+        [],
+        [],
+        [],
+        [
+            {
+                "m_BlobIndex": blob_index,
+                "m_KeywordIndices": [],
+                # 0 = no special GPU requirement. A shader that overstates its
+                # requirements is one the engine refuses; this pass needs
+                # nothing beyond shader model 4.
+                "m_ShaderRequirements": 0,
+                "m_GpuProgramType": gpu_program_type,
+            }
+            for gpu_program_type, blob_index, _parameter in variants
+        ],
+    ]
+    program["m_ParameterBlobIndices"] = [
+        [],
+        [],
+        [],
+        [parameter for _type, _blob, parameter in variants],
+    ]
+    return program
+
+
+def _texture_property(name: str) -> dict[str, Any]:
+    """A `SerializedProperty` declaring one 2D texture property."""
+    return {
+        "m_Name": name,
+        "m_Description": name.lstrip("_"),
+        "m_Attributes": [],
+        # SerializedPropertyType 4 = Texture.
+        "m_Type": 4,
+        "m_Flags": 0,
+        "m_DefValue[0]": 1.0,
+        "m_DefValue[1]": 1.0,
+        "m_DefValue[2]": 1.0,
+        "m_DefValue[3]": 1.0,
+        # TextureDimension 2 = Tex2D. "white" is Unity's built-in fallback, so
+        # a material that binds no texture draws white rather than magenta.
+        "m_DefTexture": {"m_DefaultName": "white", "m_TexDim": 2},
+    }
+
+
+def shader(name: str, texture_property: str = "_MainTex") -> BundleObject:
+    """A one-pass unlit textured `Shader`, compiled without an editor.
+
+    The bytecode is produced by `vkd3d-compiler` and wrapped in the container
+    documented in `hordeforge/7dtd-engine-research`,
+    `docs/shader-subprogram-blob.md`. One sub-shader, one pass, one hardware
+    tier, d3d11 only, and no keyword variants.
+
+    This is a **synthesized** shader, not a built one: nothing in the path
+    ever ran Unity's shader compiler, and the offline gates that check it
+    share an author with the thing they check. What it is worth is settled by
+    `shamway verify-bundle` (a real Unity runtime reporting
+    `Shader.isSupported`) and then by a person looking at the rendered prop.
+    """
+    compiled = shader_blob.unlit_textured(texture_property)
+    platforms = compiled.platforms
+    a_pass = {
+        "m_EditorDataHash": [],
+        "m_Platforms": [platform.platform for platform in platforms],
+        "m_NameIndices": [],
+        # PassType 0 = Normal.
+        "m_Type": 0,
+        "m_State": _shader_state(name),
+        # 6 = vertex | fragment, the two stages this pass fills.
+        "m_ProgramMask": 6,
+        "progVertex": _program(
+            [
+                (p.vertex_program_type, p.vertex_blob_index, p.vertex_parameter_index)
+                for p in platforms
+            ]
+        ),
+        "progFragment": _program(
+            [
+                (p.fragment_program_type, p.fragment_blob_index, p.fragment_parameter_index)
+                for p in platforms
+            ]
+        ),
+        "progGeometry": _empty_program(),
+        "progHull": _empty_program(),
+        "progDomain": _empty_program(),
+        "progRayTracing": _empty_program(),
+        "m_HasInstancingVariant": False,
+        "m_HasProceduralInstancingVariant": False,
+        "m_UseName": "",
+        "m_Name": "",
+        "m_TextureName": "",
+        "m_Tags": {"tags": []},
+    }
+    parsed_form = {
+        "m_PropInfo": {"m_Props": [_texture_property(texture_property)]},
+        "m_SubShaders": [
+            {
+                "m_Passes": [a_pass],
+                "m_Tags": {"tags": [("RenderType", "Opaque")]},
+                "m_LOD": 100,
+            }
+        ],
+        "m_KeywordNames": [],
+        "m_KeywordFlags": [],
+        "m_Name": name,
+        "m_CustomEditorName": "",
+        "m_FallbackName": "",
+        "m_Dependencies": [],
+        "m_CustomEditorForRenderPipelines": [],
+        "m_DisableNoSubshadersMessage": False,
+    }
+    return BundleObject(
+        SHADER,
+        name,
+        {
+            # The object's own m_Name is empty in every stock shader; the name
+            # that matters is the one inside m_ParsedForm.
+            "m_Name": "",
+            "m_ParsedForm": parsed_form,
+            "platforms": [platform.platform for platform in platforms],
+            "offsets": compiled.offsets,
+            "compressedLengths": [[len(p.blob)] for p in platforms],
+            "decompressedLengths": [[p.decompressed_size] for p in platforms],
+            "compressedBlob": list(compiled.compressed_blob),
+            "stageCounts": [platform.stage_count for platform in platforms],
+            "m_Dependencies": [],
+            "m_NonModifiableTextures": [],
+            "m_ShaderIsBaked": False,
+        },
+    )
+
+
+def material(
+    name: str,
+    shader_key: str,
+    texture_key: str | None = None,
+    texture_property: str = "_MainTex",
+) -> BundleObject:
+    """A `Material` binding a shader and, optionally, one texture.
+
+    `texture_key` is a `Ref` to a `Texture2D` in the same bundle. Passing
+    `None` leaves the property unbound, which draws the shader property's
+    default rather than failing — so a caller that forgets the texture gets
+    white, not an error, and `build.py` says so rather than shipping it
+    silently.
+    """
+    texture_value = {
+        "m_Texture": Ref(texture_key) if texture_key else NULL_PPTR,
+        "m_Scale": {"x": 1.0, "y": 1.0},
+        "m_Offset": {"x": 0.0, "y": 0.0},
+    }
+    return BundleObject(
+        MATERIAL,
+        name,
+        {
+            "m_Name": name,
+            "m_Shader": Ref(shader_key),
+            "m_ValidKeywords": [],
+            "m_InvalidKeywords": [],
+            "m_LightmapFlags": 4,
+            "m_EnableInstancingVariants": False,
+            "m_DoubleSidedGI": False,
+            "m_CustomRenderQueue": -1,
+            "stringTagMap": [],
+            "disabledShaderPasses": [],
+            "m_SavedProperties": {
+                "m_TexEnvs": [(texture_property, texture_value)],
+                "m_Ints": [],
+                "m_Floats": [],
+                "m_Colors": [],
+            },
+            "m_BuildTextureStacks": [],
+        },
+    )
+
+
 def _empty_compressed_mesh() -> dict[str, Any]:
     """`m_CompressedMesh` with every vector empty: this writer never packs one."""
     ranged = {"m_NumItems": 0, "m_Range": 0.0, "m_Start": 0.0, "m_Data": [], "m_BitSize": 0}
@@ -976,8 +1277,8 @@ ASSET_KINDS: dict[str, str] = {
     # vector and layered formats. Both are optional, and a source in one of
     # these is refused by name with the install line when its tool is absent —
     # never skipped, and never silently downgraded.
-    **{suffix: "AudioClip" for suffix in transcode.AUDIO_SUFFIXES},
-    **{suffix: "Texture2D" for suffix in transcode.IMAGE_SUFFIXES},
+    **dict.fromkeys(transcode.AUDIO_SUFFIXES, "AudioClip"),
+    **dict.fromkeys(transcode.IMAGE_SUFFIXES, "Texture2D"),
 }
 MESH_SUFFIXES = tuple(suffix for suffix, kind in ASSET_KINDS.items() if kind == "Mesh")
 IGNORED_NAMES = {".gitkeep", ".gitignore"}
@@ -1005,8 +1306,8 @@ def collect_sources(source_dir: Path) -> list[Path]:
         kinds = ", ".join(sorted(ASSET_KINDS))
         raise PipelineError(
             "this backend cannot build " + ", ".join(unknown[:5]) + f"; it writes {kinds}. "
-            "A prefab, material or shader still needs Unity, because a shader in a "
-            "bundle is compiled platform bytecode — see 'shamway docs no-unity'."
+            "Prefabs, materials and the unlit shader are generated from the meshes "
+            "in this directory rather than read from files — see 'shamway docs no-unity'."
         )
     if not found:
         raise PipelineError(f"{source_dir} holds no assets to build")
@@ -1034,6 +1335,30 @@ def object_for(path: Path, compress_textures: bool = False) -> BundleObject:
         return text_asset(stem, path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as exc:
         raise PipelineError(f"cannot read text asset {path}: {exc}") from exc
+
+
+def prefab_objects(mesh_path: Path, texture_stems: set[str]) -> list[BundleObject]:
+    """The Mesh, Material and prefab one mesh source file becomes.
+
+    7DTD's `Meshfile` and block `Model` resolve through
+    `DataLoader.LoadAsset<GameObject>`, so the **prefab** is the thing that has
+    to answer to the source file's stem. The `Mesh` therefore takes
+    `<stem>_mesh` and the `Material` `<stem>_mat`; a bundle where the mesh
+    owned the stem answered to a name the game never asks for.
+    """
+    stem = mesh_path.stem
+    mesh_key = f"{stem}_mesh"
+    material_key = f"{stem}_mat"
+    albedo = f"{stem}{ALBEDO_SUFFIX}"
+    return [
+        mesh(mesh_key, mesh_path),
+        material(
+            material_key,
+            UNLIT_SHADER_NAME,
+            albedo if albedo in texture_stems else None,
+        ),
+        *mesh_prefab(stem, mesh_key, (material_key,)),
+    ]
 
 
 def render_manifest(bundle_name: str, assets: list[str]) -> str:
@@ -1088,7 +1413,23 @@ def pack_directory(
     it, which is the pair `build` stages together.
     """
     sources = collect_sources(source_dir)
-    objects = [object_for(path, compress_textures) for path in sources]
+    meshes = [path for path in sources if path.suffix.lower() in MESH_SUFFIXES]
+    texture_stems = {path.stem for path in sources if path.suffix.lower() == ".png"}
+    # The prefab lane needs a shader compiler. Without one this writes the
+    # bare `Mesh` it always did rather than failing: a mesh-only bundle is
+    # still reachable through `LoadAsset<Mesh>`, and refusing to pack a mod
+    # that packed yesterday would be a worse answer than packing less of it.
+    # `shamway capabilities` and `doctor` are where the difference shows.
+    prefabs = bool(meshes) and has_capability("vkd3d-compiler")
+    objects = [
+        object_for(path, compress_textures) for path in sources if not (prefabs and path in meshes)
+    ]
+    if prefabs:
+        for path in meshes:
+            objects.extend(prefab_objects(path, texture_stems))
+        # One shader serves every material in the bundle; it carries no
+        # per-material state, so a second copy would only be a second name.
+        objects.append(shader(UNLIT_SHADER_NAME))
     bundle = build_bundle(objects, unity_version, bundle_name, target)
     members = [f"{source_dir.name}/{path.relative_to(source_dir).as_posix()}" for path in sources]
     return bundle, render_manifest(bundle_name, members)

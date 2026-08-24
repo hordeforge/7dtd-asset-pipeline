@@ -261,6 +261,13 @@ It adds an independent 62→44 Hz plus 43→34 Hz bass-pressure layer with a 65 
 attack and 1.75-second decay. This adds deep impact without creating another
 short knock.
 
+The deep-pressure addition was rejected in the target game: the knock remained
+too prominent, while the preceding version's rolling thunder was clearer. The
+follow-up removes that added layer and restores the proven 108→44 Hz boom plus
+unchanged shatter/thunder structure. It changes only the knock balance: a
+55 ms attack, reduced boom harmonic, and lower shock, boom, and short-crack
+gains.
+
 The near `blast` voice itself no longer treats sparse high-band debris as a
 main layer. A target-game reviewer rejected that output as “just crackling,”
 not a bomb or blast. Its replacement uses a wider bipolar pressure hit, a

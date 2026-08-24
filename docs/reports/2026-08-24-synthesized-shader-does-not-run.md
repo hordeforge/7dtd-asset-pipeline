@@ -6,17 +6,52 @@
   client, has collision, and draws nothing. No error, no magenta, no missing
   asset. Every offline gate passed and the in-client acceptance suite passed
   `5/5`.
-- **Cause:** the synthesized shader does not compile on a real graphics device.
-  `Shader.isSupported` is `False` and the runtime logs `Failed to load
-  GpuProgram from binary shader data`.
-- **Why nothing caught it:** `verify-bundle` runs the editor with
-  `-nographics`. With no device there is nothing to compile a sub-program
-  against, so `isSupported` returns `True` for a shader that does not run — and
-  that value was recorded across five pages as evidence the shader worked.
-- **Resolved by:** nothing yet. The false evidence is withdrawn and the
-  measurement is fixed (`verify-bundle --draw`); the shader itself is still
-  broken.
-- **Still open:** the shader. See "What to measure next".
+- **Cause of the shader failure: two bugs in the GLCore code record**, both
+  found and both fixed.
+  1. The fragment half of `UNLIT_GLSL` used `layout(location = 0)` under
+     `#version 150` without `#extension GL_ARB_explicit_attrib_location`.
+     `glslangValidator` says so in one line; Unity says nothing about it.
+  2. `source_blob()` ended the record at the padded source. Every stock GLCore
+     record carries **two further u32 words** — a vertex-attribute mask and a
+     zero — so the runtime was decoding a record eight bytes short.
+- **Result:** on a real device, for the first time,
+  `Shader.isSupported=True`, no `Failed to load GpuProgram`, and the material's
+  `_MainTex` binds to the texture instead of reading `<unbound>`.
+- **Why nothing caught it:** `verify-bundle` ran the editor with `-nographics`.
+  With no device there is nothing to compile a sub-program against, so
+  `isSupported` returned `True` for a shader that did not run — and that value
+  was recorded across five pages as evidence the shader worked. Fixed:
+  `verify-bundle --draw`.
+- **Still open — the prop still does not draw.** The shader now loads and the
+  probe is now trustworthy (its control cube reads a healthy `38.8% / 2.4%` in
+  the same frame), and the prop reads `0.0%`. That is a *different* fault from
+  the one this report opened on, and it is the next thing to measure.
+- **Not measured at all: d3d11.** Everything here is OpenGLCore, because that
+  is what a Linux editor creates. The game runs d3d11 through Proton. Both come
+  from `shader_blob.py`, and a fix for one is not evidence for the other.
+
+## How the two bugs were found
+
+Mutating a *stock* shader object toward this one, one field at a time, keeping
+the record indices consistent — the shape the previous entry in this report
+argued for, after the blob/parsed-form swap turned out to be invalid.
+
+| Mutation of the stock object | Result |
+|---|---|
+| its records re-tiled by this writer's `assemble_blob` + `compress_lz4` | `isSupported=True` — the blob assembler is clean |
+| all 19 parameter records replaced with this writer's `ParameterBlob.to_bytes()` | `isSupported=True` — the parameter blob is clean |
+| the 8 GLCore **code** records replaced with this writer's | **`isSupported=False`** — the fault is in the code record |
+
+That last row is what narrowed it to `source_blob()`. Decoding all twelve stock
+type-6 records then showed a trailing region this writer never wrote, and
+running the GLSL through `glslangValidator` — a compiler that reports errors,
+unlike the runtime — showed the missing extension.
+
+**One probe here was confounded and is recorded as such**: substituting this
+writer's GLSL into a stock record's framing also fails, but that pair is
+inconsistent by construction — the stock parameter blob beside it names stock's
+uniforms, not ours. It isolates nothing, and no conclusion was drawn from it.
+The GLSL fix rests on `glslangValidator` alone, which needs no Unity at all.
 
 ## Evidence
 
@@ -110,7 +145,17 @@ written by `shader_blob.py`.
    The change was reverted rather than kept on the grounds of being
    "more correct": it is unverified either way, and the one hard thing in this
    writer is the last place to carry an unverified edit.
-2. **The GLSL is not the fault — bisected.** A stock shader's GLCore source
+2. **Superseded — this entry's headline was wrong.** It read "the GLSL is not
+   the fault", and `UNLIT_GLSL` did in fact carry a compile error (the missing
+   `GL_ARB_explicit_attrib_location` in the fragment half). The *observation*
+   below stands: stock GLSL inside this container failed too. The inference
+   from it did not, because the record-framing bug — eight missing trailing
+   bytes — broke **every** record whatever source it carried, so substituting a
+   known-good source could not have passed and its failure said nothing about
+   the source. Left in place because the reasoning error is the point:
+   a substitution that cannot pass is not a bisect.
+
+   **The original entry, as written:** A stock shader's GLCore source
    (`Nature/SpeedTree Billboard`, 8251 chars) was substituted into this
    writer's container and rebuilt. The runtime answered exactly as before:
 

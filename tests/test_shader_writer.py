@@ -390,3 +390,57 @@ class DegradedLaneReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GLCoreRecordTailTests(unittest.TestCase):
+    """The eight bytes a GLCore code record carries after its source.
+
+    Both facts here were measured on 2026-08-24 against the twelve type-6
+    records in a stock `Legacy Shaders/Transparent/Cutout/VertexLit` taken from
+    the installed game, and both were absent from this writer until then. The
+    runtime's answer to either was `Failed to load GpuProgram from binary shader
+    data` and `Shader.isSupported == False` - naming neither a length nor a
+    line - so a unit test is the only place the difference is legible.
+    """
+
+    def test_a_source_record_does_not_end_at_its_source(self) -> None:
+        blob = shader_blob.source_blob(shader_blob.GL_CORE_32, "x", 17)
+        length = struct.unpack_from("<I", blob, 24 + 4)[0]
+        end = (24 + 8 + length + 3) & ~3
+        self.assertEqual(
+            len(blob) - end,
+            8,
+            "every stock GLCore record carries two further u32 words; a record "
+            "that stops at the padded source is eight bytes short of the format "
+            "the runtime decodes",
+        )
+        self.assertEqual(struct.unpack_from("<2I", blob, end), (17, 0))
+
+    def test_the_unlit_mask_names_the_attributes_the_glsl_declares(self) -> None:
+        declared = {
+            name for name in ("in_POSITION0", "in_TEXCOORD0") if name in shader_blob.UNLIT_GLSL
+        }
+        self.assertEqual(declared, {"in_POSITION0", "in_TEXCOORD0"})
+        self.assertEqual(
+            shader_blob.UNLIT_VERTEX_ATTRIBUTES,
+            (1 << shader_blob.VERTEX_ATTRIBUTE_POSITION)
+            | (1 << shader_blob.VERTEX_ATTRIBUTE_TEXCOORD0),
+        )
+
+    def test_both_glsl_halves_declare_the_extension_their_layout_needs(self) -> None:
+        """`layout(location = ...)` is not in GLSL 150.
+
+        The fragment half used it without the extension, and glslangValidator
+        answered `'location' : not supported for this version or the enabled
+        extensions`. Unity reported no such thing - it reported an unsupported
+        shader, and the prop drew nothing.
+        """
+        for half in ("VERTEX", "FRAGMENT"):
+            body = shader_blob.UNLIT_GLSL.split(f"#ifdef {half}", 1)[1].split("#endif", 1)[0]
+            if "layout(location" not in body:
+                continue
+            self.assertIn(
+                "#extension GL_ARB_explicit_attrib_location : require",
+                body,
+                f"the {half} half uses layout(location=...) under #version 150 without enabling it",
+            )

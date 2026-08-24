@@ -216,6 +216,13 @@ void main()
 #endif
 #ifdef FRAGMENT
 #version 150
+// Required, not decoration: `layout(location = ...)` is not in GLSL 150, and
+// without this line the fragment half fails to compile with
+// "'location' : not supported for this version or the enabled extensions".
+// The runtime reports none of that - it says "Failed to load GpuProgram from
+// binary shader data", the shader is unsupported, and a prop using it draws
+// nothing. Stock GLCore fragment programs carry the same line.
+#extension GL_ARB_explicit_attrib_location : require
 
 uniform sampler2D _MainTex;
 
@@ -230,11 +237,35 @@ void main()
 """
 
 
-def source_blob(program_type: int, source: str) -> bytes:
+# Unity's `VertexAttribute` enum, as the trailing mask of a GLCore code record
+# indexes it. Derived on 2026-08-24 from two stock records in
+# `Legacy Shaders/Transparent/Cutout/VertexLit`: one declaring
+# POSITION+NORMAL+TEXCOORD0 with mask 19 (bits 0,1,4) and one declaring
+# POSITION+COLOR+TEXCOORD0+TEXCOORD1 with mask 57 (bits 0,3,4,5). The two share
+# exactly POSITION and TEXCOORD0, and exactly bits 0 and 4.
+VERTEX_ATTRIBUTE_POSITION = 0
+VERTEX_ATTRIBUTE_NORMAL = 1
+VERTEX_ATTRIBUTE_TANGENT = 2
+VERTEX_ATTRIBUTE_COLOR = 3
+VERTEX_ATTRIBUTE_TEXCOORD0 = 4
+VERTEX_ATTRIBUTE_TEXCOORD1 = 5
+
+# What `UNLIT_GLSL` declares: `in vec3 in_POSITION0` and `in vec2 in_TEXCOORD0`.
+UNLIT_VERTEX_ATTRIBUTES = (1 << VERTEX_ATTRIBUTE_POSITION) | (1 << VERTEX_ATTRIBUTE_TEXCOORD0)
+
+
+def source_blob(program_type: int, source: str, vertex_attributes: int = 0) -> bytes:
     """A code-blob record whose program data is source text, not bytecode.
 
     OpenGLCore sub-programs carry GLSL directly, with no program-data header -
     the 38-byte DX11 header is a d3d11 thing.
+
+    The record does not end at the source. Every one of the twelve type-6
+    records in a stock GLCore shader carries **two further u32 words** after the
+    padded source: the vertex-attribute mask above, and a zero. This writer
+    omitted both until 2026-08-24, so the runtime read a record eight bytes
+    shorter than the format it was decoding and answered `Failed to load
+    GpuProgram from binary shader data` - with no mention of a length.
     """
     writer = _Writer()
     writer.i32(BLOB_VERSION)
@@ -247,6 +278,8 @@ def source_blob(program_type: int, source: str) -> bytes:
     writer.out += payload
     while len(writer.out) % 4:
         writer.out += b"\x00"
+    writer.i32(vertex_attributes)
+    writer.i32(0)
     return bytes(writer.out)
 
 
@@ -655,8 +688,8 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
         [
             vertex_parameters.to_bytes(),
             fragment_parameters.to_bytes(),
-            source_blob(GL_CORE_32, glsl),
-            source_blob(GL_CORE_32, glsl),
+            source_blob(GL_CORE_32, glsl, UNLIT_VERTEX_ATTRIBUTES),
+            source_blob(GL_CORE_32, glsl, UNLIT_VERTEX_ATTRIBUTES),
         ]
     )
     return CompiledShader(

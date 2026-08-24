@@ -45,7 +45,12 @@ ADMIN_PORT="${PLAYTEST_ADMIN_PORT:-8081}"
 WORLD_NAME="${PLAYTEST_WORLD_NAME:-Navezgane}"
 GAME_NAME="${PLAYTEST_GAME_NAME:-PlaytestNav}"
 CLIENT_PLATFORM="${PLAYTEST_CLIENT_PLATFORM:-local}"
-FRESH=0
+# Fresh by default. A reused world is a reused set of registered blocks, item
+# ids and chunk state, and the whole point of this run is that nothing carried
+# over from the last one - the same reason `client launch` refuses a running
+# client. Opting out is a deliberate act with a flag, not the thing you get by
+# forgetting one.
+FRESH=1
 LISTEN=0
 SHAMWAY="${SHAMWAY:-shamway}"
 
@@ -68,7 +73,9 @@ usage() {
 		  --admin-port N           telnet port                 (default: 8081)
 		  --timeout SECONDS        orchestrator budget         (default: 900)
 		  --client-platform MODE   local or steam              (default: local)
-		  --fresh-save             regenerate the save first
+		  --fresh-save             regenerate the save first (the default)
+		  --reuse-save             keep the existing save; faster, and weaker
+		                           evidence - say so in any report that used it
 		  --listen                 do not mute the client, for an audio sign-off
 		  -h, --help               this text
 
@@ -81,7 +88,7 @@ usage() {
 		EXAMPLES
 		  playtest-acceptance.sh                        # accept the mod in this directory
 		  playtest-acceptance.sh --listen               # same, audible, for a sound check
-		  playtest-acceptance.sh --fresh-save           # regenerate the world first
+		  playtest-acceptance.sh --reuse-save            # keep the world, for a quick loop
 		  playtest-acceptance.sh --client-platform steam  # never touch platform.cfg
 	EOF
 }
@@ -99,6 +106,7 @@ while (($#)); do
 		--timeout) TIMEOUT="${2:-}"; shift 2 ;;
 		--client-platform) CLIENT_PLATFORM="${2:-}"; shift 2 ;;
 		--fresh-save) FRESH=1; shift ;;
+		--reuse-save) FRESH=0; shift ;;
 		--listen) LISTEN=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) die "unknown option: $1 (try --help)" ;;
@@ -149,6 +157,11 @@ echo "  connect        $CONNECT_ROOT"
 echo "  client log     $CLIENT_LOG"
 echo "  client mode    $CLIENT_PLATFORM"
 echo "  client audio   $AUDIO"
+if ((FRESH)); then
+	echo "  save           regenerated for this run"
+else
+	echo "  save           REUSED (--reuse-save): weaker evidence, say so in the report"
+fi
 echo "  session        $SESSION"
 if [[ "$CLIENT_PLATFORM" == "local" ]]; then
 	echo "  note           fastconnect swaps $GAME/platform.cfg for the run and restores it on exit"

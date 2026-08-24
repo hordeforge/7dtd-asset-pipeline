@@ -214,10 +214,25 @@ the case results:
 shamway script playtest-acceptance
 ```
 
+**It regenerates the save on every run.** A reused world carries registered
+blocks, item ids and chunk state from the last one, which is the same reason
+`client launch` refuses a client that is already up: the run is supposed to
+prove what *this* build does, and anything carried over is a result nobody can
+attribute. Opting out is a deliberate flag, and a report that used it says so:
+
+```bash
+shamway script playtest-acceptance --reuse-save
+```
+
 The provider is generated rather than hand-written because the cases *are* the
-manifest: a bundle member with no case is a member nobody proved. Adding an
-extension the writer can emit means adding it to `acceptance.ASSET_CASES` with
-the `LoadAsset<T>` the engine really uses; an unmapped member is refused, not
+bundle's membership: a member with no case is a member nobody proved. For a
+synthesized mod the names come from `bundle_writer.synthesized_members`, the
+writer's own naming — a mesh source becomes a prefab at the stem, so asking
+for `LoadAsset<Mesh>` there is asking for a name the prefab now owns. For an
+editor-built or staged bundle the manifest lists real object files and the
+extension mapping applies; adding an extension means adding it to
+`acceptance.ASSET_CASES` with the `LoadAsset<T>` the engine really uses; an
+unmapped member is refused, not
 skipped.
 
 Stems and mod names reach the generated C# and XML as untrusted text — a

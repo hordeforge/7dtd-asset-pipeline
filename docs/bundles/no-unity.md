@@ -458,6 +458,10 @@ together: generate, build, deploy, hand off to the harness.
 shamway script playtest-acceptance
 ```
 
+It regenerates the save every run — a reused world is state from the last one,
+and this run is meant to prove what *this* build does. `--reuse-save` opts out
+for a quick loop, and a report that used it has to say so.
+
 ```bash
 shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
 ```

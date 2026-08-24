@@ -545,18 +545,29 @@ class DocumentationTests(unittest.TestCase):
         copy while this repository's own rules are edited at the root, and the
         copy has already drifted once. `setup.py` re-copies on every build, so
         equality here is cheap to keep and expensive to lose.
-        """
-        from sevendtd_asset_pipeline.docs import TOPICS
 
+        Every `.md` under docs/ is compared, not just the TOPICS pages: the
+        genre stores (adrs/, rfcs/, prds/, reports/, reviews/, digests/) and
+        their READMEs and templates ship in the wheel too, and a drift there
+        would be invisible to every other check.
+        """
         source = Path(__file__).resolve().parents[1] / "docs"
         if not source.is_dir():
             self.skipTest("running from a packaged install without the repo docs/")
         packaged = Path(sevendtd_asset_pipeline.__file__).resolve().parent / "docs"
-        for filename, _summary in TOPICS.values():
-            with self.subTest(filename):
+        packaged_pages = sorted(path.relative_to(packaged) for path in packaged.rglob("*.md"))
+        source_pages = sorted(path.relative_to(source) for path in source.rglob("*.md"))
+        self.assertEqual(
+            source_pages,
+            packaged_pages,
+            "docs/ and the packaged copy disagree on which pages exist; "
+            "re-copy the tree (or rebuild the wheel)",
+        )
+        for relative in source_pages:
+            with self.subTest(str(relative)):
                 self.assertTrue(
-                    (packaged / filename).read_bytes() == (source / filename).read_bytes(),
-                    f"{filename} differs between docs/ and the packaged copy; "
+                    (packaged / relative).read_bytes() == (source / relative).read_bytes(),
+                    f"{relative} differs between docs/ and the packaged copy; "
                     "re-copy it (or rebuild the wheel) so both readers see one page",
                 )
 

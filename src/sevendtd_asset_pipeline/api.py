@@ -30,11 +30,11 @@ from typing import Any
 from . import client
 from .acceptance import generate as generate_acceptance_provider
 from .build import (
-    SYNTHESIZED_CAVEATS,
     expected_unity_version,
     reject_disabled_modules,
     run_build,
     stage_bundle,
+    synthesized_caveats,
 )
 from .bundle_verify import VerifyReport, verify_with_editor
 from .bundle_writer import pack_directory
@@ -85,12 +85,16 @@ class Pipeline:
         adopt_project: Path | str | None = None,
         source_root: str | None = None,
         manifest_dir: str | None = None,
-        bundle_source: str = "unity",
+        bundle_source: str | None = None,
     ) -> tuple[Pipeline, list[Path]]:
         """Create the pipeline inside an existing modlet and return it, ready to use.
 
         Supply either `game_dir`, which reads the authoritative revision from a
         shipped game bundle, or an explicitly verified `unity_version`.
+
+        An unstated `bundle_source` means `"synthesized"`: this tool writes the
+        bundle and no editor is involved. `"unity"` opts the mod into a local
+        editor, and so does `adopt_project`.
 
         `adopt_project` points at a Unity project the mod already has: the
         template is not copied, only the pipeline-owned editor scripts are
@@ -556,7 +560,7 @@ def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
         "manifest": str(manifest),
         "bytes": len(bundle),
         "assets": manifest_assets(manifest),
-        "caveats": list(SYNTHESIZED_CAVEATS),
+        "caveats": list(synthesized_caveats()),
     }
 
 
@@ -588,7 +592,7 @@ def _init(params: dict[str, Any]) -> dict[str, Any]:
         adopt_project=params.get("adopt_project"),
         source_root=params.get("source_root"),
         manifest_dir=params.get("manifest_dir"),
-        bundle_source=params["bundle_source"],
+        bundle_source=params.get("bundle_source"),
     )
     return {"created": [str(path) for path in created]}
 

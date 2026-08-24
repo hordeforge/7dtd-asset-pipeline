@@ -1,5 +1,15 @@
 # Bundle generation
 
+> **This page is the opt-in editor path — `bundle_source = "unity"`.** It is
+> not the default and not the shortest route. By default `shamway build`
+> writes the bundle itself, with no editor, no project, no `.meta` files and
+> none of the engine-module obligations below;
+> [no-unity.md](no-unity.md) owns that path and is the one to read first.
+>
+> Read this page when the bundle needs shading the writer does not author —
+> lit, shadowed, transparent, normal-mapped or multi-pass — or when a mod that
+> already has a Unity project is adopted with `shamway init --adopt`.
+
 ## Artifact flow
 
 ```text
@@ -177,7 +187,7 @@ build dependencies; serialization then strips it and may only warn.
 shamway build
 ```
 
-The CLI:
+With `bundle_source = "unity"`, the CLI:
 
 1. verifies editor, project, installed-game revision, and Windows module;
 2. runs Unity in batch/no-graphics mode;
@@ -190,6 +200,12 @@ The CLI:
 
 An old valid artifact therefore survives a failed build. The command never
 partially copies a candidate into the modlet.
+
+The same command with the default `bundle_source = "synthesized"` skips steps
+1 to 4 entirely — there is no editor to verify, run, wait for, or read a log
+from — and does steps 5 to 7 unchanged on a bundle it wrote itself in
+milliseconds. It also prints what its own gates are worth, because an artifact
+and a checker with the same author cannot cross-examine each other.
 
 ## When the editor is on another machine
 

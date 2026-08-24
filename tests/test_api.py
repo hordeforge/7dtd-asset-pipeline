@@ -267,7 +267,11 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(sorted(KINDS), prompt["kind"]["enum"])
         self.assertEqual(["", *sorted(KEYS)], prompt["key"]["enum"])
         init = by_name["init"]["parameters"]["properties"]
-        self.assertEqual(sorted(BUNDLE_SOURCES), init["bundle_source"]["enum"])
+        self.assertEqual(list(BUNDLE_SOURCES), init["bundle_source"]["enum"])
+        # Deliberately no published default: an absent bundle_source means
+        # "synthesized" alone but "unity" with adopt_project, and the schema
+        # layer fills defaults before it can see the other parameter.
+        self.assertNotIn("default", init["bundle_source"])
 
     def test_a_published_default_is_applied_and_an_explicit_value_wins(self) -> None:
         """The schema is the only copy of a parameter default.

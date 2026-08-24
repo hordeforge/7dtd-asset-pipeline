@@ -43,11 +43,16 @@ shamway generate mesh-icon assets-src/bundle/myModThing.glb \
 ```
 
 The two frame the object identically — same yaw, pitch and padding — but the
-Blender one is a **clay render**: an interchange file carries no Unity
-material, so it reports silhouette, proportion and framing, not the in-game
-look. Treat it as the base coat that the rules below are applied to, and as
-the honest answer for a mod on the synthesized path, which has no prefab to
-photograph.
+Blender one is a **clay render**: an interchange file carries no material, so
+it reports silhouette, proportion and framing, not the in-game look. Treat it
+as the base coat that the rules below are applied to, and as the answer for a
+mod on the default synthesized path, which has no editor to drive.
+
+A synthesized bundle *does* carry a material now — one unlit textured pass —
+which changes less than it sounds like: an unlit prop at full brightness and a
+clay render differ by an albedo texture, not by shading, and neither shows how
+the prop reads under scene light. `render-icon` stays the better answer
+wherever an editor and a lit material both exist.
 
 Then look at it at 160 px, in the game, in a backpack next to vanilla items.
 Everything below is detail.
@@ -301,7 +306,7 @@ normal has to be redrawn every time the albedo changes:
 shamway generate texture-maps assets-src/textures/paint.png \
     --out-dir assets-src/textures/derived --stem myModPaint \
     --metallic 0.58 --smoothness 0.16 \
-    --also tools/shamway/UnityProject/Assets/ModAssets/Bundle/Textures
+    --also assets-src/bundle
 ```
 
 `--metallic` and `--smoothness` are the scalars the flat material shipped

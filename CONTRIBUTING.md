@@ -20,8 +20,11 @@ that editor's assemblies (`scripts/compile-editor-scripts.sh`). `make check
 test` needs no network, no Unity *running*, and no game install; the editor
 compile is opportunistic and skips with a note when it cannot run.
 
-An editor-script change therefore comes in three grades, and the report must
-say which: compiled (`make check` on a host with the editor), probed
+The editor scripts are the opt-in half of this repository — a mod that takes
+the default `bundle_source = "synthesized"` never loads one — but they are
+still owned here and still gated. An editor-script change comes in three
+grades, and the report must say which: compiled (`make check` on a host with
+the editor), probed
 (`shamway build --probe` ran it), or executed for real (`render-icon`, a
 generator, a fresh client). Never describe the first as the third.
 

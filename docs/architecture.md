@@ -7,8 +7,9 @@
 - Keep editable source and Unity project state owned by that mod.
 - Make the dangerous silent failures deterministic build-time failures.
 - Require no Python dependency merely to inspect or validate a bundle.
-- Require no Unity editor on a machine that is not building: a mod either has
-  no bundle, or its bundle can arrive already built and be gated here.
+- Require no Unity editor at all, ever, by default: the writer here produces
+  every asset class a modlet references, and a Unity editor is a source a mod
+  opts into (`bundle_source = "unity"`) rather than a dependency of the tool.
 - Treat the installed game, emitted artifact, and fresh client as separate
   authorities for version, construction, and acceptance.
 - Be easy for both humans and coding agents to run and audit: every command is
@@ -23,10 +24,11 @@
 | `api.py` | the `Pipeline` facade, and the dispatch `call`/`serve` share |
 | `serve.py` | line-delimited JSON request/response over stdio |
 | `capabilities.py` | which optional tools are usable, what they unlock, how to install them |
-| Unity project template | editor revision, package modules, source membership boundary |
-| `BundleBuilder.cs` | actual serialization, graphics APIs, options, collision rejection, probe |
+| Unity project template | *(opt-in)* editor revision, package modules, source membership boundary |
+| `BundleBuilder.cs` | *(opt-in)* editor-side serialization, graphics APIs, options, collision rejection, probe |
 | `build.stage_bundle` | the same gates and staging for a bundle a *different* editor built, so no editor is needed here |
-| `bundle_writer.py` | the writer half of the format: UnityFS container, SerializedFile v22, type trees, and Texture2D/AudioClip/TextAsset objects, with no editor |
+| `bundle_writer.py` | **the default build path**: UnityFS container, SerializedFile v22, type trees, and the Texture2D/AudioClip/TextAsset/Mesh/Material/Shader/prefab objects, with no editor |
+| `shader_blob.py` | the shader sub-program container: HLSL through `vkd3d-compiler` to `DXBC`, wrapped as Unity's compressed blob |
 | `bundle_verify.py` + `BundleVerifier.cs` | loads a bundle in a real runtime with the engine's own loader — the one offline check this project does not also author |
 | `GeneratedAsset.cs` | asset-as-code prefab/material/import/particle/audio helpers that encode the batch-mode traps |
 | `IconRenderer.cs` | renders a bundle prefab into an atlas cell, so an icon cannot drift from its mesh |
@@ -40,7 +42,7 @@
 | consumer `AGENTS.md` | the agent contract, written into the mod by `init` |
 | UnityFS reader | signature, revision, block decompression, serialized type table |
 | tracked `.manifest` | complete build membership for offline exact-stem validation |
-| installed game | authoritative expected Unity revision |
+| installed game | authoritative expected bundle revision, read-only |
 | fresh client | final runtime/render/audio acceptance |
 
 ## Trust boundaries
@@ -70,9 +72,9 @@ a bare host. Pillow only ever *adds* a measurement (alpha coverage), and its
 absence degrades to a note rather than to a pass.
 
 Unity is a *source of the artifact*, not a dependency of the tool, and for
-textures, clips, text files and meshes it is not even that: `bundle_writer.py` writes
-the container and the objects directly, so `bundle_source = "synthesized"`
-removes the editor from the build. What that costs is evidence, not
+every asset class a modlet references it is not even that: `bundle_writer.py`
+writes the container and the objects directly, so `bundle_source =
+"synthesized"` — the default — removes the editor from the build entirely. What that costs is evidence, not
 correctness-by-hope — the class-142 and stem gates become structural on our own
 output, and every synthesize says so. The trust model answers it by inverting
 the relationship: where an editor *does* exist it becomes a verifier
@@ -97,18 +99,28 @@ per-user data), and the registry marks every writer `writes: true` so a caller �
 refuse them before anything starts.
 
 The writer's boundary is where the work has reached, **not** where the format
-ends — a distinction this page got wrong until 2026-08-24. `bundle_writer.py`
-covers textures, clips, text files, meshes and the prefab component group, and
-stops at materials and shaders. What is measured is that a shader cannot be
-*borrowed*: the
-shipped player carries six shaders and all are internal, and the game's own
-bundles embed theirs same-file. Whether one can be *authored* offline was never
-checked before it was written down as impossible; it can be compiled
-(`vkd3d-compiler` for DXBC, `glslangValidator` for SPIR-V) and its container
-has since been decoded, so the boundary is a gap with a route rather than a
-wall. [ADR 0001](adrs/0001-synthesize-bundles-without-an-editor.md)
-records that research and what is not attempted; [no-unity.md](bundles/no-unity.md)
-states what a synthesized bundle owes instead.
+ends — a distinction this page got wrong until 2026-08-24, when it said the
+writer "stops at materials and shaders" and called that a property of the
+engine. `bundle_writer.py` covers textures, clips, text files, meshes,
+materials, shaders and the prefab component group: every asset class a 7DTD
+modlet references from XML. What was measured, and remains true, is only that a
+shader cannot be *borrowed* — the shipped player carries six shaders and all
+are internal, and the game's own bundles embed theirs same-file. Whether one
+could be *authored* offline was never checked before it was written down as
+impossible. It can: `vkd3d-compiler` compiles the pass to `DXBC` and the blob
+container was decoded from a shipped bundle, so the writer emits one.
+
+What the writer has not reached is narrower than that sentence was: one unlit
+opaque d3d11 pass, no keyword variants, no other graphics API.
+[ADR 0001](adrs/0001-synthesize-bundles-without-an-editor.md) records the
+research and what is not attempted; [no-unity.md](bundles/no-unity.md) states
+what a synthesized bundle owes instead.
+
+The shader lane is the only part of the writer with a host dependency:
+`vkd3d-compiler`. It degrades rather than refusing — a mesh becomes a bare
+`Mesh` instead of a prefab — because a mod that packed yesterday should not
+stop packing today. That makes it the one place a missing capability is not a
+refusal, so `build` prints a caveat naming what was packed instead.
 
 The mesh lane is also where an optional capability becomes structural rather
 than additive: `trimesh` reads the interchange file, so without it the writer

@@ -24,6 +24,11 @@ of this repository. The full ownership split is in
 | `icon` | derive an atlas cell from an already-transparent source | Pillow |
 | `texture-maps` | derive normal + mask maps from an albedo | Pillow, NumPy |
 | `mesh` | authored mesh to GLB | Blender on `PATH` |
+| `mesh-icon` | photograph a mesh file into an atlas cell, headless | Blender on `PATH` |
+| `particle-card` | a soft streak or haze card for a particle material | Pillow, NumPy |
+
+Every one of them writes a file the editorless bundle writer can read, so a
+generated asset reaches a `.unity3d` with no editor between them.
 
 Install the optional tools with `scripts/install-tools.sh --with-authoring`;
 ask what works right now with `shamway capabilities --json`. Each generator
@@ -39,7 +44,7 @@ for:
 - a recorded seed wherever randomness is involved, so a rebuild is
   byte-reproducible and a diff means someone changed the design;
 - write to a temporary file and replace the destination only on success, so a
-  failed run never leaves a half-written asset in the Unity project;
+  failed run never leaves a half-written asset in the bundle-membership folder;
 - print the numbers a review needs — dimensions, format, channels, duration,
   peak, means — so a change is reviewable without opening an editor;
 - fail on missing inputs instead of creating placeholders;
@@ -65,8 +70,8 @@ Both are first-class; pick by what the shape needs.
 
 | Lane | Use it for | Cost | Result in the bundle |
 |---|---|---|---|
-| **Authored** — `shamway generate mesh`, Blender, OpenSCAD | organic, rigged, sculpted, or anything primitives cannot express | Blender on the host | a real class-43 `Mesh` object |
-| **Procedural** — `GeneratedAsset.Primitive(...)` in the Unity project | hard-surface props that are boxes, cylinders, and spheres | nothing beyond Unity | no `Mesh` object; the prefab references Unity's built-in primitives |
+| **Authored** — `shamway generate mesh`, Blender, OpenSCAD | organic, rigged, sculpted, or anything primitives cannot express; and everything, on the default editorless path | Blender on the host | a class-43 `Mesh`, and — from `assets-src/bundle/` — the prefab, material and shader around it |
+| **Procedural** — `GeneratedAsset.Primitive(...)` in the Unity project | hard-surface props that are boxes, cylinders, and spheres | a Unity editor: this is the one lane that needs `bundle_source = "unity"` | no `Mesh` object; the prefab references Unity's built-in primitives |
 
 A procedural prop's first draft is always a handful of bare shapes that read
 as nothing; the one that shipped went to about forty primitives, and the
@@ -100,11 +105,16 @@ Blender is Z-up and glTF is Y-up, so a mesh authored at `--size W D H` arrives
 with its height on Y. The generator puts the pivot at the base, so exported
 bounds start at Y = 0 and a placed block rests on the ground.
 
-## Unity side
+## Unity side — only for a mod that opted into an editor
 
-Generating a prefab or material from code is the Unity half of the same idea.
-The scaffolded project ships `GeneratedAsset.cs`, whose helpers encode the traps
-a batch script hits and the inspector hides:
+Generating a prefab or material from code is the Unity half of the same idea,
+and it applies to `bundle_source = "unity"` alone. On the default path the
+writer assembles the prefab, material and shader itself from the mesh file, and
+none of the helpers below exist or are needed — nor do their traps, since that
+material has one texture property and no keywords.
+
+A mod with a Unity project gets `GeneratedAsset.cs`, whose helpers encode the
+traps a batch script hits and the inspector hides:
 
 - `StandardMaterial(...)` enables `_NORMALMAP` and `_METALLICGLOSSMAP`, without
   which an assigned map is never sampled;

@@ -17,7 +17,13 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from .assets_src import create as create_assets_src
-from .config import BUNDLE_SOURCES, CONFIG_NAME, VALID_BUNDLE, render_config
+from .config import (
+    BUNDLE_SOURCES,
+    CONFIG_NAME,
+    VALID_BUNDLE,
+    render_config,
+    resolve_bundle_source,
+)
 from .consumer_docs import render_agent_guide
 from .errors import PipelineError
 from .references import read_mod_name
@@ -103,9 +109,20 @@ def initialize(
     adopt_project: Path | str | None = None,
     source_root: str | None = None,
     manifest_dir: str | None = None,
-    bundle_source: str = "unity",
+    bundle_source: str | None = None,
 ) -> list[Path]:
     """Create the pipeline inside a modlet, or adopt the Unity project it has.
+
+    An unstated `bundle_source` means `"synthesized"`: no Unity project is
+    created and no editor is ever started, because this tool writes the bundle
+    itself. `"unity"` is the opt-in — it is the only value that copies a project
+    template, and the only one that makes an editor a requirement of building
+    this mod.
+
+    The one exception is `adopt_project`, which *is* that opt-in: pointing at a
+    Unity project the mod already has says the editor lane is wanted, so an
+    unstated source there means `"unity"`. Stating any other source alongside it
+    is refused, because there would be nothing for the project to be used by.
 
     With `adopt_project`, no project template is copied and no
     `ProjectVersion.txt` or package manifest is touched: those already exist and
@@ -115,6 +132,7 @@ def initialize(
     created, nothing is vendored into one, and the mod needs no editor to be
     built, validated or shipped.
     """
+    bundle_source = resolve_bundle_source(bundle_source, adopt_project is not None)
     # Checked before anything is written: an unknown source renders a
     # configuration `load_config` rejects, and the scaffold has already copied
     # a Unity project by the time that surfaces. The CLI's argparse choices
@@ -223,8 +241,11 @@ def initialize(
         if not keep.exists():
             keep.write_text(
                 "# Every file here becomes a bundle asset: .png -> Texture2D,\n"
-                "# .wav -> AudioClip, .txt/.json/.csv -> TextAsset. The file stem is\n"
-                "# the name the game loads it by. See `shamway docs no-unity`.\n",
+                "# .wav -> AudioClip, .txt/.json/.csv -> TextAsset, and a mesh\n"
+                "# (.glb/.gltf/.obj/.stl/.ply) -> a prefab with its mesh, material and\n"
+                "# shader. The file stem is the name the game loads it by; a texture\n"
+                "# named <stem>_albedo is bound to that prefab's material.\n"
+                "# See `shamway docs no-unity`.\n",
                 encoding="utf-8",
             )
     # The mod is where an agent actually works, so the rules travel with the
@@ -235,7 +256,11 @@ def initialize(
     # Editable sources and their provenance need a home outside the Unity
     # bundle folder, or they end up either unrecorded or accidentally shipped.
     # Created without clobbering: a mod may already have art here.
-    assets_src = create_assets_src(mod_root, mod_name, bundle_name)
+    # The README's "copy a selected output here" sentences have to name this
+    # mod's real membership folder: `assets-src/bundle/` by default, a path
+    # inside the Unity project only where one exists.
+    membership = None if bundle_source == "unity" else (source_root or SYNTHESIZED_SOURCE_ROOT)
+    assets_src = create_assets_src(mod_root, mod_name, bundle_name, membership=membership)
     # Report the editor folder on adoption and the whole project on a fresh
     # scaffold: in both cases it is what the caller now owns and should commit.
     if projectless:

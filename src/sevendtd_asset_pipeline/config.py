@@ -31,16 +31,35 @@ def _toml_string(value: str) -> str:
 # Where the mod's bundle comes from. This is the one key that decides whether a
 # Unity editor has to exist on this machine at all, so every Unity-touching
 # surface (doctor, build, status, validate) reads it rather than guessing from
-# whether UNITY_EDITOR happens to be set.
+# whether UNITY_EDITOR happens to be set. Declaration order is the order these
+# are offered in: "synthesized" is the default, and "unity" is the one a mod
+# opts into.
 BUNDLE_SOURCES = {
-    "unity": "a local editor builds it: shamway build",
     "synthesized": "this tool writes it directly, with no editor: shamway build",
-    "external": "an editor elsewhere builds it; this host gates and stages it: shamway stage",
     "none": "the mod ships no bundle; XML, loose atlas icons and DLLs only",
+    "external": "an editor elsewhere builds it; this host gates and stages it: shamway stage",
+    "unity": "a local editor builds it: shamway build",
 }
+DEFAULT_BUNDLE_SOURCE = "synthesized"
+
+
+def resolve_bundle_source(bundle_source: str | None, adopting: bool) -> str:
+    """What an unstated `bundle_source` means.
+
+    Unity is opt-in, so nothing chooses it for a caller who did not ask —
+    except adopting a Unity project, which is the ask. `init --adopt PROJECT`
+    that then had to repeat `--bundle-source unity` would be a second gesture
+    for the decision the first one already made, and forgetting it would
+    scaffold a synthesized mod beside a project nothing reads.
+    """
+    if bundle_source is not None:
+        return bundle_source
+    return "unity" if adopting else DEFAULT_BUNDLE_SOURCE
+
+
 # The sources that build here. They differ in what starts the build, not in
 # what gates it afterwards.
-LOCAL_BUNDLE_SOURCES = ("unity", "synthesized")
+LOCAL_BUNDLE_SOURCES = ("synthesized", "unity")
 # What SHAMWAY_BUNDLE_SOURCE may set: every declared source except "none",
 # because whether a mod has a bundle is the mod's decision recorded in the
 # file, and the environment only says where this host gets it from. Derived
@@ -125,7 +144,8 @@ class PipelineConfig:
         if not self.has_bundle:
             raise PipelineError(
                 f'{self.config_file.name} sets bundle_source = "none", so this mod has no '
-                'bundle. Set it to "unity" or "external" and give it a bundle_name to add one.'
+                'bundle. Set it to "synthesized" (written here, no editor), "external", or '
+                '"unity", and give it a bundle_name, to add one.'
             )
 
     @property
@@ -204,7 +224,11 @@ def load_config(path: Path | None = None) -> PipelineConfig:
     mod_root = _path(base, data.get("mod_root", "."), "mod_root")
     mod_name = data.get("mod_name")
     bundle_name = data.get("bundle_name", "")
-    bundle_source = data.get("bundle_source", "unity")
+    # Absent means "synthesized": this tool writes the bundle itself. Unity is
+    # opt-in, so the source that needs an editor is the one a configuration has
+    # to ask for by name. Every configuration `init` renders states the key
+    # explicitly, so this default only ever applies to a hand-written file.
+    bundle_source = data.get("bundle_source", DEFAULT_BUNDLE_SOURCE)
     if not isinstance(mod_name, str) or not mod_name.strip():
         raise PipelineError("mod_name must be a non-empty string")
     if bundle_source not in BUNDLE_SOURCES:
@@ -276,7 +300,7 @@ def render_config(
     unity_project: str = "tools/shamway/UnityProject",
     source_root: str = "Assets/ModAssets/Bundle",
     manifest_dir: str = "tools/shamway/manifests",
-    bundle_source: str = "unity",
+    bundle_source: str = DEFAULT_BUNDLE_SOURCE,
 ) -> str:
     """Render `.shamway.toml`.
 
@@ -300,8 +324,9 @@ mod_name = {_toml_string(mod_name)}
 
 # This mod ships no Unity asset bundle: XML, loose UIAtlases/ PNGs, and DLLs
 # only. No Unity editor is needed to build, validate or ship it. Adding a
-# bundle later means setting bundle_source = "unity" (or "external"), giving it
-# a bundle_name, and scaffolding a Unity project. See `shamway docs no-unity`.
+# bundle later means setting bundle_source = "synthesized", giving it a
+# bundle_name, and putting source files in the folder source_root names — still
+# with no editor. See `shamway docs no-unity`.
 bundle_source = "none"
 
 resources_dir = "Resources"
@@ -364,9 +389,10 @@ mod_root = "."
 mod_name = {_toml_string(mod_name)}
 bundle_name = {_toml_string(bundle_name)}
 
-# Where the bundle comes from: "unity" (a local editor builds it), "external"
-# (an editor elsewhere builds it and `shamway stage` gates it here), or "none"
-# (the mod ships no bundle). See `shamway docs no-unity`.
+# Where the bundle comes from: "synthesized" (this tool writes it, no editor;
+# the default), "unity" (a local editor builds it), "external" (an editor
+# elsewhere builds it and `shamway stage` gates it here), or "none" (the mod
+# ships no bundle). See `shamway docs no-unity`.
 bundle_source = "{bundle_source}"
 
 unity_project = {_toml_string(unity_project)}

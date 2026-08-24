@@ -202,7 +202,7 @@ KINDS: dict[str, Kind] = {
             "shamway generate texture-maps assets-src/textures/{stem}.png \\\n"
             "    --out-dir assets-src/textures/derived --stem {stem} \\\n"
             "    --metallic 0.58 --smoothness 0.16 \\\n"
-            "    --also tools/shamway/UnityProject/Assets/ModAssets/Bundle/Textures",
+            "    --also assets-src/bundle",
         ),
     ),
     "particle-card": Kind(

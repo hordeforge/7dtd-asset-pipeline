@@ -11,17 +11,17 @@ from pathlib import Path
 
 from .api import Pipeline, call_json
 from .build import (
-    SYNTHESIZED_CAVEATS,
     expected_unity_version,
     reject_disabled_modules,
     run_build,
     stage_bundle,
+    synthesized_caveats,
 )
 from .bundle_verify import verify_with_editor
 from .bundle_writer import pack_directory, write_artifact
 from .capabilities import capabilities
 from .client import main as client_main
-from .config import BUNDLE_SOURCES, load_config
+from .config import BUNDLE_SOURCES, load_config, resolve_bundle_source
 from .deep_inspect import deep_inspect
 from .docs import read as read_doc
 from .docs import topics as doc_topics
@@ -78,11 +78,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     init.add_argument(
         "--bundle-source",
-        choices=sorted(BUNDLE_SOURCES),
-        default="unity",
-        help="where the bundle comes from: unity (a local editor builds it), synthesized "
-        "(this tool writes it, no editor), external (built elsewhere, staged here with "
-        "'shamway stage'), or none (the mod ships no bundle)",
+        choices=list(BUNDLE_SOURCES),
+        default=None,
+        help="where the bundle comes from (default synthesized, or unity with --adopt): "
+        "synthesized (this tool writes it, no editor), none (the mod ships no bundle), "
+        "external (built elsewhere, staged here with 'shamway stage'), or unity (opt in "
+        "to a local editor building it)",
     )
     init.add_argument(
         "--manifest-dir",
@@ -321,7 +322,10 @@ def _print_pairs(data: dict[str, object]) -> None:
 
 def run(args: argparse.Namespace) -> int:
     if args.command == "init":
-        if args.bundle_source == "none":
+        # Resolved here as well as in `initialize`, because everything this
+        # branch prints and demands (a revision, the next step) depends on it.
+        bundle_source = resolve_bundle_source(args.bundle_source, args.adopt is not None)
+        if bundle_source == "none":
             # No bundle means no editor, so no revision has to be resolved and
             # neither a game install nor a network is needed to scaffold.
             version = ""
@@ -353,7 +357,7 @@ def run(args: argparse.Namespace) -> int:
             args.adopt,
             args.source_root,
             args.manifest_dir,
-            args.bundle_source,
+            bundle_source,
         )
         for path in created:
             print(f"created {path}")
@@ -362,7 +366,7 @@ def run(args: argparse.Namespace) -> int:
                 "Adopted an existing Unity project. Mark the mod's own asset generators "
                 "with [ShamwayPreBuild] so 'shamway build' runs them before collecting."
             )
-        print(_init_next_step(args.bundle_source))
+        print(_init_next_step(bundle_source))
         return 0
 
     if args.command == "inspect":
@@ -465,7 +469,7 @@ def run(args: argparse.Namespace) -> int:
         manifest_path = args.manifest or Path(f"{args.output}.manifest")
         write_artifact(manifest_path, manifest_text)
         print(f"OK: synthesized {args.output} ({len(bundle)} bytes) and {manifest_path}")
-        for caveat in SYNTHESIZED_CAVEATS:
+        for caveat in synthesized_caveats():
             print(f"note: {caveat}")
         return 0
     if args.command == "check-log":
@@ -577,7 +581,7 @@ def run(args: argparse.Namespace) -> int:
         print(f"OK: {verb} {output}")
         if synthesized:
             # Never "built": the word carries a claim about who serialized it.
-            for caveat in SYNTHESIZED_CAVEATS:
+            for caveat in synthesized_caveats():
                 print(f"note: {caveat}")
         if not args.probe:
             print("Offline gates passed. A fresh-client load is still required for acceptance.")

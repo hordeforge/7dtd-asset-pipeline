@@ -6,6 +6,14 @@ render as flat orange polygons, or flood the client log with thousands of error
 lines a second, or drop a player's frame rate whenever two of them overlap.
 Each of those has happened; each has a specific, cheap preventative below.
 
+> **This lane needs a Unity editor.** The editorless writer emits no
+> `ParticleSystem` and no particle material, so a mod that ships particles sets
+> `bundle_source = "unity"` (a local editor) or `"external"` (one elsewhere).
+> Everything else in this pipeline works without one; this is the class that
+> does not. The card *textures* below are still generated with no editor, and
+> [environment-effects.md](environment-effects.md) is the page for the effects
+> no bundle can carry at all.
+
 ## Quick start
 
 - import the card, build the prefab with GeneratedAsset.ParticleMaterial(...)

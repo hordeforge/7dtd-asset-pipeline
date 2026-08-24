@@ -4,8 +4,11 @@ This is the complete path from a host with nothing installed to a modlet that
 ships a validated asset bundle. Every step states what it costs and how you
 know it worked. [Setup](setup.md) explains each choice in more detail.
 
-Times and sizes below are the realistic case on a Linux host. The Unity editor
-download is the only large one.
+**No Unity editor appears in this path.** The bundle is written by `shamway`
+itself, which is what `shamway init` configures when nothing tells it
+otherwise. Step 4 is where an editor would go, and it is optional and marked as
+such. Times and sizes below are the realistic case on a Linux host, and without
+step 4 nothing here downloads more than a few hundred megabytes.
 
 ## 0. What you need before starting
 
@@ -13,32 +16,38 @@ download is the only large one.
   is portable. CI gates on both Linux and macOS (the tests skip what a
   case-insensitive volume cannot express, such as two casings of one name);
   Windows runs the same Python but no CI job exercises it yet.
-- An installed 7 Days to Die client. It is the authority for which Unity
-  revision your bundle must use, and it is only ever read.
-- A Unity account you can sign in to. Unity Personal is sufficient.
+- An installed 7 Days to Die client. It is the authority for which engine
+  revision your bundle must claim, and it is only ever read.
 
-You do **not** need the game running, a server, or any mod already made.
+You do **not** need the game running, a server, any mod already made, a Unity
+editor, or a Unity account. Those last two appear only in the optional step 4,
+for a mod that opts into `bundle_source = "unity"`.
 
 ## 1. Host tooling (about a minute)
 
 ```bash
 git clone https://github.com/hordeforge/7dtd-asset-pipeline
 cd 7dtd-asset-pipeline
-scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
+scripts/install-tools.sh --check --with-authoring
 ```
 
 `--check` installs nothing; it prints `OK`/`MISS` per tool so you can see what
 the host is missing. Then install for real:
 
-- `scripts/install-tools.sh --with-unity-prereqs` — required for step 4
+- `scripts/install-tools.sh` — the core, including `vkd3d-compiler`
 - `scripts/install-tools.sh --with-authoring` — art and inspection tooling
 - `scripts/install-tools.sh --with-desktop-capture` — a screenshot tool for step 8
+- `scripts/install-tools.sh --with-unity-prereqs` — only for the optional step 4
 
 ```bash
-scripts/install-tools.sh --with-unity-prereqs
+scripts/install-tools.sh
 scripts/install-tools.sh --with-authoring
 scripts/install-tools.sh --with-desktop-capture
 ```
+
+The base install carries `vkd3d-compiler`, which is what compiles the shader a
+prefab's material needs. Without it a mesh still reaches the bundle, as a bare
+`Mesh` rather than as a loadable prefab, and `build` prints a note saying so.
 
 `install-tools.sh` installs uv first, since every Python step runs through it.
 `--with-authoring` then installs Blender, OpenSCAD, ImageMagick, FFmpeg, the
@@ -78,47 +87,47 @@ shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 ```
 
 `MyMod` must already exist and contain `ModInfo.xml`. The command reads the
-Unity revision out of a shipped game bundle's header rather than trusting a
+bundle revision out of a shipped game bundle's header rather than trusting a
 wiki page, then writes:
 
 ```text
 MyMod/
-├── .shamway.toml                       # configuration; commit it
+├── .shamway.toml                           # configuration; commit it
 ├── Makefile.assets                         # assets / assets-probe / ... targets
 ├── assets-src/                             # editable sources + provenance; never ships
+│   ├── bundle/                             # every file here becomes a bundle asset
 │   ├── README.md                           # what each lane holds and must record
 │   └── icons/ textures/ meshes/ audio/ vfx/
 └── tools/shamway/
-    ├── AGENTS.md                           # the agent contract, in your repo
-    └── UnityProject/                       # the Unity project the mod owns
-        ├── Assets/ModAssets/Bundle/        # put selected source assets here
-        ├── Assets/SevenDaysToDieAssetPipeline/Editor/BundleBuilder.cs
-        ├── Assets/SevenDaysToDieAssetPipeline/Editor/BundleVerifier.cs
-        ├── Assets/SevenDaysToDieAssetPipeline/Editor/GeneratedAsset.cs
-        ├── Assets/SevenDaysToDieAssetPipeline/Editor/IconRenderer.cs
-        ├── Assets/SevenDaysToDieAssetPipeline/Editor/ShamwayPreBuild.cs
-        ├── Packages/manifest.json          # engine modules; these are build inputs
-        └── ProjectSettings/ProjectVersion.txt  # the game-matched revision
+    └── AGENTS.md                           # the agent contract, in your repo
 ```
+
+No Unity project, because none is needed: `.shamway.toml` says
+`bundle_source = "synthesized"` and `shamway build` writes the `.unity3d`
+itself. `--bundle-source none`, `external` or `unity` scaffold the other three
+cases; only `unity` adds a Unity project, and the tree it adds is in
+[no-unity.md](../bundles/no-unity.md).
 
 It refuses to overwrite any of those if they already exist. Every path is
 configurable — see [Configuration](../configuration.md).
 
-## 4. Unity editor (30-60 minutes, several GB)
+## 4. (Optional) A Unity editor (30-60 minutes, several GB)
 
-Before spending that, check whether this machine needs an editor at all. It
-does not if the mod ships no bundle — XML, loose `UIAtlases/` icons and a DLL
-are a complete modlet — or if the bundle is built elsewhere and only gated and
-staged here:
+**Skip this unless you know you need it.** Three of the four bundle sources
+need no editor, and one of those three is the default this quickstart uses. An
+editor is worth installing for exactly two reasons:
 
-```bash
-shamway init /path/to/MyMod --bundle-source none
-shamway init /path/to/MyMod --bundle-source external --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
-```
+- the bundle needs shading the writer does not author — lit, shadowed,
+  transparent, normal-mapped or multi-pass — so `bundle_source = "unity"`
+  compiles it;
+- you want `shamway verify-bundle`, which loads a synthesized bundle in a real
+  runtime. That is a checker, not a builder, and nothing needs it to ship.
 
-Both skip this section entirely; [no-unity.md](../bundles/no-unity.md) is the full page,
-including what `shamway stage` gates and what it cannot. The rest of this
-section is the default case: this machine builds the bundle.
+Everything else — including a bundle of textures, clips, text files and
+unlit props — is finished without one. [no-unity.md](../bundles/no-unity.md) is
+the full page, including what `shamway stage` gates and what it cannot.
+
+If one of those two applies:
 
 ```bash
 cd /path/to/MyMod
@@ -146,33 +155,54 @@ export UNITY_EDITOR="/path/to/Unity/Hub/Editor/2022.3.62f2/Editor/Unity"
 scripts/install-unity-editor.sh --skip-hub
 ```
 
-## 5. Prove the environment before touching art (a few minutes)
+## 5. Prove the environment before touching art (seconds)
 
 ```bash
-export UNITY_EDITOR="/path/to/Unity/Hub/Editor/<revision>/Editor/Unity"
 cd /path/to/MyMod
 shamway doctor
 shamway build --probe
 ```
 
-`doctor` checks mod identity, project revision, engine modules, game revision,
-the editor, and Windows Build Support, and reports optional authoring tools.
-It exits non-zero if any check is `FAIL`; `--json` gives agents and CI the full
-structured report either way.
+`doctor` checks mod identity, the bundle revision against the installed game,
+whether the writer has the type trees it needs, and which optional authoring
+tools are usable. It exits non-zero if any check is `FAIL`; `--json` gives
+agents and CI the full structured report either way. It reports Unity rows only
+for a mod that opted into an editor — an absent editor is not a finding about a
+mod that never asked for one.
 
-`build --probe` is the decisive test. Unity creates a throwaway cube prefab,
-builds a real Windows bundle from it, the log is checked for stripped engine
-modules, the artifact is parsed for a class-142 `AssetBundle` object, and the
-prefab is deleted. Nothing is staged into the modlet. Getting this to pass
-before art exists is the whole point: a failure here is an environment
-problem, never an asset problem.
+`build --probe` is the decisive test: it does everything a real build does and
+stages nothing. Synthesized, that is milliseconds. Getting it to pass before art
+exists is the whole point — a failure here is an environment problem, never an
+asset problem.
+
+With `bundle_source = "unity"` the same command means something slower and
+larger: export `UNITY_EDITOR`, and Unity creates a throwaway cube prefab, builds
+a real Windows bundle from it, the log is checked for stripped engine modules,
+the artifact is parsed for a class-142 `AssetBundle` object, and the prefab is
+deleted.
+
+```bash
+export UNITY_EDITOR="/path/to/Unity/Hub/Editor/<revision>/Editor/Unity"
+shamway doctor
+shamway build --probe
+```
 
 ## 6. Add an asset and ship it
 
-Put source assets **and their `.meta` files** under
-`tools/shamway/UnityProject/Assets/ModAssets/Bundle/`. Name each one with a
-mod-prefixed, globally unique stem — 7DTD resolves assets by file-name stem
-alone, discarding folder and extension.
+Put source files in `assets-src/bundle/`. Each becomes one asset named by its
+file stem — an image a `Texture2D`, a clip an `AudioClip`, a `.json`/`.txt`/
+`.csv` a `TextAsset`, and a `.glb`/`.obj`/`.stl` a **prefab** with its mesh,
+material and shader, which is what a `Meshfile` or a block `Model` loads. A
+texture named `<stem>_albedo` is bound to that prefab's material.
+
+Name each one with a mod-prefixed, globally unique stem — 7DTD resolves assets
+by file-name stem alone, discarding folder and extension.
+
+With `bundle_source = "unity"` the folder is different and so are the
+obligations: source assets go under
+`tools/shamway/UnityProject/Assets/ModAssets/Bundle/`, and each one is
+committed **with its `.meta` file**, because Unity identity lives there and a
+missing `.meta` silently re-imports as a different asset.
 
 - `shamway build` — build, gate, and stage bundle + tracked manifest
 - `shamway validate` — bundle plus every reference in Config/**/*.xml
@@ -259,19 +289,27 @@ errors while looking superficially successful.
 
 `shamway generate` ships reproducible generators for
 the sound, audio-conversion, cutout, particle-card, icon, texture, mesh,
-mesh-icon, and mesh-optimize lanes; the scaffolded Unity project
-ships `GeneratedAsset.cs` for building prefabs, materials, imports, particle
-state, and audio from code, and `IconRenderer.cs` for photographing a prefab
-into an atlas cell.
+mesh-icon, and mesh-optimize lanes, and none of them needs an editor. A mod
+that opted into one additionally gets `GeneratedAsset.cs`, for building
+prefabs, materials, imports, particle state and audio from code, and
+`IconRenderer.cs`, for photographing a prefab into an atlas cell.
 
 ```bash
 shamway generate sound blast assets-src/audio/blast.wav --seed 7 \
-    --promote tools/shamway/UnityProject/Assets/ModAssets/Bundle/Sounds/myModBlast.wav
+    --promote assets-src/bundle/myModBlast.wav
 shamway generate cutout key assets-src/icons/thing-src.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
 shamway generate texture-maps detail --out-dir assets-src/textures --stem myModSteel --seed 7
-shamway render-icon myModThing
+shamway generate mesh assets-src/bundle/myModThing.glb --shape cylinder --size 0.19 0.19 0.42
+shamway generate mesh-icon assets-src/bundle/myModThing.glb UIAtlases/ItemIconAtlas/myModThing.png
 ```
+
+`GeneratedAsset.cs`, `IconRenderer.cs` and `shamway render-icon` belong to the
+Unity lane and appear only in a mod that opted into it. `generate mesh` and
+`generate mesh-icon` are their editorless counterparts: the first writes
+primitives to a `.glb` the writer turns into a prefab, the second photographs
+that file in headless Blender and says in its own output that the result is a
+clay render rather than the in-game look.
 
 Read these before authoring:
 
@@ -294,8 +332,14 @@ Read these before authoring:
 shamway status --json
 shamway doctor --json
 shamway inspect Resources/mymod.unity3d
-shamway check-log .shamway/build/bundle/unity-build.log
 shamway refs
+```
+
+`check-log` joins that list only for a mod with an editor, because the log it
+reads is one an editor wrote:
+
+```bash
+shamway check-log .shamway/build/bundle/unity-build.log
 ```
 
 [Troubleshooting](../runbooks/troubleshooting.md) maps each failure message to its root

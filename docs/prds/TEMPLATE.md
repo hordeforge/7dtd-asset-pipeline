@@ -11,8 +11,9 @@ stale, say so here rather than leaving a reader to discover it in Design.
 
 What is impossible or unsafe without this, stated from the situation rather
 than from the solution. Include the real constraints that shape it: no network,
-no writes into a game install, Unity optional, an adopting mod may not check
-this repository out.
+no writes into a game install, Unity opt-in (`bundle_source = "synthesized"`
+is the default and starts no editor), an adopting mod may not check this
+repository out.
 
 ## Goals
 

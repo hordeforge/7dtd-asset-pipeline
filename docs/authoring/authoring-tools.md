@@ -1,7 +1,8 @@
 # Open-source authoring and inspection tools
 
-Python is the only pipeline requirement; Unity is optional and, for a bundle
-of textures, clips, text files and meshes, not involved at all. The tools below
+Python is the only pipeline requirement. Unity is **opt-in** and, for a bundle
+of textures, clips, text files, meshes, materials, shaders and prefabs — which
+is every asset class a modlet references — not involved at all. The tools below
 are optional
 and selected for reproducible, scriptable workflows that humans and coding
 agents can both drive. Pin versions in each mod when output stability matters.
@@ -14,9 +15,9 @@ right now with `shamway capabilities --json`.
 `shamway generate` already ships working generators
 built on this stack — sound synthesis and audio conversion (standard library
 only), background cutout and icons (Pillow), texture maps (Pillow + NumPy), and
-meshes (Blender) — and the scaffolded Unity project ships `GeneratedAsset.cs`
-for prefabs, materials, imports, particles, and audio, plus `IconRenderer.cs`
-for rendering a prefab into an atlas icon. Start from those.
+meshes (Blender). A mod that opted into an editor additionally gets
+`GeneratedAsset.cs`, for prefabs, materials, imports, particles and audio, and
+`IconRenderer.cs`, for rendering a prefab into an atlas icon. Start from those.
 
 ## Geometry
 
@@ -66,8 +67,9 @@ watertightness checks, normals, and scripted export.
 
 It is also the reader behind the **editorless mesh lane**: `shamway pack` and
 `bundle_source = "synthesized"` turn any file trimesh reads — `.glb`, `.gltf`,
-`.obj`, `.stl`, `.ply` — into a Unity `Mesh` inside the bundle, with no editor
-anywhere. That makes every generator on this page a bundle input rather than a
+`.obj`, `.stl`, `.ply` — into a loadable **prefab** inside the bundle, carrying
+that mesh, a material and an unlit textured shader, with no editor anywhere.
+That makes every generator on this page a bundle input rather than a
 Unity-import input:
 
 ```bash
@@ -76,9 +78,12 @@ shamway pack assets-src/bundle build/mymod.unity3d --game-dir "$SEVEN_DAYS_TO_DI
 ```
 
 Read [no-unity.md](../bundles/no-unity.md#the-mesh-lane-and-what-it-is-not)
-before using it: the writer converts handedness for you, the file must be
-Y-up, and a `Mesh` is not a prefab — 7DTD's `Meshfile` wants a `GameObject`,
-which wants a material, which wants a shader an editor has to compile.
+before using it: the writer converts handedness for you and the file must be
+Y-up. It also assembles what `Meshfile` actually resolves — the prefab takes
+the file's stem, the mesh becomes `<stem>_mesh`, the material `<stem>_mat`, and
+a texture named `<stem>_albedo` is bound to it. That lane needs
+`vkd3d-compiler` for the shader; without it the mesh is packed bare and
+`build` says so.
 
 - Official export API: <https://trimesh.org/trimesh.exchange.export.html>
 
@@ -293,6 +298,34 @@ shamway capabilities --json
 
 ## Engine facts
 
+### vkd3d-compiler — the shader a prefab's material needs
+
+**Wired**, and the writer's only host dependency. It is WineHQ's
+`vkd3d-shader`, MIT-licensed and packaged as `vkd3d` on Arch and `vkd3d-dev` on
+Debian, `vkd3d-compiler` on Fedora; `scripts/install-tools.sh` installs it in
+the base set, with no flag. It compiles the
+one unlit textured pass this writer ships from HLSL to `dxbc-tpf` — the shader
+model 4 `DXBC` a d3d11 sub-program carries — which `shader_blob.py` then wraps
+in Unity's sub-program blob container.
+
+```bash
+shamway capabilities --missing
+```
+
+Its absence does not fail a build: a mesh is packed as a bare `Mesh` instead of
+a prefab, and `shamway build` prints a note saying which it wrote. That is the
+one lane here where a missing capability degrades rather than refusing, because
+a mod that packed yesterday should keep packing — and it is why the note exists,
+since a quieter bundle must never read like a whole one.
+
+This tool is also the reason this repository has a rule about impossibility
+claims. The documentation said in six places that a Unity shader could not be
+produced offline, ever, while `vkd3d-compiler` sat installed on the machine
+that wrote it. See [AGENTS.md](../../AGENTS.md) and
+[research-provenance.md](../research/research-provenance.md).
+
+- Official repository: <https://gitlab.winehq.org/wine/vkd3d>
+
 ### ilspycmd and monodis — the named sources
 
 Every 7DTD-specific rule in this repository cites a decompiled method, and a
@@ -387,13 +420,14 @@ integration. This table says which is which, so nobody has to guess — and so
 | **Material Maker** | **not wired** — GUI-first; its CLI export is a mod-side authoring choice |
 | **AssetRipper / AssetStudio / UABE** | **reference only, by design** — read the game to learn from it, never to copy out of it |
 | **python-fsb5** | **wired** — `generate audio from-bank`, and the independent reader that grades the hand-written FSB5 banks |
-| **vkd3d-compiler / glslang** | **not wired yet** — proven to emit the DXBC/SPIR-V a Unity shader carries; blocked on one undecoded descriptor ([improvements](../status/improvements.md) 4b) |
+| **vkd3d-compiler** | **wired** — compiles the editorless shader's pass to SM4 `DXBC`; the prefab lane degrades to a bare `Mesh` without it |
+| **glslang** | **not wired** — would add the SPIR-V sub-programs a Vulkan platform carries; the same container already handles d3d11 and OpenGLCore |
 
 ## Recommended agent-ready stack
 
 | Asset | Generate/author | Pre-Unity check | Final gate |
 |---|---|---|---|
-| hard-surface mesh | OpenSCAD or Blender Python | `shamway check-mesh` (trimesh + glTF Validator) | `shamway build` straight from the exported file, or a Unity import; then in-game view |
+| hard-surface mesh | OpenSCAD or Blender Python | `shamway check-mesh` (trimesh + glTF Validator) | `shamway build` straight from the exported file — it becomes a loadable prefab; then in-game view |
 | organic/rigged mesh | Blender | glTF Validator + render turntable | Unity import (rigging and animation are not in the editorless lane) + in-game view |
 | PBR maps | Material Maker or seeded Python | channel/range checks + montage | `.mat` keywords/import + in-game light sweep |
 | item icon | `shamway generate cutout`, `shamway render-icon` (editor) or `shamway generate mesh-icon` (Blender), Pillow/ImageMagick | `shamway check-icons` + downscaled montage | client atlas lookup + human readability |

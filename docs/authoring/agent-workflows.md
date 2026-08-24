@@ -18,13 +18,17 @@ assets-src/
 ├── audio/                    # sound generators and their .wav
 └── vfx/                      # particle card sources and opacity masks
 
-tools/shamway/UnityProject/Assets/ModAssets/Bundle/
-└── selected Unity inputs + every .meta file
+assets-src/bundle/
+└── selected outputs only — every file here becomes a bundle asset
 ```
 
-Keep source-generation work outside the Unity bundle membership directory.
-Copy only selected outputs into the Unity project. This prevents concepts,
-turntables, masks, and unused alternatives from shipping accidentally.
+`assets-src/bundle/` is the membership folder by default; a mod that opted into
+an editor uses `tools/shamway/UnityProject/Assets/ModAssets/Bundle/` instead,
+and commits every `.meta` file with its asset.
+
+Either way, keep source-generation work **outside** the membership directory
+and copy only selected outputs in. This prevents concepts, turntables, masks,
+and unused alternatives from shipping accidentally.
 
 The style contract for anything generated is [art-direction.md](art-direction.md);
 the sound lane is [audio.md](audio.md); effects are [vfx.md](vfx.md).
@@ -54,12 +58,21 @@ not acceptance evidence.
 
 1. Define axes, real-world dimensions, pivot, collider, LOD, and attachment
    requirements before generation.
-2. Generate with Blender Python, OpenSCAD, or a checked-in script.
-3. Validate topology/extents and interchange format.
+2. Generate with Blender Python, OpenSCAD, `shamway generate mesh`, or a
+   checked-in script.
+3. Validate topology/extents and interchange format (`shamway check-mesh`).
 4. Render a deterministic turntable/contact sheet.
-5. Import into Unity; commit its `.meta` and importer settings.
-6. Create the exact game-facing prefab and name.
-7. Build/probe/validate, then test held/placed/dropped states in game.
+5. Copy the chosen file into `assets-src/bundle/` under the stem the XML will
+   ask for. `shamway build` turns it into the prefab the game resolves, plus
+   its mesh, material and shader; a texture named `<stem>_albedo` beside it is
+   bound to that material.
+6. Build/probe/validate, then test held/placed/dropped states in game.
+
+With `bundle_source = "unity"`, steps 5 and 6 are different: import into the
+Unity project, commit its `.meta` and importer settings, create the exact
+game-facing prefab and name, then build. Take that route when the prop needs
+lit, transparent or normal-mapped shading, rigging, or animation — none of
+which the writer's unlit pass covers.
 
 ## Texture/material lane
 
@@ -72,10 +85,14 @@ not acceptance evidence.
    machined metal, isotropic and coarser for rubber.
 3. Check sizes, alpha, numeric ranges, tiling seams, and packed-channel means
    (the mask must average back to the scalars it replaces).
-4. Configure Unity imports before assigning materials.
-5. Enable shader keywords and complete blend/depth/render state in code.
-6. Inspect generated `.mat` YAML.
-7. Test under multiple in-game light levels and distances.
+4. Drop the albedo into `assets-src/bundle/` as `<mesh stem>_albedo.png` and
+   it is bound for you. Steps 5 to 7 are the Unity lane, and are what the
+   extra maps are *for* — the editorless material has one texture property and
+   no keywords, so a normal or packed mask has nowhere to go on that path.
+5. Configure Unity imports before assigning materials.
+6. Enable shader keywords and complete blend/depth/render state in code.
+7. Inspect generated `.mat` YAML.
+8. Test under multiple in-game light levels and distances.
 
 ## Icon lane
 
@@ -108,8 +125,11 @@ Full lane, with the engine facts that decide audibility: [audio.md](audio.md).
    keep a lossless source and a transformation script.
 2. Gate it with `shamway check-sound`: mono, rate, level, clipping, DC
    offset, edge silence.
-3. Import the clip and, when range matters, a deliberate AudioSource prefab —
-   `GeneratedAsset.AudioSourcePrefab(...)`.
+3. Copy the `.wav` into `assets-src/bundle/`, where it becomes an `AudioClip`
+   with no editor. When range matters, a deliberate AudioSource prefab decides
+   audibility, and that is a Unity-lane asset —
+   `GeneratedAsset.AudioSourcePrefab(...)` — so a long-range sound is one of
+   the reasons a mod opts into an editor.
 4. Configure `sounds.xml` near/distant behavior and voice limits;
    `shamway generate sound sounds-xml` prints the entry.
 5. Validate load, then listen near, across fade, at maximum range, and under
@@ -124,7 +144,10 @@ Full lane, with budgets, tiers, and the two silent material failures:
    distance culling, concurrency policy, and fallback.
 2. Generate cards/meshes and complete transparent material state.
 3. Put hard caps in the prefab, not only in runtime selection code.
-4. Verify all particle curves/modules in the Unity log and live client.
+4. Verify all particle curves/modules in the Unity log and live client. The
+   whole VFX lane is Unity-only: the editorless writer emits no
+   `ParticleSystem`, so a mod shipping particles sets
+   `bundle_source = "unity"` or `"external"`.
 5. Test repeated effects for frame time, allocations, orphans, obstruction,
    flicker, and accessibility.
 

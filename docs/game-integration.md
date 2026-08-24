@@ -267,7 +267,8 @@ on mesh creation, `true` while a dropped countdown runs, `false` when holding
 starts. Vanilla's `timedChargePrefab` ships its `Armed` child active for this
 reason. `ActivationEmissive` is a separate mechanism that keys on a renderer
 **tag**; tags are project-level settings, so a bundle built in a different
-Unity project cannot rely on it. Layers are the other project-level
+Unity project cannot rely on it, and a synthesized bundle — which has no
+project at all — cannot use it. Layers are the other project-level
 setting worth knowing: the engine assigns layer 13 to item colliders itself,
 so author on the default layer and let it.
 

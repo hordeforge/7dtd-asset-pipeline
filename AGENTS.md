@@ -6,10 +6,12 @@ Read them before inspecting, planning, editing, or testing anything here.
 
 ## What this repository is
 
-`shamway` turns editable Unity assets into a validated
+`shamway` turns editable source assets into a validated
 `Resources/<name>.unity3d` inside a standalone modlet, and fails loudly on the
-silent-corruption modes a plain successful Unity build does not catch. It owns
-tooling only. It owns no art, no mod, and no game install.
+silent-corruption modes a plain successful build does not catch. **It writes
+that bundle itself, with no Unity editor** — that is the default, and Unity is
+a source a mod opts into rather than a dependency of the tool. It owns tooling
+only. It owns no art, no mod, and no game install.
 
 Read [README.md](README.md) and the relevant page under [docs/](docs/) before
 changing behavior. [docs/architecture.md](docs/architecture.md) explains the
@@ -163,11 +165,15 @@ no Unity, and no game install.
 - Changes to `unityfs.py` require generated fixtures for **both** acceptance
   and rejection. Never loosen a parser bound to make a real file work without
   first proving what that file actually contains.
-- Changes to bundle generation (`build.py`, `BundleBuilder.cs`) require
-  `make check test` plus a game-matched `shamway build --probe` when Unity
-  is available on the host.
+- Changes to bundle generation (`build.py`, `bundle_writer.py`,
+  `shader_blob.py`) require `make check test` plus a `shamway build --probe`
+  in a scaffolded mod, which needs no editor. Changes touching
+  `BundleBuilder.cs` additionally require a game-matched
+  `shamway build --probe` when Unity is available on the host.
 - Changes to the editor-side C# (`GeneratedAsset.cs`, `IconRenderer.cs`,
-  `ShamwayPreBuild.cs`, `BundleBuilder.cs`, `BundleVerifier.cs`) are not covered by the Python suite.
+  `ShamwayPreBuild.cs`, `BundleBuilder.cs`, `BundleVerifier.cs`) are the
+  **opt-in** half — no default-configured mod loads one — and are not covered
+  by the Python suite.
   `make check` compiles them against the installed editor's assemblies when
   `mcs` and an editor are present (`scripts/compile-editor-scripts.sh`); run
   that, then state plainly which grade the change reached — compiled, probed,
@@ -213,7 +219,7 @@ stronger evidence than the evidence that introduced it, recorded in
 |---|---|
 | class-142 `AssetBundle` object | a container the runtime rejects as incompatible |
 | disabled-module log rejection | Unity reporting success while stripping engine classes |
-| game-matched Unity revision | an editor that silently produces an unloadable bundle |
+| game-matched engine revision | a bundle aimed at a revision the installed game does not load |
 | file-stem collision rejection | assets made unreachable by 7DTD's stem-only lookup |
 | atlas-cell and `CustomIcon` checks | icons the bundle gates cannot see at all |
 | clip format checks | a clip that is stereo, silent, clipping, or DC-offset |
@@ -236,19 +242,26 @@ suite reported `pass=3 fail=0`, and what the reviewer added on top was that the
 ring was *centred and circular* and the beeps were *clean*. Stretched art and a
 crackling clip pass every gate in this repository.
 
-Unity is optional; the gates are not. A mod may declare `bundle_source =
-"none"` and ship no bundle, `"external"` and have its bundle built by an editor
-on another machine, or `"synthesized"` and have this tool write the bundle with
-no editor at all. The gates travel with the artifact in every case: `stage`
-prints a `not run:` line for each gate whose evidence (the build log, an
-installed game) did not arrive, and a synthesize prints what its gates are
-worth when the artifact and the checker share an author. Never drop one of
-those lines from a report — an unrun or by-construction gate reads exactly like
-a passed one — and **never call a synthesized bundle "built"**: that word
-carries a claim about who serialized it.
+Unity is **opt-in**; the gates are not. `bundle_source = "synthesized"` is the
+default: this tool writes the bundle, and every asset class a modlet references
+from XML — `Texture2D`, `AudioClip`, `TextAsset`, `Mesh`, `Material`, `Shader`
+and the prefab group — is written without an editor. A mod may instead declare
+`"none"` and ship no bundle, `"external"` and have its bundle built by an
+editor on another machine, or `"unity"` and opt into a local one. Nothing
+selects `"unity"` for a caller who did not ask, except `init --adopt PROJECT`,
+where pointing at a Unity project *is* the ask.
+
+The gates travel with the artifact in every case: `stage` prints a `not run:`
+line for each gate whose evidence (the build log, an installed game) did not
+arrive, and a synthesize prints what its gates are worth when the artifact and
+the checker share an author, plus a line when a lane degraded (no
+`vkd3d-compiler`, so a mesh was packed bare rather than as a prefab). Never
+drop one of those lines from a report — an unrun, by-construction or degraded
+gate reads exactly like a passed one — and **never call a synthesized bundle
+"built"**: that word carries a claim about who serialized it.
 [docs/bundles/no-unity.md](docs/bundles/no-unity.md) owns those paths and
 [docs/adrs/0001-synthesize-bundles-without-an-editor.md](docs/adrs/0001-synthesize-bundles-without-an-editor.md) the writer's
-design and its shader wall.
+design, its shader lane, and what is still unbuilt inside it.
 
 - Changes to `bundle_writer.py` need the same evidence `unityfs.py` does —
   fixtures for acceptance *and* rejection — plus a read-back through UnityPy,
@@ -283,22 +296,30 @@ design and its shader wall.
 
 ## Using the pipeline in a mod
 
-Full walkthrough: [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md). The short form:
+Full walkthrough: [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md). The short form, with no editor anywhere:
 
-- `scripts/install-tools.sh --with-unity-prereqs` — host packages
+- `scripts/install-tools.sh` — host packages, including `vkd3d-compiler`
 - `scripts/bootstrap` — the CLI
 
 ```bash
-scripts/install-tools.sh --with-unity-prereqs
+scripts/install-tools.sh
 scripts/bootstrap
 shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
-scripts/install-unity-editor.sh --project /path/to/MyMod/tools/shamway/UnityProject
 shamway doctor && shamway build --probe
 ```
 
-Then, per asset change:
+A mod that needs lit, transparent or normal-mapped shading, particles, or
+rigging opts into an editor, and only then are the next two lines relevant:
 
-- `shamway build` — build, gate, stage bundle + tracked manifest
+```bash
+scripts/install-tools.sh --with-unity-prereqs
+shamway init /path/to/MyMod --bundle-source unity --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+scripts/install-unity-editor.sh --project /path/to/MyMod/tools/shamway/UnityProject
+```
+
+Then, per asset change — the same two commands on every path:
+
+- `shamway build` — synthesize (or build), gate, stage bundle + tracked manifest
 - `shamway validate` — bundle and every recursive Config/**/*.xml reference
 
 ```bash
@@ -310,7 +331,8 @@ Machine-readable output for agents and CI:
 
 | Command | Contract |
 |---|---|
-| `shamway doctor --json` | array of `{status, name, detail}`; exit 1 if any `FAIL` |
+| `shamway build` | synthesize the bundle here with no editor (the default), or start a local one for `bundle_source = "unity"`; gate and stage either |
+| `shamway doctor --json` | array of `{status, name, detail}`; exit 1 if any `FAIL`. Reports Unity rows only for a mod that opted into an editor |
 | `shamway inspect --json BUNDLE` | revision, archive format, class IDs, class-142 flag |
 | `shamway unity-release --json` | official editor URL, changeset, and MD5 for a revision |
 | `shamway refs` | one `source: uri` line per discovered XML reference |

@@ -15,7 +15,7 @@ deployed; that varies per contributor, and this repository cannot see it.
 
 | Repository | Called | What its README says it owns |
 |---|---|---|
-| [`7dtd-asset-pipeline`](https://github.com/hordeforge/7dtd-asset-pipeline) | shamway | this repository: editable Unity assets to a staged `Resources/*.unity3d`, with the gates a successful Unity build does not provide |
+| [`7dtd-asset-pipeline`](https://github.com/hordeforge/7dtd-asset-pipeline) | shamway | this repository: editable source assets to a staged `Resources/*.unity3d`, written without a Unity editor by default, with the gates a successful build does not provide |
 | [`7dtd-playtest`](https://github.com/hordeforge/7dtd-playtest) | Vanguard | stock-client gameplay automation against the dedicated server, emitting structured scenario results; ships the live-client exclusivity lock |
 | [`7dtd-engine-research`](https://github.com/hordeforge/7dtd-engine-research) | Schematics | reverse-engineering of the V 3.1.0 (b14) dedicated server from the shipped `Assembly-CSharp.dll`: how it behaves, and its wire/file formats |
 | [`7dtd-fastconnect`](https://github.com/hordeforge/7dtd-fastconnect) | Hotwire | a client helper for joining local/dev servers without Steam `steam://connect`, plus hooks for automated join tests |

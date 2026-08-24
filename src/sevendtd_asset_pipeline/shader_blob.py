@@ -616,7 +616,9 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
 
     Vertex: object space through `unity_ObjectToWorld` then `unity_MatrixVP`.
     Fragment: a single `Texture2D` sample. No keywords, no variants, one
-    hardware tier, d3d11 only.
+    hardware tier, and two platforms: d3d11 (the one the game runs, through
+    Proton) and OpenGLCore (so a Linux editor running `verify-bundle` has a
+    sub-program it can actually create).
     """
     fragment_source = UNLIT_FRAGMENT_HLSL
     if texture_property != "_MainTex":

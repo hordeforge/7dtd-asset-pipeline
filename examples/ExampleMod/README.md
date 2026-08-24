@@ -1,7 +1,8 @@
 # Example consumer
 
-This directory illustrates the files a mod owns after `shamway init`.
-The full Unity template is omitted here because the CLI creates it.
+This directory illustrates the files a mod owns after `shamway init`. No Unity
+project appears, because `init` creates none: `bundle_source = "synthesized"`
+is the default and this tool writes the `.unity3d` itself.
 
 ```bash
 shamway init /path/to/real/ExampleMod \
@@ -17,12 +18,19 @@ at it. Orient at any time with `shamway status --json`; see
 [Consumer interfaces](../../docs/consumer-api.md).
 
 `init` also creates `assets-src/`, where editable sources and their provenance
-live. It is deliberately outside the Unity bundle folder, so nothing
+live. Only `assets-src/bundle/` becomes bundle content; everything beside it —
+concepts, masks, turntables, full-length audio — stays out, so nothing
 unfinished ships by sitting in the wrong place.
 
-After importing a prefab named `exampleModWorkbench` below the generated
-Unity project's `Assets/ModAssets/Bundle/`, build the real bundle before
+Put a mesh named `exampleModWorkbench.glb` in `assets-src/bundle/` and
+`shamway build` turns it into the prefab the sample `Config/blocks.xml` asks
+for, together with its mesh, material and shader. Build the real bundle before
 enabling the sample XML references in `Config/`.
+
+A mod that needs lit, transparent or normal-mapped shading, particles, or
+rigging opts into an editor with `shamway init --bundle-source unity`, which
+additionally creates `tools/shamway/UnityProject/`; the prefab is then imported
+there. See [Running without Unity](../../docs/bundles/no-unity.md).
 
 ## The asset classes shown here
 

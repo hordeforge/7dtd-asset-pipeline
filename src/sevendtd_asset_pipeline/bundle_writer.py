@@ -1028,7 +1028,8 @@ def shader(name: str, texture_property: str = "_MainTex") -> BundleObject:
     The bytecode is produced by `vkd3d-compiler` and wrapped in the container
     documented in `hordeforge/7dtd-engine-research`,
     `docs/shader-subprogram-blob.md`. One sub-shader, one pass, one hardware
-    tier, d3d11 only, and no keyword variants.
+    tier, no keyword variants, and two platforms: d3d11, which is what the game
+    runs, and OpenGLCore, so a Linux editor can create it in `verify-bundle`.
 
     This is a **synthesized** shader, not a built one: nothing in the path
     ever ran Unity's shader compiler, and the offline gates that check it
@@ -1414,7 +1415,9 @@ def pack_directory(
     """
     sources = collect_sources(source_dir)
     meshes = [path for path in sources if path.suffix.lower() in MESH_SUFFIXES]
-    texture_stems = {path.stem for path in sources if path.suffix.lower() == ".png"}
+    texture_stems = {
+        path.stem for path in sources if ASSET_KINDS.get(path.suffix.lower()) == "Texture2D"
+    }
     # The prefab lane needs a shader compiler. Without one this writes the
     # bare `Mesh` it always did rather than failing: a mesh-only bundle is
     # still reachable through `LoadAsset<Mesh>`, and refusing to pack a mod

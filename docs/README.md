@@ -20,10 +20,11 @@ follows ([agent-workflows.md](authoring/agent-workflows.md)), the house style
 ([audio.md](authoring/audio.md), [vfx.md](authoring/vfx.md)), and the optional
 OSS toolchain ([authoring-tools.md](authoring/authoring-tools.md)).
 
-How a bundle is produced lives in [bundles/](bundles/README.md): the editor
-build path ([bundle-generation.md](bundles/bundle-generation.md)) and where a
-`.unity3d` may come from when there is no editor
-([no-unity.md](bundles/no-unity.md)).
+How a bundle is produced lives in [bundles/](bundles/README.md). Start with
+[no-unity.md](bundles/no-unity.md): it owns the default path, where this tool
+writes the `.unity3d` itself, and the other two editorless sources.
+[bundle-generation.md](bundles/bundle-generation.md) is the **opt-in** editor
+build path, for a bundle whose shading the writer does not author.
 
 The rest of the reference sits at the top level: the design and trust
 boundaries ([architecture.md](architecture.md)), every configuration key

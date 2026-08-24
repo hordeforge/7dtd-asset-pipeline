@@ -7,6 +7,8 @@ one, so the rules have to be there. `shamway init` writes this file to
 
 from __future__ import annotations
 
+from .config import DEFAULT_BUNDLE_SOURCE
+
 AGENT_GUIDE = """# Asset pipeline: agent instructions
 
 This mod builds its Unity asset bundle with **shamway**
@@ -47,7 +49,7 @@ Exit code 0 means valid. Start here rather than reading files.
 | `shamway check-sound FILE` | fast | clip format, level, clipping, DC offset |
 | `shamway check-icons` | instant | atlas cells and every icon key: `CustomIcon`, `display_entry icon=`, and item/block names |
 | `shamway validate` | fast | bundle + every XML reference + `code_references` |
-| `shamway build --probe` | minutes | proves the environment; stages nothing |
+| `shamway build --probe` | minutes (milliseconds when synthesized) | proves the environment; stages nothing |
 | `shamway build` | minutes (seconds when synthesized) | produces, gates, and stages the bundle |
 | `shamway stage BUNDLE` | fast | gates and stages a bundle an editor elsewhere built; no Unity here |
 | `shamway render-icon STEM` | minutes | renders a prefab into its atlas cell |
@@ -166,7 +168,9 @@ for particle effects.
   geometry.
 - **procedural**: compose Unity's built-in primitives in the Unity project with
   `GeneratedAsset.Primitive(...)`. Use for hard-surface props. Emits no mesh
-  asset at all, so the geometry stays a reviewable diff of numbers.
+  asset at all, so the geometry stays a reviewable diff of numbers. This is the
+  one lane that needs a Unity project; without one, `shamway generate mesh`
+  writes the same primitives to a `.glb` and the writer takes it from there.
 
 **Do not improvise an image-generation prompt.** `shamway prompt` renders the
 art-direction contract for you — the asset-type line, the key colour, the
@@ -390,23 +394,37 @@ class 142 is missing, the cause is an engine module, not a build option.
 """
 
 
-# The guide below assumes the common case: this mod builds its own bundle with
-# a local editor. When it does not, the difference is stated at the top rather
-# than woven through every section, so an agent reads one authoritative
-# paragraph instead of discovering the exception in a table row.
+# The guide below is written for a mod with a Unity project, because that is
+# the shape with the most rules — `.meta` files, engine modules, vendored editor
+# scripts. Every other source has *fewer* obligations, not different ones, so
+# the difference is stated once at the top rather than woven through every
+# section: an agent reads one authoritative paragraph instead of discovering the
+# exception in a table row. `bundle_source = "unity"` gets no banner because it
+# is the shape the body already describes.
 BUNDLE_SOURCE_BANNERS = {
     "synthesized": """> **This mod's bundle is written by shamway itself, with no Unity.**
-> `.shamway.toml` sets `bundle_source = "synthesized"`: `shamway build` reads
-> the source folder and writes `Resources/{bundle_name}` directly — no editor,
-> no Unity project, seconds not minutes. Every file in the source folder becomes
-> one asset named by its stem: `.png` a Texture2D, `.wav` an AudioClip (16-bit
-> PCM, a rate from FMOD's table), `.txt`/`.json`/`.csv` a TextAsset. A mesh,
-> prefab, material or shader **cannot** be synthesized and is refused by name.
-> `shamway build` prints what its gates are worth on its own output; never
-> repeat its result as "built", and never drop those notes from a report. With
-> an editor present, `shamway verify-bundle` loads the result in a real runtime.
-> A fresh client is the acceptance, not a confirmation. Details:
-> `shamway docs no-unity`.
+> `.shamway.toml` sets `bundle_source = "synthesized"`, which is the default:
+> `shamway build` reads the source folder and writes `Resources/{bundle_name}`
+> directly — no editor, no Unity project, seconds not minutes. Every file in the
+> source folder becomes an asset named by its stem: `.png`/`.jpg`/`.tga`/`.bmp`
+> a Texture2D, `.wav` an AudioClip (16-bit PCM, a rate from FMOD's table),
+> `.txt`/`.json`/`.csv` a TextAsset, and a mesh (`.glb`, `.gltf`, `.obj`,
+> `.stl`, `.ply`) a **prefab** carrying that mesh, a material and an unlit
+> textured shader — which is what `Meshfile` and block `Model` actually load. A
+> texture named `<stem>_albedo` is bound to that prefab's material. `.ogg`,
+> `.mp3` and `.svg` are converted first, when FFmpeg or ImageMagick is
+> installed. The prefab lane needs `vkd3d-compiler`; without it a mesh is packed
+> as a bare `Mesh` and `shamway capabilities` says so. `shamway build` prints
+> what its gates are worth on its own output; never repeat its result as
+> "built", and never drop those notes from a report. With an editor present,
+> `shamway verify-bundle` loads the result in a real runtime. A fresh client is
+> the acceptance, not a confirmation. Details: `shamway docs no-unity`.
+>
+> Four things below need a Unity project this mod does not have, and do not
+> apply: `.meta` files, the engine-module rule and `check-log` (no editor
+> reports stripping), `[ShamwayPreBuild]` and the vendored editor scripts, and
+> `shamway render-icon` — use `shamway generate mesh-icon` for the icon lane and
+> `shamway generate mesh` for primitives. Everything else applies unchanged.
 
 """,
     "external": """> **This mod does not build its bundle here.** `.shamway.toml` sets
@@ -431,7 +449,20 @@ BUNDLE_SOURCE_BANNERS = {
 }
 
 
-def render_agent_guide(mod_name: str, bundle_name: str, bundle_source: str = "unity") -> str:
+# The facts block the guide opens with, as written for a Unity project. Every
+# source that has no project has to replace it, or the first thing anyone reads
+# is two paths that do not exist and a contradiction with the banner above them.
+_PROJECT_FACTS = (
+    "- Bundle: `Resources/{bundle_name}`\n"
+    "- Unity project: `tools/shamway/UnityProject`\n"
+    "- Bundle membership: `tools/shamway/UnityProject/Assets/ModAssets/Bundle/`\n"
+)
+_OPENING_LINE = "This mod builds its Unity asset bundle with **shamway**"
+
+
+def render_agent_guide(
+    mod_name: str, bundle_name: str, bundle_source: str = DEFAULT_BUNDLE_SOURCE
+) -> str:
     """Fill the guide's placeholders.
 
     Deliberately not `str.format`: this document contains JSON examples, and
@@ -443,16 +474,22 @@ def render_agent_guide(mod_name: str, bundle_name: str, bundle_source: str = "un
     if banner:
         title, rest = guide.split("\n", 1)
         guide = f"{title}\n\n{banner}{rest.lstrip()}"
-    if bundle_source == "none":
-        # The facts at the top of the guide are the first thing anyone reads;
-        # leaving Unity paths there would contradict the banner immediately.
+    if bundle_source == "synthesized":
         guide = guide.replace(
-            "This mod builds its Unity asset bundle with **shamway**",
+            _OPENING_LINE,
+            "This mod's Unity asset bundle is written by **shamway**, with no editor",
+        ).replace(
+            _PROJECT_FACTS,
+            "- Bundle: `Resources/{bundle_name}`, written by `shamway build`; no Unity "
+            "project\n"
+            "- Bundle membership: `assets-src/bundle/` — every file in it becomes an asset\n",
+        )
+    if bundle_source == "none":
+        guide = guide.replace(
+            _OPENING_LINE,
             "This mod is scaffolded and validated with **shamway**",
         ).replace(
-            "- Bundle: `Resources/{bundle_name}`\n"
-            "- Unity project: `tools/shamway/UnityProject`\n"
-            "- Bundle membership: `tools/shamway/UnityProject/Assets/ModAssets/Bundle/`\n",
+            _PROJECT_FACTS,
             '- Bundle: none (`bundle_source = "none"`); no Unity project, no editor\n',
         )
         bundle_name = "(none)"

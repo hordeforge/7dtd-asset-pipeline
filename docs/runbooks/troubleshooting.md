@@ -6,6 +6,12 @@ Run:
 
 ```bash
 shamway inspect Resources/mybundle.unity3d
+```
+
+With `bundle_source = "unity"` there is also a build log, and it is where a
+success-while-stripping build admits itself:
+
+```bash
 shamway check-log .shamway/build/bundle/unity-build.log
 ```
 
@@ -98,6 +104,43 @@ log for all disabled-module warnings and inspect the object table with
 UnityPy/AssetsTools.NET. Ensure the relevant engine module—particles, physics,
 audio, animation—is declared. Then verify the exact prefab live.
 
+## A synthesized mesh loaded, but nothing is drawn where the prop should be
+
+`inspect --deep` says which of two things happened:
+
+```bash
+shamway inspect --deep Resources/mybundle.unity3d
+```
+
+If the object table shows a `Mesh` and no `GameObject`, the prefab lane did not
+run — `vkd3d-compiler` was absent when the bundle was written, so the mesh was
+packed bare rather than as the prefab `Meshfile` and block `Model` resolve.
+`build` prints a note saying so on every such build; it is not silent, but it
+is easy to scroll past. Install it and build again:
+
+```bash
+shamway capabilities --missing
+shamway build
+```
+
+If the table shows the whole group — `GameObject`, `Transform`, `MeshFilter`,
+`MeshRenderer`, `Material`, `Shader` — then the chain is intact and the problem
+is elsewhere: the XML asks for a stem the bundle does not carry (`shamway
+validate`), or the prop is drawn somewhere you are not looking. An unlit pass
+whose constant-buffer offsets were wrong would put it in the wrong place rather
+than fail, and that is exactly what [blockers.md](../status/blockers.md) entry 6
+says nobody has looked at yet.
+
+## A synthesized prop draws pure white
+
+Its material has no texture bound. The writer binds `<stem>_albedo` to the
+prefab's `_MainTex` and leaves the property at the shader's default white when
+no such texture is in the source folder — white, not an error, because an
+unbound property is a legitimate material. Name the texture after the mesh:
+`prop.glb` wants `prop_albedo.png` beside it. The mesh cannot be called
+`prop_albedo` itself, and the prefab already owns `prop`, which is why the
+suffix exists.
+
 ## Normal or metallic map is assigned but has no effect, or renders flat green
 
 Check both sides:
@@ -114,6 +157,11 @@ client it renders flat and green-tinged, which is the signature to look for.
 Inspector-looking fields alone are insufficient for script-generated
 materials; `GeneratedAsset.StandardMaterial` and `EmissiveMaterial` set the
 keywords, and the `.mat` grep in [vfx.md](../authoring/vfx.md) is how to read them back.
+
+This whole entry is about a Unity-built material. The editorless writer's
+material has one texture property and no keywords at all, so it cannot reach
+this state — and cannot reach a normal map either, which is why lit and
+normal-mapped shading is a mod's reason to opt into `bundle_source = "unity"`.
 
 ## Transparent particles appear as opaque cards
 

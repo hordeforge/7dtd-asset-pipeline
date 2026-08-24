@@ -1,12 +1,15 @@
 # Release checklist
 
+Rows marked *(unity)* apply only to `bundle_source = "unity"` or a staged
+`"external"` bundle. The default source starts no editor and owes none of them.
+
 ## Source and project
 
-- [ ] Every selected source asset and `.meta` is committed.
+- [ ] Every selected source asset is committed — and, *(unity)*, its `.meta`.
 - [ ] Generation scripts, seeds, prompts, references, and licenses are recorded.
 - [ ] No concept/source-only file accidentally sits below bundle source root.
-- [ ] Unity project revision equals the installed game's shipped bundle revision.
-- [ ] Required `com.unity.modules.*` dependencies cover every component type.
+- [ ] The bundle's revision equals the installed game's shipped bundle revision.
+- [ ] *(unity)* Required `com.unity.modules.*` dependencies cover every component type.
 - [ ] Bundle asset stems are mod-prefixed and globally unique.
 - [ ] Every variant owns its own icon, held mesh, and placed model; no player-facing
       variant inherits another's art, and `Extends` `param1` excludes what it must.
@@ -27,9 +30,11 @@
 - [ ] `shamway check-icons` passes, and every external `CustomIcon` key is deliberate.
 - [ ] `shamway check-sound` passes for every shipped clip.
 - [ ] `shamway check-mesh` passes for every authored mesh.
-- [ ] `shamway script compile-editor-scripts --scripts <vendored Editor/> --with <mod Editor/>` passes for the game-matched revision.
+- [ ] *(unity)* `shamway script compile-editor-scripts --scripts <vendored Editor/> --with <mod Editor/>` passes for the game-matched revision.
 - [ ] `shamway inspect --json` records correct revision and class 142.
-- [ ] Unity log contains no disabled-module, shader, particle, compiler, or serialization error.
+- [ ] `shamway inspect --deep` shows a `GameObject` for every mesh source, not a bare `Mesh` — a bare one means `vkd3d-compiler` was absent and the prefab lane degraded.
+- [ ] Every `note:` line a synthesize printed is in the report, none dropped.
+- [ ] *(unity)* Unity log contains no disabled-module, shader, particle, compiler, or serialization error.
 - [ ] A second unchanged build is byte-identical, or nondeterminism is explained.
 - [ ] Package contains `Resources/<bundle>.unity3d` and excludes authoring files.
 
@@ -75,7 +80,7 @@ failed review* — kept distinct from "stand-in" and "accepted".
 ## After a game update
 
 - [ ] Verify game files in Steam, then `shamway doctor`: does the shipped bundle's revision still match?
-- [ ] `shamway build --probe` with the (possibly new) game-matched editor.
+- [ ] `shamway build --probe` against the (possibly new) revision — *(unity)*, with the game-matched editor.
 - [ ] Re-decompile every engine fact in [research-provenance.md](../research/research-provenance.md) and record the pass.
 - [ ] `shamway validate`, `check-icons`, `check-sound`; then a fresh client.
 - [ ] Re-verify the asset inventory against `Config/` and the installed game, not against prose — the source project found its stand-in table stale on two rows.

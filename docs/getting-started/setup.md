@@ -6,12 +6,15 @@ page explains each step's reasoning and its alternatives.
 ## 0. Install host tooling
 
 ```bash
-scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
+scripts/install-tools.sh --check --with-authoring
 ```
 
 `--check` reports `OK`/`MISS` per tool and installs nothing. Drop `--check` to
 install through `pacman`, `apt-get`, `dnf`, or `zypper`. Only Python is
-required for the CLI itself; `--with-unity-prereqs` covers the editor
+required for the CLI itself. The base set also carries `vkd3d-compiler`, which
+compiles the shader a synthesized prefab's material needs — the writer's one
+host dependency, and it degrades to a bare `Mesh` with a printed note rather
+than failing. `--with-unity-prereqs` covers the **optional** editor
 installer's needs, `--with-authoring` the optional art tooling in
 [Authoring tools](../authoring/authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
 and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy) —
@@ -65,7 +68,7 @@ drifted from the lock; re-lock deliberately with `uv lock`. Pass
 `--no-extras` for the dependency-free core alone. It never
 uses `sudo`, installs OS packages, or modifies shell startup files.
 
-## 2. Identify the game install and Unity revision
+## 2. Identify the game install and its engine revision
 
 The installed game is the authority. Point `--game-dir` or
 `SEVEN_DAYS_TO_DIE_DIR` at the directory containing
@@ -90,13 +93,21 @@ shamway init /path/to/MyMod --unity-version 2022.3.62f2
 
 Record how that revision was verified in the mod's documentation.
 
-## 3. Install Unity and Windows Build Support
+## 3. (Optional) Install Unity and Windows Build Support
 
-Skip this whole section if this machine does not build the bundle. A mod that
-declares `bundle_source = "none"` ships no bundle and needs no editor; a mod
-that declares `"external"` has its bundle built elsewhere and gated here with
-`shamway stage`. [Running without Unity](../bundles/no-unity.md) covers both, including
-what the build host does instead.
+**Skip this whole section unless the mod opted into an editor.** Three of the
+four bundle sources need none, and the default is one of them:
+`bundle_source = "synthesized"` has this tool write the `.unity3d` itself,
+`"external"` has an editor elsewhere build it and `shamway stage` gate it here,
+and `"none"` ships no bundle at all. [Running without
+Unity](../bundles/no-unity.md) covers all three, including what a build host
+does instead.
+
+What is left needing an editor here is `bundle_source = "unity"` — a bundle
+whose shading the writer does not author — and the two commands that use an
+editor as a tool rather than as a build step, `shamway verify-bundle` and
+`shamway render-icon`. Nothing needs either of those to build, gate, stage or
+ship.
 
 The editor revision must match the installed game exactly, and **Windows Build
 Support (Mono)** is mandatory: the shipped client loads a Windows-target bundle
@@ -232,19 +243,26 @@ shamway doctor
 shamway build --probe
 ```
 
-`doctor` checks the mod identity, Unity project revision, package modules,
-game revision, editor executable, and Windows Build Support. It also reports
-optional authoring tools. Each check reports its own `OK`/`WARN`/`FAIL`
-verdict, and the command exits non-zero when any check is `FAIL`, so one broken
-check never hides the rest. Use `shamway doctor --json` for CI or agents.
+`doctor` reads `bundle_source` first and checks only what that source can
+fail on. Synthesized, that is the mod identity, the revision against the
+installed game, the source folder, and whether the writer has the type trees it
+needs; the Unity rows are absent rather than warning about an editor the mod
+never asked for. With `bundle_source = "unity"` it adds the project revision,
+the package modules, the editor executable, and Windows Build Support. Each
+check reports its own `OK`/`WARN`/`FAIL` verdict, and the command exits
+non-zero when any check is `FAIL`, so one broken check never hides the rest.
+Use `shamway doctor --json` for CI or agents.
 
-The probe is the decisive setup test. It asks Unity to create a cube prefab,
-build a throwaway Windows bundle, checks the Unity log, parses the result for
-class 142, and deletes the source prefab. It never stages into the modlet.
-It also exposes license failures that `Unity -version` cannot.
+The probe is the decisive setup test, and it stages nothing on either path.
+Synthesized, it writes the whole bundle from the source folder in milliseconds
+and runs every offline gate on it. With an editor, it asks Unity to create a
+cube prefab, build a throwaway Windows bundle, checks the Unity log, parses the
+result for class 142, and deletes the source prefab — which also exposes
+license failures that `Unity -version` cannot.
 
 ## Platform notes
 
+- None of these notes applies to the default path, which starts no editor.
 - Linux native Unity can build the Windows-target bundle. Proton is not
   required for the editor; the source project tried a Windows editor under an
   isolated Proton prefix as an escape hatch and proved it unnecessary, so

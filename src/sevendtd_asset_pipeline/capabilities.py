@@ -121,7 +121,9 @@ REGISTRY: tuple[_Spec, ...] = (
         purpose="compile the unlit shader's HLSL to the DXBC shader model 4 bytecode a "
         "d3d11 sub-program carries, so a synthesized bundle can ship a material and a "
         "visible prefab with no editor",
-        install="shamway script install-tools --with-authoring",
+        # In the base set, not --with-authoring: it belongs to the default
+        # build path rather than to an optional art lane.
+        install="shamway script install-tools",
     ),
     _Spec(
         name="fsb5",

@@ -232,6 +232,9 @@ class SourceLaneTests(unittest.TestCase):
     """A mesh source file becomes a prefab only where a shader compiler exists."""
 
     def pack(self, work: Path) -> collections.Counter[str]:
+        return collections.Counter(obj.type.name for obj in self.packed_objects(work))
+
+    def packed_objects(self, work: Path) -> list[Any]:
         import UnityPy
 
         from sevendtd_asset_pipeline.bundle_writer import pack_directory
@@ -239,8 +242,7 @@ class SourceLaneTests(unittest.TestCase):
         bundle, _manifest = pack_directory(work, "lane.unity3d", REVISION)
         path = work / "out.unity3d"
         path.write_bytes(bundle)
-        env = UnityPy.load(str(path))
-        return collections.Counter(obj.type.name for obj in env.objects)
+        return list(UnityPy.load(str(path)).objects)
 
     def source_tree(self, work: Path) -> None:
         import trimesh
@@ -278,6 +280,60 @@ class SourceLaneTests(unittest.TestCase):
         self.assertEqual(kinds["Mesh"], 1)
         self.assertEqual(kinds["Shader"], 0)
         self.assertEqual(kinds["GameObject"], 0)
+
+    @unittest.skipUnless(has_capability("trimesh"), "the mesh lane needs trimesh")
+    @needs_vkd3d
+    def test_an_albedo_in_any_texture_format_is_bound_to_the_material(self) -> None:
+        """`<stem>_albedo` decided the binding by suffix, not by asset kind.
+
+        Eight suffixes become a Texture2D, and only `.png` was matched, so a
+        `.tga` or `.jpg` albedo drew the shader's default white and no gate
+        anywhere said why.
+        """
+        import trimesh
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as raw:
+            work = Path(raw)
+            trimesh.creation.box(extents=(1, 1, 1)).export(work / "prop.glb")
+            Image.new("RGBA", (1, 1), (9, 9, 9, 255)).save(work / "prop_albedo.tga")
+            objects = self.packed_objects(work)
+        materials = [obj.read() for obj in objects if obj.type.name == "Material"]
+        self.assertEqual(len(materials), 1)
+        envs = dict(materials[0].m_SavedProperties.m_TexEnvs)
+        self.assertNotEqual(
+            envs["_MainTex"].m_Texture.m_PathID, 0, "an unbound _MainTex draws the default white"
+        )
+
+
+class DegradedLaneReportTests(unittest.TestCase):
+    """A lane that quietly packs less must say so, like every unrun gate here."""
+
+    def caveats(self, compiler_present: bool) -> tuple[str, ...]:
+        import shutil
+        import unittest.mock
+
+        from sevendtd_asset_pipeline.build import synthesized_caveats
+
+        real = shutil.which
+        with unittest.mock.patch(
+            "shutil.which",
+            lambda name, *a, **k: (
+                real(name, *a, **k) if compiler_present or name != "vkd3d-compiler" else None
+            ),
+        ):
+            return synthesized_caveats()
+
+    def test_a_missing_shader_compiler_is_reported_with_what_it_costs(self) -> None:
+        joined = " ".join(self.caveats(compiler_present=False))
+        self.assertIn("vkd3d-compiler", joined)
+        self.assertIn("bare Mesh", joined)
+
+    @needs_vkd3d
+    def test_nothing_extra_is_claimed_when_the_lane_is_whole(self) -> None:
+        from sevendtd_asset_pipeline.build import SYNTHESIZED_CAVEATS
+
+        self.assertEqual(SYNTHESIZED_CAVEATS, self.caveats(compiler_present=True))
 
 
 if __name__ == "__main__":

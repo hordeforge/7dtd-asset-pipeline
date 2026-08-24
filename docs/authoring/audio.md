@@ -36,7 +36,7 @@ Synthesize a clip, gate it, put it in the bundle, and wire it:
 
 ```bash
 shamway generate sound blast assets-src/audio/blast-near.wav --seed 7 \
-    --promote tools/shamway/UnityProject/Assets/ModAssets/Bundle/Sounds/myModBlastNear.wav
+    --promote assets-src/bundle/myModBlastNear.wav
 shamway check-sound assets-src/audio/blast-near.wav
 shamway build && shamway validate
 ```
@@ -411,17 +411,33 @@ per call while the item's `Meta` is above zero and, at zero, resets it to
 item with no `SoundTick` is silent for its entire countdown, and the only cue
 is whatever the mesh shows.
 
-## Unity import
+## Getting the clip into the bundle
 
 Promote only the selected clip into the bundle-membership folder — from the
-generator (`--promote`), so the bytes are the recorded design — and commit its
-`.meta`. `GeneratedAsset.ImportAudioClip(...)` sets the import the pipeline
-wants: Vorbis compression, force-to-mono, `preloadAudioData` off, and streaming
-for anything long — a bundle opens lazily, and a multi-megabyte clip
-decompressed at load stalls the frame it lands on.
+generator (`--promote`), so the bytes are the recorded design. By default that
+folder is `assets-src/bundle/`, and there is nothing else to do: `shamway
+build` makes the `AudioClip` from the file, and `check-sound` has already
+gated it.
 
-Keep source generators **outside** that folder. The `.wav` that ships is a
-copy; the generator and its full-length source stay in `assets-src/audio/`.
+```bash
+shamway generate sound blast assets-src/audio/blast.wav --seed 7 \
+    --promote assets-src/bundle/myModBlast.wav
+shamway check-sound assets-src/bundle/myModBlast.wav
+shamway build
+```
+
+With `bundle_source = "unity"` the folder is inside the Unity project, the
+clip is committed with its `.meta`, and the import settings matter:
+`GeneratedAsset.ImportAudioClip(...)` sets the ones the pipeline wants —
+Vorbis compression, force-to-mono, `preloadAudioData` off, and streaming for
+anything long, because a bundle opens lazily and a multi-megabyte clip
+decompressed at load stalls the frame it lands on. That encoder is the reason
+to take this route for a large or quality-critical clip; the editorless bank is
+PCM16 and therefore bigger.
+
+Keep source generators **outside** the membership folder either way. The `.wav`
+that ships is a copy; the generator and its full-length source stay in
+`assets-src/audio/`.
 
 ## Acceptance
 

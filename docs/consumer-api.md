@@ -20,8 +20,9 @@ behaviour from what they run.
 
 ### Why not a server
 
-This is a local build tool: it reads a game install and drives a Unity editor
-on the same machine. An HTTP or RPC server would add a network surface, a port,
+This is a local build tool: it reads a game install and writes files on the
+same machine, and can drive a Unity editor there for a mod that opted into one.
+An HTTP or RPC server would add a network surface, a port,
 and a protocol dependency to something whose consumers are scripts, CI jobs,
 and agents that can already start a subprocess. `serve` gives the same
 efficiency over stdio with no listener and no dependency, and `schema` publishes
@@ -115,15 +116,19 @@ print(call("status")["valid"])
 
 ```text
 MyMod/
-├── .shamway.toml                   # configuration; commit it
+├── .shamway.toml                       # configuration; commit it
 ├── Makefile.assets                     # make -f Makefile.assets assets
 ├── assets-src/                         # editable sources + provenance; never ships
+│   ├── bundle/                         # every file here becomes a bundle asset
 │   └── README.md                       # what each lane holds, what a row must record
 └── tools/shamway/
     ├── AGENTS.md                       # the agent contract, in your repo
-    ├── manifests/                      # tracked build membership
-    └── UnityProject/                   # the Unity project your mod owns
+    └── manifests/                      # tracked build membership
 ```
+
+`--bundle-source unity` adds one more directory,
+`tools/shamway/UnityProject/`, and `source_root` then points inside it instead
+of at `assets-src/bundle/`. Nothing else in this page changes.
 
 Nothing here points back at a checkout of this repository, so the mod stays a
 standalone repo. `init` refuses to overwrite any of those files.
@@ -142,18 +147,22 @@ For asset-bundle work, follow @tools/shamway/AGENTS.md.
 Every command exits `0` on success and non-zero on failure, printing one
 `ERROR: ...` line to stderr. Prefer exit codes over parsing prose.
 
+The `Unity` column says whether the command can start an editor **on this
+machine**. Only three ever do, and `build` only when the mod set
+`bundle_source = "unity"`.
+
 | Command | Network | Unity | Writes | Purpose |
 |---|---|---|---|---|
 | `status [--json]` | no | no | no | whole-mod state; exit 1 if invalid |
-| `doctor [--json]` | no | runs `-version` | no | host readiness; exit 1 on any `FAIL` |
+| `doctor [--json]` | no | `-version`, if the mod opted in | no | host readiness; exit 1 on any `FAIL` |
 | `refs` | no | no | no | every bundle URI under `Config/` |
 | `inspect [--json] PATH` | no | no | no | one bundle's revision and class IDs |
 | `check-log PATH` | no | no | no | reject a Unity disabled-module log |
 | `validate [--bundle PATH]` | no | no | no | bundle + all XML references |
-| `build --probe` | no | yes | no | prove the environment; stages nothing |
-| `build` | no | yes | **yes** | build, gate, stage bundle + manifest |
+| `build --probe` | no | only if `bundle_source = "unity"` | no | prove the environment; stages nothing |
+| `build` | no | only if `bundle_source = "unity"` | **yes** | build or synthesize, gate, stage bundle + manifest |
 | `stage BUNDLE [--manifest M] [--log L]` | no | **no** | **yes** | gate and stage a bundle an editor elsewhere built |
-| `pack SOURCE OUTPUT` | no | **no** | **yes** | synthesize a .unity3d from textures, clips, text files and meshes |
+| `pack SOURCE OUTPUT` | no | **no** | **yes** | synthesize a .unity3d from textures, clips, text files, meshes, materials and shaders |
 | `verify-bundle [BUNDLE]` | no | yes | no | load it in a real runtime and report every asset |
 | `init MOD_ROOT` | no | no | **yes** | scaffold into a modlet, or `--adopt` its existing Unity project |
 | `capabilities [--json]` | no | no | no | optional capabilities and how to install them |
@@ -171,11 +180,13 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |
 
 `build`, `stage` and `render-icon` are the only commands that write into the
-modlet, and the first two only after every offline gate passes. `stage` is
-`build` without the editor: it takes an artifact built elsewhere through the
-same gates, reports in `skipped[]` whichever gates its evidence could not
-support, and stages atomically. See [no-unity.md](bundles/no-unity.md), which also
-covers `bundle_source = "none"` for a mod that ships no bundle at all. `render-icon` needs a **graphics
+modlet, and the first two only after every offline gate passes. `build` with
+the default `bundle_source = "synthesized"` writes the bundle itself in
+milliseconds and starts nothing; `stage` takes an artifact built elsewhere
+through the same gates, reports in `skipped[]` whichever gates its evidence
+could not support, and stages atomically. See
+[no-unity.md](bundles/no-unity.md), which covers all four sources, including
+`"none"` for a mod that ships no bundle at all. `render-icon` needs a **graphics
 device** — it never passes `-nographics`, because that combination silently
 produces a blank image; run it under `xvfb-run -a` on a headless host.
 
@@ -389,7 +400,7 @@ pipeline.call("inspect_deep")  # same dispatch as `call` and `serve`
 | Method | Returns |
 |---|---|
 | `Pipeline.discover(start=None)` | a pipeline bound to the nearest config |
-| `Pipeline.scaffold(root, *, game_dir=…, unity_version=…)` | `(pipeline, created_paths)` |
+| `Pipeline.scaffold(root, *, game_dir=…, unity_version=…, bundle_source=None)` | `(pipeline, created_paths)`; `None` means `"synthesized"`, or `"unity"` with `adopt_project` |
 | `.status()` | `Status` |
 | `.doctor()` | `list[Check]` |
 | `.capabilities(probe_versions=False)` | `list[Capability]` |
@@ -403,7 +414,7 @@ pipeline.call("inspect_deep")  # same dispatch as `call` and `serve`
 | `.render_icon(prefab, output=None, size=160, …)` | `RenderResult` (needs Unity + Pillow) |
 | `.check_log(path)` | raises if the log shows stripped modules |
 | `.unity_release(version=None)` | `Release` (uses the network) |
-| `.build(probe=False)` | staged bundle `Path` |
+| `.build(probe=False)` | staged bundle `Path`; no Unity unless `bundle_source = "unity"` |
 | `.stage(bundle, manifest=None, log=None)` | `(staged Path, skipped gates)`; no Unity needed |
 | `.pack(source, output, unity_version=None, game_dir=None)` | `{bundle, manifest, bytes, assets, caveats}`; no Unity needed |
 | `.verify_bundle(bundle=None)` | `VerifyReport`; needs an editor |
@@ -481,8 +492,21 @@ on any hosted runner as a pull-request gate:
 
 `status`/`validate` catch the review-time failures — a bundle committed without
 its manifest, an XML reference to an asset nobody built, a case mismatch, a
-stem collision. Keep `build` on an authoring host with a licensed Unity; it is
-not a CI step.
+stem collision.
+
+With the default `bundle_source = "synthesized"`, `build` is a CI step too: it
+needs no editor, no licence and no display, and it finishes in milliseconds.
+The runner needs `vkd3d-compiler` for the prefab lane — otherwise a mesh is
+packed bare and the note saying so is the thing to fail the job on:
+
+```yaml
+- run: shamway capabilities --missing
+- run: shamway build
+- run: shamway validate
+```
+
+`bundle_source = "unity"` is the case that is not a CI step: keep it on an
+authoring host with a licensed editor.
 
 If a build host *does* exist elsewhere — a machine or runner with the
 game-matched editor and a licence you arranged there — the artifact comes back

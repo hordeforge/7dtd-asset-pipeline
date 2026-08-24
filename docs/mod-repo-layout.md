@@ -43,8 +43,9 @@ Everything below is detail.
 | This repository owns | Your mod owns |
 |---|---|
 | the `shamway` command and every gate | the `ModInfo.xml`, `Config/`, and gameplay XML |
-| the Unity project template and `BundleBuilder.cs` | the assets in `Assets/ModAssets/Bundle/` and their `.meta` files |
-| `GeneratedAsset.cs` and `IconRenderer.cs` | the editor scripts that *use* them to build this mod's prefabs |
+| the editorless writer that produces the bundle | the source files in `assets-src/bundle/` it produces it from |
+| *(opt-in)* the Unity project template and `BundleBuilder.cs` | *(opt-in)* the assets in `Assets/ModAssets/Bundle/` and their `.meta` files |
+| *(opt-in)* `GeneratedAsset.cs` and `IconRenderer.cs` | *(opt-in)* the editor scripts that *use* them to build this mod's prefabs |
 | the generators (`shamway generate …`) | the prompts, seeds, commands, and source art in `assets-src/` |
 | the art-direction, audio, and VFX contracts | this mod's own art direction, if it narrows them |
 | the engine facts, and the gates that encode them | the acceptance evidence for this mod's bundle |
@@ -77,6 +78,8 @@ bytes and ran your logic, never that the art reads well at inventory scale.
 
 ## What `init` writes into the mod
 
+By default — no Unity project, because none is needed:
+
 ```text
 MyMod/
 ├── ModInfo.xml                          # yours, and required before init runs
@@ -85,25 +88,42 @@ MyMod/
 ├── Resources/mymod.unity3d              # BUILD OUTPUT — commit it, never edit it
 ├── UIAtlases/ItemIconAtlas/*.png        # yours: 160 x 160 atlas cells
 │
-├── .shamway.toml                    # written by init; commit it
+├── .shamway.toml                        # written by init; commit it
 ├── Makefile.assets                      # written by init; make -f Makefile.assets assets
 ├── assets-src/                          # written by init; YOURS from then on
+│   ├── bundle/                          #   every file here becomes a bundle asset
 │   ├── README.md                        #   the provenance contract
 │   └── icons/ textures/ meshes/ audio/ vfx/
 └── tools/shamway/
     ├── AGENTS.md                        # written by init: the agent contract
-    ├── manifests/                       # BUILD OUTPUT — commit alongside the bundle
-    └── UnityProject/                    # written by init; the mod owns it after that
-        ├── Assets/ModAssets/Bundle/     #   your assets + every .meta file
-        ├── Assets/SevenDaysToDieAssetPipeline/Editor/   # pipeline-owned; do not edit
-        ├── Packages/manifest.json       #   engine modules — these are BUILD INPUTS
-        └── ProjectSettings/ProjectVersion.txt
+    └── manifests/                       # BUILD OUTPUT — commit alongside the bundle
+```
+
+With `--bundle-source unity`, one more tree appears, and it is the mod's from
+then on:
+
+```text
+└── tools/shamway/UnityProject/
+    ├── Assets/ModAssets/Bundle/         #   your assets + every .meta file
+    ├── Assets/SevenDaysToDieAssetPipeline/Editor/   # pipeline-owned; do not edit
+    ├── Packages/manifest.json           #   engine modules — these are BUILD INPUTS
+    └── ProjectSettings/ProjectVersion.txt
 ```
 
 `init` refuses to overwrite any of it, and never touches `Config/`,
 `Resources/`, or `UIAtlases/`.
 
-Three of those need a word:
+Some of those need a word:
+
+- **`assets-src/bundle/` is the default membership folder.** Every file in it
+  becomes one asset named by its stem, and a mesh becomes a prefab with its
+  mesh, material and shader. Nothing else in `assets-src/` ships or enters the
+  bundle — that is the point of the split.
+- **`Resources/` and `manifests/` are build outputs you commit.** They are one
+  logical artifact — the bundle and the manifest that records its membership —
+  so commit them together, and never hand-edit either.
+
+The rest apply only to a mod that opted into an editor:
 
 - **`Assets/SevenDaysToDieAssetPipeline/Editor/` is pipeline-owned.** It is
   copied in, not linked, so the mod builds standalone — but treat it as
@@ -112,9 +132,6 @@ Three of those need a word:
 - **`Packages/manifest.json` is yours to extend.** Declare a module for every
   component type your assets use; an absent module makes Unity strip those
   classes while still reporting success.
-- **`Resources/` and `manifests/` are build outputs you commit.** They are one
-  logical artifact — the bundle and the manifest that records its membership —
-  so commit them together, and never hand-edit either.
 - **`ProjectSettings/ProjectSettings.asset` churns.** Unity rewrites it on
   every experiment (`targetPixelDensity`, `buildNumber`, platform strings).
   Review those hunks and discard the noise deliberately; never bulk-revert
@@ -122,11 +139,12 @@ Three of those need a word:
 
 ### Committing, and what never ships
 
-Commit: `.shamway.toml`, `Makefile.assets`, `assets-src/`, the Unity
-project (including every `.meta`), the built bundle, and its tracked manifest.
+Commit: `.shamway.toml`, `Makefile.assets`, `assets-src/`, the built bundle,
+and its tracked manifest. A mod with a Unity project commits that too,
+including every `.meta`.
 
 Do not ship in the released modlet: `.shamway.toml`, `tools/`,
-`assets-src/`, `.shamway/`, `.local/`, or the Unity project. The deployable modlet
+`assets-src/`, `.shamway/`, `.local/`, or a Unity project. The deployable modlet
 is `ModInfo.xml`, `Config/` (with `Localization.csv` inside it), `Resources/`, and `UIAtlases/`
 — see [game-integration.md](game-integration.md).
 
@@ -135,6 +153,11 @@ Add to the mod's `.gitignore`:
 ```gitignore
 .shamway/
 .local/
+```
+
+A mod with a Unity project adds its machine-local directories:
+
+```gitignore
 tools/shamway/UnityProject/Library/
 tools/shamway/UnityProject/Temp/
 tools/shamway/UnityProject/Logs/
@@ -147,31 +170,37 @@ evidence, and evidence that is only ever local is evidence nobody else can
 check — but they are never part of the deployable modlet either way. If you do
 commit them, commit them somewhere other than `.local/`.
 
-## A mod with no bundle, or one built elsewhere
+## The four shapes, and which one you get
 
-Everything above assumes the mod owns a Unity project and builds its bundle
-here. Two other shapes are supported and change what `init` writes:
+`--bundle-source` picks it, and three of the four involve no editor at all:
 
-- `--bundle-source synthesized` — the bundle is written by shamway itself. No
+- **`synthesized`, the default** — the bundle is written by shamway itself. No
   Unity project is created; `source_root` points at `assets-src/bundle/` in the
   mod, and every file there becomes one asset: images (`.png`, `.jpg`, `.tga`,
   `.bmp`, plus `.svg`/`.psd`/`.exr`/`.webp`/`.avif` through ImageMagick), clips
   (`.wav`, plus `.ogg`/`.mp3`/`.flac`/`.aiff`/`.m4a`/`.opus`/`.wma` through
-  FFmpeg), meshes (`.glb`, `.gltf`, `.obj`, `.stl`, `.ply`), and text
-  (`.txt`/`.json`/`.csv`). **Materials and shaders** still need an editor —
-  see [no-unity.md](bundles/no-unity.md), and
-  [improvements.md](status/improvements.md) 4b for the route that would close
-  it.
-- `--bundle-source none` — the mod ships no bundle at all (XML, loose
-  `UIAtlases/` PNGs, a DLL). No Unity project is created, `Makefile.assets`
-  has no build targets, and no editor is needed for any part of the mod.
-- `--bundle-source external` — the layout is unchanged, including the Unity
-  project, but the editor lives on another machine; `shamway stage` gates and
-  stages what it built.
+  FFmpeg), text (`.txt`/`.json`/`.csv`), and a mesh (`.glb`, `.gltf`, `.obj`,
+  `.stl`, `.ply`) becoming a **prefab** with its mesh, material and an unlit
+  textured shader. That last lane needs `vkd3d-compiler`; without it the mesh
+  is packed bare and `build` says so.
+- **`none`** — the mod ships no bundle at all (XML, loose `UIAtlases/` PNGs, a
+  DLL). No Unity project is created, `Makefile.assets` has no build targets,
+  and no editor is needed for any part of the mod.
+- **`external`** — a Unity project and an editor exist, but on another machine;
+  `shamway stage` gates and stages what it built. This host needs no editor.
+- **`unity`, opt-in** — a local editor builds it, and the Unity project tree
+  above appears. Choose it when the bundle needs shading the writer does not
+  author: lit, shadowed, transparent, normal-mapped or multi-pass.
 
-See [no-unity.md](bundles/no-unity.md).
+See [no-unity.md](bundles/no-unity.md) for all four in full, and
+[improvements.md](status/improvements.md) for what is still unbuilt inside the
+shader lane.
 
 ## Adopting a mod that already has a Unity project
+
+This is the one place `init` chooses the editor lane for you, because pointing
+at a Unity project *is* the choice: `--adopt` scaffolds `bundle_source =
+"unity"` without `--bundle-source unity` after it.
 
 A mod with assets already has a Unity project, its own editor scripts, and a
 committed bundle. Do **not** scaffold a fresh project and move things into it.
@@ -220,6 +249,11 @@ the generators, the documentation, and the host scripts:
 ```bash
 shamway script --list
 shamway script install-tools --with-authoring --with-research
+```
+
+The editor installer is served the same way, for a mod that opted into one:
+
+```bash
 shamway script install-unity-editor --project tools/shamway/UnityProject
 ```
 

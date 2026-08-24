@@ -2,14 +2,22 @@
 
 ## Where Unity actually enters
 
-Of everything this pipeline does, only two operations *can* start a Unity
-editor: `build` — and only when the mod asks for it — and `render-icon`, which
-has an editorless counterpart in `shamway generate mesh-icon`. Every other
-command — `status`, `doctor`, `refs`,
-`validate`, `inspect` (including `--deep`), `check-mesh`, `check-sound`,
-`check-icons`, `generate`, `prompt`, `docs`, `stage`, and the whole `client`
-family — is Python reading files, and always ran on a machine with no editor
-and no game.
+Of everything this pipeline does, only three operations *can* start a Unity
+editor, and none of them has to:
+
+- `build`, and only when the mod has asked for it with `bundle_source =
+  "unity"`. The default is `"synthesized"`, which starts nothing;
+- `render-icon`, which photographs a bundle prefab. `shamway generate
+  mesh-icon` does the same job from the mesh file in headless Blender;
+- `verify-bundle`, which is a *checker*, not a builder — nothing needs it to
+  build, gate, stage or ship, and it is the one offline check here that this
+  project did not also author.
+
+Every other command — `status`, `doctor`, `refs`, `validate`, `inspect`
+(including `--deep`), `pack`, `check-mesh`, `check-sound`, `check-icons`,
+`generate`, `prompt`, `docs`, `stage`, `acceptance-provider`, and the whole
+`client` family — is Python reading files, and always ran on a machine with no
+editor and no game.
 
 So the real question is never "can I use shamway without Unity". It is **where
 the `.unity3d` comes from**, or whether the mod needs one at all. That has four
@@ -17,24 +25,29 @@ answers, and the configuration states which one applies:
 
 | `bundle_source` | Where the bundle comes from | Needs an editor here |
 |---|---|---|
-| `unity` (default) | a local editor builds it: `shamway build` | yes |
-| `synthesized` | this tool writes it directly: `shamway build`, seconds, no editor | no |
-| `external` | an editor elsewhere builds it; this host gates and stages it: `shamway stage` | no |
+| `synthesized` **(default)** | this tool writes it directly: `shamway build`, seconds, no editor | no |
 | `none` | nowhere: the mod ships no bundle | no |
+| `external` | an editor elsewhere builds it; this host gates and stages it: `shamway stage` | no |
+| `unity` **(opt in)** | a local editor builds it: `shamway build` | yes |
 
-Three questions decide it:
+Three of the four need no editor, and the default is one of them: an `init`
+that says nothing about a bundle source gets `synthesized`. The single
+exception is `init --adopt PROJECT`, where pointing at a Unity project the mod
+already has *is* the opt-in, so that scaffolds `unity` without repeating it.
+
+Three questions decide which case a mod is in:
 
 1. Does any XML ask the engine to load an asset out of a bundle — a
    `Meshfile`, a block `Model`, a `sounds.xml` `ClipName`, an XUi mesh? If not,
    the mod needs no bundle: `none`.
-2. Is everything in that bundle a texture, a sound, a text file or a **mesh**
-   — or a **prefab** built from one of those meshes? Then `synthesized`
-   writes it here, with no editor and no project: a mesh source file becomes a
-   prefab with a material and a shared unlit shader, all synthesized.
-3. Otherwise the bundle needs a shader this writer does not author — anything
-   lit, transparent, normal-mapped, animated or multi-pass — and an editor has
-   to compile it: `unity` if one lives on this machine, `external` if it lives
-   on another.
+2. Does everything in that bundle draw unlit and opaque? Then `synthesized`
+   writes it here, with no editor and no project — textures, sounds, text
+   files, and a mesh source file becoming a prefab with its mesh, material and
+   shader.
+3. Only if the bundle needs shading this writer does not author — lit,
+   shadowed, transparent, normal-mapped, or multi-pass — does an editor have to
+   compile it: `unity` if one lives on this machine, `external` if it lives on
+   another.
 
 The rest of this page takes them in that order.
 
@@ -108,8 +121,13 @@ no project, no editor, no batch-mode run: `shamway build` reads a folder of
 source files and writes the `.unity3d` in milliseconds.
 
 ```bash
-shamway init /path/to/MyMod --bundle-source synthesized --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 ```
+
+No flag selects it — it is what `init` does when nothing says otherwise.
+`--bundle-source synthesized` is accepted and means the same thing, and stating
+it is worth doing in a script that must not change meaning if the default ever
+does.
 
 That scaffolds `assets-src/bundle/`, and every file you put there becomes one
 asset, named by its file stem — the name 7DTD's URIs ask for:
@@ -119,7 +137,7 @@ asset, named by its file stem — the name 7DTD's URIs ask for:
 | `myModPanel.png`, `.jpg`, `.tga`, `.bmp` | `Texture2D`, RGBA32 (or DXT1/DXT5) | `LoadAsset<Texture2D>` |
 | `myModBlast.wav` | `AudioClip`, 16-bit PCM in an FSB5 bank | `sounds.xml`, `LoadAsset<AudioClip>` |
 | `myModData.json`, `.txt`, `.csv` | `TextAsset` | `LoadAsset<TextAsset>` |
-| `myModThing.glb`, `.gltf`, `.obj`, `.stl`, `.ply` | `Mesh`, one submesh | `LoadAsset<Mesh>` |
+| `myModThing.glb`, `.gltf`, `.obj`, `.stl`, `.ply` | a **prefab** with its `Mesh`, `Material` and `Shader` | `Meshfile`, block `Model`, `LoadAsset<GameObject>` |
 | `myModBeep.ogg`, `.mp3`, `.flac`, `.aiff`, `.m4a`, `.opus`, `.wma` | `AudioClip`, decoded by **FFmpeg** first | `sounds.xml`, `LoadAsset<AudioClip>` |
 | `myModGlyph.svg`, `.psd`, `.exr`, `.webp`, `.avif` | `Texture2D`, rasterized by **ImageMagick** first | `LoadAsset<Texture2D>` |
 
@@ -256,21 +274,32 @@ Provenance for each of those is in
 art surveyed, and what is not attempted are in
 [offline-bundle-builder.md](../adrs/0001-synthesize-bundles-without-an-editor.md).
 
-### What it cannot write, and why that is a gap rather than a law
+### What it does not write yet, and why none of it is a law
 
-Materials and shaders still need an editor **today**. That is a gap, not a
-law, and this page claimed otherwise until 2026-08-24 — see the correction in
+Every asset class a 7DTD modlet references from XML — `Texture2D`,
+`AudioClip`, `TextAsset`, `Mesh`, `Material`, `Shader`, and the prefab group —
+is written here. What is left is **inside** the shader lane, not outside it:
+
+| Unbuilt | What it would take |
+|---|---|
+| lit, shadowed, or fog-affected shading | the lighting constant buffers and the keyword variants a real surface pass declares |
+| transparency and cut-out | a second blend state and a render-queue tag, both already representable in `_shader_state` |
+| normal mapping | tangents in the mesh lane, plus a second texture property |
+| instancing and multi-pass | more than one `m_Passes` entry, and the instancing variant flag |
+| Vulkan and Metal sub-programs | `glslangValidator` for SPIR-V; the container is the same |
+
+A prop that needs one of those still uses `unity` or `external`, and neither is
+second-class. Everything else does not.
+
+**Nothing on that list is a property of the engine.** This page said the
+opposite until 2026-08-24 — that materials and shaders "cannot be produced
+offline, ever" — which was false, and the tool that disproved it
+(`vkd3d-compiler`) was already installed on the machine that wrote it. The
+correction is recorded in
 [research-provenance.md](../research/research-provenance.md).
 
-Prefabs came off this list on the same day. `bundle_writer.mesh_prefab` emits
-the `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer` group and a
-real 2022.3.62f2 runtime resolved it. It is not wired into the source folder,
-because a renderer with no material draws nothing and this pipeline does not
-ship an asset that loads and shows nothing.
-
-What is measured is narrower than the old claim. A material references a
-shader, and a mod bundle has to carry its own, because **borrowing** one is
-closed both ways:
+What *is* measured, and remains true, is that a mod bundle must carry its own
+shader, because **borrowing** one is closed both ways:
 
 - **the player's shaders.** The shipped game's `unity default resources`
   carries six shaders and all six are internal — no Standard, no Unlit,
@@ -279,19 +308,9 @@ closed both ways:
   material in it points at one in the *same file*. Copying those into a mod
   would ship the game's assets.
 
-**Authoring** one is a different question, and it was never checked before it
-was called impossible. A shader's d3d11 sub-programs carry DXBC, and
-`vkd3d-compiler` — WineHQ's vkd3d-shader, MIT, and already installed on the
-machine that wrote the wrong claim — compiles HLSL to exactly that;
-`glslangValidator` covers the Vulkan sub-programs. The `Shader` class has a
-type tree at this revision like every other class, and the sub-program blob
-container has been decoded out of the game's own bundle
-(`research-provenance.md`, "Shader object and sub-program blob layout").
-
-So the honest statement is: **unbuilt, with a known route**, tracked in
-[status/improvements.md](../status/improvements.md). Until it is built, a mod
-with a prefab or a material uses `unity` or `external`; both are unchanged and
-neither is second-class. A mod whose geometry ships as meshes needs neither.
+Carrying its own is exactly what this writer does, so that finding is a
+constraint the lane satisfies rather than a wall it stops at. The remaining
+gaps are tracked in [status/improvements.md](../status/improvements.md).
 
 ### The gates say what they are worth
 
@@ -490,10 +509,28 @@ shamway client deploy .
 shamway client launch --mod-name MyMod
 ```
 
-`render-icon` is the only one with no editorless form, and only because it
+`build` is in that list too, and is the point of the page: with the default
+`bundle_source` it writes the bundle here.
+
+```bash
+shamway build
+shamway pack assets-src/bundle out.unity3d --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+```
+
+`render-icon` is the only command with no editorless form, and only because it
 photographs a bundle prefab with its materials. `generate mesh-icon` covers
 the same intent from the mesh file, in headless Blender, and says in its own
 output that what it produced is a clay render.
+
+The default path has exactly one host dependency of its own, and only for the
+prefab lane: `vkd3d-compiler`, which compiles the shader. It is in
+`scripts/install-tools.sh`, and its absence degrades rather than failing — a
+mesh is packed as a bare `Mesh`, and `build` prints a note saying so rather
+than letting a quieter bundle pass for a whole one:
+
+```bash
+shamway capabilities --missing
+```
 
 The last two matter most: **acceptance never needed the editor**. A bundle
 built anywhere, staged here, still ends where every asset in this pipeline

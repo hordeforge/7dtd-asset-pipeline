@@ -59,12 +59,15 @@ cd /path/to/MyMod
 through a real client and a human look, on 2026-08-24 — see the entry in the
 verified list below for the log lines and what the reviewer reported.
 
-**Blocks:** the same proof for a bundle a **Unity editor** built. That is the
-backend most mods use, and nothing about the synthesized run transfers to it:
-a different serializer wrote the file, and the classes an editor can put in one
-(meshes, prefabs, materials, shaders) are exactly the ones the synthesized path
-refuses. Offline gates are verified for both; offline gates are not
-sufficient for either.
+**Blocks:** the same proof for a bundle a **Unity editor** built. Nothing about
+the synthesized run transfers to it: a different serializer wrote the file, and
+its build carries two gates the synthesized path has no equivalent for (the
+disabled-module and particle-curve log gates). Offline gates are verified for
+both; offline gates are not sufficient for either.
+
+This is no longer the backend most mods use — `bundle_source = "synthesized"`
+is the default and the writer covers every asset class a modlet references —
+which lowers this entry's priority without making it less true.
 
 **You run:** build a bundle in a real mod, deploy it, start a genuinely fresh
 client, and load each changed asset by its real URI. The plumbing exists now
@@ -147,22 +150,26 @@ shamway validate
 log and `SEVEN_DAYS_TO_DIE_DIR` were present), `validate` passes, and the
 bundle then loads in a fresh client per entry 3.
 
-### 6. No synthesized mesh, and no mesh-rendered icon, has faced a player
+### 6. No synthesized prop has been drawn on a screen
 
-**Not blocked:** construction. A real Unity 2022.3.62f2 runtime read two
+**Not blocked:** construction. A real Unity 2022.3.62f2 runtime read
 synthesized `Mesh` objects back at their authored vertex counts and bounds
-through `shamway verify-bundle` (see the verified entry below), and
+through `shamway verify-bundle`, and on 2026-08-24 the same runtime reported
+the synthesized `Shader` as `isSupported=True`, the `Material` naming its
+texture, and the prefab resolving both (see the verified entry below).
 `shamway check-icons` accepts what `shamway generate mesh-icon` writes —
 measured at `160x160 rgba 53% opaque` on a generated crate.
 
-**Blocks:** the claim that either is *right*. Neither has been in front of a
-person. The mesh has never been resolved by 7DTD's own `DataLoader` in a live
-client, so the stem lookup and `@modfolder` rewriting are unproven for class
-43 specifically; and a mesh whose winding or up-axis is wrong loads perfectly
-and looks wrong, which is the one failure mode the writer's conversions exist
-to prevent and the one no offline gate can see. The icon has never been looked
-at in an inventory grid next to vanilla art, where a clay render either reads
-as an item or reads as a grey blob.
+**Blocks:** the claim that any of it is *right*. **Nothing synthesized past a
+texture and a clip has been in front of a person, and no synthesized prefab
+has been drawn at all** — `isSupported` is the runtime saying it could compile
+the sub-program, not that a single pixel was rasterized. Three failures are
+live and none is visible offline: a mesh whose winding or up-axis is wrong
+loads perfectly and looks mirrored or face-down, which is exactly what the
+writer's conversions exist to prevent; an unlit pass whose constant-buffer
+offsets are wrong draws the geometry in the wrong place rather than failing;
+and a clay-rendered icon either reads as an item at 160 px beside vanilla art
+or reads as a grey blob.
 
 **You run,** in a mod whose `assets-src/bundle/` holds a mesh, with XML that
 loads it:
@@ -175,10 +182,11 @@ shamway client deploy .
 shamway client launch --mod-name MyMod
 ```
 
-**Confirms it worked:** the harness reports the `LoadAsset<Mesh>` case passing
-with a non-zero vertex count, and a person says two things the suite cannot —
-that the geometry is **not mirrored and not lying on its face**, and that the
-icon is legible at 160 px beside the game's own. File that judgement with
+**Confirms it worked:** the harness reports the `LoadAsset<GameObject>` case
+passing for the prefab, and a person says three things the suite cannot — that
+the prop is **where it should be** and not offset by a wrong constant-buffer
+slot, that the geometry is **not mirrored and not lying on its face**, and that
+the icon is legible at 160 px beside the game's own. File that judgement with
 `shamway client capture --observable "..."`.
 
 ## Verified, for contrast
@@ -233,11 +241,25 @@ These were open and are now closed, so the list above stays meaningful:
   The bounds match what was authored, so the vertex stream, the channel table
   and the index buffer all decoded as intended. That is the engine's loader,
   not this repository's parser — and it is still not 7DTD and still not a
-  look. **No synthesized mesh has yet been rendered in a client**, because a
-  visible mesh needs a material, which needs a shader, which is the wall in
-  [no-unity.md](../bundles/no-unity.md). A mesh loaded from a Harmony DLL
-  through `LoadAsset<Mesh>` is the path that has no such gap and has not been
-  exercised either.
+  look.
+
+- **A shader, a material and a whole prefab reach a bundle with no editor.**
+  Also on 2026-08-24. The chain a `Meshfile` or a block `Model` actually
+  resolves — prefab → renderer → material → shader — is written by
+  `bundle_writer.py`, with the pass's `DXBC` compiled by `vkd3d-compiler` and
+  wrapped in the sub-program container decoded out of the game's own bundle.
+  A real Unity 2022.3.62f2 runtime reports:
+
+  ```text
+  VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=1
+  VERIFY-MATERIAL: 'prop_mat' shader='Shamway/Unlit' shaderSupported=True _MainTex=prop_albedo
+  ```
+
+  That closes the claim this documentation carried in six places until that
+  day: that a Unity shader "cannot be produced offline, ever". It could, and
+  the tool that proved it was already installed. What it does **not** close is
+  entry 6 above — `isSupported` means the runtime could compile the
+  sub-program, not that anything was drawn.
 
 - Blender installs from the official checksum-verified build, and
   `shamway generate mesh` exports all three shapes with the pivot at the base.

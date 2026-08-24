@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from ._version import __version__
-from .config import BUNDLE_SOURCES
+from .config import BUNDLE_SOURCES, DEFAULT_BUNDLE_SOURCE
 from .docs import topics
 from .errors import PipelineError
 from .generators import describe
@@ -241,10 +241,11 @@ _DEFINITIONS: tuple[Operation, ...] = (
     ),
     Operation(
         name="build",
-        summary='Produce, gate and stage the bundle. With bundle_source "unity" a local '
-        "editor builds it and probe=true proves the environment with a throwaway cube; with "
-        '"synthesized" this tool writes it directly, no editor. Refused for "external" '
-        "and \"none\"; use 'stage' there.",
+        summary='Produce, gate and stage the bundle. With bundle_source "synthesized" '
+        "(the default) this tool writes it directly, no editor, and probe=true proves the "
+        'environment in milliseconds; with "unity" a local editor builds it and probe=true '
+        'proves the environment with a throwaway cube. Refused for "external" and "none"; '
+        "use 'stage' there.",
         parameters=_schema({"probe": {"type": "boolean", "default": False}}),
         returns="{bundle: path}",
         cost=MINUTES,
@@ -463,7 +464,8 @@ _DEFINITIONS: tuple[Operation, ...] = (
                 },
                 "source_root": {
                     "type": "string",
-                    "description": "bundle-membership folder, relative to the Unity project",
+                    "description": "bundle-membership folder: relative to the mod root "
+                    'unless bundle_source is "unity", where it is relative to the project',
                 },
                 "manifest_dir": {
                     "type": "string",
@@ -473,9 +475,14 @@ _DEFINITIONS: tuple[Operation, ...] = (
                     "type": "string",
                     # Derived from BUNDLE_SOURCES so the published schema cannot
                     # drift from what load_config and `init --bundle-source` accept.
-                    "enum": sorted(BUNDLE_SOURCES),
-                    "default": "unity",
-                    "description": "where the bundle comes from: "
+                    "enum": list(BUNDLE_SOURCES),
+                    # No "default" key: an absent bundle_source means
+                    # "synthesized" on its own but "unity" with adopt_project,
+                    # and the schema layer fills defaults before it can see the
+                    # other parameter. Stating one here would turn adoption into
+                    # an error for every caller that did not repeat it.
+                    "description": f"where the bundle comes from (default "
+                    f"{DEFAULT_BUNDLE_SOURCE}, or unity with adopt_project): "
                     + ", ".join(f"{name} ({why})" for name, why in BUNDLE_SOURCES.items()),
                 },
             },

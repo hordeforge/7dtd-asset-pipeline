@@ -42,9 +42,19 @@ with UnityPy against the installed game, 2026-08-24; see
 
 An earlier draft of this ADR added that authoring a shader offline is
 impossible. It is not, that was never checked, and the sentence is withdrawn
-— the rule is now in AGENTS.md. What is true is narrower and enough for this
-decision: **there is no material on this path today**, so there is nothing for
-a renderer to shade, whichever renderer is chosen.
+— the rule is now in AGENTS.md. What was true when this was decided, and
+narrow enough to decide it, is that **there was no material on this path**, so
+there was nothing for a renderer to shade, whichever renderer was chosen.
+
+**Superseded in part, same day.** `bundle_writer.shader` and
+`bundle_writer.material` landed hours later, so a synthesized bundle now does
+carry a material. The decision below stands unchanged for a different reason
+than the one it was made for: `render-icon` still needs a Unity editor, which
+is the thing a synthesized mod does not have, and the material the writer emits
+is one unlit textured pass — a render of it and a clay render differ by an
+albedo texture, not by shading. Revisiting this is worth it when the writer
+emits a *lit* material, and the trigger in "Consequences" below is restated
+accordingly.
 
 ## Decision
 
@@ -81,10 +91,12 @@ second guard, and it earned its place immediately — during development it
 caught a stale `matrix_world` that aimed the camera at nothing and produced a
 transparent cell no other check would have failed.
 
-What would justify revisiting this: an offline path to a valid material. That
-means a shader the writer can emit — the route exists (`vkd3d-compiler` for
-DXBC, the decoded blob container) and is tracked in
-[status/improvements.md](../status/improvements.md) — since a shader in the
-shipped player that a mod may reference is the one half genuinely measured
-closed. When the writer can emit a material, the right move is a real prefab
-render, not a better clay one.
+What would justify revisiting this: an offline path to a **lit** material. The
+writer reached an unlit one on 2026-08-24, which is not enough to change the
+answer — an unlit pass at full brightness and a Blender clay render differ by
+an albedo texture, and neither shows how the prop reads under scene light.
+Lit, shadowed and normal-mapped shading is tracked in
+[status/improvements.md](../status/improvements.md). When the writer emits
+that, the right move is a real prefab render, not a better clay one — and it
+still needs a renderer that is not a Unity editor, or the lane closes again for
+exactly the mods it was opened for.

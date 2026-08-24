@@ -19,6 +19,7 @@ import tempfile
 from pathlib import Path
 
 from .bundle_writer import pack_directory, write_artifact
+from .capabilities import has_capability
 from .config import PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
@@ -267,6 +268,22 @@ SYNTHESIZED_CAVEATS = (
     "a fresh client is therefore the acceptance for a synthesized bundle rather "
     "than a confirmation of it: 'shamway client deploy .' then 'client launch'",
 )
+
+# The prefab lane degrades rather than failing when no shader compiler is
+# installed, and a degraded lane that says nothing is indistinguishable from a
+# complete one — the same reason `stage` prints a `not run:` line per gate.
+NO_SHADER_COMPILER_CAVEAT = (
+    "vkd3d-compiler is not installed, so any mesh was packed as a bare Mesh rather than "
+    "as the prefab with its material and shader that Meshfile and block Model load: "
+    "'shamway capabilities --missing' prints the install line"
+)
+
+
+def synthesized_caveats() -> tuple[str, ...]:
+    """What this host's synthesize is worth, including any lane that degraded."""
+    if has_capability("vkd3d-compiler"):
+        return SYNTHESIZED_CAVEATS
+    return (*SYNTHESIZED_CAVEATS, NO_SHADER_COMPILER_CAVEAT)
 
 
 def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:

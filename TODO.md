@@ -73,8 +73,11 @@ close the entry — never edit the entry to match what happened.
 ## Everything else
 
 Capability work is [improvements.md](docs/status/improvements.md), which
-already carries its own ordering and names the OSS tool for each gap. The two
+already carries its own ordering and names the OSS tool for each gap. The three
 worth knowing about without reading it: XML patches are scanned but never
-applied, so an XPath that matches nothing is silent; and the synthesized
-texture and audio lanes are uncompressed, which is a size cost, not a
-correctness one.
+applied, so an XPath that matches nothing is silent; the synthesized audio lane
+is uncompressed, which is a size cost and not a correctness one (textures got
+BC1/BC3 on 2026-08-24); and the writer's shader pass is **unlit, opaque and
+variant-free**, so lit, shadowed, transparent, normal-mapped and multi-pass
+shading is unbuilt with a known route, and a mod that needs it opts into
+`bundle_source = "unity"` or `"external"` today.

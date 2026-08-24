@@ -16,6 +16,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# The row the membership folder gets when it lives inside this tree.
+MEMBERSHIP_LANE = (
+    "**bundle content** — every file here becomes an asset named by its stem; "
+    "copy only selected outputs in"
+)
+
 LANES = {
     "icons": "atlas icons: generated or drawn sources, and the cut-out RGBA derivative",
     "textures": "albedo, normal, and packed mask sources for materials",
@@ -24,6 +30,12 @@ LANES = {
     "vfx": "particle card sources and opacity masks",
 }
 
+# Where a selected output is copied to become bundle content. It differs per
+# bundle source — the mod root's own folder by default, a path inside the Unity
+# project for an opt-in editor — and the README has to name the real one, or
+# every "copy it here" sentence points at a directory that does not exist.
+UNITY_MEMBERSHIP = "tools/shamway/UnityProject/Assets/ModAssets/Bundle"
+
 README = """# Editable asset sources for {mod_name}
 
 Nothing in this directory ships. It holds the sources, generators, and
@@ -31,9 +43,9 @@ provenance behind the assets that do: the deployable artifacts are the bundle
 at `Resources/{bundle_name}`, the PNGs under `UIAtlases/`, and nothing else.
 
 Keep it this way round on purpose. Concepts, rejected alternatives, masks,
-turntables and full-resolution sources live here; only a *selected* output is
-copied into `tools/shamway/UnityProject/Assets/ModAssets/Bundle/`, so an
-unfinished asset cannot ship merely by sitting in the wrong folder.
+turntables and full-resolution sources live here; only a *selected* output
+reaches `{membership}/`, so an unfinished asset cannot ship merely by sitting
+in the wrong folder.
 
 ## Layout
 
@@ -82,11 +94,11 @@ shamway docs mod-repo-layout
 
 ```bash
 shamway generate sound blast audio/thing.wav --seed 7 \
-    --promote ../tools/shamway/UnityProject/Assets/ModAssets/Bundle/Sounds/myModThing.wav
+    --promote {membership_here}/myModThing.wav
 shamway generate cutout key icons/src.png ../UIAtlases/ItemIconAtlas/thing.png \
     --size 160 --pad 0.9 --trim
 shamway generate texture-maps textures/paint.png --out-dir textures/derived --stem myModPaint \
-    --also ../tools/shamway/UnityProject/Assets/ModAssets/Bundle/Textures
+    --also {membership_here}
 shamway generate mesh meshes/thing.glb --shape box --size 1 0.6 0.8
 ```
 
@@ -97,14 +109,13 @@ Then gate each lane, build, and validate — from the mod root:
 
 - `shamway capabilities --json` — what is installed, and what it unlocks
 - `shamway check-icons` — every atlas PNG and CustomIcon key
-- `shamway render-icon myModThing` — photograph a prefab into an icon
+- `shamway generate mesh-icon` — photograph a mesh file into an icon, no editor
 
 ```bash
 shamway capabilities --json
 shamway check-mesh assets-src/meshes/thing.glb
 shamway check-sound assets-src/audio/thing.wav
 shamway check-icons
-shamway render-icon myModThing
 shamway build && shamway validate
 ```
 
@@ -121,8 +132,20 @@ two a person did.
 """
 
 
-def render_readme(mod_name: str, bundle_name: str) -> str:
-    rows = "\n".join(f"| `{name}/` | {purpose} |" for name, purpose in LANES.items())
+def render_readme(mod_name: str, bundle_name: str, membership: str | None = None) -> str:
+    """The provenance contract, naming this mod's real bundle-membership folder.
+
+    `membership` is that folder relative to the mod root. `None` means the
+    opt-in Unity project's, which is the only case where it does not live
+    inside this tree.
+    """
+    membership = membership or UNITY_MEMBERSHIP
+    lanes = dict(LANES)
+    if membership.startswith("assets-src/"):
+        # It is one of the directories this README describes, so it gets a row
+        # rather than being a path mentioned only in prose.
+        lanes = {membership.split("/", 1)[1]: MEMBERSHIP_LANE, **lanes}
+    rows = "\n".join(f"| `{name}/` | {purpose} |" for name, purpose in lanes.items())
     text = README
     if not bundle_name:
         # A mod with no bundle still needs this tree: its icons and their
@@ -131,17 +154,30 @@ def render_readme(mod_name: str, bundle_name: str) -> str:
             "the deployable artifacts are the bundle\nat `Resources/{bundle_name}`, the PNGs under `UIAtlases/`, and nothing else.",
             "the deployable artifacts are the PNGs\nunder `UIAtlases/`, the XML under `Config/`, and nothing else.",
         ).replace(
-            "only a *selected* output is\ncopied into `tools/shamway/UnityProject/Assets/ModAssets/Bundle/`, so an\nunfinished asset cannot ship merely by sitting in the wrong folder.",
-            "only a *selected* output is\ncopied into `UIAtlases/`, so an unfinished asset cannot ship merely by\nsitting in the wrong folder.",
+            "only a *selected* output\nreaches `{membership}/`, so an unfinished asset cannot ship merely by sitting\nin the wrong folder.",
+            "only a *selected* output\nreaches `UIAtlases/`, so an unfinished asset cannot ship merely by sitting\nin the wrong folder.",
         )
+    # The generator examples run from inside this tree, so they need the path
+    # from here, not from the mod root: `bundle/x.wav`, not `../assets-src/…`.
+    here = (
+        membership.split("/", 1)[1] if membership.startswith("assets-src/") else f"../{membership}"
+    )
     return (
         text.replace("{mod_name}", mod_name)
         .replace("{bundle_name}", bundle_name)
+        .replace("{membership_here}", here)
+        .replace("{membership}", membership)
         .replace("{lane_rows}", rows)
     )
 
 
-def create(mod_root: Path, mod_name: str, bundle_name: str, directory: str = "assets-src") -> Path:
+def create(
+    mod_root: Path,
+    mod_name: str,
+    bundle_name: str,
+    directory: str = "assets-src",
+    membership: str | None = None,
+) -> Path:
     """Create the source tree, leaving any existing content untouched."""
     root = mod_root / directory
     root.mkdir(parents=True, exist_ok=True)
@@ -153,5 +189,5 @@ def create(mod_root: Path, mod_name: str, bundle_name: str, directory: str = "as
             keep.write_text(f"# {purpose}\n", encoding="utf-8")
     readme = root / "README.md"
     if not readme.exists():
-        readme.write_text(render_readme(mod_name, bundle_name), encoding="utf-8")
+        readme.write_text(render_readme(mod_name, bundle_name, membership), encoding="utf-8")
     return root

@@ -949,11 +949,34 @@ class DocumentationTests(unittest.TestCase):
 
 class AssetsSourceTreeTests(unittest.TestCase):
     def test_readme_names_every_lane_and_resolves_placeholders(self) -> None:
-        readme = render_readme("MyMod", "mymod.unity3d")
-        self.assertNotIn("{mod_name}", readme)
-        self.assertNotIn("{bundle_name}", readme)
-        for lane in LANES:
-            self.assertIn(f"`{lane}/`", readme)
+        for membership in (None, "assets-src/bundle"):
+            with self.subTest(membership=membership):
+                readme = render_readme("MyMod", "mymod.unity3d", membership)
+                for placeholder in ("{mod_name}", "{bundle_name}", "{membership"):
+                    self.assertNotIn(placeholder, readme)
+                for lane in LANES:
+                    self.assertIn(f"`{lane}/`", readme)
+
+    def test_the_readme_names_this_mods_real_membership_folder(self) -> None:
+        """ "Copy a selected output here" has to point at a folder that exists.
+
+        The text was written for a Unity project, and every mod now gets
+        `assets-src/bundle/` unless it opted into one — so a fixed path sent
+        the default reader to a directory `init` never created.
+        """
+        synthesized = render_readme("MyMod", "mymod.unity3d", "assets-src/bundle")
+        self.assertIn("`bundle/`", synthesized, "the membership folder gets a Layout row")
+        self.assertNotIn("UnityProject", synthesized)
+        # Generator examples run from inside assets-src, so the promote target
+        # is `bundle/…`, never `../assets-src/bundle/…`.
+        self.assertIn("--promote bundle/", synthesized)
+        self.assertNotIn("../assets-src", synthesized)
+
+        editor = render_readme("MyMod", "mymod.unity3d")
+        self.assertIn("../tools/shamway/UnityProject/Assets/ModAssets/Bundle", editor)
+
+        bundle_free = render_readme("MyMod", "")
+        self.assertIn("reaches `UIAtlases/`", bundle_free)
 
     def test_scaffold_creates_the_tree_without_clobbering(self) -> None:
         from sevendtd_asset_pipeline.assets_src import create

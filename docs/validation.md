@@ -6,12 +6,18 @@
 shamway status --json
 shamway doctor --json
 shamway inspect Resources/examplemod.unity3d
-shamway check-log .shamway/build/bundle/unity-build.log
 shamway refs
 shamway validate
 shamway check-icons
 shamway check-sound assets-src/audio/clip.wav
 shamway check-mesh assets-src/meshes/thing.glb
+```
+
+One more applies only to a mod whose bundle an editor built, because the log it
+reads is one an editor wrote:
+
+```bash
+shamway check-log .shamway/build/bundle/unity-build.log
 ```
 
 `inspect --json` and `doctor --json` are suitable for CI and agent workflows.
@@ -22,19 +28,24 @@ stderr. Prefer exit codes over parsing prose.
 
 ## Offline gates
 
+Five of these read an editor's *build* and so apply only to
+`bundle_source = "unity"` or a staged `"external"` bundle; they are marked. The
+rest read the artifact and the mod's own XML, and run on every path.
+
 | Gate | Failure caught | Evidence used |
 |---|---|---|
-| Editor exit/output | compiler, license, target, or serialization failure | process exit and expected files |
-| Disabled-module log gate | Unity “succeeds” while stripping classes | exact warning family in full Unity log |
-| UnityFS signature/revision | wrong file or editor revision | built bundle header and installed game bundle header |
+| Editor exit/output *(editor only)* | compiler, license, target, or serialization failure | process exit and expected files |
+| Disabled-module log gate *(editor only)* | Unity “succeeds” while stripping classes | exact warning family in full Unity log |
+| UnityFS signature/revision | wrong file or engine revision | built bundle header and installed game bundle header |
 | Class-142 gate | container cannot become a runtime `AssetBundle` | first serialized file's class/type table |
 | Manifest stem uniqueness | assets unreachable because 7DTD discards path/extension | complete tracked manifest |
 | URI mod identity | wrong `@modfolder` name, or a URI targeting game bundles | `ModInfo.xml` and recursive XML scan |
 | Bundle path | missing, wrong, or escaped file | case-insensitive resolution below mod root |
 | Asset case/membership | typo, case mismatch, or absent stem | URI and tracked manifest |
 | Code-referenced stems | a prefab or clip only C# loads, absent from or misnamed in the bundle | `code_references` in `.shamway.toml` against the tracked manifest |
-| Particle curve-mode log gate | a system that logs on every frame in the client | `curves must all be in the same mode` in the Unity build log |
-| Editor revision | `UNITY_EDITOR` pointing at a different editor, which silently upgrades the project | `Unity -version` against `ProjectVersion.txt` |
+| Particle curve-mode log gate *(editor only)* | a system that logs on every frame in the client | `curves must all be in the same mode` in the Unity build log |
+| Editor revision *(editor only)* | `UNITY_EDITOR` pointing at a different editor, which silently upgrades the project | `Unity -version` against `ProjectVersion.txt` |
+| Engine modules *(editor only)* | a component class Unity will strip while reporting success | `Packages/manifest.json` |
 | Atlas cell shape | an icon that is not square, not the cell size, has no alpha, or was never cut out of its background | PNG IHDR chunk, plus alpha coverage when Pillow is present |
 | Icon key case | a `CustomIcon` whose case differs from the filename stem it ships | recursive XML scan against `UIAtlases/` |
 | Clip format | stereo, unexpected sample rate, silence, near-silence, clipping, DC offset | WAV frames |
@@ -48,9 +59,10 @@ every item or block that sets no `CustomIcon`, because that is the engine's
 default sprite lookup. A key this mod does not provide is reported, never
 failed: referencing a vanilla key is normal.
 
-### When this tool wrote the bundle itself
+### When this tool wrote the bundle itself — the default
 
-Every gate in the table above still runs against a synthesized bundle, and the
+Every gate in the table above that is not marked *(editor only)* still runs
+against a synthesized bundle, and the
 revision gate still means exactly what it meant: it rejects a bundle written
 for an engine the installed game does not use. Two others change character,
 because an artifact and a checker with the same author cannot cross-examine
@@ -61,16 +73,23 @@ each other, and one cannot run at all:
 | class-142 container | true by construction — structural, not independent evidence |
 | stem uniqueness | reads the membership record this build wrote, same caveat |
 | disabled-module log gate | cannot run: no editor, so no log, and nothing was stripped |
-| Unity revision | unchanged and independent |
+| engine revision | unchanged and independent |
 | every XML reference gate | unchanged: they read the mod's XML, not the artifact's author |
 
-`build` prints those three as `note:` lines on every synthesize, and calls the
+One more note appears only when a lane degraded: with no `vkd3d-compiler` on
+the host, a mesh source is packed as a bare `Mesh` rather than as the prefab
+the game resolves, and `build` says which it wrote. A quieter bundle must never
+read like a whole one.
+
+`build` prints those as `note:` lines on every synthesize, and calls the
 result **synthesized**, never *built*. What restores independent evidence is
 `shamway verify-bundle`, which loads the artifact in a real Unity runtime with
 the engine's own loader and class definitions — the only offline check here
 that this repository did not also author. It needs an editor, which is exactly
 what the backend exists to avoid, so it is optional and its absence is
-reported rather than assumed away.
+reported rather than assumed away. Nothing needs it to build, gate, stage or
+ship; it is a checker, and the only reason an editor is worth having on a
+machine that does not build with one.
 
 Acceptance is unchanged and matters more: a fresh client and a person.
 
@@ -87,7 +106,7 @@ that goes unmentioned reads exactly like a passed one.
 
 A mod that declares no bundle (`bundle_source = "none"`) has one gate in
 total: no XML may load an asset out of a bundle the mod does not ship.
-[no-unity.md](bundles/no-unity.md) covers both cases.
+[no-unity.md](bundles/no-unity.md) covers all four cases.
 
 ### What `validate` discovers, and what it cannot
 

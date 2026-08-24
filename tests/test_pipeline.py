@@ -80,10 +80,8 @@ class PipelineTests(unittest.TestCase):
         this machine's.
         """
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
-        self.assertEqual("unity", load_config(self.root / CONFIG_NAME).bundle_source)
-        self.assertEqual(
-            "synthesized", self._load_with_machine_source_env("synthesized").bundle_source
-        )
+        self.assertEqual("synthesized", load_config(self.root / CONFIG_NAME).bundle_source)
+        self.assertEqual("unity", self._load_with_machine_source_env("unity").bundle_source)
         self.assertEqual("external", self._load_with_machine_source_env("external").bundle_source)
 
     def test_the_machine_bundle_source_may_not_invent_or_remove_a_bundle(self) -> None:
@@ -108,7 +106,7 @@ class PipelineTests(unittest.TestCase):
         """
         from sevendtd_asset_pipeline.config import BUNDLE_SOURCES, MACHINE_BUNDLE_SOURCES
 
-        self.assertEqual(("unity", "synthesized", "external"), MACHINE_BUNDLE_SOURCES)
+        self.assertEqual(("synthesized", "external", "unity"), MACHINE_BUNDLE_SOURCES)
         self.assertEqual(
             tuple(name for name in BUNDLE_SOURCES if name != "none"),
             MACHINE_BUNDLE_SOURCES,
@@ -301,14 +299,21 @@ class PipelineTests(unittest.TestCase):
     def test_doctor_rejects_an_editor_whose_version_differs_from_the_project(self) -> None:
         from sevendtd_asset_pipeline.doctor import editor_matches_project
 
-        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="unity")
         config = load_config(self.root / ".shamway.toml")
         self.assertEqual("OK", editor_matches_project("2022.3.62f2", config).status)
         self.assertEqual("OK", editor_matches_project("2022.3.62f2 (7670c08855a9)", config).status)
         self.assertEqual("FAIL", editor_matches_project("6000.5.9f1", config).status)
 
     def test_scaffold_pins_the_changeset_when_it_is_known(self) -> None:
-        initialize(self.root, None, "example.unity3d", "2022.3.62f2", "7670c08855a9")
+        initialize(
+            self.root,
+            None,
+            "example.unity3d",
+            "2022.3.62f2",
+            "7670c08855a9",
+            bundle_source="unity",
+        )
         version_file = (
             self.root
             / "tools"
@@ -324,7 +329,7 @@ class PipelineTests(unittest.TestCase):
     def test_scaffold_omits_the_revision_line_when_the_changeset_is_unknown(self) -> None:
         # Unity writes that line itself on first open, so an unreachable
         # release service must not fail the scaffold.
-        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="unity")
         version_file = (
             self.root
             / "tools"
@@ -344,7 +349,7 @@ class PipelineTests(unittest.TestCase):
 
         from sevendtd_asset_pipeline.doctor import run_doctor
 
-        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="unity")
         editor = self.root / "fake-editor"
         editor.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         editor.chmod(0o755)
@@ -507,7 +512,9 @@ class BuildPreflightTests(unittest.TestCase):
         (self.root / "ModInfo.xml").write_text(
             '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
         )
-        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        # Explicitly the editor lane: these are `run_build`'s Unity preflights,
+        # which the default source never reaches.
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="unity")
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -721,12 +728,50 @@ MANIFEST = "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleTh
 
 
 class UnityOptionalTests(unittest.TestCase):
-    """The two ways a mod exists without a Unity editor on this machine.
+    """The three ways a mod exists without a Unity editor on this machine.
 
-    `bundle_source = "external"` keeps the bundle and every gate that reads it,
-    and moves only the editor elsewhere. `bundle_source = "none"` drops the
-    bundle entirely, which is what an XML-and-icons modlet actually is.
+    `bundle_source = "synthesized"` — the default — keeps the bundle and writes
+    it here. `"external"` keeps the bundle and every gate that reads it, and
+    moves only the editor elsewhere. `"none"` drops the bundle entirely, which
+    is what an XML-and-icons modlet actually is.
     """
+
+    def test_the_default_source_scaffolds_no_unity_project(self) -> None:
+        """Unity is opt-in: an `init` that did not ask for it gets no editor.
+
+        The default used to be `"unity"`, which put a Unity project and an
+        editor requirement into every mod that never said it wanted one.
+        """
+        created = initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        config = load_config(self.root / CONFIG_NAME)
+        self.assertEqual("synthesized", config.bundle_source)
+        self.assertFalse((self.root / "tools" / "shamway" / "UnityProject").exists())
+        self.assertIn(self.root / "assets-src" / "bundle", created)
+        self.assertEqual(self.root / "assets-src" / "bundle", config.bundle_source_dir)
+
+    def test_adopting_a_project_is_itself_the_opt_in_to_unity(self) -> None:
+        """`--adopt` must not need `--bundle-source unity` repeated after it.
+
+        Pointing at a Unity project the mod already has says the editor lane is
+        wanted. Defaulting to synthesized there would scaffold a mod beside a
+        project nothing reads.
+        """
+        project = self.root / "Existing"
+        (project / "Assets" / "ModAssets" / "Bundle").mkdir(parents=True)
+        (project / "ProjectSettings").mkdir()
+        (project / "Packages").mkdir()
+        (project / "ProjectSettings" / "ProjectVersion.txt").write_text(
+            "m_EditorVersion: 2022.3.62f2\n", encoding="utf-8"
+        )
+        (project / "Packages" / "manifest.json").write_text(
+            '{"dependencies": {"com.unity.modules.assetbundle": "1.0.0"}}', encoding="utf-8"
+        )
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", adopt_project=project)
+        self.assertEqual("unity", load_config(self.root / CONFIG_NAME).bundle_source)
+
+    def test_a_stated_source_always_wins_over_both_defaults(self) -> None:
+        initialize(self.root, None, None, "", bundle_source="none")
+        self.assertEqual("none", load_config(self.root / CONFIG_NAME).bundle_source)
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -887,7 +932,9 @@ class UnityOptionalTests(unittest.TestCase):
         initialize(self.root, None, "example.unity3d", "2022.3.62f2")
         config_file = self.root / CONFIG_NAME
         config_file.write_text(
-            config_file.read_text().replace('bundle_source = "unity"', 'bundle_source = "somehow"'),
+            config_file.read_text().replace(
+                'bundle_source = "synthesized"', 'bundle_source = "somehow"'
+            ),
             encoding="utf-8",
         )
         with self.assertRaisesRegex(PipelineError, "bundle_source must be one of"):

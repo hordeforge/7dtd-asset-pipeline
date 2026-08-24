@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Install the host tooling this pipeline builds and inspects assets with.
 #
-# Only Python 3.11+ and a game-matched Unity editor are pipeline requirements.
-# Everything else here supports the authoring lanes in docs/authoring/authoring-tools.md
-# and is opt-in, so a build host never installs desktop art packages it has no
-# use for.
+# Python 3.11+ is the only pipeline requirement, and vkd3d-compiler is what the
+# default editorless build path needs to write a prefab's shader. A Unity editor
+# is opt-in and is installed by scripts/install-unity-editor.sh, not here.
+# Everything else supports the authoring lanes in docs/authoring/authoring-tools.md
+# and is opt-in too, so a build host never installs desktop art packages it has
+# no use for.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,8 +27,9 @@ USAGE
 OPTIONS
   --with-authoring       Also install the optional asset-authoring tools
                          (Blender, OpenSCAD, ImageMagick, FFmpeg, Xvfb)
-  --with-unity-prereqs   Also install what scripts/install-unity-editor.sh
-                         needs (curl, tar, libarchive, flatpak, libxml2.so.2)
+  --with-unity-prereqs   Also install what the OPTIONAL scripts/install-unity-editor.sh
+                         needs (curl, tar, libarchive, flatpak, libxml2.so.2).
+                         Only a mod that sets bundle_source = "unity" needs it
   --with-research        Also install the decompilers that engine facts must
                          cite (.NET 8 SDK + ilspycmd, Mono's monodis)
   --with-desktop-capture Also install a screenshot tool, so the human visual
@@ -40,11 +43,13 @@ BASE TOOLS
   git, make          Version control and the consumer Makefile targets
   shellcheck         Lints this repository's scripts in 'make check'
   pactl              Mutes and unmutes a test client (shamway client mute)
+  vkd3d-compiler     HLSL to DXBC: the shader a synthesized prefab's material
+                     needs. Without it a mesh is packed as a bare Mesh and
+                     'shamway build' prints a note saying so
 
 WITH --with-authoring
   blender            Headless mesh authoring, conversion, and turntables
   openscad           Parametric hard-surface geometry
-  vkd3d-compiler     HLSL to DXBC, for the editorless shader and material lane
   imagemagick        Icons, masks, channel packing, contact sheets
   ffmpeg             Audio conversion, normalization, and synthesis
   xvfb               A virtual display for shamway render-icon, which
@@ -147,10 +152,11 @@ run_check() {
 	report make "consumer Makefile targets" have make
 	report shellcheck "script linting in make check" have shellcheck
 	report pactl "client mute/unmute (shamway client)" have pactl
+	report vkd3d-compiler "HLSL to DXBC (synthesized shaders and materials)" \
+		have vkd3d-compiler
 	if ((WITH_AUTHORING)); then
 		report blender "mesh authoring" have blender
 		report openscad "parametric geometry" have openscad
-		report vkd3d-compiler "HLSL to DXBC (shaders, materials)" have vkd3d-compiler
 		report magick "icons and textures" have magick
 		report ffmpeg "audio" have ffmpeg
 		report xvfb-run "icon rendering on a headless host" have xvfb-run
@@ -202,13 +208,14 @@ collect_pacman() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(shellcheck)
 	have pactl || PACKAGES+=(libpulse)
+	# Arch ships /usr/bin/vkd3d-compiler in `vkd3d` (verified with pacman -Qo).
+	have vkd3d-compiler || PACKAGES+=(vkd3d)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
 		have magick || PACKAGES+=(imagemagick)
 		have ffmpeg || PACKAGES+=(ffmpeg)
 		have xvfb-run || PACKAGES+=(xorg-server-xvfb)
-		have vkd3d-compiler || PACKAGES+=(vkd3d)
 	fi
 	if ((WITH_UNITY_PREREQS)); then
 		have curl || PACKAGES+=(curl)
@@ -234,13 +241,15 @@ collect_apt() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(shellcheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
+	# `vkd3d-compiler`, not `vkd3d-dev`: Debian bookworm/trixie/sid ship the
+	# binary in the package of the same name, and vkd3d-dev is only headers.
+	have vkd3d-compiler || PACKAGES+=(vkd3d-compiler)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
 		have magick || PACKAGES+=(imagemagick)
 		have ffmpeg || PACKAGES+=(ffmpeg)
 		have xvfb-run || PACKAGES+=(xvfb)
-		have vkd3d-compiler || PACKAGES+=(vkd3d-dev)
 	fi
 	if ((WITH_UNITY_PREREQS)); then
 		have curl || PACKAGES+=(curl)
@@ -266,6 +275,9 @@ collect_dnf() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(ShellCheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
+	# Fedora names the binary's package after the binary (vkd3d-compiler-1.17
+	# in Rawhide); the plain `vkd3d` package is the runtime library.
+	have vkd3d-compiler || PACKAGES+=(vkd3d-compiler)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -297,6 +309,10 @@ collect_zypper() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(ShellCheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
+	# openSUSE Factory carries `vkd3d`. If this host ends up without the
+	# binary anyway, --check says MISS and the build degrades with a note
+	# rather than failing.
+	have vkd3d-compiler || PACKAGES+=(vkd3d)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)

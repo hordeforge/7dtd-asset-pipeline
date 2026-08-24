@@ -50,6 +50,7 @@ rest read the artifact and the mod's own XML, and run on every path.
 | Icon key case | a `CustomIcon` whose case differs from the filename stem it ships | recursive XML scan against `UIAtlases/` |
 | Clip format | stereo, unexpected sample rate, silence, near-silence, clipping, DC offset | WAV frames |
 | Mesh extents/conformance | a mesh authored in the wrong unit, or invalid glTF | trimesh and the Khronos validator |
+| Block `Class` resolves | a `Class` naming no engine type, which aborts the whole XML file | `Block<value>` against the installed game's own type table (`monodis`) |
 
 Icons are **not** bundle members — `ModManager.LoadUiAtlases` packs
 `UIAtlases/<Atlas>/*.png` at runtime — so `validate` cannot see them and
@@ -118,6 +119,38 @@ that goes unmentioned reads exactly like a passed one.
 A mod that declares no bundle (`bundle_source = "none"`) has one gate in
 total: no XML may load an asset out of a bundle the mod does not ship.
 [no-unity.md](bundles/no-unity.md) covers all four cases.
+
+### A block `Class` is engine API, not mod data
+
+`<property name="Class" value="X" />` names a **C# type in the game's
+assembly**, resolved as `Block` + `X`. A value that names no such type does not
+fail that block — it aborts the file:
+
+```text
+ERR XML loader: Loading and parsing 'blocks.xml' failed
+EXC Class 'Decoration' not found on block shamwayPropProofBlock!
+```
+
+Every other block in that file is lost with it, `items.xml` fails next, saved
+block ids stop matching, `TileEntityComposite.read` floods the log, and world
+load ends in a `NullReferenceException`. The mod reads as catastrophically
+broken and the cause is one invented word.
+
+No bundle gate can see it: the URI resolves, the manifest is complete, the
+prefab loads. So `validate` checks the value against the engine's own type
+table, read with `monodis` from `Assembly-CSharp.dll` — never against a list
+kept here, which would be wrong the day the engine adds a class and would fail
+a mod for using something real. Verified: every `Class` value the shipped
+`blocks.xml` uses resolves to a `Block<X>` type, with no exceptions.
+
+Without `monodis` the check falls back to the `Class` values vanilla's own
+config uses, which is *weaker* — a real class no vanilla block needs is absent
+from it — and the refusal names which source answered. With no game directory
+at all it prints a `not run:` line rather than passing, because an unrun gate
+must never read like a passed one.
+
+This gate exists because an invented `Class="Decoration"` passed `validate`,
+shipped to a client, and was found by reading the log.
 
 ### What `validate` discovers, and what it cannot
 

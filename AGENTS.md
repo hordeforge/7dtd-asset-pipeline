@@ -222,6 +222,8 @@ stronger evidence than the evidence that introduced it, recorded in
 | game-matched engine revision | a bundle aimed at a revision the installed game does not load |
 | file-stem collision rejection | assets made unreachable by 7DTD's stem-only lookup |
 | atlas-cell and `CustomIcon` checks | icons the bundle gates cannot see at all |
+| block `Class` resolution | a `Class` naming no engine type, which aborts the whole XML file |
+| mesh UVs behind a texture | an albedo nothing can sample, drawn as one flat colour |
 | clip format checks | a clip that is stereo, silent, clipping, or DC-offset |
 | fresh-client acceptance | everything an offline parse cannot prove |
 

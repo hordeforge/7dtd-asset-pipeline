@@ -227,6 +227,26 @@ class RejectionTests(unittest.TestCase):
             )
 
 
+def textured_box(path: Path) -> Path:
+    """A box carrying UV0, which is what a mesh with a texture must have.
+
+    `trimesh.creation.box` has no UVs, and the writer now refuses a mesh with
+    an `<stem>_albedo` beside it and nothing to sample it with — so a fixture
+    that wants the texture bound has to supply the channel a real export does.
+    """
+    import numpy
+    import trimesh
+
+    box = trimesh.creation.box(extents=(1, 1, 1))
+    # Any well-formed UV0 will do here: what is under test is that the channel
+    # exists and reaches the bundle, not what it maps to.
+    extent = box.vertices.max(axis=0) - box.vertices.min(axis=0)
+    uv = (box.vertices[:, :2] - box.vertices[:, :2].min(axis=0)) / extent[:2]
+    box.visual = trimesh.visual.TextureVisuals(uv=numpy.asarray(uv, dtype=float))
+    box.export(path)
+    return path
+
+
 @needs_unitypy
 class SourceLaneTests(unittest.TestCase):
     """A mesh source file becomes a prefab only where a shader compiler exists."""
@@ -245,9 +265,7 @@ class SourceLaneTests(unittest.TestCase):
         return list(UnityPy.load(str(path)).objects)
 
     def source_tree(self, work: Path) -> None:
-        import trimesh
-
-        trimesh.creation.box(extents=(1, 1, 1)).export(work / "prop.glb")
+        textured_box(work / "prop.glb")
         one_pixel_png(work / "prop_albedo.png")
 
     @unittest.skipUnless(has_capability("trimesh"), "the mesh lane needs trimesh")
@@ -290,12 +308,11 @@ class SourceLaneTests(unittest.TestCase):
         `.tga` or `.jpg` albedo drew the shader's default white and no gate
         anywhere said why.
         """
-        import trimesh
         from PIL import Image
 
         with tempfile.TemporaryDirectory() as raw:
             work = Path(raw)
-            trimesh.creation.box(extents=(1, 1, 1)).export(work / "prop.glb")
+            textured_box(work / "prop.glb")
             Image.new("RGBA", (1, 1), (9, 9, 9, 255)).save(work / "prop_albedo.tga")
             objects = self.packed_objects(work)
         materials = [obj.read() for obj in objects if obj.type.name == "Material"]
@@ -304,6 +321,41 @@ class SourceLaneTests(unittest.TestCase):
         self.assertNotEqual(
             envs["_MainTex"].m_Texture.m_PathID, 0, "an unbound _MainTex draws the default white"
         )
+
+
+class UvGuardTests(unittest.TestCase):
+    """A texture that can never be sampled is refused, not shipped.
+
+    Blender's glTF exporter drops a UV layer no material samples, so every mesh
+    `shamway generate mesh` produced arrived without UVs. The writer bound
+    `<stem>_albedo` to the prefab's material anyway, the shader had nothing to
+    sample, and the prop drew one flat colour — with the mesh, the material and
+    the texture all loading green in a live client.
+    """
+
+    @unittest.skipUnless(has_capability("trimesh"), "the mesh lane needs trimesh")
+    def test_an_albedo_on_a_mesh_without_uvs_is_refused(self) -> None:
+        import trimesh
+
+        from sevendtd_asset_pipeline.bundle_writer import prefab_objects
+
+        with tempfile.TemporaryDirectory() as raw:
+            work = Path(raw)
+            trimesh.creation.box(extents=(1, 1, 1)).export(work / "prop.glb")
+            with self.assertRaisesRegex(PipelineError, "no UV channel"):
+                prefab_objects(work / "prop.glb", {"prop_albedo"})
+
+    @unittest.skipUnless(has_capability("trimesh"), "the mesh lane needs trimesh")
+    def test_a_mesh_without_uvs_and_without_a_texture_is_fine(self) -> None:
+        """An untextured prop is a legitimate thing to ship."""
+        import trimesh
+
+        from sevendtd_asset_pipeline.bundle_writer import prefab_objects
+
+        with tempfile.TemporaryDirectory() as raw:
+            work = Path(raw)
+            trimesh.creation.box(extents=(1, 1, 1)).export(work / "prop.glb")
+            self.assertTrue(prefab_objects(work / "prop.glb", set()))
 
 
 class DegradedLaneReportTests(unittest.TestCase):

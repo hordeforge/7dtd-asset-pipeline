@@ -74,6 +74,16 @@ obj.data.transform(__import__("mathutils").Matrix.Translation((0, 0, sz / 2)))
 obj.data.update()
 bpy.ops.object.shade_smooth() if shape == "sphere" else None
 
+# A material, purely so the glTF exporter keeps TEXCOORD_0. Blender's
+# primitives carry a UV map, but the exporter drops a UV layer no material
+# samples - so every mesh this generator wrote arrived with no UVs, and the
+# `<stem>_albedo` texture the writer binds to the prefab's material had
+# nothing to map onto. It rendered a flat colour and no gate anywhere said
+# why: the mesh loaded, the material loaded, the texture loaded.
+uv_material = bpy.data.materials.new(name=name + "_uv")
+uv_material.use_nodes = True
+obj.data.materials.append(uv_material)
+
 bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_selection=False)
 dims = obj.dimensions
 print("BLENDER_EXTENTS %.6f %.6f %.6f" % (dims.x, dims.y, dims.z))

@@ -85,6 +85,14 @@ a texture named `<stem>_albedo` is bound to it. That lane needs
 `vkd3d-compiler` for the shader; without it the mesh is packed bare and
 `build` says so.
 
+**Export UVs, or the texture cannot show.** glTF drops a UV layer no material
+samples, so a mesh exported from Blender with no material assigned arrives
+without `TEXCOORD_0` — the writer then binds `<stem>_albedo` to a material with
+nothing to sample it, and the prop draws one flat colour while the mesh, the
+material and the texture all load green. `shamway generate mesh` attaches a
+material for exactly this reason, and the writer refuses a mesh that has an
+albedo beside it and no UV channel.
+
 - Official export API: <https://trimesh.org/trimesh.exchange.export.html>
 
 ### gltfpack — simplification, and a quantization trap

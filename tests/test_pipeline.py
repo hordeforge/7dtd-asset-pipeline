@@ -746,8 +746,12 @@ class UnityOptionalTests(unittest.TestCase):
         config = load_config(self.root / CONFIG_NAME)
         self.assertEqual("synthesized", config.bundle_source)
         self.assertFalse((self.root / "tools" / "shamway" / "UnityProject").exists())
-        self.assertIn(self.root / "assets-src" / "bundle", created)
-        self.assertEqual(self.root / "assets-src" / "bundle", config.bundle_source_dir)
+        # Resolved on both sides: `initialize` resolves the mod root, and on
+        # macOS the temporary directory is /var/... while its resolution is
+        # /private/var/..., so comparing raw paths passes only on Linux.
+        expected = (self.root / "assets-src" / "bundle").resolve()
+        self.assertIn(expected, [path.resolve() for path in created])
+        self.assertEqual(expected, config.bundle_source_dir.resolve())
 
     def test_adopting_a_project_is_itself_the_opt_in_to_unity(self) -> None:
         """`--adopt` must not need `--bundle-source unity` repeated after it.

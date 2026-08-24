@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .bundle_writer import pack_directory
+from .bundle_writer import pack_directory, write_artifact
 from .config import PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
@@ -288,9 +288,9 @@ def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:
         config.bundle_source_dir, config.bundle_name, version, _build_target(config)
     )
     built = output / config.bundle_name
-    built.write_bytes(bundle_bytes)
+    write_artifact(built, bundle_bytes)
     generated_manifest = output / f"{config.bundle_name}.manifest"
-    generated_manifest.write_text(manifest_text, encoding="utf-8")
+    write_artifact(generated_manifest, manifest_text)
 
     validate_bundle(built, version)
     reject_ambiguous_stems(manifest_assets(generated_manifest))

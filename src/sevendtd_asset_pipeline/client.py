@@ -419,6 +419,11 @@ def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = Tr
     project can never reach a client by accident. With `replace`, an existing
     deployment is removed first, so a stale bundle cannot survive next to a
     new one. Returns the relative paths copied.
+
+    The copy lands in a temporary folder beside the destination and is renamed
+    into place only after every entry has been copied, so a failure midway (a
+    full disk, a permission error) leaves the previous deployment intact
+    instead of a half modlet the client would load as silently broken state.
     """
     name = _deploy_name(mod_name)
     mod_root = Path(mod_root).resolve()
@@ -430,23 +435,32 @@ def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = Tr
             raise PipelineError(f"{destination} already exists; pass replace=True to refresh it")
         if destination.resolve() == mod_root:
             raise PipelineError(f"{destination} is the mod root itself; refusing to delete it")
-        if destination.is_symlink():
-            destination.unlink()
-        else:
-            shutil.rmtree(destination)
-    destination.mkdir(parents=True, exist_ok=True)
-    copied: list[str] = []
-    candidates = [mod_root / name for name in DEPLOY_ALLOWLIST]
+    candidates = [mod_root / entry for entry in DEPLOY_ALLOWLIST]
     candidates += sorted(path for path in mod_root.glob("*.dll") if path.is_file())
-    for source in candidates:
-        if not source.exists():
-            continue
-        target = destination / source.name
-        if source.is_dir():
-            shutil.copytree(source, target, ignore=shutil.ignore_patterns(".git*", "*.meta"))
-        else:
-            shutil.copy2(source, target)
-        copied.append(source.name)
+    staged = destination.with_name(f".{name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
+    copied: list[str] = []
+    try:
+        staged.mkdir(parents=True)
+        for source in candidates:
+            if not source.exists():
+                continue
+            target = staged / source.name
+            if source.is_dir():
+                shutil.copytree(source, target, ignore=shutil.ignore_patterns(".git*", "*.meta"))
+            else:
+                shutil.copy2(source, target)
+            copied.append(source.name)
+        if destination.exists():
+            if destination.is_symlink():
+                destination.unlink()
+            else:
+                shutil.rmtree(destination)
+        staged.replace(destination)
+    except OSError as exc:
+        raise PipelineError(f"could not finish deploying {name} to {mods_dir}: {exc}") from exc
+    finally:
+        if staged.exists():
+            shutil.rmtree(staged, ignore_errors=True)
     return copied
 
 
@@ -921,7 +935,13 @@ def fresh_client_run(
     with held_lock(session):
         started_at = time.time()
         command = launch_command(steam_bin, extra_args)
-        subprocess.run(command, check=False)
+        try:
+            subprocess.run(command, check=False)
+        except OSError as exc:
+            # The which() probe above catches a missing binary; this catches
+            # the exec that still failed (permissions, ENOEXEC), so it reaches
+            # the caller as one ERROR line instead of a raw traceback.
+            raise PipelineError(f"cannot launch through {steam_bin}: {exc}") from exc
         muted_indexes: list[int] = []
         unmuted = False
         try:
@@ -934,17 +954,22 @@ def fresh_client_run(
                     # unmuted state, not the mute.
                     set_client_mute(False, wait_seconds=5)
                     unmuted = True
-                stop_client(running_client_pids())
             newest = latest_client_log(logs, written_after=started_at)
         finally:
-            # Anything raised between muting and the scheduled unmute — a stop
-            # that failed, a log that never appeared, a Ctrl+C mid-run — must
-            # still undo the mute. It persists in WirePlumber's saved state,
-            # and would silence every later session of this game, not just
-            # this run.
-            if run_seconds and mute and muted_indexes and not unmuted:
-                with contextlib.suppress(PipelineError):
-                    set_client_mute(False, wait_seconds=5)
+            if run_seconds:
+                # Anything raised between muting and here — a stop that failed,
+                # a log that never appeared, a Ctrl+C mid-run — must still undo
+                # the mute: it persists in WirePlumber's saved state, and would
+                # silence every later session of this game, not just this run.
+                if mute and muted_indexes and not unmuted:
+                    with contextlib.suppress(PipelineError):
+                        set_client_mute(False, wait_seconds=5)
+                # And a timed run owns its client's lifetime: whatever way the
+                # window ended, the client must not survive to hold the
+                # exclusivity check against every later run. The stop comes
+                # after any needed unmute, because once the client exits there
+                # is no stream whose state WirePlumber could save.
+                stop_client(running_client_pids())
     return AcceptanceRun(
         log=scan_log(newest, mod_name),
         launched=command,

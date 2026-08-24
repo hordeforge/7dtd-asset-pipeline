@@ -18,7 +18,7 @@ from .build import (
     stage_bundle,
 )
 from .bundle_verify import verify_with_editor
-from .bundle_writer import pack_directory
+from .bundle_writer import pack_directory, write_artifact
 from .capabilities import capabilities
 from .client import main as client_main
 from .config import BUNDLE_SOURCES, load_config
@@ -448,13 +448,14 @@ def run(args: argparse.Namespace) -> int:
                 "it claims to be for, and the installed game is what has to load it"
             )
         bundle, manifest_text = pack_directory(args.source, args.output.name, version)
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_bytes(bundle)
+        # Atomic writes: a pack interrupted midway must not leave a truncated
+        # .unity3d at the path a later deploy would ship.
+        write_artifact(args.output, bundle)
         # Not `manifest`: that name belongs to the operation registry's manifest()
         # at module level, and a local of the same name shadows it for the whole
         # of run() — which broke `shamway schema` in a way no unit test saw.
         manifest_path = args.manifest or Path(f"{args.output}.manifest")
-        manifest_path.write_text(manifest_text, encoding="utf-8")
+        write_artifact(manifest_path, manifest_text)
         print(f"OK: synthesized {args.output} ({len(bundle)} bytes) and {manifest_path}")
         for caveat in SYNTHESIZED_CAVEATS:
             print(f"note: {caveat}")

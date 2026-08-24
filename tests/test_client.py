@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -110,6 +111,49 @@ class DeployTests(unittest.TestCase):
     def test_refuses_a_mod_without_modinfo(self) -> None:
         with tempfile.TemporaryDirectory() as temp, self.assertRaises(PipelineError):
             client.deploy_mod(Path(temp), Path(temp) / "Mods", "X")
+
+    def test_a_failed_copy_leaves_the_previous_deployment_intact(self) -> None:
+        """The destination is replaced only after every entry has been staged.
+
+        A deploy that dies midway (a full disk, a permission error) must not
+        leave a half modlet the client would load as broken state, and must
+        not have destroyed the deployment that was already there.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mod = root / "MyMod"
+            (mod / "Config").mkdir(parents=True)
+            (mod / "Config/items.xml").write_text("<configs/>")
+            (mod / "ModInfo.xml").write_text("<xml/>")
+            mods_dir = root / "Mods"
+
+            client.deploy_mod(mod, mods_dir, "MyMod")
+            good = mods_dir / "MyMod"
+            self.assertEqual("<xml/>", (good / "ModInfo.xml").read_text())
+
+            def exploding(source: object, target: object, **kwargs: object) -> None:
+                raise OSError(28, "No space left on device")
+
+            with (
+                mock.patch.object(shutil, "copytree", side_effect=exploding),
+                self.assertRaises(PipelineError),
+            ):
+                client.deploy_mod(mod, mods_dir, "MyMod")
+            self.assertEqual({"Config", "ModInfo.xml"}, {p.name for p in good.iterdir()})
+            self.assertEqual(
+                "<xml/>", (good / "ModInfo.xml").read_text(), "the old deployment survived"
+            )
+            self.assertEqual(["MyMod"], [path.name for path in mods_dir.iterdir()])
+
+    def test_a_completed_deployment_leaves_no_staging_folder_behind(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mod = root / "MyMod"
+            mod.mkdir()
+            (mod / "ModInfo.xml").write_text("<xml/>")
+            mods_dir = root / "Mods"
+            client.deploy_mod(mod, mods_dir, "MyMod")
+            self.assertEqual(["MyMod"], [path.name for path in mods_dir.iterdir()])
 
     def test_refuses_a_name_that_traverses_out_of_the_mods_dir(self) -> None:
         """A mod name is a folder name, never a path.
@@ -764,11 +808,11 @@ class FreshClientRunTests(unittest.TestCase):
 
     def test_a_failure_mid_run_still_unmutes(self) -> None:
         # The interrupt lands inside the run window; the finally must undo the
-        # mute before the error reaches the caller.
+        # mute, and must not leave the client running behind it either.
         with self.assertRaises(KeyboardInterrupt):
             self._run(sleep_side_effect=KeyboardInterrupt())
         self.assertIn("unmute", self.calls)
-        self.assertEqual(["mute", "unmute"], self.calls)
+        self.assertEqual(["mute", "unmute", "stop"], self.calls)
 
     def test_a_failed_stop_after_the_unmute_does_not_unmute_twice(self) -> None:
         with self.assertRaises(RuntimeError):

@@ -33,7 +33,9 @@ offline parse of what it wrote proves construction, never acceptance.
 from __future__ import annotations
 
 import hashlib
+import os
 import struct
+import tempfile
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -1019,6 +1021,28 @@ def render_manifest(bundle_name: str, assets: list[str]) -> str:
         "Dependencies: []",
     ]
     return "\n".join(lines) + "\n"
+
+
+def write_artifact(path: Path, payload: bytes | str) -> None:
+    """Write a bundle or manifest to `path` through a temporary file and one rename.
+
+    A plain ``write_bytes`` that dies midway (disk full, Ctrl+C) leaves a
+    truncated artifact at the final path, indistinguishable from a complete one
+    until something fails to load it. The unique temporary name and the
+    unlink-on-every-exit are the package's atomic-write pattern, shared with
+    `build._atomic_copy`, `client._write_lock`, `capture._write_manifest` and
+    the generators.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = payload.encode("utf-8") if isinstance(payload, str) else payload
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    os.close(descriptor)
+    temporary_path = Path(temporary)
+    try:
+        temporary_path.write_bytes(data)
+        temporary_path.replace(path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def pack_directory(

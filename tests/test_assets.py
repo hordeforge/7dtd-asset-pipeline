@@ -414,6 +414,8 @@ class GeneratorTests(unittest.TestCase):
             self.assertEqual([], list(root.glob("*.tmp")), "the staged file must not survive")
 
     def test_the_mesh_icon_refuses_a_bad_target_before_starting_blender(self) -> None:
+        import tempfile
+
         from sevendtd_asset_pipeline.generators.mesh_icon import main
 
         with tempfile.TemporaryDirectory() as name:

@@ -46,6 +46,7 @@ from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
+from . import transcode
 from .client import hold_for_write, user_mods_dir
 from .config import PipelineConfig, load_config
 from .errors import PipelineError
@@ -55,6 +56,11 @@ from .references import manifest_assets, read_mod_name
 # worth asserting once loaded. Keyed by source extension, the same mapping
 # `bundle_writer.ASSET_KINDS` uses, so the two cannot disagree about what a
 # `.png` becomes.
+KIND_SOURCE_ASSERTIONS = {
+    "Texture2D": "loaded.width > 0 && loaded.height > 0",
+    "AudioClip": "loaded.channels > 0 && loaded.frequency > 0 && loaded.samples > 0",
+}
+
 ASSET_CASES: dict[str, tuple[str, str]] = {
     ".png": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
     ".tga": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
@@ -73,7 +79,18 @@ ASSET_CASES: dict[str, tuple[str, str]] = {
     ".obj": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
     ".stl": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
     ".ply": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
+    ".jpeg": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
+    ".bmp": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
 }
+# The converted lanes: whatever FFmpeg and ImageMagick let into a bundle has
+# to be loadable from one too, and this generated the cases rather than a
+# hand-written list so the two cannot drift as those tuples grow.
+for _kind, _suffixes in (
+    ("AudioClip", transcode.AUDIO_SUFFIXES),
+    ("Texture2D", transcode.IMAGE_SUFFIXES),
+):
+    for _suffix in _suffixes:
+        ASSET_CASES[_suffix] = (_kind, KIND_SOURCE_ASSERTIONS[_kind])
 
 # Every extension mapped to a kind must assert the same property of it, so the
 # case body can look the assertion up by kind instead of re-deriving it per

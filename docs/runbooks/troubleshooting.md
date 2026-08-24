@@ -403,22 +403,26 @@ ToFileDescriptor(intptr_t): Assertion `fd < sysconf(_SC_OPEN_MAX) &&
 at a time."' failed.
 ```
 
-**It is the host's file-descriptor limit, not the project.** Reproduced
-2026-08-24 on a machine whose soft `RLIMIT_NOFILE` was 1048576: every build
-aborted. The same command at 65536 — same project, same editor — succeeded
-every time.
+**It is intermittent, and nobody knows why.** Observed at roughly two aborts in
+a dozen builds on one host. The same command, in the same environment, on the
+same project, succeeds on an immediate retry.
 
-`shamway` launches every batch-mode editor through `run_unity`, which lowers
-the child's limit to 65536 and leaves the parent's alone, so this should not
-reach you. If you are invoking the editor yourself, do the same:
+`shamway` launches every batch-mode editor through `run_unity`, which retries
+an abort that never produced a bundle, up to three attempts, and says so on
+stderr when it does. If all three abort, the failure is real and the log is
+worth reading.
 
-```bash
-ulimit -n 65536
-```
+### What this is *not*
 
-`shamway doctor` reports the host's limit under `open files`.
+An earlier version of this page blamed the host's soft `RLIMIT_NOFILE`, on the
+strength of a machine at 1048576 where builds aborted and then succeeded after
+lowering it to 65536. **That was a coincidence and the claim was wrong.** With
+the limit clamped to 65536 the same build aborted again with the same
+assertion. Lowering your file limit will not help, and the clamp that used to
+do it automatically has been removed rather than left in place on the chance
+that it might.
 
-The mechanism inside mono is **not** established — the assertion reads as
-though a larger `_SC_OPEN_MAX` should be easier to satisfy, not harder. What is
-recorded here is the reproduction and the mitigation. Do not repeat it as a
-diagnosis.
+Recorded at this length because the wrong explanation is more attractive than
+the right one: the assertion names a file-descriptor limit, so a reader who has
+one that looks large will believe they have found the cause, and they will be
+able to "confirm" it on the next build that happens to succeed.

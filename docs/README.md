@@ -17,7 +17,8 @@ and each choice explained in [setup.md](getting-started/setup.md).
 The asset lanes own [authoring/](authoring/README.md): the lane each asset type
 follows ([agent-workflows.md](authoring/agent-workflows.md)), the house style
 ([art-direction.md](authoring/art-direction.md)), the sound and VFX lanes
-([audio.md](authoring/audio.md), [vfx.md](authoring/vfx.md)), and the optional
+([audio.md](authoring/audio.md), [vfx.md](authoring/vfx.md)), worn character
+gear ([skinned-gear.md](authoring/skinned-gear.md)), and the optional
 OSS toolchain ([authoring-tools.md](authoring/authoring-tools.md)).
 
 How a bundle is produced lives in [bundles/](bundles/README.md). Start with

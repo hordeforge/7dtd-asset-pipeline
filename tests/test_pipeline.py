@@ -64,6 +64,56 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse((self.root / CONFIG_NAME).exists(), "nothing may be written")
         self.assertFalse((self.root / "tools").exists())
 
+    def _load_with_machine_source_env(self, value: str) -> PipelineConfig:
+        import os
+        from unittest import mock
+
+        clean = {key: value for key, value in os.environ.items() if key != "SHAMWAY_BUNDLE_SOURCE"}
+        with mock.patch.dict(os.environ, {**clean, "SHAMWAY_BUNDLE_SOURCE": value}):
+            return load_config(self.root / CONFIG_NAME)
+
+    def test_the_machine_bundle_source_override_selects_this_host(self) -> None:
+        """SHAMWAY_BUNDLE_SOURCE moves one committed configuration between hosts.
+
+        The same checkout is a build host with an editor and an agent box
+        without one; the file records the mod's decision, the environment
+        this machine's.
+        """
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        self.assertEqual("unity", load_config(self.root / CONFIG_NAME).bundle_source)
+        self.assertEqual(
+            "synthesized", self._load_with_machine_source_env("synthesized").bundle_source
+        )
+        self.assertEqual("external", self._load_with_machine_source_env("external").bundle_source)
+
+    def test_the_machine_bundle_source_may_not_invent_or_remove_a_bundle(self) -> None:
+        initialize(self.root, None, None, "", bundle_source="none")
+        for override in ("unity", "synthesized", "external"):
+            with self.assertRaisesRegex(PipelineError, "cannot apply"):
+                self._load_with_machine_source_env(override)
+
+    def test_the_machine_bundle_source_rejects_values_that_are_not_sources(self) -> None:
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        for override in ("none", "bogus"):
+            with self.assertRaisesRegex(PipelineError, "may only be"):
+                self._load_with_machine_source_env(override)
+
+    def test_machine_bundle_sources_are_the_declared_sources_minus_none(self) -> None:
+        """The override's allowed set is derived from BUNDLE_SOURCES, not a copy.
+
+        A source added to BUNDLE_SOURCES becomes machine-selectable by
+        construction; pinning the literal keeps adding one a deliberate,
+        reviewed act rather than something an environment variable starts
+        permitting silently.
+        """
+        from sevendtd_asset_pipeline.config import BUNDLE_SOURCES, MACHINE_BUNDLE_SOURCES
+
+        self.assertEqual(("unity", "synthesized", "external"), MACHINE_BUNDLE_SOURCES)
+        self.assertEqual(
+            tuple(name for name in BUNDLE_SOURCES if name != "none"),
+            MACHINE_BUNDLE_SOURCES,
+        )
+
     def test_scaffold_survives_hostile_modinfo_characters(self) -> None:
         """A ModInfo Name with TOML metacharacters must still load back exactly.
 

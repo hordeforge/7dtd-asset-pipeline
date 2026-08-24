@@ -362,10 +362,14 @@ class Pipeline:
 
 
 def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str, Any]:
-    """Reject unknown or missing parameters, and demand any capability, up front.
+    """Reject unknown or missing parameters, apply schema defaults, demand capabilities.
 
-    Failing here means an out-of-process caller gets the same message for the
-    same mistake as a Python caller, before any work starts.
+    The JSON Schema in `operations.py` is the single source of parameter
+    defaults: an absent parameter whose property declares one is filled in
+    here, so `shamway call`, `shamway serve`, and the Python facade cannot
+    drift from what the published contract promises. Failing here means an
+    out-of-process caller gets the same message for the same mistake as a
+    Python caller, before any work starts.
     """
     arguments = dict(params or {})
     properties = operation.parameters.get("properties", {})
@@ -376,6 +380,12 @@ def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str,
             f"operation {operation.name!r} got unknown parameter(s): "
             f"{', '.join(sorted(unknown))}; accepts: {allowed}"
         )
+    defaults = {
+        name: prop["default"]
+        for name, prop in properties.items()
+        if "default" in prop and name not in arguments
+    }
+    arguments = {**defaults, **arguments}
     for required in operation.parameters.get("required", []):
         if required not in arguments:
             raise PipelineError(f"operation {operation.name!r} requires parameter {required!r}")
@@ -438,22 +448,18 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "check_mesh": lambda self, p: self.check_mesh(**_mesh_params(p)),
     "check_log": lambda self, p: _check_log_result(Path(p["log"])),
     "check_sound": lambda self, p: self.check_sound(**_sound_params(p)),
-    "check_icons": lambda self, p: self.check_icons(
-        p.get("atlas_root", "UIAtlases"), p.get("cell", 160)
-    ),
+    "check_icons": lambda self, p: self.check_icons(p["atlas_root"], p["cell"]),
     "render_icon": lambda self, p: self.render_icon(
         p["prefab"],
         p.get("output"),
-        p.get("size", 160),
-        p.get("atlas", "ItemIconAtlas"),
-        p.get("yaw", 208.0),
-        p.get("pitch", 8.0),
-        p.get("padding", 1.22),
+        p["size"],
+        p["atlas"],
+        p["yaw"],
+        p["pitch"],
+        p["padding"],
     ),
-    "unity_release": lambda self, p: self.unity_release(
-        p.get("version"), p.get("platform", "LINUX")
-    ),
-    "build": lambda self, p: {"bundle": str(self.build(p.get("probe", False)))},
+    "unity_release": lambda self, p: self.unity_release(p.get("version"), p["platform"]),
+    "build": lambda self, p: {"bundle": str(self.build(p["probe"]))},
     "pack": lambda self, p: _pack(p, self.config.game_dir),
     "verify_bundle": lambda self, p: self.verify_bundle(p.get("bundle")),
     "acceptance_provider": lambda self, p: self.acceptance_provider(
@@ -465,13 +471,13 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "init": lambda self, p: _init(p),
     "client_where": lambda self, p: self.client_where(p.get("game_dir")),
     "client_deploy": lambda self, p: self.client_deploy(
-        p.get("mods_dir"), p.get("mod_name"), p.get("replace", True)
+        p.get("mods_dir"), p.get("mod_name"), p["replace"]
     ),
     "client_launch": lambda self, p: self.client_launch(
         p.get("run_seconds"),
-        p.get("mute", False),
+        p["mute"],
         p.get("mod_name"),
-        p.get("steam_bin", "steam"),
+        p["steam_bin"],
         p.get("log_dir"),
     ),
     "client_log": lambda self, p: self.client_log(
@@ -491,9 +497,9 @@ def _client_log(
 
 
 # Shared parameter plumbing for the operations that run identically with and
-# without a configuration. One mapping per operation keeps the JSON-schema
-# defaults in `_STATELESS` from drifting away from the bound methods in
-# `_DISPATCH`.
+# without a configuration. Parameters whose default is published in the
+# schema are read directly: `_validated` has already applied it, so there is
+# exactly one copy of each default value (operations.py).
 def _prompt_params(params: dict[str, Any]) -> dict[str, Any]:
     return {
         "kind": params["kind"],
@@ -502,23 +508,23 @@ def _prompt_params(params: dict[str, Any]) -> dict[str, Any]:
         "palette": params.get("palette", ""),
         "key": params.get("key", ""),
         "avoid": tuple(params.get("avoid", ())),
-        "stem": params.get("stem", "myModThing"),
+        "stem": params["stem"],
     }
 
 
 def _mesh_params(params: dict[str, Any]) -> dict[str, Any]:
     return {
         "mesh": Path(params["mesh"]),
-        "max_extent": params.get("max_extent", 16.0),
-        "strict": params.get("strict", False),
+        "max_extent": params["max_extent"],
+        "strict": params["strict"],
     }
 
 
 def _sound_params(params: dict[str, Any]) -> dict[str, Any]:
     return {
         "clip": Path(params["clip"]),
-        "max_seconds": params.get("max_seconds", 30.0),
-        "require_mono": params.get("require_mono", True),
+        "max_seconds": params["max_seconds"],
+        "require_mono": params["require_mono"],
     }
 
 
@@ -582,7 +588,7 @@ def _init(params: dict[str, Any]) -> dict[str, Any]:
         adopt_project=params.get("adopt_project"),
         source_root=params.get("source_root"),
         manifest_dir=params.get("manifest_dir"),
-        bundle_source=params.get("bundle_source", "unity"),
+        bundle_source=params["bundle_source"],
     )
     return {"created": [str(path) for path in created]}
 
@@ -596,7 +602,7 @@ _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "check_log": lambda p: _check_log_result(Path(p["log"])),
     "check_sound": lambda p: check_sound(**_sound_params(p)),
     "unity_release": lambda p: fetch_release(
-        p["version"] if p.get("version") else _needs_version(), p.get("platform", "LINUX")
+        p["version"] if p.get("version") else _needs_version(), p["platform"]
     ),
     "init": _init,
     "pack": lambda p: _pack(p, None),
@@ -607,8 +613,8 @@ _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
         client.game_dir_from_env(),
         p.get("mod_name"),
         run_seconds=p.get("run_seconds"),
-        mute=p.get("mute", False),
-        steam_bin=p.get("steam_bin", "steam"),
+        mute=p["mute"],
+        steam_bin=p["steam_bin"],
         log_dir=Path(p["log_dir"]) if p.get("log_dir") else None,
     ),
     "client_log": lambda p: _client_log(

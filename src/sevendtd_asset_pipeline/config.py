@@ -41,6 +41,11 @@ BUNDLE_SOURCES = {
 # The sources that build here. They differ in what starts the build, not in
 # what gates it afterwards.
 LOCAL_BUNDLE_SOURCES = ("unity", "synthesized")
+# What SHAMWAY_BUNDLE_SOURCE may set: every declared source except "none",
+# because whether a mod has a bundle is the mod's decision recorded in the
+# file, and the environment only says where this host gets it from. Derived
+# from BUNDLE_SOURCES so the two cannot drift when a source is added.
+MACHINE_BUNDLE_SOURCES = tuple(name for name in BUNDLE_SOURCES if name != "none")
 BUNDLE_SOURCE_ENV = "SHAMWAY_BUNDLE_SOURCE"
 
 
@@ -151,9 +156,10 @@ def _machine_bundle_source(configured: str) -> str:
     override = os.environ.get(BUNDLE_SOURCE_ENV, "").strip()
     if not override:
         return configured
-    if override not in ("unity", "synthesized", "external"):
+    if override not in MACHINE_BUNDLE_SOURCES:
+        allowed = ", ".join(repr(name) for name in MACHINE_BUNDLE_SOURCES)
         raise PipelineError(
-            f"{BUNDLE_SOURCE_ENV} may only be 'unity', 'synthesized' or 'external' (it says "
+            f"{BUNDLE_SOURCE_ENV} may only be {allowed} (it says "
             f"where this machine gets the bundle from), not {override!r}"
         )
     if configured == "none":

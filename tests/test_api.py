@@ -269,6 +269,24 @@ class DispatchTests(unittest.TestCase):
         init = by_name["init"]["parameters"]["properties"]
         self.assertEqual(sorted(BUNDLE_SOURCES), init["bundle_source"]["enum"])
 
+    def test_a_published_default_is_applied_and_an_explicit_value_wins(self) -> None:
+        """The schema is the only copy of a parameter default.
+
+        `call` fills an absent parameter from the property's declared default,
+        so the dispatch layer reads the applied value instead of carrying its
+        own fallback literal that could drift from what `shamway schema`
+        promises.
+        """
+        from sevendtd_asset_pipeline.api import _validated
+        from sevendtd_asset_pipeline.operations import get as get_operation
+
+        defaulted = _validated(get_operation("prompt"), {"kind": "item-icon", "subject": "a nuke"})
+        self.assertEqual("myModThing", defaulted["stem"])
+        overridden = _validated(
+            get_operation("prompt"), {"kind": "item-icon", "subject": "a nuke", "stem": "thing"}
+        )
+        self.assertEqual("thing", overridden["stem"])
+
     def test_config_bound_operation_without_config_explains_itself(self) -> None:
         with self.assertRaisesRegex(PipelineError, "needs a mod configuration"):
             call_json(None, "status")

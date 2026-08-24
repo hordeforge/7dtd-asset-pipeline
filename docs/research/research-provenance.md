@@ -1022,3 +1022,25 @@ looks right in a dump and is wrong in the world.
 Limitation, recorded rather than hidden: a sculpted mesh gets a box that
 over-covers it. That is in
 [../status/improvements.md](../status/improvements.md), not a silent surprise.
+
+
+## The three shader platforms a 7DTD shader carries
+
+**Measured 2026-08-24** with UnityPy over every `Shader` in the installed
+game's `Data/Bundles/Standalone/Entities/*`. Ten shaders, and all ten carry
+exactly the same three `ShaderCompilerPlatform` ids:
+
+| id | platform | shaders carrying it |
+|---|---|---|
+| 4 | `D3D11` | 10 of 10 |
+| 15 | `GLCore` | 10 of 10 |
+| 18 | `Vulkan` | 10 of 10 |
+
+**There is no separate Direct3D 12 id.** Unity's desktop D3D12 backend consumes
+the same DXBC sub-programs as D3D11, so `4` covers both and a shader that works
+under d3d11 works under d3d12. That is why this repository's platform list is
+three entries and not four - stated here because "we do not emit d3d12" reads
+like a gap and is not one.
+
+This writer emits `4` and `15`. **`18` is missing**, so a client running Vulkan
+has no sub-program at all to create.

@@ -7,9 +7,12 @@
 # screen, holds it, and announces itself in the client log. This waits for that
 # announcement and takes the picture.
 #
-# Run it beside `playtest-acceptance.sh`, not instead of it:
+# Run it beside `playtest-acceptance.sh`, not instead of it, and only while
+# this host's playtest lock is yours - `playtest-acceptance.sh` takes that lock,
+# and it is what stops another session's client being the one on screen:
 #
-#     scripts/playtest-capture.sh --label vulkan &
+#     python3 ../7dtd-playtest/scripts/playtest_lock.py wait --timeout 600
+#     scripts/playtest-capture.sh --case look_myProp --label vulkan &
 #     scripts/playtest-acceptance.sh --mod-root .
 #
 # It exits when the suite writes DONE, or at --timeout.
@@ -19,10 +22,18 @@ LABEL="staged"
 TIMEOUT=900
 MARKER="scene staged"
 OUT_DIR=".local/acceptance"
+# Which staged case this loop is waiting for. Required, and the reason is a
+# scar: the client log lives at a fixed path shared by every session on this
+# host, and a screenshot photographs the whole screen. Without a case filter
+# this loop fired on *another* session's staged marker and photographed *their*
+# client - five times - producing frames that looked like evidence and were
+# somebody else's run.
+CASE=""
 
 while (($#)); do
     case "$1" in
     --label) LABEL="${2:-}"; shift 2 ;;
+    --case) CASE="${2:-}"; shift 2 ;;
     --timeout) TIMEOUT="${2:-}"; shift 2 ;;
     --marker) MARKER="${2:-}"; shift 2 ;;
     --out-dir) OUT_DIR="${2:-}"; shift 2 ;;
@@ -36,6 +47,12 @@ while (($#)); do
         ;;
     esac
 done
+
+if [[ -z "$CASE" ]]; then
+    echo "playtest-capture.sh: --case is required (the staged case id to wait for, e.g." >&2
+    echo "  look_myProp). Without it this loop photographs whatever any session stages." >&2
+    exit 2
+fi
 
 logs="$(shamway client where --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["log_dir"])')"
 started="$(date +%s)"
@@ -64,6 +81,7 @@ while true; do
         # One capture per staged case, keyed on the case id in the marker line.
         while read -r case_id; do
             [[ -z "$case_id" ]] && continue
+            [[ "$case_id" == "$CASE" ]] || continue
             case " $seen " in *" $case_id "*) continue ;; esac
             seen="$seen $case_id"
             shamway client capture "${LABEL}-${case_id}" \

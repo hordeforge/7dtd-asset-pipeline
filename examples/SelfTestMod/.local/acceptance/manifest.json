@@ -1,0 +1,26 @@
+[
+  {
+    "backend": "spectacle",
+    "bytes": 3238269,
+    "captured_at": "2026-08-24T15:10:16Z",
+    "file": "vulkan-staged.png",
+    "label": "vulkan-staged",
+    "notes": [],
+    "observable": "staged frame for staged: is the prop drawn, and drawn correctly",
+    "session": "wayland",
+    "sha256": "4b847ef546941d6524dfebceddae8b39ded58848df4fa2c0fc722534470b8861",
+    "verdict": null
+  },
+  {
+    "backend": "spectacle",
+    "bytes": 3777871,
+    "captured_at": "2026-08-24T15:24:22Z",
+    "file": "vulkan2-staged.png",
+    "label": "vulkan2-staged",
+    "notes": [],
+    "observable": "staged frame for staged: is the prop drawn, and drawn correctly",
+    "session": "wayland",
+    "sha256": "bb8e3bfa12a3b271fc64320377475d99f216d4ca88d0bf693683685f002a9824",
+    "verdict": null
+  }
+]

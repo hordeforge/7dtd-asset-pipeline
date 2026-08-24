@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<xml>
+	<Name value="ShamwaySelfTestAcceptance" />
+	<DisplayName value="ShamwaySelfTest bundle acceptance" />
+	<Description value="Generated 7dtd-playtest scenario provider: loads every bundle member through the game's own DataLoader." />
+	<Author value="shamway" />
+	<Version value="1.0.0" />
+</xml>

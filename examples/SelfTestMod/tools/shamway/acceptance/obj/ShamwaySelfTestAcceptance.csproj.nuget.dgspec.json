@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "restore": {
+    "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj": {}
+  },
+  "projects": {
+    "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
+        "projectName": "ShamwaySelfTestAcceptance",
+        "projectPath": "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
+        "packagesPath": "/home/yannick/.nuget/packages/",
+        "outputPath": "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/yannick/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "framework": "net48",
+            "targetAlias": "net48",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "false",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.300"
+      },
+      "frameworks": {
+        "net48": {
+          "framework": "net48",
+          "targetAlias": "net48",
+          "dependencies": {
+            "Microsoft.NETFramework.ReferenceAssemblies": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.3, )",
+              "autoReferenced": true
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.302/RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

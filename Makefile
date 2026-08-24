@@ -15,7 +15,7 @@ SHELL_SCRIPTS := scripts/bootstrap scripts/install-tools.sh scripts/install-unit
 	scripts/compile-editor-scripts.sh scripts/playtest-acceptance.sh
 
 check: lint typecheck
-	$(PYTHON) -m compileall -q src tests
+	$(PYTHON) -m compileall -q src tests scripts/github_asset_url.py
 	bash -n $(SHELL_SCRIPTS)
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		shellcheck -S style $(SHELL_SCRIPTS); \

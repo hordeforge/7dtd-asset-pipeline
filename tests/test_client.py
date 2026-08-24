@@ -222,8 +222,12 @@ WRN Entity FallingBlock_3 (EntityFallingBlock) fell off the world, pos=1,2,3
         report = client.scan_log_text(text, "MyMod")
         self.assertEqual(len(report.problems), client.PROBLEM_LIMIT)
         self.assertEqual(len(report.warnings), client.WARNING_LIMIT)
-        self.assertTrue(all(k == "particle_curve_mode" for k in
-                            (line.split(":", 1)[0] for line in report.problems)))
+        self.assertTrue(
+            all(
+                k == "particle_curve_mode"
+                for k in (line.split(":", 1)[0] for line in report.problems)
+            )
+        )
         self.assertTrue(all(w.startswith("exception:") for w in report.warnings))
         # The positive markers seen before the flood still count as found.
         self.assertEqual(report.missing_positive, ())

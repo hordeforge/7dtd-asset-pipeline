@@ -46,6 +46,11 @@ class build_py(_build_py):  # type: ignore[misc]  # noqa: N801 - setuptools requ
             staged_scripts.mkdir(parents=True, exist_ok=True)
             for script in sorted(SOURCE_SCRIPTS.glob("*.sh")):
                 shutil.copy2(script, staged_scripts / script.name)
+            # install-tools.sh resolves its GitHub release URLs through this
+            # sibling; a staged installer without it could resolve nothing.
+            helper = SOURCE_SCRIPTS / "github_asset_url.py"
+            if helper.is_file():
+                shutil.copy2(helper, staged_scripts / helper.name)
         # setuptools copies into build/lib but never deletes from it, so the
         # residue of an older layout would ride along in every rebuilt wheel:
         # after these directories were categorized into subdirectories, a

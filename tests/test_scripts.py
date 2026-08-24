@@ -47,6 +47,15 @@ class ScriptRegistryTests(unittest.TestCase):
                     f"{filename} differs between scripts/ and the packaged copy; "
                     "re-copy it (or rebuild the wheel) so both readers see one script",
                 )
+        # install-tools.sh resolves GitHub release URLs through this sibling,
+        # so a staged installer without its current copy can resolve nothing.
+        with self.subTest("github_asset_url.py"):
+            self.assertEqual(
+                (source_root / "github_asset_url.py").read_bytes(),
+                (packaged_root / "github_asset_url.py").read_bytes(),
+                "github_asset_url.py differs between scripts/ and the packaged copy; "
+                "re-copy it (or rebuild the wheel) so both readers see one script",
+            )
 
     def test_an_unknown_script_lists_the_known_ones(self) -> None:
         with self.assertRaisesRegex(PipelineError, "install-tools"):

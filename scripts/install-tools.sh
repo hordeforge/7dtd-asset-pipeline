@@ -334,17 +334,12 @@ install_uv() {
 	done
 
 	# Deliberately not 'curl | sh': the release tarball and its published
-	# SHA-256 give the same result with something to verify against.
+	# SHA-256 give the same result with something to verify against. The JSON
+	# selection is a sibling script, so this file stays one language.
 	url="$(curl --fail --location --silent --show-error --max-time 30 \
 		https://api.github.com/repos/astral-sh/uv/releases/latest 2>/dev/null |
-		python3 -c 'import json,sys
-try:
-    release = json.load(sys.stdin)
-except Exception:
-    raise SystemExit(0)
-for asset in release.get("assets", []):
-    if asset.get("name") == "uv-x86_64-unknown-linux-gnu.tar.gz":
-        print(asset["browser_download_url"]); raise SystemExit(0)' || true)"
+		python3 "$ROOT/scripts/github_asset_url.py" \
+			--name uv-x86_64-unknown-linux-gnu.tar.gz || true)"
 	if [[ -z "$url" ]]; then
 		echo "note: could not resolve a uv release; skipped"
 		return
@@ -496,15 +491,7 @@ install_gltf_validator() {
 	# than pinning a version that goes stale.
 	url="$(curl --fail --location --silent --show-error --max-time 30 \
 		https://api.github.com/repos/KhronosGroup/glTF-Validator/releases 2>/dev/null |
-		python3 -c 'import json,sys
-try:
-    releases = json.load(sys.stdin)
-except Exception:
-    raise SystemExit(0)
-for release in releases if isinstance(releases, list) else []:
-    for asset in release.get("assets", []):
-        if asset.get("name", "").endswith("-linux64.tar.xz"):
-            print(asset["browser_download_url"]); raise SystemExit(0)' || true)"
+		python3 "$ROOT/scripts/github_asset_url.py" --suffix=-linux64.tar.xz || true)"
 	if [[ -z "$url" ]]; then
 		echo "note: could not resolve a gltf_validator release; skipped"
 		return

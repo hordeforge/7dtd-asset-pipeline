@@ -56,7 +56,7 @@ where = ["src"]
 # templates/ is the Unity project init copies into a mod; docs/ is staged into
 # the package by setup.py so `shamway docs` works without a checkout. The docs
 # are categorized into subdirectories; ** carries them.
-sevendtd_asset_pipeline = ["templates/**/*", "docs/**/*.md", "scripts/*.sh"]
+sevendtd_asset_pipeline = ["templates/**/*", "docs/**/*.md", "scripts/*.sh", "scripts/*.py"]
 
 [tool.ruff]
 line-length = 100

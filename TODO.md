@@ -27,19 +27,23 @@ verified, or accepted.
 | 3 | An **editor-built** bundle surviving a fresh client | a real mod, an editor, and a person who looks at the asset |
 | 4 | `render-icon` and six `GeneratedAsset` helpers *executing* | an editor plus a display (or `xvfb-run -a`) |
 | 5 | The `external` round trip: build there, stage here | a second machine |
-| 6 | A synthesized mesh and its clay icon in front of a player | a live client, and a person's eyes |
+| 6 | A synthesized **prop** *drawn on a screen* — the engine loads it (proven 2026-08-24); nobody has seen it | a person's eyes |
 
 ### Order to work them
 
 Do them in this order, for reasons that are about cost rather than importance:
 
 1. **6, then 4.** Both need one client session on this host, and 6 needs no
-   editor at all — it is the cheapest evidence still outstanding and it closes
-   the newest gap, which is the one most likely to be quietly assumed shut.
+   editor at all. Its mechanical half closed on 2026-08-24 — 7DTD's own
+   `DataLoader` resolves the synthesized prefab, mesh, material and texture on
+   a fresh world — so what is left is the half no suite can supply: **a person
+   looking at the prop**. `ShamwayPropProof` is built for it, with asymmetric
+   extents and an R-and-arrow texture so mirrored and upside-down both show.
    Run 4 in the same sitting: the display is already there.
-2. **3.** Same session again if an editor-built mod is to hand. It is the
-   largest single claim still open — the backend most mods use — so it is
-   worth its own deliberate run rather than being folded into 6's.
+2. **3.** Same session again if an editor-built mod is to hand. It is a large
+   claim still open, though a smaller one than it was: `bundle_source =
+   "unity"` is now the opt-in rather than the default, so fewer mods depend on
+   it. Worth its own deliberate run rather than being folded into 6's.
 3. **5.** Needs a second machine, so it waits for one to exist rather than
    for anyone to find time.
 4. **2, then 1.** Both are about installing Unity, and 2 is a prerequisite for

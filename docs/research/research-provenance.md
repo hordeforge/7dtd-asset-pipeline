@@ -573,38 +573,55 @@ WineHQ publishes a GPG `.sign` beside each tarball but no checksum file, so
 (`034613605baab8ba84674f8d272cf22b5e86bc6bc03fc5728ef9bce07308baa6`) and
 refuses a version override that arrives without one.
 
-### What a live client said about the synthesized bundle, first run
+### What a live client says about a synthesized prefab
 
 **Measured 2026-08-24**, 7 Days to Die **V.3.10.14** through
-`shamway script playtest-acceptance`, on a bundle written with no editor:
+`shamway script playtest-acceptance`, on a **freshly generated world**, against
+a bundle written with no editor anywhere in its path:
+
+```text
+shamwayPropProof: shamwayPropProof children=0 renderers=1
+shamwayPropProof_mesh: shamwayPropProof_mesh vertices=24 submeshes=1 bounds=(0.30, 0.50, 0.20)
+shamwayPropProof_mat: shamwayPropProof_mat shader=Shamway/Unlit
+shamwayPropProof_albedo: shamwayPropProof_albedo 256x256 RGBA32
+SUMMARY pass=5 fail=0 skip=0 total=5
+```
+
+Every one of those is a `DataLoader.LoadAsset<T>` by **stem**, the way the
+engine resolves a `#@modfolder(...)` URI, so the class-142 `m_Container` table
+this writer emits is being read by the game rather than by this repository's
+parser. Four things that could each have been wrong and were not:
+
+- the **prefab answers to the source file's stem** — the name `Meshfile` and
+  block `Model` resolve — rather than the mesh answering to it;
+- it carries its renderer: `renderers=1`, not an empty `GameObject`, which is
+  what a prefab with a dropped `MeshRenderer` would have reported;
+- the mesh's bounds are what was authored (0.30 x 0.50 x 0.20 after the Y-up
+  conversion), so the vertex stream, channel table and index buffer decoded;
+- the material names `Shamway/Unlit`, the shader compiled here by
+  `vkd3d-compiler` — the engine followed a cross-object `PPtr` chain the writer
+  resolved by name, into a shader no Unity editor produced.
+
+A fifth case asked for a stem the bundle does not contain and got null, so
+those passes are not a loader answering everything.
+
+**The first run of this suite failed, and the defect was ours.** `acceptance.plan`
+mapped a manifest entry's extension to a class — `.glb` to `Mesh` — and asked
+for it at the bare stem, which the prefab now owns:
 
 ```text
 shamwayPropProof: LoadAsset<Mesh> returned null
 FAIL shamwaypropproof_bundle/load_shamwayPropProof
-shamwayPropProof_albedo: shamwayPropProof_albedo 256x256 RGBA32
-PASS shamwaypropproof_bundle/load_shamwayPropProof_albedo
-PASS shamwaypropproof_bundle/absent_stem_is_null
 ```
 
-The failure was **this repository's provider generator, not the bundle**.
-`acceptance.plan` mapped a manifest entry's extension to a class — `.glb` to
-`Mesh` — and asked for it at the bare stem. Since the shader lane landed, a
-mesh source produces a *prefab* under that stem, with the mesh at
-`<stem>_mesh`. The engine answered null correctly.
+The engine answered correctly. The provider now derives its cases from
+`bundle_writer.synthesized_members`, the writer's own naming, so an extension
+mapping cannot drift from the writer again.
 
-Two things this does establish, on a synthesized bundle in the real game:
-
-- the class-142 container's `m_Container` table resolves a **`Texture2D`** by
-  stem through `DataLoader.LoadAsset<T>`, reported back as `256x256 RGBA32`,
-  which is what was authored;
-- a stem the bundle does not contain returns null, so a pass is not a loader
-  answering everything.
-
-What it does **not** establish is anything about the prefab, the material or
-the shader in 7DTD. The provider now derives its cases from
-`bundle_writer.synthesized_members` — the writer's own naming, one source of
-truth — and the re-run is what would settle it.
-[status/blockers.md](../status/blockers.md) entry 6 holds that.
+**This is a load, not a look.** Nothing here says a pixel was rasterized: every
+case above passes on a prop that draws mirrored, face-down, or in the wrong
+place entirely. [status/blockers.md](../status/blockers.md) entry 6 holds that,
+and it is the only thing left on this lane.
 
 ## Class-table prefix window, measured for the offline reader
 

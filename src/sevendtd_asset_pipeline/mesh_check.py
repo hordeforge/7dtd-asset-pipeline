@@ -65,7 +65,7 @@ def _measure(path: Path, report: MeshReport, max_extent: float) -> None:
     import trimesh
 
     try:
-        loaded = trimesh.load(str(path), force=None)
+        loaded = trimesh.load(str(path))
     except Exception as exc:  # noqa: BLE001 - trimesh raises many unrelated types
         report.problems.append(f"trimesh could not load the mesh: {exc}")
         return

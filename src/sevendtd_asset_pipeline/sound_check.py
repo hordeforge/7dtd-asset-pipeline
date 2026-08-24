@@ -118,7 +118,7 @@ def check_sound(
     if not samples:
         raise PipelineError(f"{clip} contains no audio frames")
 
-    frames = len(samples) // max(channels, 1)
+    frames = len(samples) // channels
     # The downmix stays an array too, for the same reason as in _read: the
     # zip groups one frame's channels at C speed and the generator is drained
     # straight into the buffer, so no per-sample list is ever built.
@@ -134,7 +134,7 @@ def check_sound(
     )
     peak = max(map(abs, mono))
     clipped = sum(1 for value in mono if value >= 32767 or value <= -32767)
-    energy = math.sqrt(sum(value * value for value in mono) / len(mono))
+    rms = math.sqrt(sum(value * value for value in mono) / len(mono))
     mean = sum(mono) / len(mono)
     leading, trailing = _silence_edges(mono, rate, silence_floor)
 
@@ -192,7 +192,7 @@ def check_sound(
         duration_seconds=round(duration, 4),
         peak=round(peak / FULL_SCALE, 5),
         peak_dbfs=round(20 * math.log10(peak / FULL_SCALE), 2) if peak else None,
-        rms=round(energy / FULL_SCALE, 5),
+        rms=round(rms / FULL_SCALE, 5),
         dc_offset=round(mean / FULL_SCALE, 5),
         clipped_samples=clipped,
         leading_silence_seconds=round(leading, 4),

@@ -37,7 +37,7 @@ import os
 import struct
 import tempfile
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -256,10 +256,7 @@ def _serialize(
     objects: list[BundleObject], unity_version: str, target: int, cab: str
 ) -> _Serialized:
     """Build the SerializedFile metadata and data sections."""
-    class_ids: list[int] = []
-    for obj in objects:
-        if obj.class_id not in class_ids:
-            class_ids.append(obj.class_id)
+    class_ids = list(dict.fromkeys(obj.class_id for obj in objects))
 
     common = _common_strings()
     trees = {class_id: _node(class_id, unity_version) for class_id in class_ids}
@@ -417,15 +414,7 @@ def build_bundle(
     # own bundles do, and so every container entry can name a later id.
     path_ids = {(obj.key or obj.name): index for index, obj in enumerate(objects, start=2)}
     objects = [
-        BundleObject(
-            class_id=obj.class_id,
-            name=obj.name,
-            fields=cast("dict[str, Any]", _resolve_refs(obj.fields, path_ids, obj.name)),
-            key=obj.key,
-            in_container=obj.in_container,
-            resource=obj.resource,
-            resource_field=obj.resource_field,
-        )
+        replace(obj, fields=cast("dict[str, Any]", _resolve_refs(obj.fields, path_ids, obj.name)))
         for obj in objects
     ]
     container = [

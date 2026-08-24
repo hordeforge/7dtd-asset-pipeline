@@ -543,8 +543,12 @@ def run(args: argparse.Namespace) -> int:
                 if not item.available:
                     print(f"     install: {item.install}")
         return 0
-    if args.command == "unity-release" and args.version:
-        data = fetch_release(args.version, args.platform).as_dict()
+    if args.command == "unity-release":
+        # An explicit --version answers without a modlet; resolving from the
+        # project needs load_config, so it happens here, before the shared
+        # load below would demand one.
+        version = args.version or project_unity_version(load_config(args.config).unity_project)
+        data = fetch_release(version, args.platform).as_dict()
         if args.json:
             print(json.dumps(data, indent=2, sort_keys=True))
         else:
@@ -618,13 +622,6 @@ def run(args: argparse.Namespace) -> int:
             print(
                 f"OK: bundle and {validation.reference_count} reference(s) validated (XML and code_references)"
             )
-        return 0
-    if args.command == "unity-release":
-        data = fetch_release(project_unity_version(config.unity_project), args.platform).as_dict()
-        if args.json:
-            print(json.dumps(data, indent=2, sort_keys=True))
-        else:
-            _print_pairs(data)
         return 0
     if args.command == "status":
         status_report = collect_status(config)

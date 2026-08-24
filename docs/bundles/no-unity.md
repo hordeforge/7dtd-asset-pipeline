@@ -146,7 +146,7 @@ was read out of a real artifact rather than guessed:
 Provenance for each of those is in
 [research-provenance.md](../research/research-provenance.md); the design record, the prior
 art surveyed, and what is not attempted are in
-[offline-bundle-builder.md](offline-bundle-builder.md).
+[offline-bundle-builder.md](../adrs/0001-synthesize-bundles-without-an-editor.md).
 
 ### What it cannot write, and why that is not a temporary gap
 
@@ -159,7 +159,7 @@ mesh or a prefab therefore uses `unity` or `external`; both are unchanged and
 neither is second-class.
 
 The `Mesh` object itself is writable in principle, and
-[offline-bundle-builder.md](offline-bundle-builder.md) records the
+[offline-bundle-builder.md](../adrs/0001-synthesize-bundles-without-an-editor.md) records the
 clone-and-patch idea that could reach materials one day. Neither is built,
 because a half-built prefab lane is worse than none.
 

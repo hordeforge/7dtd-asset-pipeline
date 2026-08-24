@@ -16,14 +16,13 @@ follows ([agent-workflows.md](authoring/agent-workflows.md)), the house style
 ([authoring-tools.md](authoring/authoring-tools.md)).
 
 How a bundle is produced lives in [docs/bundles/](bundles/): the editor build
-path ([bundle-generation.md](bundles/bundle-generation.md)), where a `.unity3d`
-may come from when there is no editor
-([no-unity.md](bundles/no-unity.md)), and the design record of the writer that
-needs no editor at all
-([offline-bundle-builder.md](bundles/offline-bundle-builder.md)).
+path ([bundle-generation.md](bundles/bundle-generation.md)) and where a
+`.unity3d` may come from when there is no editor
+([no-unity.md](bundles/no-unity.md)).
 
 Evidence for the 7DTD-specific rules lives in
-[docs/research/](research/) ([research-provenance.md](research/research-provenance.md)).
+[docs/research/](research/) ([research-provenance.md](research/research-provenance.md)),
+with a [template](research/TEMPLATE.md) for future engine-fact pages.
 
 Procedures for recurring situations live in [docs/runbooks/](runbooks/):
 failure messages and their root causes
@@ -33,6 +32,20 @@ failure messages and their root causes
 The working state of the project lives in [docs/status/](status/): what still
 needs a human, a licence, or a client ([blockers.md](status/blockers.md)), and
 known capability gaps ([improvements.md](status/improvements.md)).
+
+Decisions and process records follow the same split as the reference pages:
+
+- [adrs/](adrs/) — decisions that have been made: the constraint, the choice,
+  the honest cost. ADR 0001 owns the editorless bundle writer's design record.
+- [rfcs/](rfcs/) — decisions still open, each arguing alternatives and a
+  recommendation.
+- [prds/](prds/) — specifications of intended behaviour for capabilities not
+  built yet.
+- [reports/](reports/) — operational bugs and evidence-led investigations,
+  preserved instead of lost to run logs.
+- [reviews/](reviews/) — working notes that have not hardened into any of the
+  above.
+- [digests/](digests/) — what other projects' work can teach this one.
 
 Reference pages sit at the top level: the design and trust boundaries
 ([architecture.md](architecture.md)), every configuration key

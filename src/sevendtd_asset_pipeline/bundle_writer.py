@@ -670,7 +670,12 @@ def mesh(name: str, source: Path) -> BundleObject:
     # traceback to stderr, falls back, and succeeds. Its logger has no handler,
     # so Python's last-resort one prints it; a NullHandler keeps a working code
     # path from reading as a crash in every report this writer appears in.
-    logging.getLogger("trimesh").addHandler(logging.NullHandler())
+    # Registered once per process, not once per call: this function runs for
+    # every mesh in every pack, and a handler appended per mesh accumulates on
+    # the process-global logger for as long as a `shamway serve` session lives.
+    trimesh_logger = logging.getLogger("trimesh")
+    if not trimesh_logger.handlers:
+        trimesh_logger.addHandler(logging.NullHandler())
 
     try:
         loaded = trimesh.load(str(source), force="mesh")

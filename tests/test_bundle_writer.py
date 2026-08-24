@@ -352,6 +352,27 @@ class MeshTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "cannot read mesh"):
             mesh("myModThing", broken)
 
+    def test_repeated_mesh_writes_register_the_trimesh_quiet_handler_once(self) -> None:
+        """The trimesh logger's handler count must not grow with meshes written.
+
+        `mesh()` attaches a NullHandler so trimesh's fallback noise cannot read
+        as a crash. The logger is process-global, and this function runs once
+        per mesh per pack, so an unguarded registration accumulates a handler
+        every call for the life of a long-lived `shamway serve` session.
+        """
+        import logging
+
+        source = write_obj(self.root / "myModThing.obj")
+        trimesh_logger = logging.getLogger("trimesh")
+        before = len(trimesh_logger.handlers)
+        mesh("myModThing", source)
+        mesh("myModOther", source)
+        self.assertLessEqual(
+            len(trimesh_logger.handlers),
+            before + 1,
+            "one call per mesh must not append a handler each time",
+        )
+
     def test_a_mesh_is_a_bundle_member_like_any_other_source_file(self) -> None:
         sources = self.root / "bundle"
         sources.mkdir()

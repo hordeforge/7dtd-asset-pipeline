@@ -42,7 +42,11 @@ GLTFPACK_TIMEOUT = 300
 
 def measure(path: Path) -> tuple[int, int, list[float]]:
     """Triangles, vertices and extents, read through trimesh."""
-    logging.getLogger("trimesh").addHandler(logging.NullHandler())
+    # Same quieting as bundle_writer.mesh, and the same once-per-process guard:
+    # a handler appended per call accumulates on the process-global logger.
+    trimesh_logger = logging.getLogger("trimesh")
+    if not trimesh_logger.handlers:
+        trimesh_logger.addHandler(logging.NullHandler())
     import trimesh
 
     loaded = trimesh.load(str(path), force="mesh")

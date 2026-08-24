@@ -29,3 +29,7 @@ report keeps its history, the runbook stays current.
 <!-- inventory:report:start -->
 (none written yet)
 <!-- inventory:report:end -->
+
+## Reports
+
+- [2026-08-24 — a synthesized prop places in 7DTD and renders nothing](2026-08-24-synthesized-shader-does-not-run.md) — the shader does not compile on a real device, and `-nographics` had been reporting it fine

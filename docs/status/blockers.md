@@ -164,6 +164,14 @@ measured at `160x160 rgba 53% opaque` on a generated crate.
 7 Days to Die resolves the synthesized prefab, its mesh, its material and its
 texture through the game's own `DataLoader`, on a freshly generated world.
 
+**Measured failing, 2026-08-24.** A synthesized prop places in a live client
+and **renders nothing**: the shader does not compile on a real graphics device
+(`isSupported=False`, `Failed to load GpuProgram from binary shader data`).
+Everything around it is sound — the game resolves the prefab, mesh, material
+and texture by stem. Full account, including what was ruled out and what to
+measure next:
+[reports/2026-08-24-synthesized-shader-does-not-run.md](../reports/2026-08-24-synthesized-shader-does-not-run.md).
+
 **Blocks:** the claim that any of it is *right*. **Nothing synthesized past a
 texture and a clip has been in front of a person, and no synthesized prefab has
 been drawn at all.** A live `LoadAsset<GameObject>` returning a prefab with

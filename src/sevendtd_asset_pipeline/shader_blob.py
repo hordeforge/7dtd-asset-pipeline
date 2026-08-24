@@ -15,6 +15,9 @@ sub-programs the game carries. No Unity is involved in producing it.
 
 from __future__ import annotations
 
+import ctypes
+import functools
+import os
 import shutil
 import struct
 import subprocess
@@ -347,6 +350,161 @@ def compile_hlsl(source: str, profile: str) -> bytes:
             "container; this writer will not wrap bytes it cannot identify."
         )
     return data
+
+
+SPIRV_MAGIC = 0x07230203
+SMOLV_MAGIC = 0x534D4F4C
+# `ShaderCompilerPlatform.Vulkan`, and the program type its code records use.
+SHADER_COMPILER_PLATFORM_VULKAN = 18
+VULKAN_PROGRAM = 25
+# Every stock Vulkan record puts section A's payload 176 bytes in.
+VULKAN_SECTION_HEADER = 176
+
+
+def compile_spirv(dxbc: bytes) -> bytes:
+    """Translate a DXBC container to SPIR-V with `vkd3d-compiler`.
+
+    The same translation DXVK performs at runtime, which is why this needs no
+    second compiler: the HLSL is already compiled, and Vulkan wants the same
+    program in SPIR-V rather than a differently-authored one.
+    """
+    binary = shutil.which("vkd3d-compiler")
+    if binary is None:
+        raise PipelineError(
+            "vkd3d-compiler is not installed; it translates this writer's DXBC "
+            "into the SPIR-V a Vulkan sub-program carries. Install it with "
+            "'shamway script install-tools'."
+        )
+    with tempfile.TemporaryDirectory() as work:
+        src = Path(work) / "shader.dxbc"
+        out = Path(work) / "shader.spv"
+        src.write_bytes(dxbc)
+        result = subprocess.run(  # noqa: S603
+            [binary, "-x", "dxbc-tpf", "-b", "spirv-binary", str(src), "-o", str(out)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0 or not out.exists():
+            detail = (result.stderr or result.stdout).strip()
+            raise PipelineError(f"vkd3d-compiler could not produce SPIR-V: {detail}")
+        data = out.read_bytes()
+    if len(data) < 4 or struct.unpack_from("<I", data, 0)[0] != SPIRV_MAGIC:
+        raise PipelineError(
+            f"vkd3d-compiler produced {len(data)} bytes that are not a SPIR-V module"
+        )
+    return data
+
+
+def compress_smolv(spirv: bytes) -> bytes:
+    """Compress a SPIR-V module to SMOL-V, which is what Unity stores.
+
+    Unity does not put SPIR-V in a Vulkan sub-program; it puts SMOL-V, Aras
+    Pranckevicius's compressed form of it. The encoder is **not** vendored
+    here - a SPIR-V codec has nothing to do with this game, so it lives in
+    https://github.com/ywy50/zmol-v and is loaded through its C ABI. See
+    `docs/sibling-repos.md`, "Outside the organization".
+    """
+    library = smolv_library()
+    if library is None:
+        raise PipelineError(
+            "libzmolv is not installed; it compresses the SPIR-V a Vulkan "
+            "sub-program carries. Build it from https://github.com/ywy50/zmol-v "
+            "with 'zig build' and point ZMOLV_LIBRARY at the shared library it "
+            "writes, or leave the Vulkan platform out."
+        )
+    out_ptr = ctypes.POINTER(ctypes.c_ubyte)()
+    out_len = ctypes.c_size_t()
+    code = library.zmolv_encode(spirv, len(spirv), ctypes.byref(out_ptr), ctypes.byref(out_len))
+    if code != 0:
+        reason = {1: "not SPIR-V", 2: "malformed SPIR-V", 3: "out of memory"}.get(code, str(code))
+        raise PipelineError(f"zmolv could not encode the SPIR-V module: {reason}")
+    try:
+        encoded = bytes(bytearray(out_ptr[i] for i in range(out_len.value)))
+    finally:
+        library.zmolv_free(out_ptr, out_len)
+    if struct.unpack_from("<I", encoded, 0)[0] != SMOLV_MAGIC:
+        raise PipelineError("zmolv returned bytes that do not start with the SMOL-V magic")
+    return encoded
+
+
+@functools.lru_cache(maxsize=1)
+def smolv_library() -> "ctypes.CDLL | None":
+    """The zmol-v shared library, or None when it is not installed."""
+    candidates = []
+    override = os.environ.get("ZMOLV_LIBRARY")
+    if override:
+        candidates.append(Path(override))
+    for directory in ("/usr/local/lib", "/usr/lib"):
+        candidates.append(Path(directory) / "libzmolv.so")
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            library = ctypes.CDLL(str(candidate))
+        except OSError:
+            continue
+        library.zmolv_encode.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_ubyte)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        library.zmolv_encode.restype = ctypes.c_int
+        library.zmolv_free.argtypes = [ctypes.POINTER(ctypes.c_ubyte), ctypes.c_size_t]
+        library.zmolv_free.restype = None
+        return library
+    return None
+
+
+def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
+    """One Vulkan code record: two SMOL-V modules behind a 176-byte header.
+
+    Decoded from shipped 2022.3 bundles; see `docs/research/research-provenance.md`,
+    "The Vulkan sub-program record". A Vulkan record is program type 25 and,
+    unlike d3d11 and GLCore, carries **both stages** - which is why Unity
+    reports `stageCounts` of 1 for Vulkan and 2 for d3d11.
+
+    Two things here are **inferred and untested**, and are the reason this lane
+    is not called finished:
+
+    - **Which section holds which stage.** Section B is the larger module in all
+      four stock shaders measured, and in `VertexLit` - whose lighting is done
+      per-vertex - the vertex program is the larger one, so B is read as the
+      vertex stage. That is an argument from size, not a decode.
+    - **The 32 bytes at words 20..27**, which look like a hash. No MD5, SHA-1
+      or SHA-256 of either module, of both concatenated, or of the payload
+      matched, so they are written as zero here. If the runtime only uses them
+      to key a shader cache, zero costs a recompile; if it validates them, this
+      record is rejected and that is what the first live test will say.
+    """
+    header = bytearray(VULKAN_SECTION_HEADER)
+    section_a = VULKAN_SECTION_HEADER + len(fragment_smolv)
+    struct.pack_into(
+        "<6I",
+        header,
+        0,
+        0x02000061,  # version and flags, as every stock record carries
+        section_a,
+        len(vertex_smolv),
+        VULKAN_SECTION_HEADER,
+        len(fragment_smolv),
+        0,
+    )
+    struct.pack_into("<I", header, 19 * 4, 1)
+    payload = bytes(header) + fragment_smolv + vertex_smolv
+
+    writer = _Writer()
+    writer.i32(BLOB_VERSION)
+    writer.i32(VULKAN_PROGRAM)
+    for _ in range(4):
+        writer.i32(0)
+    writer.i32(0)  # keyword count
+    writer.i32(len(payload))
+    writer.out += payload
+    while len(writer.out) % 4:
+        writer.out += b"\x00"
+    return bytes(writer.out)
 
 
 def dxbc_chunks(data: bytes) -> dict[str, bytes]:
@@ -782,6 +940,38 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
             source_blob(GL_CORE_32, glsl, UNLIT_VERTEX_ATTRIBUTES),
         ]
     )
+    # Vulkan is additive and optional: a host without the SMOL-V encoder builds
+    # exactly the two platforms it always did, rather than failing. The game
+    # only reaches for platform 18 under `-force-vulkan`, so its absence costs
+    # nothing on a default client.
+    vulkan: tuple[PlatformBlob, ...] = ()
+    if smolv_library() is not None:
+        vulkan_raw = assemble_blob(
+            [
+                vertex_parameters.to_bytes(),
+                fragment_parameters.to_bytes(),
+                vulkan_code_blob(
+                    compress_smolv(compile_spirv(vertex_dxbc)),
+                    compress_smolv(compile_spirv(fragment_dxbc)),
+                ),
+            ]
+        )
+        vulkan = (
+            PlatformBlob(
+                SHADER_COMPILER_PLATFORM_VULKAN,
+                compress_lz4(vulkan_raw),
+                len(vulkan_raw),
+                VULKAN_PROGRAM,
+                VULKAN_PROGRAM,
+                0,
+                1,
+                # One record carries both stages, so both indices name it.
+                2,
+                2,
+                stage_count=1,
+            ),
+        )
+
     return CompiledShader(
         platforms=(
             PlatformBlob(
@@ -808,7 +998,8 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
                 3,
                 stage_count=1,
             ),
-        ),
+        )
+        + vulkan,
         texture_name=texture_property,
         dxbc={"vertex": vertex_dxbc, "fragment": fragment_dxbc},
     )

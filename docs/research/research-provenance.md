@@ -1148,3 +1148,48 @@ contract with the runtime, not a convenience for the author. Padding is not
 optional, and an offline check that reads `RDEF` is the only cheap place to
 catch a violation - the expensive place is a person looking at a block on two
 graphics APIs.
+
+
+## Emitting a Vulkan sub-program: what is built, and the two guesses in it
+
+**Built 2026-08-24.** `shader_blob.unlit_textured` now emits platform 18 when
+the SMOL-V encoder is available, giving `platforms [4, 15, 18]` and
+`stageCounts [2, 1, 1]` - the same shape every stock shader carries.
+
+The route, all three steps now real:
+
+1. `compile_spirv` translates this writer's own DXBC with
+   `vkd3d-compiler -x dxbc-tpf -b spirv-binary`. The d3d11 and Vulkan
+   sub-programs therefore come from **one** source and cannot drift apart,
+   which is worth more than the hop it costs: a day was spent on d3d11 and
+   GLCore disagreeing about a constant-buffer layout.
+2. `compress_smolv` loads [ywy50/zmol-v](https://github.com/ywy50/zmol-v)
+   through its C ABI. Not vendored: a SPIR-V codec has nothing to do with this
+   game.
+3. `vulkan_code_blob` writes the container decoded above, and its invariants
+   are asserted against the built record: `word1 + word2` equals the payload
+   length, `word3` is 176, `word4` is `word1 - 176`, and both sections start
+   with the SMOL-V magic.
+
+**Vulkan is optional and additive.** A host without the encoder builds the same
+two platforms it always did rather than failing, because the game reaches for
+platform 18 only under `-force-vulkan`. Adding it does not disturb the others:
+with all three present, `verify-bundle --draw` still reports the prop at
+`covered=38.8% zoomed-out=2.4%` on OpenGL Core.
+
+**Two things in it are inferred, not decoded**, and they are why this lane is
+not called finished:
+
+- **Which section holds which stage.** Section B is the larger module in all
+  four stock shaders measured, and `VertexLit` does its lighting per-vertex,
+  which makes the vertex program the larger one - so B is written as the vertex
+  stage. That is an argument from size, not a decode.
+- **The 32 bytes at words 20..27.** They look like a hash and they differ per
+  shader, so they are content-derived rather than constant. No MD5, SHA-1 or
+  SHA-256 of either module, of both concatenated, or of the payload matched, so
+  this writer sets them to zero. If the runtime only uses them to key a shader
+  cache, zero costs a recompile; if it validates them, the record is rejected.
+
+A live client launched with `-force-vulkan` loads the bundle with **no shader
+errors at all**, which rules out the record being rejected on sight. Whether it
+*draws* is the open question, and only a look answers it.

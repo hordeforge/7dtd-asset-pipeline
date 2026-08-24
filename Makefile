@@ -17,7 +17,7 @@ all: check test
 SHELL_SCRIPTS := scripts/bootstrap $(wildcard scripts/*.sh)
 
 check: lint typecheck
-	$(PYTHON) -m compileall -q src tests scripts/github_asset_url.py
+	$(PYTHON) -m compileall -q src tests $(wildcard scripts/*.py)
 	bash -n $(SHELL_SCRIPTS)
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		shellcheck -S style $(SHELL_SCRIPTS); \

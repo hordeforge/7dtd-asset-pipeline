@@ -187,6 +187,24 @@ These were open and are now closed, so the list above stays meaningful:
   two findings came from: no offline gate and no in-client case would have
   reported a stretched ring or a crackling clip.
 
+- **A mesh reaches a bundle with no editor.** On 2026-08-24 a real Unity
+  2022.3.62f2 runtime read back two synthesized `Mesh` objects through
+  `shamway verify-bundle`:
+
+  ```text
+  shamwayprobemesh: Mesh named 'shamwayProbeMesh'  [vertices=8 triangles=12 submeshes=1 uv=True bounds=(0.40, 0.80, 0.40)]
+  shamwayprobeball: Mesh named 'shamwayProbeBall'  [vertices=42 triangles=80 submeshes=1 uv=False bounds=(0.60, 0.60, 0.60)]
+  ```
+
+  The bounds match what was authored, so the vertex stream, the channel table
+  and the index buffer all decoded as intended. That is the engine's loader,
+  not this repository's parser — and it is still not 7DTD and still not a
+  look. **No synthesized mesh has yet been rendered in a client**, because a
+  visible mesh needs a material, which needs a shader, which is the wall in
+  [no-unity.md](../bundles/no-unity.md). A mesh loaded from a Harmony DLL
+  through `LoadAsset<Mesh>` is the path that has no such gap and has not been
+  exercised either.
+
 - Blender installs from the official checksum-verified build, and
   `shamway generate mesh` exports all three shapes with the pivot at the base.
 - The Khronos glTF validator installs and catches a corrupt GLB.

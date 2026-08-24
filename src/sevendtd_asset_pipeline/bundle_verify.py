@@ -33,7 +33,7 @@ EDITOR_FOLDER = "Assets/SevenDaysToDieAssetPipeline/Editor"
 # The verifier prints one line per asset; anything else in a Unity log is noise
 # from a batch-mode editor starting up.
 ASSET_LINE = re.compile(r"^VERIFY-ASSET: (?P<key>\S+) -> (?P<type>\w+) named '(?P<name>[^']*)'")
-DETAIL_LINE = re.compile(r"^VERIFY-(?:TEX|CLIP|TEXT): (?P<detail>.*)$")
+DETAIL_LINE = re.compile(r"^VERIFY-(?:TEX|CLIP|TEXT|MESH): (?P<detail>.*)$")
 
 
 @dataclass

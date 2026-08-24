@@ -70,7 +70,7 @@ a bare host. Pillow only ever *adds* a measurement (alpha coverage), and its
 absence degrades to a note rather than to a pass.
 
 Unity is a *source of the artifact*, not a dependency of the tool, and for
-textures, clips and text files it is not even that: `bundle_writer.py` writes
+textures, clips, text files and meshes it is not even that: `bundle_writer.py` writes
 the container and the objects directly, so `bundle_source = "synthesized"`
 removes the editor from the build. What that costs is evidence, not
 correctness-by-hope — the class-142 and stem gates become structural on our own
@@ -96,12 +96,21 @@ reporting one.
 per-user data), and the registry marks every writer `writes: true` so a caller — `serve` included — can
 refuse them before anything starts.
 
-The writer's boundary is deliberate too: `bundle_writer.py` covers textures,
-clips and text files, and stops at meshes, prefabs, materials and shaders,
-because a shader in a bundle is compiled platform bytecode only Unity's shader
-compiler produces. [ADR 0001](adrs/0001-synthesize-bundles-without-an-editor.md)
+The writer's boundary is deliberate too, and it is drawn where the engine
+draws it rather than where the work got hard. `bundle_writer.py` covers
+textures, clips, text files and meshes, and stops at prefabs, materials and
+shaders, because a shader in a bundle is compiled platform bytecode only
+Unity's shader compiler produces — measured, not assumed: the shipped player
+carries six shaders and all are internal, and the game's own bundles embed
+theirs same-file. [ADR 0001](adrs/0001-synthesize-bundles-without-an-editor.md)
 records that research and what is not attempted; [no-unity.md](bundles/no-unity.md)
 states what a synthesized bundle owes instead.
+
+The mesh lane is also where an optional capability becomes structural rather
+than additive: `trimesh` reads the interchange file, so without it the writer
+refuses a `.glb` by name instead of skipping it. That is the same rule the rest
+of the registry follows — a missing capability is a refusal with an install
+command, never a quieter build.
 
 ## Why a tracked manifest
 

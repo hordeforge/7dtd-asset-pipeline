@@ -25,10 +25,10 @@ Three questions decide it:
 1. Does any XML ask the engine to load an asset out of a bundle — a
    `Meshfile`, a block `Model`, a `sounds.xml` `ClipName`, an XUi mesh? If not,
    the mod needs no bundle: `none`.
-2. Is everything in that bundle a texture, a sound or a text file? Then
-   `synthesized` writes it here, with no editor and no project.
-3. Otherwise the bundle contains a mesh, a prefab, a material or a shader, and
-   an editor has to serialize it: `unity` if one lives on this machine,
+2. Is everything in that bundle a texture, a sound, a text file or a **mesh**?
+   Then `synthesized` writes it here, with no editor and no project.
+3. Otherwise the bundle contains a prefab, a material or a shader, and an
+   editor has to serialize it: `unity` if one lives on this machine,
    `external` if it lives on another.
 
 The rest of this page takes them in that order.
@@ -112,6 +112,41 @@ asset, named by its file stem — the name 7DTD's URIs ask for:
 | `myModPanel.png` | `Texture2D`, RGBA32, uncompressed | `LoadAsset<Texture2D>` |
 | `myModBlast.wav` | `AudioClip`, 16-bit PCM in an FSB5 bank | `sounds.xml`, `LoadAsset<AudioClip>` |
 | `myModData.json`, `.txt`, `.csv` | `TextAsset` | `LoadAsset<TextAsset>` |
+| `myModThing.glb`, `.gltf`, `.obj`, `.stl`, `.ply` | `Mesh`, one submesh | `LoadAsset<Mesh>` |
+
+### The mesh lane, and what it is not
+
+Any geometry file [trimesh](../authoring/authoring-tools.md#trimesh--python-mesh-generation-and-checks)
+reads becomes a `Mesh`: positions, normals, and UV0 when the file has them,
+interleaved in one vertex stream. Blender, OpenSCAD (through STL), `shamway
+generate mesh`, and anything else that exports an interchange format all reach
+the bundle the same way, with no editor between them and it.
+
+```bash
+shamway check-mesh assets-src/bundle/myModThing.glb
+shamway build
+```
+
+Two conversions happen inside the writer, because both are the kind of wrong
+that loads perfectly and looks broken:
+
+- **handedness**: glTF, OBJ, STL and PLY are right-handed and Unity is not, so
+  X is negated and triangle winding reversed. A mesh converted without this is
+  mirrored, and every gate passes;
+- **up axis**: the file must be Y-up. A Z-up export arrives lying on its face.
+  That is an exporter setting and no amount of geometry inspection reveals it —
+  set it in Blender's export dialog or `--python` call.
+
+What the mesh lane does not write: tangents, vertex colours, blend shapes,
+skinning, and more than one submesh. One mesh file is one material's worth of
+geometry, and a normal-mapped material would find no tangents. Both are
+consequences of the paragraph below rather than of effort.
+
+A `Mesh` is a mesh, not a model. 7DTD's `Meshfile` and block `Model` resolve
+through `DataLoader.LoadAsset<GameObject>` — a **prefab**, which needs a
+renderer, which needs a material, which needs a shader. A synthesized `Mesh`
+is reachable from a Harmony DLL through `LoadAsset<Mesh>`, and is the geometry
+half of a model whose prefab an editor still assembles.
 
 ```bash
 shamway build
@@ -150,18 +185,28 @@ art surveyed, and what is not attempted are in
 
 ### What it cannot write, and why that is not a temporary gap
 
-Meshes, prefabs, materials and shaders still need an editor. The blocker is
-specifically the **shader**: a material references one, and a shader in a
-bundle is compiled platform bytecode produced by Unity's shader compiler. No
-offline writer can produce that, so a prefab whose renderer has no valid shader
-renders magenta in the client — a failure no offline gate can see. A mod with a
-mesh or a prefab therefore uses `unity` or `external`; both are unchanged and
-neither is second-class.
+Prefabs, materials and shaders still need an editor. The blocker is exactly
+one thing — the **shader** — and it is a property of the engine, not effort
+not yet spent. A material references a shader; a shader in a bundle is
+compiled platform bytecode produced by Unity's shader compiler. Nothing
+offline produces that, so a prefab whose renderer has no valid shader renders
+magenta in the client, and no offline gate can see it.
 
-The `Mesh` object itself is writable in principle, and
-[offline-bundle-builder.md](../adrs/0001-synthesize-bundles-without-an-editor.md) records the
-clone-and-patch idea that could reach materials one day. Neither is built,
-because a half-built prefab lane is worse than none.
+Two ways around it were measured on 2026-08-24, and both are closed
+([research-provenance.md](../research/research-provenance.md), "Why a material
+cannot follow the mesh"):
+
+- **borrow the player's shaders.** The shipped game's `unity default
+  resources` carries six shaders and all six are internal — no Standard, no
+  Unlit, nothing a prop could use.
+- **borrow the game's own.** The `trees` bundle embeds its ten shaders, and
+  every material in it points at one in the *same file*. A mod bundle would
+  have to do the same, which means compiling them, which is the wall again —
+  and copying the game's would ship its assets.
+
+So a mod with a prefab or a material uses `unity` or `external`; both are
+unchanged and neither is second-class. A mod whose geometry ships as meshes
+needs neither.
 
 ### The gates say what they are worth
 

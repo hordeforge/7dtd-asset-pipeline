@@ -68,6 +68,11 @@ ASSET_CASES: dict[str, tuple[str, str]] = {
     ".prefab": ("GameObject", "loaded.transform != null"),
     ".fbx": ("GameObject", "loaded.transform != null"),
     ".mat": ("Material", "loaded.shader != null"),
+    ".glb": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
+    ".gltf": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
+    ".obj": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
+    ".stl": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
+    ".ply": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
 }
 
 # Every extension mapped to a kind must assert the same property of it, so the
@@ -91,6 +96,8 @@ ASSET_DETAILS: dict[str, str] = {
     "TextAsset": '" bytes=" + loaded.bytes.Length',
     "GameObject": '" children=" + loaded.transform.childCount',
     "Material": '" shader=" + loaded.shader.name',
+    "Mesh": '" vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount '
+    '+ " bounds=" + loaded.bounds.size',
 }
 TEMPLATE_DIR = "PlaytestProvider"
 PROVIDER_DIRECTORY = "tools/shamway/acceptance"

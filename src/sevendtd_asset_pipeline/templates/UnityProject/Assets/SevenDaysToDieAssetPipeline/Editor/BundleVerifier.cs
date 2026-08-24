@@ -75,6 +75,23 @@ namespace SevenDaysToDie.AssetPipeline
                               texture.format + " readable=" + texture.isReadable);
                 }
 
+                Mesh mesh = asset as Mesh;
+                if (mesh != null)
+                {
+                    // A mesh whose vertex stream or index buffer is malformed
+                    // deserializes to zero counts rather than failing, which
+                    // is the same shape of silence the clip check below covers.
+                    Debug.Log("VERIFY-MESH: vertices=" + mesh.vertexCount +
+                              " triangles=" + (mesh.triangles.Length / 3) +
+                              " submeshes=" + mesh.subMeshCount +
+                              " uv=" + (mesh.uv.Length > 0) +
+                              " bounds=" + mesh.bounds.size);
+                    if (mesh.vertexCount == 0 || mesh.triangles.Length == 0)
+                    {
+                        Debug.LogError("VERIFY-FAIL: " + name + " read back with no geometry");
+                    }
+                }
+
                 AudioClip clip = asset as AudioClip;
                 if (clip != null)
                 {

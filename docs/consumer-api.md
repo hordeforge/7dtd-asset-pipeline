@@ -153,7 +153,7 @@ Every command exits `0` on success and non-zero on failure, printing one
 | `build --probe` | no | yes | no | prove the environment; stages nothing |
 | `build` | no | yes | **yes** | build, gate, stage bundle + manifest |
 | `stage BUNDLE [--manifest M] [--log L]` | no | **no** | **yes** | gate and stage a bundle an editor elsewhere built |
-| `pack SOURCE OUTPUT` | no | **no** | **yes** | synthesize a .unity3d from textures, clips and text files |
+| `pack SOURCE OUTPUT` | no | **no** | **yes** | synthesize a .unity3d from textures, clips, text files and meshes |
 | `verify-bundle [BUNDLE]` | no | yes | no | load it in a real runtime and report every asset |
 | `init MOD_ROOT` | no | no | **yes** | scaffold into a modlet, or `--adopt` its existing Unity project |
 | `capabilities [--json]` | no | no | no | optional capabilities and how to install them |

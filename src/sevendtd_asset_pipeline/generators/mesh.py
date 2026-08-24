@@ -9,9 +9,15 @@ rather than unrecorded GUI state, and so an agent has a template to extend.
 Copy it into the mod's own `assets-src/` and build the real geometry there with
 the full `bpy` API.
 
-Validate whatever you export before importing it into Unity:
+Validate whatever you export before it goes anywhere:
 
     shamway check-mesh out.glb
+
+The GLB it writes is a bundle input as it stands. Dropped into a synthesized
+mod's `assets-src/bundle/`, `shamway build` writes it into the `.unity3d` as a
+Unity `Mesh` with no editor involved; a mod that builds with Unity imports the
+same file instead. See `shamway docs no-unity` for which of the two a mod is
+in, and for why a `Mesh` is not yet a prefab.
 
 For hard-surface props that are really a few boxes and cylinders, the other
 lane is cheaper: compose built-in primitives in the Unity project with

@@ -101,8 +101,13 @@ REGISTRY: tuple[_Spec, ...] = (
         name="trimesh",
         kind="module",
         probe="trimesh",
-        unlocks=("shamway check-mesh",),
-        purpose="mesh extents, watertightness, and geometry counts",
+        unlocks=(
+            "shamway check-mesh",
+            "shamway pack (meshes)",
+            'shamway build with bundle_source = "synthesized" (meshes)',
+        ),
+        purpose="mesh extents, watertightness, geometry counts, and reading "
+        "glTF/OBJ/STL/PLY into an editorless bundle",
         install=extra_install("mesh"),
     ),
     _Spec(
@@ -118,7 +123,8 @@ REGISTRY: tuple[_Spec, ...] = (
         kind="command",
         probe="blender",
         unlocks=("shamway generate mesh",),
-        purpose="authored mesh lane: organic, rigged, and sculpted geometry",
+        purpose="authored mesh lane: organic, rigged, and sculpted geometry, exported "
+        "as glTF straight into an editorless bundle",
         install="shamway script install-tools --with-authoring",
     ),
     _Spec(
@@ -126,7 +132,8 @@ REGISTRY: tuple[_Spec, ...] = (
         kind="command",
         probe="openscad",
         unlocks=("a mod's own OpenSCAD generators",),
-        purpose="parametric hard-surface geometry",
+        purpose="parametric hard-surface geometry; its STL output is a bundle input, "
+        "so OpenSCAD reaches a .unity3d with no editor",
         install="shamway script install-tools --with-authoring",
     ),
     _Spec(

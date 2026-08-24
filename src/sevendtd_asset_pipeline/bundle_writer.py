@@ -558,7 +558,8 @@ def mesh(name: str, source: Path) -> BundleObject:
 
     try:
         loaded = trimesh.load(str(source), force="mesh")
-    except Exception as exc:  # noqa: BLE001 - trimesh raises many unrelated types
+    # trimesh raises many unrelated types, so this catch is deliberately broad.
+    except Exception as exc:
         raise PipelineError(f"cannot read mesh {source}: {exc}") from exc
 
     vertices = getattr(loaded, "vertices", None)

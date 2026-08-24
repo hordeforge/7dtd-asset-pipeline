@@ -416,7 +416,10 @@ class GeneratorTests(unittest.TestCase):
     def test_the_mesh_icon_refuses_a_bad_target_before_starting_blender(self) -> None:
         from sevendtd_asset_pipeline.generators.mesh_icon import main
 
-        self.assertEqual(1, main(["/nonexistent/thing.glb", "/tmp/out.png"]))
+        with tempfile.TemporaryDirectory() as name:
+            output = Path(name) / "out.png"
+            self.assertEqual(1, main(["/nonexistent/thing.glb", str(output)]))
+
     @unittest.skipUnless(has_capability("pillow"), "the cutout lane needs Pillow")
     def test_cutout_alpha_keeps_an_alpha_that_is_not_the_luma(self) -> None:
         """The trap this mode exists for: a mask whose alpha is not its brightness.
@@ -487,12 +490,16 @@ class GeneratorTests(unittest.TestCase):
             for shape, size in (("streak", 32), ("haze", 64)):
                 with self.subTest(shape):
                     out = root / f"{shape}.png"
-                    self.assertEqual(0, run("particle-card", [shape, str(out), "--size", str(size)]))
+                    self.assertEqual(
+                        0, run("particle-card", [shape, str(out), "--size", str(size)])
+                    )
                     image = Image.open(out)
                     self.assertEqual((size, size), image.size)
                     self.assertEqual((255, 255), image.convert("RGB").getextrema()[0])
                     low, high = image.getchannel("A").getextrema()
-                    self.assertEqual(0, low, "the card fills its whole square; nothing to fade into")
+                    self.assertEqual(
+                        0, low, "the card fills its whole square; nothing to fade into"
+                    )
                     self.assertGreater(high, 32, "the shape is too faint to see")
 
     @unittest.skipUnless(has_capability("pillow"), "the particle-card lane needs Pillow")

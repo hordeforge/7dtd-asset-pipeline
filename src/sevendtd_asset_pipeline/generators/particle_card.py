@@ -84,7 +84,7 @@ def haze(size: int, lobes: int, softness: float, seed: int) -> Image.Image:
     irregular silhouette, which is the whole difference between "fog" and
     "somebody drew a sphere".
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 - lobe placement, not a secret
     mask = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(mask)
     for _ in range(lobes):

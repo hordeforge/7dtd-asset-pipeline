@@ -249,6 +249,20 @@ def _parser() -> argparse.ArgumentParser:
         help="passed through; `shamway client --help` lists them",
     )
 
+    # Registered for `--help` only; `main` intercepts it before parsing, the
+    # same way it does prompt, script and client. Without this row the command
+    # exists, works, and is documented everywhere except where someone looks.
+    acceptance_parser = commands.add_parser(
+        "acceptance-provider",
+        help="generate the 7dtd-playtest provider that loads every bundle member in a live client",
+        add_help=False,
+    )
+    acceptance_parser.add_argument(
+        "arguments",
+        nargs=argparse.REMAINDER,
+        help="passed through; `shamway acceptance-provider --help` lists them",
+    )
+
     documentation = commands.add_parser(
         "docs", help="print this pipeline's documentation, from the installed package"
     )

@@ -176,6 +176,16 @@ REGISTRY: tuple[_Spec, ...] = (
         install="shamway script install-tools",
     ),
     _Spec(
+        name="glslangValidator",
+        kind="command",
+        probe="glslangValidator",
+        unlocks=("the writer's own GLSL check for the OpenGLCore sub-program",),
+        purpose="compile the unlit shader's GLSL halves offline and report the line and "
+        "reason when they are wrong - the runtime reports only that the shader is "
+        "unsupported, and a prop using it draws nothing",
+        install="shamway script install-tools",
+    ),
+    _Spec(
         name="fsb5",
         kind="module",
         probe="fsb5",

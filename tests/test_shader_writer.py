@@ -13,7 +13,9 @@ What it proved is recorded in docs/research/research-provenance.md.
 from __future__ import annotations
 
 import collections
+import shutil
 import struct
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -444,3 +446,48 @@ class GLCoreRecordTailTests(unittest.TestCase):
                 body,
                 f"the {half} half uses layout(location=...) under #version 150 without enabling it",
             )
+
+
+class GLSLCompilesTests(unittest.TestCase):
+    """Compile `UNLIT_GLSL` with a real GLSL compiler.
+
+    The runtime's whole report of a GLSL error is that the shader is
+    unsupported and the prop draws nothing. `glslangValidator` gives the line
+    and the reason, offline, with no editor and no device - and would have
+    caught the missing `GL_ARB_explicit_attrib_location` in one command.
+
+    Skipped when the compiler is absent rather than asserted away: it is an
+    optional capability, registered as one, and a host without it is not a
+    failing host.
+    """
+
+    def _halves(self) -> dict[str, str]:
+        source = shader_blob.UNLIT_GLSL
+        split = source.index("#ifdef FRAGMENT")
+        vertex = source[source.index("#ifdef VERTEX") + len("#ifdef VERTEX") : split]
+        fragment = source[split + len("#ifdef FRAGMENT") :]
+        # Unity defines the guard symbol and compiles what it wraps, so each
+        # body is its section with the `#endif` that closes the guard removed.
+        return {
+            "vert": vertex.rstrip()[: -len("#endif")],
+            "frag": fragment.rstrip()[: -len("#endif")],
+        }
+
+    def test_each_half_compiles(self) -> None:
+        if shutil.which("glslangValidator") is None:
+            self.skipTest("glslangValidator is not installed")
+        with tempfile.TemporaryDirectory() as directory:
+            for suffix, body in self._halves().items():
+                path = Path(directory) / f"unlit.{suffix}"
+                path.write_text(body, encoding="utf-8")
+                finished = subprocess.run(  # noqa: S603
+                    ["glslangValidator", str(path)],  # noqa: S607
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(
+                    finished.returncode,
+                    0,
+                    f"the {suffix} half does not compile:\n{finished.stdout}{finished.stderr}",
+                )

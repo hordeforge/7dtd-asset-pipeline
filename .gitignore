@@ -39,3 +39,5 @@ dist/
 # Published wheels still declare open ranges, so consumers are unaffected.
 *.lock
 !uv.lock
+
+*.ignore

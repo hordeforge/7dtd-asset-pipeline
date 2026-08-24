@@ -110,6 +110,12 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="also write the membership manifest here (default: OUTPUT.manifest)",
     )
+    pack.add_argument(
+        "--compress-textures",
+        action="store_true",
+        help="block-compress textures to DXT1/DXT5 (8x/4x smaller, lossy); "
+        "both sides must be a multiple of 4",
+    )
 
     verify = commands.add_parser(
         "verify-bundle",
@@ -447,7 +453,9 @@ def run(args: argparse.Namespace) -> int:
                 "pack needs --game-dir or --unity-version: a bundle carries the revision "
                 "it claims to be for, and the installed game is what has to load it"
             )
-        bundle, manifest_text = pack_directory(args.source, args.output.name, version)
+        bundle, manifest_text = pack_directory(
+            args.source, args.output.name, version, compress_textures=args.compress_textures
+        )
         # Atomic writes: a pack interrupted midway must not leave a truncated
         # .unity3d at the path a later deploy would ship.
         write_artifact(args.output, bundle)

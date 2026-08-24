@@ -285,7 +285,11 @@ def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:
     output = config.build_dir / ("probe" if probe else "bundle")
     output.mkdir(parents=True, exist_ok=True)
     bundle_bytes, manifest_text = pack_directory(
-        config.bundle_source_dir, config.bundle_name, version, _build_target(config)
+        config.bundle_source_dir,
+        config.bundle_name,
+        version,
+        _build_target(config),
+        compress_textures=config.compress_textures,
     )
     built = output / config.bundle_name
     write_artifact(built, bundle_bytes)

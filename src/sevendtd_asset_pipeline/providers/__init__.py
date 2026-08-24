@@ -43,12 +43,3 @@ def configuration_state() -> dict[str, str]:
             continue
         state[name] = CONFIGURED if provider.is_configured() else UNAVAILABLE
     return state
-
-
-def any_configured() -> bool:
-    """Whether any credential-bearing provider is configured right now.
-
-    Presence is checked offline and says nothing about whether a key would be
-    accepted; that verification happens at submission time and nowhere else.
-    """
-    return any(state == CONFIGURED for state in configuration_state().values())

@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from . import audio_review
+from . import atomic, audio_review
 from .api import Pipeline, call_json
 from .build import (
     expected_unity_version,
@@ -19,7 +19,7 @@ from .build import (
     synthesized_caveats,
 )
 from .bundle_verify import verify_with_editor
-from .bundle_writer import pack_directory, write_artifact
+from .bundle_writer import pack_directory
 from .capabilities import capabilities
 from .client import main as client_main
 from .colour import DEFAULT_COLOUR_TOLERANCE, DEFAULT_TILE_RATIO, check_texture
@@ -636,12 +636,12 @@ def run(args: argparse.Namespace) -> int:
         )
         # Atomic writes: a pack interrupted midway must not leave a truncated
         # .unity3d at the path a later deploy would ship.
-        write_artifact(args.output, bundle)
+        atomic.write(args.output, bundle)
         # Not `manifest`: that name belongs to the operation registry's manifest()
         # at module level, and a local of the same name shadows it for the whole
         # of run() — which broke `shamway schema` in a way no unit test saw.
         manifest_path = args.manifest or Path(f"{args.output}.manifest")
-        write_artifact(manifest_path, manifest_text)
+        atomic.write(manifest_path, manifest_text)
         print(f"OK: synthesized {args.output} ({len(bundle)} bytes) and {manifest_path}")
         for caveat in synthesized_caveats():
             print(f"note: {caveat}")

@@ -53,57 +53,48 @@ from .config import PipelineConfig, load_config
 from .errors import PipelineError
 from .references import manifest_assets, read_mod_name
 
-# Which `LoadAsset<T>` a bundle member is fetched with, and what about it is
-# worth asserting once loaded. Keyed by source extension, the same mapping
-# `bundle_writer.ASSET_KINDS` uses, so the two cannot disagree about what a
-# `.png` becomes.
-KIND_SOURCE_ASSERTIONS = {
+# The `LoadAsset<T>` expression that proves each loaded class actually loaded.
+KIND_ASSERTIONS: dict[str, str] = {
     "Texture2D": "loaded.width > 0 && loaded.height > 0",
     "AudioClip": "loaded.channels > 0 && loaded.frequency > 0 && loaded.samples > 0",
+    "TextAsset": "loaded.text != null",
+    "GameObject": "loaded.transform != null",
+    "Material": "loaded.shader != null",
+    "Mesh": "loaded.vertexCount > 0 && loaded.triangles.Length > 0",
 }
 
-ASSET_CASES: dict[str, tuple[str, str]] = {
-    ".png": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
-    ".tga": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
-    ".jpg": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
-    ".wav": ("AudioClip", "loaded.channels > 0 && loaded.frequency > 0 && loaded.samples > 0"),
-    ".ogg": ("AudioClip", "loaded.channels > 0 && loaded.frequency > 0 && loaded.samples > 0"),
-    ".mp3": ("AudioClip", "loaded.channels > 0 && loaded.frequency > 0 && loaded.samples > 0"),
-    ".txt": ("TextAsset", "loaded.text != null"),
-    ".json": ("TextAsset", "loaded.text != null"),
-    ".csv": ("TextAsset", "loaded.text != null"),
-    ".prefab": ("GameObject", "loaded.transform != null"),
-    ".fbx": ("GameObject", "loaded.transform != null"),
-    ".mat": ("Material", "loaded.shader != null"),
-    ".glb": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
-    ".gltf": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
-    ".obj": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
-    ".stl": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
-    ".ply": ("Mesh", "loaded.vertexCount > 0 && loaded.triangles.Length > 0"),
-    ".jpeg": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
-    ".bmp": ("Texture2D", "loaded.width > 0 && loaded.height > 0"),
+# Which class each manifest extension loads as — keyed by extension because
+# `plan()`'s editor-built route sees file names, not classes. A synthesized mod
+# asks the writer itself instead (`synthesized_members`), so this table only
+# ever answers for a bundle an editor built.
+ASSET_CASES: dict[str, str] = {
+    ".png": "Texture2D",
+    ".tga": "Texture2D",
+    ".jpg": "Texture2D",
+    ".jpeg": "Texture2D",
+    ".bmp": "Texture2D",
+    ".wav": "AudioClip",
+    ".ogg": "AudioClip",
+    ".mp3": "AudioClip",
+    ".txt": "TextAsset",
+    ".json": "TextAsset",
+    ".csv": "TextAsset",
+    ".prefab": "GameObject",
+    ".fbx": "GameObject",
+    ".mat": "Material",
+    ".glb": "Mesh",
+    ".gltf": "Mesh",
+    ".obj": "Mesh",
+    ".stl": "Mesh",
+    ".ply": "Mesh",
 }
 # The converted lanes: whatever FFmpeg and ImageMagick let into a bundle has
-# to be loadable from one too, and this generated the cases rather than a
-# hand-written list so the two cannot drift as those tuples grow.
-for _kind, _suffixes in (
-    ("AudioClip", transcode.AUDIO_SUFFIXES),
-    ("Texture2D", transcode.IMAGE_SUFFIXES),
-):
-    for _suffix in _suffixes:
-        ASSET_CASES[_suffix] = (_kind, KIND_SOURCE_ASSERTIONS[_kind])
-
-# Every extension mapped to a kind must assert the same property of it, so the
-# case body can look the assertion up by kind instead of re-deriving it per
-# bundle member. A disagreement inside ASSET_CASES is an authoring error here,
-# not something a provider should resolve by picking one.
-KIND_ASSERTIONS: dict[str, str] = {}
-for _entry in ASSET_CASES.values():
-    agreed = KIND_ASSERTIONS.setdefault(_entry[0], _entry[1])
-    if agreed != _entry[1]:
-        raise PipelineError(
-            f"ASSET_CASES gives {_entry[0]} two different assertions: {agreed!r} and {_entry[1]!r}"
-        )
+# to be loadable from one too, so their containers join the same table rather
+# than drifting into a second list.
+for _suffix in transcode.AUDIO_SUFFIXES:
+    ASSET_CASES[_suffix] = "AudioClip"
+for _suffix in transcode.IMAGE_SUFFIXES:
+    ASSET_CASES[_suffix] = "Texture2D"
 
 # What each kind prints into the client log, so a pass is citable rather than
 # merely green. `Report.Info` lines land under the harness's stable prefix.
@@ -220,18 +211,18 @@ def plan(config: PipelineConfig) -> ProviderPlan:
         return _rendered_plan(config, mod_root, stems)
     for asset in manifest_assets(manifest):
         suffix = Path(asset).suffix.lower()
-        entry = ASSET_CASES.get(suffix)
-        if entry is None:
+        kind = ASSET_CASES.get(suffix)
+        if kind is None:
             unsupported.append(asset)
             continue
-        stems.append((Path(asset).stem, entry[0]))
+        stems.append((Path(asset).stem, kind))
     if unsupported:
         kinds = ", ".join(sorted(ASSET_CASES))
         raise PipelineError(
             "no load case is defined for " + ", ".join(sorted(unsupported)[:5]) + f"; known "
-            f"extensions are {kinds}. Add the extension to acceptance.ASSET_CASES with the "
-            "LoadAsset<T> the engine actually uses for it, rather than leaving a bundle "
-            "member nobody proves."
+            f"extensions are {kinds}. Add the extension to acceptance.ASSET_CASES (and, for "
+            "a class the table does not yet name, its assertion to KIND_ASSERTIONS), rather "
+            "than leaving a bundle member nobody proves."
         )
     if not stems:
         raise PipelineError(f"{manifest} lists no assets a provider case could load")

@@ -17,7 +17,12 @@ from sevendtd_asset_pipeline.config import PipelineConfig
 from sevendtd_asset_pipeline.errors import PipelineError
 
 
-def _mod(root: Path, assets: list[str], mod_name: str = "ExampleMod") -> PipelineConfig:
+def _mod(
+    root: Path,
+    assets: list[str],
+    mod_name: str = "ExampleMod",
+    bundle_source: str = "synthesized",
+) -> PipelineConfig:
     from sevendtd_asset_pipeline.config import load_config, render_config
 
     (root / "Config").mkdir(parents=True, exist_ok=True)
@@ -31,7 +36,7 @@ def _mod(root: Path, assets: list[str], mod_name: str = "ExampleMod") -> Pipelin
             mod_name=mod_name,
             bundle_name="examplemod.unity3d",
             unity_version="2022.3.62f2",
-            bundle_source="synthesized",
+            bundle_source=bundle_source,
         ),
         encoding="utf-8",
     )
@@ -81,6 +86,38 @@ class PlanTests(unittest.TestCase):
             with self.assertRaises(PipelineError) as raised:
                 acceptance.plan(config)
             self.assertIn("shamway build", str(raised.exception))
+
+
+class EditorBuiltManifestTests(unittest.TestCase):
+    """The manifest route of `plan()`: the half an editor-built mod takes.
+
+    A synthesized mod derives its cases from its source folder, but a mod whose
+    bundle is built elsewhere (`external`, or a local editor) has no source
+    folder here: `shamway stage`'s tracked manifest is the only membership list,
+    and these cases are read from it.
+    """
+
+    def _external_mod(self, root: Path, assets: list[str]) -> PipelineConfig:
+        return _mod(root, assets, bundle_source="external")
+
+    def test_every_manifest_member_becomes_a_case_by_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._external_mod(Path(tmp), ["panel.png", "blast.wav", "prop.prefab"])
+            planned = acceptance.plan(config)
+        self.assertEqual(
+            {("panel", "Texture2D"), ("blast", "AudioClip"), ("prop", "GameObject")},
+            set(planned.stems),
+        )
+
+    def test_an_unknown_manifest_extension_is_refused_with_the_known_ones(self) -> None:
+        """The same refusal rule the synthesized route enforces, from the manifest."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._external_mod(Path(tmp), ["panel.png", "mystery.shader"])
+            with self.assertRaises(PipelineError) as raised:
+                acceptance.plan(config)
+        message = str(raised.exception)
+        self.assertIn("mystery.shader", message)
+        self.assertIn(".png", message, "the known extensions must be listed for the author")
 
 
 class SynthesizedNamingTests(unittest.TestCase):
@@ -239,7 +276,7 @@ class InjectionTests(unittest.TestCase):
 
 class RegistryTests(unittest.TestCase):
     def test_every_writer_kind_has_a_detail_line(self) -> None:
-        kinds = {kind for kind, _ in acceptance.ASSET_CASES.values()}
+        kinds = set(acceptance.ASSET_CASES.values())
         self.assertEqual(kinds, set(acceptance.ASSET_DETAILS))
 
     def test_the_synthesizable_extensions_all_have_cases(self) -> None:
@@ -249,7 +286,7 @@ class RegistryTests(unittest.TestCase):
         for suffix, kind in ASSET_KINDS.items():
             with self.subTest(suffix):
                 self.assertIn(suffix, acceptance.ASSET_CASES)
-                self.assertEqual(kind, acceptance.ASSET_CASES[suffix][0])
+                self.assertEqual(kind, acceptance.ASSET_CASES[suffix])
 
 
 if __name__ == "__main__":

@@ -343,9 +343,9 @@ writer's own naming — a mesh source becomes a prefab at the stem, so asking
 for `LoadAsset<Mesh>` there is asking for a name the prefab now owns. For an
 editor-built or staged bundle the manifest lists real object files and the
 extension mapping applies; adding an extension means adding it to
-`acceptance.ASSET_CASES` with the `LoadAsset<T>` the engine really uses; an
-unmapped member is refused, not
-skipped.
+`acceptance.ASSET_CASES` (and, for a class that table does not yet name, its
+load assertion to `acceptance.KIND_ASSERTIONS`); an unmapped member is
+refused, not skipped.
 
 Stems and mod names reach the generated C# and XML as untrusted text — a
 staged manifest or a vendored ModInfo.xml can come from another machine — so

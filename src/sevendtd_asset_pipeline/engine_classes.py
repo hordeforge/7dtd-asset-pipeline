@@ -40,10 +40,6 @@ TYPE_NAME = re.compile(r"\b(Block[A-Za-z0-9_]+)\b")
 ASSEMBLY = Path("7DaysToDie_Data/Managed/Assembly-CSharp.dll")
 
 
-def assembly_path(game_dir: Path) -> Path:
-    return Path(game_dir) / ASSEMBLY
-
-
 def _from_assembly(game_dir: Path) -> set[str] | None:
     """Every `Class` value the engine can resolve, from its own type table.
 
@@ -54,7 +50,7 @@ def _from_assembly(game_dir: Path) -> set[str] | None:
     """
     if shutil.which("monodis") is None:
         return None
-    assembly = assembly_path(game_dir)
+    assembly = Path(game_dir) / ASSEMBLY
     if not assembly.is_file():
         return None
     try:

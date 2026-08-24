@@ -156,7 +156,7 @@ class MeshIconDownscaleTests(unittest.TestCase):
 
 
 class WriteArtifactTests(unittest.TestCase):
-    """`bundle_writer.write_artifact` is the pack/synthesize publish point.
+    """`atomic.write` is the pack/synthesize publish point.
 
     A truncated .unity3d at its final path reads exactly like a complete one
     until something fails to load it, so the bytes must reach the target only
@@ -172,30 +172,30 @@ class WriteArtifactTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def test_writes_bytes_and_text_and_creates_the_parent(self) -> None:
-        from sevendtd_asset_pipeline.bundle_writer import write_artifact
+        from sevendtd_asset_pipeline.atomic import write
 
-        write_artifact(self.destination, b"UnityFS")
+        write(self.destination, b"UnityFS")
         self.assertEqual(b"UnityFS", self.destination.read_bytes())
-        write_artifact(self.root / "manifest.txt", "Assets:\n")
+        write(self.root / "manifest.txt", "Assets:\n")
         self.assertEqual("Assets:\n", (self.root / "manifest.txt").read_text(encoding="utf-8"))
         self.assertEqual([], dotfiles(self.root) + dotfiles(self.root / "nested"))
 
     def test_replacing_an_existing_artifact_keeps_one_copy(self) -> None:
-        from sevendtd_asset_pipeline.bundle_writer import write_artifact
+        from sevendtd_asset_pipeline.atomic import write
 
-        write_artifact(self.destination, b"first")
-        write_artifact(self.destination, b"second")
+        write(self.destination, b"first")
+        write(self.destination, b"second")
         self.assertEqual(b"second", self.destination.read_bytes())
         self.assertEqual([self.destination], list((self.root / "nested").iterdir()))
 
     def test_a_failed_publish_cleans_its_temporary(self) -> None:
-        from sevendtd_asset_pipeline.bundle_writer import write_artifact
+        from sevendtd_asset_pipeline.atomic import write
 
         def exploding(self: Path, target: object) -> Path:
             raise ReplaceError(28, "No space left on device")
 
         with mock.patch.object(Path, "replace", exploding), self.assertRaises(OSError):
-            write_artifact(self.destination, b"half-written")
+            write(self.destination, b"half-written")
         self.assertFalse(self.destination.exists())
         self.assertEqual([], dotfiles(self.root))
 

@@ -43,7 +43,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 
-from . import atomic, block_compress, shader_blob, transcode
+from . import block_compress, shader_blob, transcode
 from .capabilities import has_capability, require_capability
 from .errors import PipelineError
 
@@ -1497,16 +1497,6 @@ def render_manifest(bundle_name: str, assets: list[str]) -> str:
         "Dependencies: []",
     ]
     return "\n".join(lines) + "\n"
-
-
-def write_artifact(path: Path, payload: bytes | str) -> None:
-    """Write a bundle or manifest to `path` through a temporary file and one rename.
-
-    A plain ``write_bytes`` that dies midway (disk full, Ctrl+C) leaves a
-    truncated artifact at the final path, indistinguishable from a complete one
-    until something fails to load it.
-    """
-    atomic.write(path, payload)
 
 
 def synthesized_members(source_dir: Path) -> list[tuple[str, str]]:

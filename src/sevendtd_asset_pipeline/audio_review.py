@@ -309,8 +309,6 @@ LOOP_RUBRIC: tuple[RubricDimension, ...] = (
     RubricDimension("loop_seam_risk", "for a loop: is the seam audible"),
 )
 
-RUBRIC_DIMENSIONS = BASE_RUBRIC + LOOP_RUBRIC
-
 
 def rubric_for(intent: AudioReviewIntent) -> tuple[RubricDimension, ...]:
     """Loop-seam scoring applies only when playback says the clip loops."""

@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 
 from . import atomic
-from .bundle_writer import pack_directory, write_artifact
+from .bundle_writer import pack_directory
 from .capabilities import capabilities
 from .config import PipelineConfig
 from .errors import PipelineError
@@ -318,9 +318,9 @@ def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:
         compress_textures=config.compress_textures,
     )
     built = output / config.bundle_name
-    write_artifact(built, bundle_bytes)
+    atomic.write(built, bundle_bytes)
     generated_manifest = output / f"{config.bundle_name}.manifest"
-    write_artifact(generated_manifest, manifest_text)
+    atomic.write(generated_manifest, manifest_text)
 
     validate_bundle(built, version)
     reject_ambiguous_stems(manifest_assets(generated_manifest))

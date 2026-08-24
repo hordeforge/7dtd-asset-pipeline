@@ -9,6 +9,7 @@ tool that produced them.
 
 ## Conventions
 
+- Start from [TEMPLATE.md](TEMPLATE.md).
 - Name files after the subject: `<project-or-paper>.md`.
 - Open with what was studied and why, close with what applies here and what
   deliberately does not.

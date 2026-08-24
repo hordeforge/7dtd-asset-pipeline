@@ -117,8 +117,7 @@ no Unity, and no game install.
   directory it lands in. The tests fail when any of those drifts, and the
   first two are published in `shamway schema`.
 - `docs/` is categorized: every subdirectory is a genre with its own
-  `README.md`, and every genre that takes new pages carries a `TEMPLATE.md`
-  to start from — an ADR for a decision made, an RFC for one still open, a
+  `README.md`, and every genre carries a `TEMPLATE.md` to start a page from — an ADR for a decision made, an RFC for one still open, a
   PRD for behaviour not built yet, a runbook for a recurring procedure, a
   research page for an engine fact, a report for an investigation.
   [docs/README.md](docs/README.md) is the index, served as `shamway docs index`.

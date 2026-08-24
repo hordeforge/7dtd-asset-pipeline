@@ -5,8 +5,8 @@ Every page here is also served from an installed package with `shamway docs`
 index` prints this page), so a mod repository can read these rules with no
 checkout of this repository.
 
-Every subdirectory carries its own `README.md` index, and every genre that
-takes new pages carries a `TEMPLATE.md` to start from.
+Every subdirectory carries its own `README.md` index, and every genre carries
+a `TEMPLATE.md` to start a new page from.
 
 ## Reference
 

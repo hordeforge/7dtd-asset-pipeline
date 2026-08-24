@@ -383,6 +383,21 @@ display name silently degrades to its id. The diagnostic is one log line:
 `[MODS] Loading localization from mod: <name>` appears whenever the file was
 found. Its absence means the file is in the wrong place.
 
+`shamway client log` requires that line **only when the deployed mod actually
+carries `Config/Localization.csv`**. A mod that ships none cannot produce it,
+and requiring it would fail a correct mod - which it did to
+`examples/SelfTestMod` on 2026-08-24, in the same verdict as a `mod_loaded`
+that was a timing race. The check reads the deployed folder rather than
+assuming, and an unknown mods directory answers "do not require it": an
+unprovable requirement is not a requirement.
+
+That timing race is worth knowing about too. The client log file is created
+**before** the engine has loaded any mod - measured on a Proton host, the file
+appeared at `20:24:09` and `[MODS] Loaded Mod:` was written at `20:24:12` - so
+`client launch` now rescans until the positive markers appear rather than
+judging the instant the file exists. A false `FAIL` is worse than no verdict:
+it sends the next session hunting a deployment bug that is not there.
+
 Do not deploy `.shamway.toml`, `tools/`, `assets-src/`, editable sources,
 Unity project state, manifests, build logs, scripts, or documentation unless
 the mod's release policy explicitly includes authoring material. Zip so that

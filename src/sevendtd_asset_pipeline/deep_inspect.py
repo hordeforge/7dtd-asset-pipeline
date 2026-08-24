@@ -151,6 +151,10 @@ def deep_inspect(path: Path) -> DeepReport:
     return DeepReport(
         path=str(path),
         object_count=len(objects),
-        type_counts=dict(sorted(Counter(o.type.name for o in objects).items())),
+        # The same tolerance the per-entry loop above applies: one object whose
+        # type cannot be read must not abort a report whose entries succeeded.
+        type_counts=dict(
+            sorted(Counter(getattr(o.type, "name", "Unknown") for o in objects).items())
+        ),
         entries=entries,
     )

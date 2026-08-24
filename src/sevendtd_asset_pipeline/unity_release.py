@@ -63,14 +63,32 @@ def _md5(integrity: object) -> str | None:
 
 
 def parse_release(payload: dict[str, object], version: str, platform: str = "LINUX") -> Release:
+    # The body is whatever json.loads produced, so its shape is asserted, not
+    # assumed: a changed or hostile response must fail as the module's own
+    # PipelineError, not as an AttributeError past every handler.
+    if not isinstance(payload, dict):
+        raise PipelineError(
+            f"Unity's release service returned unexpected JSON for {version}: expected an object"
+        )
     results = payload.get("results")
     if not isinstance(results, list) or not results:
         raise PipelineError(f"Unity's release service knows no version {version}")
     entry = results[0]
+    if not isinstance(entry, dict):
+        raise PipelineError(
+            f"Unity's release service returned an unreadable release entry for {version}"
+        )
+    raw_downloads = entry.get("downloads", [])
+    if not isinstance(raw_downloads, list):
+        raise PipelineError(
+            f"Unity's release service returned an unreadable download list for {version}"
+        )
     downloads = [
         item
-        for item in entry.get("downloads", [])
-        if item.get("platform") == platform and item.get("architecture") == "X86_64"
+        for item in raw_downloads
+        if isinstance(item, dict)
+        and item.get("platform") == platform
+        and item.get("architecture") == "X86_64"
     ]
     if not downloads:
         raise PipelineError(f"Unity {version} has no {platform} X86_64 editor download")
@@ -79,8 +97,13 @@ def parse_release(payload: dict[str, object], version: str, platform: str = "LIN
     changeset_match = CHANGESET.search(url)
     if not changeset_match:
         raise PipelineError(f"cannot read a changeset from Unity's download URL: {url}")
+    raw_modules = editor.get("modules", [])
     module = next(
-        (item for item in editor.get("modules", []) if item.get("id") == WINDOWS_MONO_MODULE),
+        (
+            item
+            for item in (raw_modules if isinstance(raw_modules, list) else [])
+            if isinstance(item, dict) and item.get("id") == WINDOWS_MONO_MODULE
+        ),
         None,
     )
     return Release(

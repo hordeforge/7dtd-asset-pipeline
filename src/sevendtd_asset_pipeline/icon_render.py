@@ -108,6 +108,8 @@ def render_icon(
     yaw: float = 208.0,
     pitch: float = 8.0,
     padding: float = 1.22,
+    *,
+    timeout: int = 900,
 ) -> RenderResult:
     """Render `prefab` (a bundle stem or project path) into an atlas PNG."""
     # It photographs a prefab out of the bundle's source folder, so a mod with
@@ -162,7 +164,17 @@ def render_icon(
         "-sapIconPadding",
         f"{padding:g}",
     ]
-    result = subprocess.run(command, check=False)
+    # The same bound a verify-bundle editor gets: an editor that hangs (the
+    # Proton async-load starvation is one documented way) must fail the run
+    # with its log named, not hold the command forever.
+    try:
+        result = subprocess.run(command, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise PipelineError(
+            f"Unity did not finish rendering {project_path} within {timeout}s and was "
+            f"killed; its partial log is {log}. On a machine with no display, run this "
+            "command under 'xvfb-run -a'."
+        ) from exc
     if result.returncode != 0:
         raise PipelineError(
             f"Unity exited {result.returncode} while rendering {project_path}; inspect {log}. "

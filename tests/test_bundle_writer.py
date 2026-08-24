@@ -173,6 +173,31 @@ class WriterTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "16-bit"):
             audio_clip("myModEight", clip)
 
+    def test_a_clip_whose_header_declares_no_channels_is_a_pipeline_error(self) -> None:
+        # `wave` refuses a zero-channel header itself (wave.Error), and
+        # audio_clip wraps that: a damaged header must fail as the package's
+        # own error, never as a ZeroDivisionError past every handler.
+        clip = write_wav(self.root / "zero.wav")
+        raw = bytearray(clip.read_bytes())
+        raw[22:24] = b"\x00\x00"
+        clip.write_bytes(bytes(raw))
+        with self.assertRaisesRegex(PipelineError, "cannot read clip"):
+            audio_clip("myModZero", clip)
+
+    def test_a_texture_over_pillows_decompression_limit_is_refused_not_crashed(self) -> None:
+        # DecompressionBombError subclasses Exception directly, so an OSError-
+        # only catch let it escape cli.main's handler as a raw traceback.
+        from PIL import Image
+
+        png = write_png(self.root / "big.png", size=(200, 200))
+        original = Image.MAX_IMAGE_PIXELS
+        Image.MAX_IMAGE_PIXELS = 100
+        try:
+            with self.assertRaisesRegex(PipelineError, "cannot read texture"):
+                texture_2d("myModBig", png)
+        finally:
+            Image.MAX_IMAGE_PIXELS = original
+
 
 @needs_unitypy
 class SourceDirectoryTests(unittest.TestCase):

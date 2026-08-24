@@ -84,6 +84,38 @@ class UnityReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "no MACOS"):
             parse_release(PAYLOAD, "2022.3.62f2", platform="MACOS")
 
+    def test_a_non_object_payload_is_refused_not_crashed(self) -> None:
+        # A changed or hostile response must fail as the module's own error;
+        # an AttributeError escapes cli.main's handler as a raw traceback.
+        with self.assertRaisesRegex(PipelineError, "unexpected JSON"):
+            parse_release(["not", "an", "object"], "1.2.3f4")  # type: ignore[arg-type]
+
+    def test_an_unreadable_release_entry_is_refused_not_crashed(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "unreadable release entry"):
+            parse_release({"results": ["2022.3.62f2"]}, "1.2.3f4")
+
+    def test_an_unreadable_download_list_is_refused_not_crashed(self) -> None:
+        payload: dict[str, object] = {"results": [{"version": "1.2.3f4", "downloads": "none"}]}
+        with self.assertRaisesRegex(PipelineError, "unreadable download list"):
+            parse_release(payload, "1.2.3f4")
+
+    def test_non_dict_download_entries_are_skipped_not_crashed(self) -> None:
+        payload = json.loads(json.dumps(PAYLOAD))
+        assert isinstance(payload, dict)
+        entry = payload["results"][0]
+        assert isinstance(entry, dict)
+        entry["downloads"].insert(0, "https://example.invalid/not-an-object")
+        release = parse_release(payload, "2022.3.62f2")
+        self.assertEqual("7670c08855a9", release.changeset)
+
+    def test_non_dict_module_entries_are_skipped_not_crashed(self) -> None:
+        payload = json.loads(json.dumps(PAYLOAD))
+        assert isinstance(payload, dict)
+        linux = payload["results"][0]["downloads"][1]
+        linux["modules"].insert(0, "windows-mono")
+        release = parse_release(payload, "2022.3.62f2")
+        self.assertIsNotNone(release.windows_mono)
+
 
 class _Response:
     """The slice of urlopen's context manager fetch_release uses."""

@@ -82,7 +82,10 @@ def run(name: str, argv: list[str]) -> int:
     env = dict(os.environ)
     env.setdefault("SHAMWAY_SCRIPT_ROOT", str(script.parent))
     # bash resolves over PATH by design; the scripts are shipped host tooling.
-    result = subprocess.run(["bash", str(script), *argv], check=False, env=env)  # noqa: S607
+    try:
+        result = subprocess.run(["bash", str(script), *argv], check=False, env=env)  # noqa: S607
+    except OSError as exc:
+        raise PipelineError(f"cannot run {script} through bash: {exc}") from exc
     return result.returncode
 
 

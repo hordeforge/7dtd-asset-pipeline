@@ -434,7 +434,9 @@ def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
             # Unity's first row is the bottom one; a texture written top-down
             # loads fine and renders upside down, which no gate would catch.
             pixels = image.transpose(Image.FLIP_TOP_BOTTOM).tobytes()
-    except OSError as exc:
+    except (OSError, ValueError, Image.DecompressionBombError) as exc:
+        # DecompressionBombError subclasses Exception directly, and some decode
+        # paths raise ValueError, so OSError alone let both escape as tracebacks.
         raise PipelineError(f"cannot read texture {png}: {exc}") from exc
 
     return BundleObject(

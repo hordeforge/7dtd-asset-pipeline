@@ -15,6 +15,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from sevendtd_asset_pipeline import client
 from sevendtd_asset_pipeline.errors import PipelineError
@@ -653,6 +654,95 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         data = json.loads(out.getvalue())
         self.assertIn("launch", data)
+
+
+class FreshClientRunTests(unittest.TestCase):
+    """A muted timed run must unmute even when the run fails part-way.
+
+    WirePlumber persists the game stream's mute, so a run that dies between
+    muting and the scheduled unmute would otherwise silence every later
+    session of this game, not just this run.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.lock = self.root / "playtest_running"
+        self.steam = self.root / "steam-stub"
+        self.steam.write_text("#!/bin/sh\nexit 0\n")
+        self.steam.chmod(0o755)
+        os.environ[client.LOCK_ENV] = str(self.lock)
+        # fresh_client_run derives the log dir from the game dir unless one is
+        # given; the tests patch the log functions, but the derivation itself
+        # still runs first and needs a usable answer.
+        self.logs = self.root / "logs"
+        self.logs.mkdir()
+        (self.logs / "output_log_client__test.txt").write_text("", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        os.environ.pop(client.LOCK_ENV, None)
+        self.temporary.cleanup()
+
+    def _run(
+        self, *, sleep_side_effect: object | None = None, stop: bool = False
+    ) -> client.AcceptanceRun:
+        self.calls: list[str] = []
+        report = client.LogReport(log="log", mod_name=None)
+
+        def fake_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
+            self.calls.append("mute" if muted else "unmute")
+            return [7] if muted else []
+
+        def fake_stop(pids: list[int]) -> None:
+            self.calls.append("stop")
+            if stop:
+                raise RuntimeError("the stop failed")
+
+        patches = [
+            mock.patch.object(client, "set_client_mute", side_effect=fake_mute),
+            mock.patch.object(client, "running_client_pids", return_value=[]),
+            mock.patch.object(client, "stop_client", side_effect=fake_stop),
+            mock.patch.object(
+                client, "latest_client_log", return_value=self.root / "client-log.txt"
+            ),
+            mock.patch.object(client, "scan_log", return_value=report),
+        ]
+        if sleep_side_effect is not None:
+            patches.append(mock.patch("time.sleep", side_effect=sleep_side_effect))
+        with contextlib.ExitStack() as stack:
+            for patch in patches:
+                stack.enter_context(patch)
+            return client.fresh_client_run(
+                game_dir=None,
+                mod_name="ExampleMod",
+                run_seconds=2,
+                mute=True,
+                steam_bin=str(self.steam),
+                log_dir=self.logs,
+            )
+
+    def test_a_bounded_muted_run_unmutes_before_stopping_the_client(self) -> None:
+        # The unmute must precede the stop: once the client exits there is no
+        # stream to un-mute, and WirePlumber would save the muted state.
+        run = self._run()
+        self.assertEqual(["mute", "unmute", "stop"], self.calls)
+        self.assertTrue(run.unmuted_again)
+        self.assertTrue(run.muted)
+
+    def test_a_failure_mid_run_still_unmutes(self) -> None:
+        # The interrupt lands inside the run window; the finally must undo the
+        # mute before the error reaches the caller.
+        with self.assertRaises(KeyboardInterrupt):
+            self._run(sleep_side_effect=KeyboardInterrupt)
+        self.assertIn("unmute", self.calls)
+        self.assertEqual(["mute", "unmute"], self.calls)
+
+    def test_a_failed_stop_after_the_unmute_does_not_unmute_twice(self) -> None:
+        with self.assertRaises(RuntimeError):
+            self._run(stop=True)
+        # The scheduled unmute already happened; the cleanup path must not
+        # report or retry it as if it had been skipped.
+        self.assertEqual(["mute", "unmute", "stop"], self.calls)
 
 
 if __name__ == "__main__":

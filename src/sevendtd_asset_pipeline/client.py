@@ -544,13 +544,20 @@ def disable_discord_integration(user_reg: Path) -> bool:
 def _sink_inputs() -> list[dict[str, object]]:
     if shutil.which("pactl") is None:
         raise PipelineError("pactl is not installed; cannot reach the PipeWire/Pulse sink inputs")
-    result = subprocess.run(
-        # PATH lookup is deliberate: pactl is a user tool located by shutil.which above.
-        ["pactl", "-f", "json", "list", "sink-inputs"],  # noqa: S607
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    # A wedged audio server must fail the run, not hang it: set_client_mute
+    # polls this until its own deadline, so an unbounded pactl here is an
+    # unbounded command.
+    try:
+        result = subprocess.run(
+            # PATH lookup is deliberate: pactl is a user tool located by shutil.which above.
+            ["pactl", "-f", "json", "list", "sink-inputs"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise PipelineError(f"pactl did not answer: {exc}") from exc
     if result.returncode != 0:
         raise PipelineError(f"pactl failed: {result.stderr.strip() or result.returncode}")
     try:
@@ -599,11 +606,28 @@ def set_client_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
         indexes = client_sink_inputs()
         if indexes:
             for index in indexes:
-                subprocess.run(
-                    # PATH lookup deliberate, as in client_sink_inputs above.
-                    ["pactl", "set-sink-input-mute", str(index), "1" if muted else "0"],  # noqa: S607
-                    check=False,
-                )
+                # A mute that failed at the audio server must not be reported
+                # as applied: WirePlumber persists the stream's state, so a
+                # silent failure here outlives this run.
+                try:
+                    changed = subprocess.run(
+                        # PATH lookup deliberate, as in client_sink_inputs above.
+                        # pactl is a user tool resolved over PATH by design.
+                        ["pactl", "set-sink-input-mute", str(index), "1" if muted else "0"],  # noqa: S607
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=10,
+                    )
+                except (OSError, subprocess.SubprocessError) as exc:
+                    raise PipelineError(
+                        f"pactl did not answer for sink input {index}: {exc}"
+                    ) from exc
+                if changed.returncode != 0:
+                    raise PipelineError(
+                        f"pactl could not {'mute' if muted else 'unmute'} sink input "
+                        f"{index}: {changed.stderr.strip() or changed.returncode}"
+                    )
             return indexes
         if time.monotonic() >= deadline:
             return []
@@ -877,16 +901,28 @@ def fresh_client_run(
         command = launch_command(steam_bin, extra_args)
         subprocess.run(command, check=False)
         muted_indexes: list[int] = []
-        if mute:
-            muted_indexes = set_client_mute(True)
         unmuted = False
-        if run_seconds:
-            time.sleep(run_seconds)
-            if mute and muted_indexes:
-                set_client_mute(False, wait_seconds=5)
-                unmuted = True
-            stop_client(running_client_pids())
-        newest = latest_client_log(logs, written_after=started_at)
+        try:
+            if mute:
+                muted_indexes = set_client_mute(True)
+            if run_seconds:
+                time.sleep(run_seconds)
+                if mute and muted_indexes:
+                    # While the stream still exists, so WirePlumber saves the
+                    # unmuted state, not the mute.
+                    set_client_mute(False, wait_seconds=5)
+                    unmuted = True
+                stop_client(running_client_pids())
+            newest = latest_client_log(logs, written_after=started_at)
+        finally:
+            # Anything raised between muting and the scheduled unmute — a stop
+            # that failed, a log that never appeared, a Ctrl+C mid-run — must
+            # still undo the mute. It persists in WirePlumber's saved state,
+            # and would silence every later session of this game, not just
+            # this run.
+            if run_seconds and mute and muted_indexes and not unmuted:
+                with contextlib.suppress(PipelineError):
+                    set_client_mute(False, wait_seconds=5)
     return AcceptanceRun(
         log=scan_log(newest, mod_name),
         launched=command,

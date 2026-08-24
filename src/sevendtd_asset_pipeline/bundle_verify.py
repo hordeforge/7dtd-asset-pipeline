@@ -138,7 +138,15 @@ def verify_with_editor(
         str(bundle),
         "-quit",
     ]
-    result = subprocess.run(command, check=False, timeout=timeout)
+    try:
+        result = subprocess.run(command, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        # TimeoutExpired is not a TimeoutError, so without this it escapes
+        # cli.main's handler as a raw traceback. run() has killed the editor.
+        raise PipelineError(
+            f"the editor did not finish verifying within {timeout}s and was killed; "
+            f"its partial log is {log}. Rule out a hang before raising the limit."
+        ) from exc
     return _classify(bundle, log, result.returncode)
 
 

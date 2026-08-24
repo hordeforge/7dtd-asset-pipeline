@@ -122,10 +122,18 @@ def _validate_gltf(path: Path, report: MeshReport, strict: bool) -> None:
         issues = payload.get("issues", {})
         report.gltf_errors = int(issues.get("numErrors", 0))
         report.gltf_warnings = int(issues.get("numWarnings", 0))
-    except (json.JSONDecodeError, TypeError, ValueError):
+    except (json.JSONDecodeError, TypeError, ValueError, AttributeError):
+        # A zero exit with unusable output proves neither conformance nor its
+        # absence; recording nothing would read exactly like a pass.
+        detail = result.stderr.strip()[:200] or result.stdout.strip()[:120]
         if result.returncode != 0:
             report.problems.append(
-                f"glTF validator exited {result.returncode}: {result.stderr.strip()[:200]}"
+                f"glTF validator exited {result.returncode}: {detail or 'no output'}"
+            )
+        else:
+            report.problems.append(
+                f"glTF validator exited 0 but wrote no readable report "
+                f"({detail or 'no output'}); treating conformance as unproven"
             )
         return
     if report.gltf_errors:

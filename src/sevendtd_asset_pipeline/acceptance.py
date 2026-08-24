@@ -294,24 +294,31 @@ def build(plan_: ProviderPlan, game_dir: Path, harness_dll: Path, output: Path) 
             "hordeforge/7dtd-playtest ('make build'), then pass --harness-dll."
         )
     project = plan_.directory / f"{plan_.assembly}.csproj"
-    result = subprocess.run(
-        [
-            dotnet,
-            "build",
-            str(project),
-            "-c",
-            "Release",
-            "-o",
-            str(output),
-            "-v",
-            "q",
-            f"-p:GameManagedDir={managed}",
-            f"-p:PlaytestHarnessPath={Path(harness_dll)}",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [
+                dotnet,
+                "build",
+                str(project),
+                "-c",
+                "Release",
+                "-o",
+                str(output),
+                "-v",
+                "q",
+                f"-p:GameManagedDir={managed}",
+                f"-p:PlaytestHarnessPath={Path(harness_dll)}",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise PipelineError(
+            "dotnet build did not finish within 600s and was killed; a cold "
+            "NuGet restore on an offline host is the usual cause."
+        ) from exc
     if result.returncode != 0:
         tail = (result.stdout + result.stderr).strip().splitlines()[-12:]
         raise PipelineError("dotnet build failed:\n" + "\n".join(tail))

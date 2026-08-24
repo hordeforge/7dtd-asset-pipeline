@@ -51,7 +51,88 @@ preflighted the dedicated server but not the client, so a caller who exported
 the wrong variable waited out a fifteen-minute timeout instead of reading one
 error line. Both were fixed where they belonged.
 
-### Documentation is part of the change, not a follow-up
+### Never declare an impossibility you did not test
+
+**Do not write "impossible", "cannot", "the wall", "not a temporary gap", or
+"nothing offline produces that" unless you ran a check that returned it.** If
+no check was run, the only honest phrasing is "I have not checked whether X is
+possible". This binds a passing remark in a report exactly as hard as a
+conclusion in an ADR, and hardest of all when the sentence is about to be
+written into a page the next session will read as settled.
+
+Two failures are the same failure: over-generalizing a positive observation
+("it worked here, so it works"), and over-generalizing a negative one ("I
+could not find a way, so there is none"). The second is worse, because it
+forecloses work rather than merely overstating it, and nobody re-opens a
+question the documentation calls closed.
+
+This rule has a scar. On 2026-08-24 this repository's documentation said, in
+six places and in an ADR, that a Unity shader "cannot be produced offline,
+ever — only Unity's shader compiler produces that". It was false, and the
+disproof was already installed on the machine that wrote it:
+
+```bash
+which vkd3d-compiler glslangValidator
+```
+
+`vkd3d-compiler` (WineHQ, OSS) compiles HLSL to SM4/SM5 **DXBC** — the exact
+bytecode Unity's d3d11 sub-programs carry — and `glslangValidator` emits the
+SPIR-V the Vulkan sub-programs carry. Two *borrowing* routes had genuinely been
+measured closed (the shipped player carries only internal shaders; the game's
+own bundles embed theirs same-file), and the report leapt from "cannot borrow
+one" to "cannot author one". That does not follow, and it deleted the exact
+capability the work had been asked for.
+
+So, concretely, before any such sentence — **both** of these, not either:
+
+1. **Check locally.** Run `which`, a package search, or one probe script, and
+   **cite what it returned** in the same paragraph.
+2. **Search online, thoroughly.** The local host is not the state of the art;
+   an absent tool proves nothing about whether the tool exists. Look for the
+   format specification, the open-source implementation, the reverse-
+   engineering write-up, the issue thread where someone already did it. Search
+   the *format* and the *artifact* by name, not only your framing of the
+   problem: "Unity shader sub-program blob format" finds what "can I make a
+   shader without Unity" does not. Prior art for reading a format is prior art
+   for writing it — every parser is a specification someone already paid for.
+   Name the sources you found, and say what you searched if you found nothing.
+
+A local `which` that comes back empty and no search is **not** a check; that
+combination is how the shader claim below got written. Off-the-shelf pieces
+for this repository's own problems have turned up in Wine, in Khronos, in
+HearthSim's game-modding tools and in a decade of Unity reverse-engineering
+projects — none of which were installed here, and all of which were one search
+away.
+
+Then, when writing it down:
+
+- name the *specific* route measured closed, never the whole problem — "the
+  player has no shader a mod may reference" is a finding, "shaders are
+  impossible" is not;
+- prefer **"unbuilt, and here is the route"** to "impossible". If the route is
+  long, that is a cost, and a cost belongs in
+  [docs/status/improvements.md](docs/status/improvements.md), not in a page
+  that tells the next session to stop;
+- if you genuinely could not settle it, write "**not checked**" and say what
+  would settle it. That is an honest state; "impossible" is a claim.
+
+An impossibility claim is a gate on future work. It needs the same evidence
+this file demands of every other gate.
+
+### Documentation is written while the work happens, never afterwards
+
+Documentation is **not** a step at the end and **not** a follow-up commit. It
+is written *during* the change, in the same working session, as each piece
+lands — the way a test is. An agent that finishes the code and then goes
+looking for the pages to update has already got it wrong, even if it updates
+them: by then the reasons are reconstructed rather than recorded, and the
+things that were surprising on the way have been forgotten.
+
+In practice that means: when a behaviour changes, stop and write the page
+before moving to the next piece of code; when a measurement is taken, write it
+into [docs/research/research-provenance.md](docs/research/research-provenance.md)
+with the tool that produced it before acting on it; when a route is tried and
+rejected, record *why* before trying the next one.
 
 Every behaviour change updates the documentation in the same commit that makes
 it — in **whichever** repository the change lands, this one or a sibling. A new

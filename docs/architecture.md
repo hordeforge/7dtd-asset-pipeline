@@ -96,13 +96,16 @@ reporting one.
 per-user data), and the registry marks every writer `writes: true` so a caller — `serve` included — can
 refuse them before anything starts.
 
-The writer's boundary is deliberate too, and it is drawn where the engine
-draws it rather than where the work got hard. `bundle_writer.py` covers
-textures, clips, text files and meshes, and stops at prefabs, materials and
-shaders, because a shader in a bundle is compiled platform bytecode only
-Unity's shader compiler produces — measured, not assumed: the shipped player
-carries six shaders and all are internal, and the game's own bundles embed
-theirs same-file. [ADR 0001](adrs/0001-synthesize-bundles-without-an-editor.md)
+The writer's boundary is where the work has reached, **not** where the format
+ends — a distinction this page got wrong until 2026-08-24. `bundle_writer.py`
+covers textures, clips, text files and meshes, and stops at prefabs, materials
+and shaders. What is measured is that a shader cannot be *borrowed*: the
+shipped player carries six shaders and all are internal, and the game's own
+bundles embed theirs same-file. Whether one can be *authored* offline was never
+checked before it was written down as impossible; it can be compiled
+(`vkd3d-compiler` for DXBC, `glslangValidator` for SPIR-V) and its container
+has since been decoded, so the boundary is a gap with a route rather than a
+wall. [ADR 0001](adrs/0001-synthesize-bundles-without-an-editor.md)
 records that research and what is not attempted; [no-unity.md](bundles/no-unity.md)
 states what a synthesized bundle owes instead.
 

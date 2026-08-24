@@ -254,6 +254,24 @@ valid prefab, so nothing reports it.
     refuses while a client runs; do not work around it, and do not launch
     over a client someone else is using. A bundle is cached for the life of
     the process, so a reused client proves nothing about a rebuild.
+13. **Never declare something impossible you did not test.** Do not write
+    "impossible", "cannot", or "there is no way" — in a report, a comment, or
+    a doc — unless a check was run that returned it; say "I have not checked"
+    instead. Two checks, not one: run `which <tool>` or a package search *and*
+    search online for the format spec, the OSS implementation, or the
+    reverse-engineering write-up. A missing local tool proves nothing about
+    whether the tool exists, and searching the *format* by name finds what
+    searching your framing of the problem does not. Name the specific route
+    you measured closed, never the whole problem: "the shipped player has no
+    shader a mod may reference" is a finding; "shaders are impossible offline"
+    is not, and it was written into this pipeline's own docs while the tool
+    that disproves it (`vkd3d-compiler`) sat installed on the same machine.
+    Prefer "unbuilt, and here is the route".
+14. **Write the documentation while you work, not afterwards.** Update the
+    page in the same session as the change that needs it, as each piece lands
+    — not in a pass at the end and not in a follow-up commit. Reasons
+    reconstructed later are worse than reasons recorded at the time, and the
+    surprising parts are exactly the ones already forgotten by then.
 
 ## Fresh-client acceptance, mechanically
 

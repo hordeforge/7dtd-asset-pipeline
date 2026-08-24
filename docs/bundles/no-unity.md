@@ -189,28 +189,34 @@ art surveyed, and what is not attempted are in
 
 ### What it cannot write, and why that is not a temporary gap
 
-Prefabs, materials and shaders still need an editor. The blocker is exactly
-one thing — the **shader** — and it is a property of the engine, not effort
-not yet spent. A material references a shader; a shader in a bundle is
-compiled platform bytecode produced by Unity's shader compiler. Nothing
-offline produces that, so a prefab whose renderer has no valid shader renders
-magenta in the client, and no offline gate can see it.
+Prefabs, materials and shaders still need an editor **today**. That is a gap,
+not a law, and this page said otherwise until 2026-08-24 — see the correction
+in [research-provenance.md](../research/research-provenance.md).
 
-Two ways around it were measured on 2026-08-24, and both are closed
-([research-provenance.md](../research/research-provenance.md), "Why a material
-cannot follow the mesh"):
+What is measured is narrower than the old claim. A material references a
+shader, and a mod bundle has to carry its own, because **borrowing** one is
+closed both ways:
 
-- **borrow the player's shaders.** The shipped game's `unity default
-  resources` carries six shaders and all six are internal — no Standard, no
-  Unlit, nothing a prop could use.
-- **borrow the game's own.** The `trees` bundle embeds its ten shaders, and
-  every material in it points at one in the *same file*. A mod bundle would
-  have to do the same, which means compiling them, which is the wall again —
-  and copying the game's would ship its assets.
+- **the player's shaders.** The shipped game's `unity default resources`
+  carries six shaders and all six are internal — no Standard, no Unlit,
+  nothing a prop could use.
+- **the game's own.** The `trees` bundle embeds its ten shaders, and every
+  material in it points at one in the *same file*. Copying those into a mod
+  would ship the game's assets.
 
-So a mod with a prefab or a material uses `unity` or `external`; both are
-unchanged and neither is second-class. A mod whose geometry ships as meshes
-needs neither.
+**Authoring** one is a different question, and it was never checked before it
+was called impossible. A shader's d3d11 sub-programs carry DXBC, and
+`vkd3d-compiler` — WineHQ's vkd3d-shader, MIT, and already installed on the
+machine that wrote the wrong claim — compiles HLSL to exactly that;
+`glslangValidator` covers the Vulkan sub-programs. The `Shader` class has a
+type tree at this revision like every other class, and the sub-program blob
+container has been decoded out of the game's own bundle
+(`research-provenance.md`, "Shader object and sub-program blob layout").
+
+So the honest statement is: **unbuilt, with a known route**, tracked in
+[status/improvements.md](../status/improvements.md). Until it is built, a mod
+with a prefab or a material uses `unity` or `external`; both are unchanged and
+neither is second-class. A mod whose geometry ships as meshes needs neither.
 
 ### The gates say what they are worth
 

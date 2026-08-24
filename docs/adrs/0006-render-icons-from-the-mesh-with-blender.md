@@ -34,14 +34,17 @@ Three alternatives were considered:
    mesh lane accepts because both sit on interchange files.
 
 The measured constraint behind the honest downside: a material needs a shader,
-a shader in a bundle is compiled platform bytecode, and both routes to
-borrowing one from the game are closed — the shipped player's `unity default
-resources` carries six shaders and all are internal, and the game's own bundles
-embed theirs with `m_Shader.m_FileID: 0`. Measured with UnityPy against the
-installed game, 2026-08-24; see
-[research/research-provenance.md](../research/research-provenance.md), "Why a
-material cannot follow the mesh". So on this path there is no material to
-render, and no amount of renderer choice changes that.
+and both routes to *borrowing* one from the game are closed — the shipped
+player's `unity default resources` carries six shaders and all are internal,
+and the game's own bundles embed theirs with `m_Shader.m_FileID: 0`. Measured
+with UnityPy against the installed game, 2026-08-24; see
+[research/research-provenance.md](../research/research-provenance.md).
+
+An earlier draft of this ADR added that authoring a shader offline is
+impossible. It is not, that was never checked, and the sentence is withdrawn
+— the rule is now in AGENTS.md. What is true is narrower and enough for this
+decision: **there is no material on this path today**, so there is nothing for
+a renderer to shade, whichever renderer is chosen.
 
 ## Decision
 
@@ -78,8 +81,10 @@ second guard, and it earned its place immediately — during development it
 caught a stale `matrix_world` that aimed the camera at nothing and produced a
 transparent cell no other check would have failed.
 
-What would justify revisiting this: an offline path to a valid material, which
-means either a shader the writer can emit or a shader in the shipped player
-that a mod's material may legally reference. Both were measured closed on
-2026-08-24. If either changes, the right move is a real prefab render, not a
-better clay one.
+What would justify revisiting this: an offline path to a valid material. That
+means a shader the writer can emit — the route exists (`vkd3d-compiler` for
+DXBC, the decoded blob container) and is tracked in
+[status/improvements.md](../status/improvements.md) — since a shader in the
+shipped player that a mod may reference is the one half genuinely measured
+closed. When the writer can emit a material, the right move is a real prefab
+render, not a better clay one.

@@ -360,11 +360,18 @@ glTF runtime for Unity apply. It has no evidence in the artifact above because
 a mirrored mesh is a perfectly valid `Mesh` object; the test that holds it is
 `test_the_right_handed_source_is_converted_rather_than_mirrored`.
 
-### Why a material cannot follow the mesh
+### A material's shader: what is measured closed, and what is not
 
-Measured 2026-08-24 with UnityPy, and the reason the shader wall in
-[no-unity.md](../bundles/no-unity.md) is a property of the engine rather than
-of effort spent:
+**Correction, 2026-08-24.** An earlier version of this section concluded that
+"compiled shader bytecode is what an offline writer cannot produce" and the
+pages that cited it said a shader was impossible offline, full stop. **That was
+wrong**, and it is the reason AGENTS.md now carries "Never declare an
+impossibility you did not test". What had actually been measured was that a
+shader cannot be *borrowed*; nothing had been checked about *authoring* one.
+The two findings below stand. The conclusion drawn from them did not.
+
+Borrowing, measured with UnityPy against the installed game — both routes
+closed:
 
 - the shipped player's `7DaysToDie_Data/Resources/unity default resources`
   carries **six** shaders, all internal: `Hidden/InternalErrorShader`,
@@ -373,14 +380,83 @@ of effort spent:
   could use;
 - the game's own `trees` bundle **embeds its shaders**: 10 `Shader` objects
   inside the archive, and every `Material` in it points at one with
-  `m_Shader.m_FileID: 0` — same file. That is the pattern a mod bundle would
-  have to follow, and compiled shader bytecode is what an offline writer
-  cannot produce;
+  `m_Shader.m_FileID: 0` — same file. So a mod bundle must carry its own;
 - the one external that bundle declares is `Resources/unity_builtin_extra`,
-  so the engine does resolve external references at runtime. That is recorded
-  as a route, not a plan: the player has no such file on disk, and pointing a
-  synthesized material at a shader variant nobody compiled for it renders
-  magenta — a failure no offline gate sees.
+  so the engine does resolve external references at runtime. Recorded as a
+  route, not a plan: the player has no such file on disk.
+
+Authoring, checked on the same host the false claim was written on:
+
+```bash
+which vkd3d-compiler glslangValidator
+```
+
+Both were **already installed**. `vkd3d-compiler` (WineHQ's vkd3d-shader, MIT,
+`/usr/bin/vkd3d-compiler`, package `vkd3d` 1.19) compiles HLSL to `dxbc-tpf` —
+shader-model 4/5 **DXBC**, which is exactly what Unity's d3d11 sub-programs
+carry. `glslangValidator` emits the SPIR-V the Vulkan sub-programs carry. So
+the bytecode half has an open-source producer, and the claim that only Unity's
+compiler can make one was never checked before it was written down.
+
+### Shader object and sub-program blob layout
+
+Measured 2026-08-24 with UnityPy and a scratch decoder over
+`Data/Bundles/Standalone/Entities/trees`, using its smallest shader,
+`Legacy Shaders/Transparent/Cutout/VertexLit` (28198 compressed blob bytes).
+This is the structure an offline writer has to reproduce:
+
+- the object carries `platforms: [4, 15, 18]` — `ShaderCompilerPlatform`
+  d3d11, OpenGLCore and Vulkan — with `stageCounts: [2, 1, 1]` and parallel
+  `offsets`, `compressedLengths` and `decompressedLengths`, each a **list of
+  lists** (one inner entry per hardware tier; this shader has one);
+- `compressedBlob` is the three platform blobs concatenated, each **LZ4 block
+  compressed**: offsets `[0, 5926, 11800]`, compressed `[5926, 5874, 16398]`,
+  decompressed `[49568, 87712, 56144]`;
+- each decompressed blob is `u32 count`, then `count` records of **12 bytes**
+  — `offset, length, flags(0)` — then the data. The record size is 12 and not
+  8: `39 × 12 + 4 = 472`, which is exactly the first record's offset, and the
+  records tile the payload contiguously (`472 + 884 = 1356`, the next offset);
+- the table mixes two kinds of entry. **Parameter blobs** begin with the magic
+  `ba 75 0a 0c` and hold constant-buffer and texture-parameter names
+  (`$Globals`, `_Color`, `_Cutoff`); **code blobs** hold a Unity header
+  followed by the driver bytecode, `DXBC` at offset 70 for the vertex program
+  measured here. `m_ParameterBlobIndices` indexes the first kind and
+  `m_BlobIndex` on each sub-program the second;
+- in 2021+ the compiled variants live in `m_PlayerSubPrograms` (grouped, with
+  only the last group populated: 18 vertex and 6 fragment variants here) and
+  `m_SubPrograms` is empty — it is editor-only. Shared parameters moved to
+  `m_CommonParameters` on the `SerializedProgram`.
+
+A **code blob**'s header decodes as eight little-endian `u32`s before the
+bytecode, measured on this shader's vertex (`m_BlobIndex` 6) and fragment
+(14) programs:
+
+| Offset | Vertex | Fragment | Field |
+|---|---|---|---|
+| 0 | 202012090 | 202012090 | `m_Version` — the same value on every blob, and the `ba 75 0a 0c` that looks like a magic is just this int |
+| 4 | 15 | 17 | `m_ProgramType`: `DX11VertexSM40` and `DX11PixelSM40` — **shader model 4.0**, which is exactly `vkd3d-compiler`'s `dxbc-tpf` target |
+| 8 | 74 | 3 | ALU instruction count |
+| 12 | 0 | 1 | texture instruction count |
+| 16 | 2 | 0 | flow instruction count |
+| 20 | 7 | 2 | temp-register/requirements word |
+| 24 | 0 | 0 | keyword count (this variant has none) |
+| 28 | 3326 | 570 | code length |
+
+`DXBC` then begins at byte 70 in both, with the four bytes at 66 zero, and
+`70 + 3322 = 3392` closes the vertex record exactly. The container structure
+matches [AssetStudio's `ShaderConverter.cs`](https://github.com/Perfare/AssetStudio/blob/master/AssetStudioUtility/ShaderConverter.cs)
+and [UnityPy's `ShaderConverter.py`](https://github.com/K0lb3/UnityPy/blob/master/UnityPy/export/ShaderConverter.py),
+which read `m_Version`, `m_ProgramType`, three stat ints, a keyword array and
+then the code array, and which document the third record `u32` as `segment`
+for Unity 2019.3+ — independent confirmation of the 12-byte stride measured
+above. Two parsers of a format are a specification for a writer of it.
+
+What that leaves genuinely unknown, and therefore *unchecked* rather than
+impossible: whether 7DTD's rendering path accepts a minimally-authored pass,
+which keyword variants the engine demands, and the exact `m_CommonParameters`
+binding a hand-compiled shader needs. Those are the next measurements, not a
+wall. Progress and the route live in
+[status/improvements.md](../status/improvements.md).
 
 Runtime confirmation, same day: a synthesized bundle carrying all three classes
 was loaded by a real Unity 2022.3.62f2 runtime through

@@ -74,13 +74,13 @@ mesh being any file [trimesh](docs/authoring/authoring-tools.md) reads, so
 Blender's glTF, OpenSCAD's STL and `shamway generate mesh` all reach a bundle
 with no editor between them and it.
 
-It stops at **prefabs, materials and shaders**, and that boundary is the
-engine's rather than a to-do. A material references a shader; a shader in a
-bundle is compiled platform bytecode from Unity's shader compiler. Both ways
-around it were measured against the installed game and both are closed — the
-shipped player carries six shaders and all are internal, and the game's own
-bundles embed theirs same-file. [Running without Unity](docs/bundles/no-unity.md)
-is the full page.
+It stops at **prefabs, materials and shaders** — for now. That is a to-do with
+a known route, not a property of the engine: a mod bundle must carry its own
+shader (borrowing one is measured closed both ways), but compiling one offline
+is an open road, since `vkd3d-compiler` emits the SM4/SM5 DXBC that d3d11
+sub-programs carry and the blob container has been decoded out of the game's
+own bundle. Tracked in [Improvements](docs/status/improvements.md);
+[Running without Unity](docs/bundles/no-unity.md) is the full page.
 
 Where an editor *does* exist, it is more useful as a checker than as a
 builder — this is the one offline check in the project that the project did
@@ -388,6 +388,7 @@ consuming mod reads them with no checkout of this repository, and
 - [Release checklist](docs/runbooks/release-checklist.md) — artifact and live acceptance
 - [Blockers](docs/status/blockers.md) — what still needs a human, a licence, or a client
 - [Improvements](docs/status/improvements.md) — known gaps and the tool that closes each
+- [TODO.md](TODO.md) — the order the open blockers and gaps come in, and who can close each
 - [AGENTS.md](AGENTS.md) — the contract for coding agents working here
 - [Contributing](CONTRIBUTING.md) — proof boundaries and the uv toolchain
 

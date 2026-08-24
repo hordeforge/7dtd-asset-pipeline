@@ -151,16 +151,26 @@ handedness conversion — glTF/OBJ/STL/PLY are right-handed, Unity is not — wh
 is not a format fact at all and is the one thing in the lane that no gate can
 catch, because a mirrored mesh is a perfectly valid `Mesh`.
 
-The shader is the wall, not the effort, and on 2026-08-24 that stopped being
-an inference. A material references a shader, and a shader in a bundle is
-compiled platform bytecode from Unity's shader compiler. Nothing offline
-produces that, so a synthesized prefab renders magenta — a failure no offline
-gate can see. Both borrowing routes were measured against the installed game
-and both are closed (`research-provenance.md`, "Why a material cannot follow
-the mesh"): the player's `unity default resources` holds six shaders and all
-are internal, and the game's own bundles embed their shaders with
-`m_Shader.m_FileID: 0`, same-file, which a mod bundle can only match by
-compiling its own.
+**Correction, 2026-08-24.** This paragraph previously read "the shader is the
+wall, not the effort" and concluded that nothing offline produces compiled
+shader bytecode. That was an untested assertion and it is withdrawn; the rule
+it violated is now in AGENTS.md, "Never declare an impossibility you did not
+test".
+
+What is measured: a material references a shader, and a mod bundle must carry
+its own, because both **borrowing** routes are closed
+(`research-provenance.md`) — the player's `unity default resources` holds six
+shaders and all are internal, and the game's own bundles embed theirs with
+`m_Shader.m_FileID: 0`, same-file, which copying would mean shipping the
+game's assets. A synthesized prefab with no valid shader renders magenta, and
+no offline gate sees that.
+
+What is **not** measured, and was wrongly presented as settled: whether a
+shader can be *authored* offline. `vkd3d-compiler` compiles HLSL to SM4/SM5
+DXBC and `glslangValidator` emits SPIR-V — the two bytecode formats this
+revision's sub-programs carry — and the sub-program blob container has since
+been decoded out of the game's own bundle. So this row is **unbuilt with a
+known route**, tracked in `status/improvements.md`, not closed.
 
 Two routes stay recorded and unattempted, both for the same reason — each one
 can only be judged by a client that renders it, and a magenta prop is the

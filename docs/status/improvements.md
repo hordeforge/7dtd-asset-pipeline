@@ -73,6 +73,51 @@ Until then the advice stands: big or quality-critical audio goes through the
 `unity`/`external` path where Unity's importer encodes Vorbis, and the synth
 path carries short clips and utility sounds.
 
+## 4b. The editorless writer stops at shaders, materials and prefabs
+
+This entry exists because the documentation used to say this was impossible.
+It is not; it was never checked. See
+[research-provenance.md](../research/research-provenance.md), "A material's
+shader", and the AGENTS.md rule that came out of it.
+
+What is actually closed: **borrowing** a shader. The shipped player carries
+six shaders and all are internal, and the game's own bundles embed theirs
+`m_Shader.m_FileID: 0`, same-file. A mod bundle must therefore carry its own.
+
+What is open, with the pieces already on the shelf:
+
+| Piece | Status |
+|---|---|
+| `Shader`/`Material`/`GameObject`/`Transform`/`MeshFilter`/`MeshRenderer` type trees at this revision | available, same UnityPy TPK source the writer already uses for `Mesh` |
+| HLSL → SM4/SM5 **DXBC** (what d3d11 sub-programs carry) | [`vkd3d-compiler`](https://gitlab.winehq.org/wine/vkd3d) — WineHQ, MIT, `dxbc-tpf` target |
+| GLSL/HLSL → **SPIR-V** (Vulkan sub-programs) | `glslangValidator`, and [Slang](https://github.com/shader-slang/slang) or [DXC](https://github.com/microsoft/DirectXShaderCompiler) as alternatives |
+| Sub-program blob container | **decoded** from `Entities/trees`: LZ4 per platform, `u32 count` + 12-byte `(offset, length, segment)` records, code blobs an 8-`u32` header then `DXBC`. Cross-checked against AssetStudio and UnityPy, which both parse it |
+| Prior art for the format | [AssetStudio `ShaderConverter.cs`](https://github.com/Perfare/AssetStudio/blob/master/AssetStudioUtility/ShaderConverter.cs), [UnityPy `ShaderConverter.py`](https://github.com/K0lb3/UnityPy/blob/master/UnityPy/export/ShaderConverter.py) — read-side implementations, which is a specification for the write side |
+| Cross-object `PPtr` wiring inside one synthesized file | **not built** — `build_bundle` assigns path ids by position and no constructor references another object yet. This is the first thing to add, and prefabs need it regardless of shaders |
+
+**Close it with**, in this order, because each step is verifiable on its own:
+
+1. `PPtr` support in `build_bundle`, proven by a `Material` → `Texture2D`
+   reference read back through UnityPy;
+2. a `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer` prefab over an
+   already-working `Mesh`, with an empty material slot — loadable, invisible,
+   and honest about it;
+3. the smallest possible shader: one unlit textured pass, HLSL compiled by
+   `vkd3d-compiler`, wrapped in the container above. `shamway verify-bundle`
+   is the gate — a real runtime reports `Shader.isSupported`, which is the
+   first mechanical answer to "did this work";
+4. only then a `Material` that binds it, and only then a claim about rendering
+   — which, as everywhere else here, ends at a person looking at a client.
+
+**What is genuinely unknown** (unknown, not impossible): the exact bytes of the
+Unity header preceding the DXBC in a code blob, whether 7DTD's rendering path
+accepts a minimally-authored pass, and which keyword variants the engine
+demands. Each is a measurement against the game's own bundles, not a barrier.
+
+Until it is built, a mod with a prefab or a material uses `bundle_source =
+"unity"` or `"external"`, and the documentation says **unbuilt**, never
+impossible.
+
 ## 5. No property-based testing of the parser
 
 `unityfs.py`'s rejection fixtures are hand-built vectors — good ones, but

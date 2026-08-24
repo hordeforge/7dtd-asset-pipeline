@@ -258,7 +258,8 @@ errors while looking superficially successful.
 ## Creating the assets themselves
 
 `shamway generate` ships reproducible generators for
-the sound, audio-conversion, cutout, icon, texture, mesh, and mesh-icon lanes; the scaffolded Unity project
+the sound, audio-conversion, cutout, icon, texture, mesh, mesh-icon, and
+mesh-optimize lanes; the scaffolded Unity project
 ships `GeneratedAsset.cs` for building prefabs, materials, imports, particle
 state, and audio from code, and `IconRenderer.cs` for photographing a prefab
 into an atlas cell.

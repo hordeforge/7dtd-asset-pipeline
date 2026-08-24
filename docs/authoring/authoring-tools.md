@@ -82,15 +82,39 @@ which wants a material, which wants a shader an editor has to compile.
 
 - Official export API: <https://trimesh.org/trimesh.exchange.export.html>
 
-### gltfpack — mesh optimization before import
+### gltfpack — simplification, and a quantization trap
 
-`gltfpack` (from meshoptimizer) quantizes positions, normals and UVs and
-reorders indices for vertex-cache locality, shrinking a glTF by large factors
-with a documented quality knob (`-cc`, `-vpq`, `-vtn`). Run it between export
-and validation when bundle size matters; keep the unoptimized glTF as the
-editable source.
+**Wired** as `shamway generate mesh-optimize`, with one important correction
+to the obvious reading of its feature list.
+
+```bash
+shamway generate mesh-optimize thing.glb thing-lod1.glb --simplify 0.25
+shamway check-mesh thing-lod1.glb
+```
+
+gltfpack does three things: simplifies, reorders indices for vertex-cache
+locality, and quantizes vertex attributes. **Quantization does not shrink a
+shamway bundle.** It makes the *glTF* smaller by storing positions as 16-bit,
+but `bundle_writer.mesh` re-encodes every vertex into Unity's own stream as
+float32 regardless, so a quantized input yields the same-sized `Mesh`.
+Measured: a 7888-byte GLB packs to 4048 bytes on disk and changes the bundle
+not at all. `mesh-optimize` therefore passes `-noq` by default — keeping the
+precision the writer would have kept anyway — and `--keep-quantization` is
+there for anyone shipping the glTF itself.
+
+Simplification *does* transfer, because fewer triangles is fewer vertices in
+the stream, and it is how a mod derives LOD variants from one authored mesh.
+Measured on a 5120-triangle icosphere: `--simplify 0.25` gives 1280 triangles
+for 0.31% extent drift.
+
+That drift number is the gate. Simplification is lossy in **shape**, and a
+collapsed mesh still loads, still passes `check-mesh`, and is simply the wrong
+object — so the command compares extents before and after and refuses
+anything past `--max-drift` (2% by default), deleting the output. At
+`--simplify 0.02` the same sphere drifts 1.54% and is refused at a 0.5% limit.
 
 - Official repository: <https://github.com/zeux/meshoptimizer>
+- Install: `npm install -g gltfpack`
 
 ### AssetRipper — full vanilla reference extraction
 
@@ -359,7 +383,7 @@ integration. This table says which is which, so nobody has to guess — and so
 | **ImageMagick** | **wired** — rasterizes `.svg`, `.psd`, `.exr`, `.webp`, `.avif` into the texture lane, which Pillow cannot |
 | **FFmpeg** | **wired** — decodes `.ogg`, `.mp3`, `.flac`, `.aiff`, `.m4a`, `.opus`, `.wma` into the audio lane, which the stdlib cannot |
 | **bc7enc / Compressonator / ISPC / ctt** | **not wired** — BC7 only; none is packaged on Arch, Debian or Fedora, so each means a source build. BC1/BC3 are built in |
-| **gltfpack** | **not wired** — mesh quantization; useful when a mod's bundle is mesh-heavy, and nothing needs it before then |
+| **gltfpack** | **wired** — `generate mesh-optimize`, for simplification. Its quantization is a *false win here* and is turned off by default |
 | **Material Maker** | **not wired** — GUI-first; its CLI export is a mod-side authoring choice |
 | **AssetRipper / AssetStudio / UABE** | **reference only, by design** — read the game to learn from it, never to copy out of it |
 | **python-fsb5** | **wired** — `generate audio from-bank`, and the independent reader that grades the hand-written FSB5 banks |

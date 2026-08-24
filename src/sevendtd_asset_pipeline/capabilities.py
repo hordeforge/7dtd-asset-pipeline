@@ -140,6 +140,15 @@ REGISTRY: tuple[_Spec, ...] = (
         install="shamway script install-tools --with-authoring",
     ),
     _Spec(
+        name="gltfpack",
+        kind="command",
+        probe="gltfpack",
+        unlocks=("shamway generate mesh-optimize",),
+        purpose="simplify a mesh and reorder it for vertex-cache locality; it cuts "
+        "triangles, which reaches the bundle, not bytes on disk, which does not",
+        install="npm install -g gltfpack",
+    ),
+    _Spec(
         name="openscad",
         kind="command",
         probe="openscad",
@@ -179,8 +188,12 @@ REGISTRY: tuple[_Spec, ...] = (
         name="magick",
         kind="command",
         probe="magick",
-        unlocks=("a mod's own image generators",),
-        purpose="deterministic raster transforms and contact sheets",
+        unlocks=(
+            "shamway pack (.svg/.psd/.exr/.webp/.avif textures)",
+            "a mod's own image generators",
+        ),
+        purpose="rasterize the source formats Pillow cannot read — vector art above "
+        "all — plus deterministic raster transforms for a mod's own scripts",
         install="shamway script install-tools --with-authoring",
     ),
     _Spec(
@@ -205,8 +218,12 @@ REGISTRY: tuple[_Spec, ...] = (
         name="ffmpeg",
         kind="command",
         probe="ffmpeg",
-        unlocks=("a mod's own audio scripts",),
-        purpose="audio conversion, normalization, and filtering",
+        unlocks=(
+            "shamway pack (.ogg/.mp3/.flac/.aiff/.m4a/.opus/.wma clips)",
+            "a mod's own audio scripts",
+        ),
+        purpose="decode the compressed containers the standard library cannot open, "
+        "plus conversion, normalization and filtering for a mod's own scripts",
         install="shamway script install-tools --with-authoring",
     ),
 )

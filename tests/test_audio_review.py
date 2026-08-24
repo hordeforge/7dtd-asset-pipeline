@@ -489,7 +489,8 @@ class OperationSurfaceTests(unittest.TestCase):
         self.assertEqual(1, len(lines))
         self.assertTrue(lines[0].startswith("ERROR: "), lines)
 
-    def test_cli_completes_over_the_fake_provider_with_consent(self) -> None:
+    def _run_cli_review(self, *extra: str) -> tuple[int, str]:
+        """Run `review-audio` over the fake provider with consent, capture stdout."""
         stdout = io.StringIO()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -516,11 +517,14 @@ class OperationSurfaceTests(unittest.TestCase):
                         "--provider",
                         "fake",
                         "--allow-network",
-                        "--json",
+                        *extra,
                     ]
                 )
+        return code, stdout.getvalue()
+
+    def test_cli_completes_over_the_fake_provider_with_consent(self) -> None:
+        code, text = self._run_cli_review("--json")
         self.assertEqual(0, code)
-        text = stdout.getvalue()
         report = json.loads(text[text.index("{") :])
         self.assertEqual("fake", report["provider"])
         self.assertTrue(report["advisory_only"])
@@ -532,36 +536,9 @@ class OperationSurfaceTests(unittest.TestCase):
         format spec and crashed after a paid submission had already completed;
         this pins the whole non-JSON path, disclosure through advisory note.
         """
-        stdout = io.StringIO()
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            clip = write_clip(root / "falling.wav")
-            intent = root / "falling.review.json"
-            intent.write_text(json.dumps(VALID_INTENT), encoding="utf-8")
-            with (
-                mock.patch(
-                    "sevendtd_asset_pipeline.capabilities._availability",
-                    return_value={"model-audio-review": True},
-                ),
-                mock.patch(
-                    "sevendtd_asset_pipeline.cli.resolve_provider",
-                    return_value=FakeProvider(),
-                ),
-                contextlib.redirect_stdout(stdout),
-            ):
-                code = main(
-                    [
-                        "review-audio",
-                        str(clip),
-                        "--intent",
-                        str(intent),
-                        "--provider",
-                        "fake",
-                        "--allow-network",
-                    ]
-                )
+        code, text = self._run_cli_review()
         self.assertEqual(0, code)
-        lines = stdout.getvalue().splitlines()
+        lines = text.splitlines()
         self.assertIn("score: semantic_fit = unjudgeable", lines)
         self.assertTrue(any(line.startswith("summary: ") for line in lines))
         self.assertTrue(any(line.startswith("warning: ") for line in lines))

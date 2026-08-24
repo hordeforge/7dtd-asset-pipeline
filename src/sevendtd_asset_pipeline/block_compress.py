@@ -63,7 +63,7 @@ def _from_565(packed: Any, numpy: Any) -> Any:
     return out
 
 
-def _blocks(pixels: Any, numpy: Any) -> Any:
+def _blocks(pixels: Any) -> Any:
     """Reorder (H, W, 4) pixels into (N, 16, 4) blocks in BCn's texel order."""
     height, width = pixels.shape[0], pixels.shape[1]
     grid = pixels.reshape(height // BLOCK, BLOCK, width // BLOCK, BLOCK, 4)
@@ -132,7 +132,7 @@ def compress(pixels: Any, alpha: bool) -> tuple[bytes, int]:
             "multiple of 4. Resize the source, or leave this texture uncompressed."
         )
 
-    blocks = _blocks(pixels, numpy)
+    blocks = _blocks(pixels)
     c0, c1, colour_indices = _colour_blocks(blocks, numpy)
     packed_colour = _pack_indices(colour_indices, 2, numpy)
 

@@ -60,6 +60,10 @@ TOPICS: dict[str, tuple[str, str]] = {
         "authoring/audio.md",
         "sound synthesis, sounds.xml, and why a loaded clip can be silent",
     ),
+    "model-audio-review": (
+        "prds/0001-contextual-model-audio-review.md",
+        "the unbuilt contextual model-audition and advisory-review contract",
+    ),
     "vfx": ("authoring/vfx.md", "particle budgets, LOD tiers, and two silent material failures"),
     "environment-effects": (
         "authoring/environment-effects.md",

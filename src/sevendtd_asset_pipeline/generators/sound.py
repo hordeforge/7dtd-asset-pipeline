@@ -10,6 +10,7 @@ byte-for-byte.
 
     shamway generate sound blast   art/audio/blast-near.wav --seed 7
     shamway generate sound blast   art/audio/blast-far.wav  --seed 7 --distant
+    shamway generate sound nuclear-blast art/audio/nuclear-near.wav --seed 7
     shamway generate sound tick    art/audio/fuse-tick.wav
     shamway generate sound whoosh  art/audio/throw.wav --seconds 1.4
     shamway generate sound bomb-whistle art/audio/fall.wav --seconds 4
@@ -208,13 +209,12 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
         ]
         return normalize(remove_dc(fade_tail(mix((1.0, rumble), (0.35, thud)), 2.5)), -2.0)
 
-    crack = [
-        value * shape for value, shape in zip(white, envelope(times, 0.002, 0.02), strict=True)
-    ]
-    rip = [
-        value * shape
-        for value, shape in zip(lowpass(white, 1800.0), envelope(times, 0.01, 0.18), strict=True)
-    ]
+    shock_noise = lowpass(white, 4200.0)
+    shock = []
+    for time, grit in zip(times, shock_noise, strict=True):
+        positive = math.exp(-time / 0.035)
+        negative = 0.55 * math.exp(-(time - 0.05) / 0.065) if time >= 0.05 else 0.0
+        shock.append(math.tanh((positive - negative) * 2.0 + grit * math.exp(-time / 0.11) * 0.5))
 
     # Pressure wave: an exponential sweep from 70 Hz to 22 Hz over three
     # seconds. Below about 25 Hz it is felt more than heard, which is the point.
@@ -242,19 +242,87 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
             rumble, envelope(times, 0.12, duration * 0.33, power=0.9), times, strict=True
         )
     ]
-    band = lowpass(highpass(white, 900.0), 5000.0)
-    gate = lowpass([1.0 if generator.random() < 0.08 else 0.0 for _ in times], 60.0)
-    debris = [
-        value * shape * open_amount * 4.0 * 0.18
-        for value, shape, open_amount in zip(band, envelope(times, 0.3, 1.6), gate, strict=True)
+    body_band = lowpass(highpass(white, 45.0), 850.0, passes=2)
+    body = [
+        value * min(time / 0.02, 1.0) * math.exp(-time / 1.5)
+        for value, time in zip(body_band, times, strict=True)
     ]
+    reflected = [0.0] * len(times)
+    offset = int(0.28 * RATE)
+    for index in range(offset, len(times)):
+        age = (index - offset) / RATE
+        reflected[index] = body_band[index - offset] * math.exp(-age / 0.22)
     return normalize(
         remove_dc(
             fade_tail(
-                mix((1.0, crack), (0.55, rip), (0.9, sweep), (0.95, rumble), (1.0, debris)), 1.5
+                [
+                    math.tanh(value * 1.35)
+                    for value in mix(
+                        (1.45, shock),
+                        (0.9, sweep),
+                        (0.85, body),
+                        (0.5, reflected),
+                        (0.8, rumble),
+                    )
+                ],
+                1.5,
             )
         )
     )
+
+
+def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
+    """A near nuclear detonation, not a peak-boosted generic impact.
+
+    A broad pressure wall is followed by separated terrain returns and a dense
+    low-mid coda. Infrasonic identity is shifted into the audible low band so
+    the result survives ordinary speakers and a game's positional mixer.
+    """
+    times = seconds(duration)
+    white = noise(len(times), generator)
+
+    tearing = lowpass(white, 6500.0)
+    shock = []
+    for time, grit in zip(times, tearing, strict=True):
+        positive = math.exp(-time / 0.075)
+        negative_time = max(time - 0.085, 0.0)
+        negative = 0.72 * math.exp(-negative_time / 0.12) if time >= 0.085 else 0.0
+        shock.append(math.tanh((positive - negative) * 2.8 + grit * math.exp(-time / 0.22) * 0.9))
+
+    body = []
+    phase_a = phase_b = phase_c = 0.0
+    for time in times:
+        phase_a += 2 * math.pi * (92.0 - 48.0 * min(time / 3.8, 1.0)) / RATE
+        phase_b += 2 * math.pi * (61.0 - 24.0 * min(time / 5.0, 1.0)) / RATE
+        phase_c += 2 * math.pi * 113.0 / RATE
+        shape = math.exp(-time / 3.2) * min(time / 0.025, 1.0)
+        body.append(
+            shape
+            * math.tanh(
+                1.35 * math.sin(phase_a)
+                + 0.9 * math.sin(phase_b + 0.4)
+                + 0.32 * math.sin(phase_c + 1.1)
+            )
+        )
+
+    return_noise = lowpass(white, 900.0)
+    returns = [0.0] * len(times)
+    for delay, gain, decay in ((0.34, 0.78, 0.16), (0.82, 0.58, 0.24), (1.47, 0.38, 0.34)):
+        offset = int(delay * RATE)
+        for index in range(offset, len(times)):
+            age = (index - offset) / RATE
+            returns[index] += return_noise[index - offset] * math.exp(-age / decay) * gain
+
+    low_coda = lowpass(white, 240.0, passes=3)
+    mid_coda = lowpass(highpass(white, 180.0), 1600.0, passes=2)
+    coda = [
+        (1.15 * low + 0.42 * mid) * min(time / 0.18, 1.0) * math.exp(-time / (duration * 0.31))
+        for low, mid, time in zip(low_coda, mid_coda, times, strict=True)
+    ]
+
+    mixed = mix((1.6, shock), (1.25, body), (0.85, returns), (1.0, coda))
+    saturated = [math.tanh(value * 1.65) for value in mixed]
+    return normalize(remove_dc(fade_tail(saturated, 2.0)), -0.2)
 
 
 def tick(generator: random.Random) -> list[float]:
@@ -526,6 +594,11 @@ def main(argv: list[str] | None = None) -> int:
         "--distant", action="store_true", help="the same event heard kilometres away"
     )
 
+    nuclear_parser = voice(
+        "nuclear-blast", "near nuclear detonation: pressure wall, heavy returns, long coda"
+    )
+    nuclear_parser.add_argument("--seconds", type=float, default=16.0)
+
     tick_parser = voice("tick", "one dry mechanical click (an item's SoundTick)")
     tick_parser.add_argument("--repeats", type=int, default=1, help="clicks in the clip")
     tick_parser.add_argument("--interval", type=float, default=1.0, help="seconds between clicks")
@@ -583,6 +656,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "blast":
         duration = args.seconds or (15.0 if args.distant else 11.0)
         samples = blast(duration, generator, args.distant)
+    elif args.command == "nuclear-blast":
+        if args.seconds < 8.0:
+            raise SystemExit("ERROR: a nuclear-blast needs at least 8 seconds for its coda")
+        samples = nuclear_blast(args.seconds, generator)
     elif args.command == "tick":
         one = tick(generator)
         if args.repeats > 1:

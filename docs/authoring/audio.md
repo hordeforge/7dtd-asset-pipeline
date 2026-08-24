@@ -120,11 +120,15 @@ say. Two ways out, and the choice is a real design decision:
   `maxDistance`, and name it in the sound group. `GeneratedAsset.AudioSourcePrefab(...)`
   builds one with 3D spatial blend and logarithmic rolloff.
 - **Play the sound near the listener, in the direction of the event, and apply
-  the attenuation yourself.** The source project chose this: the hook plays the
-  blast 40 m from the listener toward the detonation and scales the volume by
-  real distance. The direction stays honest, vanilla mixer routing and the
-  player's volume options still apply, and no second prefab has to be
-  maintained. It needs a C# hook, which the first option does not.
+  the attenuation yourself.** Keep the virtual source close enough that the
+  prefab does not impose a second, accidental attenuation curve; 40 m was
+  human-rejected as far too faint in the source project, while 8 m preserves
+  useful direction. Scale volume by real event distance. Pass the absolute
+  world coordinate to `Audio.Manager.Play`: the installed V3.1 method subtracts
+  `Origin.position` internally, so pre-rebasing it places the source wrongly.
+  The direction stays honest, vanilla mixer routing and player volume options
+  still apply, and no second prefab has to be maintained. It needs a C# hook,
+  which the first option does not.
 
 **2. `DistantFadeStart` defaults to −1, meaning never.** `Audio.Manager.Play`
 switches to a node's `DistantClip` only past `DistantFadeStart` metres, and
@@ -193,6 +197,26 @@ shamway generate sound blast assets-src/audio/blast-near.wav --seed 7
 shamway generate sound blast assets-src/audio/blast-far.wav  --seed 7 --distant
 ```
 
+Peak-normalizing `blast` does not turn its short generic-impact silhouette into
+a nuclear detonation. For a near nuclear layer, use the dedicated voice:
+
+```bash
+shamway generate sound nuclear-blast assets-src/audio/nuclear-near.wav --seed 7
+```
+
+It uses a broad saturated pressure wall instead of a millisecond crack, moves
+the pressure body into the 35–115 Hz band that ordinary speakers reproduce,
+adds separated terrain returns, and sustains a dense low-mid coda. It is a
+game-audio rendering, not a calibrated scientific pressure trace; human
+listening in the target mixer remains the acceptance gate.
+
+The near `blast` voice itself no longer treats sparse high-band debris as a
+main layer. A target-game reviewer rejected that output as “just crackling,”
+not a bomb or blast. Its replacement uses a wider bipolar pressure hit, a
+dense 45–850 Hz body, one reflected report, soft saturation, and the rolling
+rumble. `nuclear-blast` remains distinct through its broader pressure wall,
+multiple heavy returns, and longer coda.
+
 If the mod plays the distant clip from code, delay it by `distance / 343`
 seconds. A nuclear blast heard instantly two kilometres away reads as a bug
 even to a player who could not say why.
@@ -216,8 +240,9 @@ on V 3.1.0 b14:
   position, string group, int entityId = -1, bool, float volumeScale)` keeps
   the game's own AudioSource prefab, mixer routing, and the player's volume
   options; nothing a mod writes should construct an `AudioSource`. Positions
-  are world coordinates minus `Origin.position` (7DTD re-bases its floating
-  origin), as the stock code does. When the clip is delayed, recompute the
+  are absolute world coordinates; the installed V3.1 manager subtracts
+  `Origin.position` internally. Pre-rebasing applies the floating origin twice.
+  When the clip is delayed, recompute the
   direction at arrival, not at firing: the player moves during a six-second
   flight.
 - **Local, non-positional cues.** `Audio.Manager.PlayInsidePlayerHead(group)`
@@ -236,7 +261,8 @@ request:
 
 | Voice | What it is | Typical use |
 |---|---|---|
-| `blast` | crack + sub-bass sweep + rolling rumble + debris, or the distant swell | explosions, large impacts |
+| `blast` | pressure hit + audible low-mid body + reflected report + rolling rumble, or the distant swell | bombs, explosions, large impacts |
+| `nuclear-blast` | broad pressure wall + audible low-frequency body + separated terrain returns + long dense coda | a near nuclear detonation that must not read as a generic firework |
 | `tick` | one dry escapement click, under 90 ms | an item's `SoundTick` countdown |
 | `whoosh` | filtered noise sweeping up and back down | a thrown object, a passing shell |
 | `bomb-whistle` | phase-continuous aerodynamic tone descending gradually over turbulent air | a bomb falling toward impact |

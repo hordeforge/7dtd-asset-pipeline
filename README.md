@@ -151,6 +151,7 @@ Generate the asset, then gate its lane before it goes anywhere:
 
 ```bash
 shamway generate sound blast assets-src/audio/blast.wav --seed 7
+shamway generate sound nuclear-blast assets-src/audio/nuclear.wav --seed 7
 shamway generate sound bomb-whistle assets-src/audio/falling.wav --seed 7 --seconds 4
 shamway generate mesh assets-src/bundle/myModThing.glb --shape cylinder --size 0.19 0.19 0.42
 shamway generate cutout key assets-src/icons/thing-src.png UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim

@@ -604,6 +604,46 @@ no class 142. The pipeline rejected it on the log gate, and the previously
 staged bundle was left byte-identical. Restoring the manifest produced a
 class-142 bundle that passed every gate.
 
+## Nuclear-blast voice provenance (2026-08-24)
+
+The dedicated `nuclear-blast` voice was added after a target-game human listen
+rejected the generic `blast` result as both too faint and not recognisable as a
+nuclear detonation. Its structural choices are grounded in two kinds of
+evidence rather than in a renamed oscillator:
+
+- Lawrence Livermore National Laboratory's restored and declassified US
+  atmospheric-test film archive documents the relevant event class and the
+  large, evolving atmospheric/terrain presentation:
+  <https://www.llnl.gov/article/43956/llnl-releases-newly-declassified-test-videos>.
+- Arrowsmith and Bowman, *Explosion yield estimation from pressure wave
+  template matching*, JASA 141 (2017), uses full measured pressure waveforms
+  rather than reducing an explosion to a peak value; the article is US
+  Government work and available as PMC5459613:
+  <https://pmc.ncbi.nlm.nih.gov/articles/PMC5459613/>. That supports treating
+  the pressure front and following waveform/coda as the identity, rather than
+  assuming peak normalization can turn a generic impact into a nuclear event.
+
+The generated clip deliberately transposes infrasonic identity into audible
+low frequencies for consumer speakers. It is therefore a designed game asset,
+not a scientific reconstruction. `check-sound` proves its file properties;
+only a human listen through the target game's mixer can accept its character.
+
+The same reviewer identified the pre-existing generic `blast` voice as a known
+defect: it did not read as a bomb or blast and sounded like crackling. Its near
+variant therefore replaces sparse high-band debris and a millisecond-scale
+crack with a wider pressure hit, dense audible body, reflected report, and
+rolling tail. This remains human-verdict provenance, not a scientific claim;
+the test suite locks reproducibility, duration, and file gates, while each
+consumer still owes listening in its target mixer.
+
+The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
+`ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
+`Origin.position` internally. A caller must pass one absolute world coordinate;
+pre-rebasing it applies the floating origin twice. A source-project listening
+run also rejected a 40 m virtual source as too faint through the stock explosion
+prefab, which is why the authoring guide now says to validate a much closer
+virtual source instead of presenting 40 m as a safe default.
+
 ## Module resolution is not module declaration
 
 Testing the above turned up a fact worth recording, because it changes what

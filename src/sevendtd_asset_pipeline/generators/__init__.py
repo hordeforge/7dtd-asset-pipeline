@@ -39,7 +39,7 @@ class GeneratorInfo(TypedDict):
 GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "sound": (
         "sound",
-        "create clips: designed voices (blast, tick, whoosh, bomb-whistle, hum, beep) and sounds.xml",
+        "create clips: designed voices (blast, nuclear-blast, tick, whoosh, bomb-whistle, hum, beep) and sounds.xml",
         (),
     ),
     "audio": (

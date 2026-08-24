@@ -285,6 +285,16 @@ design, its shader lane, and what is still unbuilt inside it.
 - **Never launch a client over someone else's.** `shamway client launch`
   refuses while `7DaysToDie.exe` runs; do not work around that. One machine
   has one client, and a reused process proves nothing about a rebuild.
+- **Never write into the client's `Mods/` folder outside the lock**, and never
+  delete anything there you did not put there. It is shared with every other
+  session on the host: `7dtd-playtest` and `7dtd-fastconnect` live there and a
+  live run is reading them. `shamway client deploy` holds the lock across its
+  write; a raw `cp` or `rm -rf` does not, so put one behind
+  `shamway client hold -- <command>`. This has a scar: a session cleared both
+  harness mods out of that folder while another session's client was mid-run,
+  to solve a problem it had assumed and never checked — the mods are inert
+  without the orchestrator's arguments, so there was nothing to solve. Deleting
+  shared state is never the cheap option.
 - **Never automate, request, print, log, or commit Unity credentials or
   license data.** Sign-in and activation are user-owned actions.
   `scripts/install-unity-editor.sh` deliberately stops and waits for a human.
@@ -354,7 +364,8 @@ Machine-readable output for agents and CI:
 | `shamway script NAME` | the host scripts (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized), served from the package |
 | `shamway script playtest-synthesized` | the editorless writer's own live-client regression: builds a throwaway modlet and asserts the game loaded its prefab, mesh, material and texture |
 | `shamway client where --json` | the client's per-user `Mods/` and `logs/` paths |
-| `shamway client deploy MOD` | copy the deployable modlet there (writes outside the install only) |
+| `shamway client deploy MOD` | copy the deployable modlet there, holding the shared lock across the write (writes outside the install only) |
+| `shamway client hold -- CMD` | run any other `Mods/` write behind the same lock, so a raw `cp` cannot land in a live session's run |
 | `shamway client launch --mod-name NAME` | a genuinely fresh client, then its log classified; refuses a running one |
 | `shamway client log --json` | classify the newest client log: positive load lines and silent-failure signatures |
 | `shamway client capture LABEL` | record the frame a visual sign-off was made on, and its observable |

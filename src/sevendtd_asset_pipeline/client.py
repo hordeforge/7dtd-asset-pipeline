@@ -1065,6 +1065,20 @@ def main(argv: list[str] | None = None) -> int:
     launch.add_argument("--json", action="store_true")
     launch.add_argument("extra", nargs="*", help="additional client arguments")
 
+    hold = sub.add_parser(
+        "hold",
+        help="run a command while holding the shared client lock, for a raw Mods/ write",
+    )
+    hold.add_argument(
+        "--action",
+        default="write into the shared Mods folder",
+        help="what the refusal message says this run was trying to do",
+    )
+    # Not `command`: the subparser's own dest is `command`, and a positional of
+    # the same name overwrites it, so dispatch falls through to "unknown
+    # command" and the guard silently never runs.
+    hold.add_argument("argv", nargs="+", help="the command to run under the lock")
+
     log = sub.add_parser("log", help="find the newest client log and classify it")
     log.add_argument("--path", type=Path, default=None, help="a specific log instead of the newest")
     log.add_argument("--mod-name", default=None)
@@ -1155,6 +1169,16 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
                 f"AUDIO {'muted at the OS layer (not a listening run)' if run.muted else 'unmuted'}"
             )
         return 0 if run.log.ok else 1
+    if args.command == "hold":
+        # For writers this package does not own: a shell script copying the
+        # harness mods in, a one-off `cp` a person is about to run. Those
+        # bypass `deploy`'s guard entirely and land in whatever run currently
+        # holds the client, which is how a live session's Mods folder gets
+        # rewritten underneath it. Running them here puts them behind the same
+        # flock every other writer serializes through.
+        with hold_for_write(args.action):
+            completed = subprocess.run(args.argv, check=False)
+        return completed.returncode
     if args.command == "log":
         path = args.path or latest_client_log(args.log_dir or client_log_dir(game_dir))
         report = scan_log(path, args.mod_name)

@@ -184,12 +184,20 @@ echo
 echo "DEPLOY (client Proton Mods)"
 mkdir -p "$MODS_DIR"
 (cd "$MOD_ROOT" && "$SHAMWAY" client deploy .)
+# `client deploy` holds the shared lock across its write. These two do not go
+# through it — they are plain directory copies — so without the same guard they
+# rewrite the Mods folder of whatever run currently holds the client. That has
+# happened: a session cleared 7dtd-playtest and 7dtd-fastconnect out of this
+# folder while another session's client was live, and the only reason it was
+# noticed is that a human saw it. `client hold` puts the copies behind the same
+# flock every other writer serializes through.
 for pair in "$PLAYTEST_ROOT/dist/7dtd-playtest:7dtd-playtest" "$CONNECT_ROOT/dist/7dtd-fastconnect:7dtd-fastconnect"; do
 	src="${pair%%:*}"
 	name="${pair##*:}"
 	[[ -d "$src" ]] || die "missing deploy source: $src (build it in its own checkout)"
-	rm -rf "${MODS_DIR:?}/$name"
-	cp -a "$src" "$MODS_DIR/$name"
+	# shellcheck disable=SC2016  # $0/$1/$2 are the inner shell's positionals, by design
+	"$SHAMWAY" client hold --action "replace $name in the shared Mods folder" -- \
+		bash -c 'rm -rf "${2:?}/$1" && cp -a "$0" "$2/$1"' "$src" "$name" "$MODS_DIR"
 	echo "  deployed $name"
 done
 echo

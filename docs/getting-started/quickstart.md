@@ -10,7 +10,9 @@ download is the only large one.
 ## 0. What you need before starting
 
 - Linux, macOS, or Windows. The scripted install path is Linux; the CLI itself
-  is portable.
+  is portable. Linux is what CI gates on — the macOS job runs but does not
+  block, because three of its failures are the runner's filesystem rather than
+  the CLI (case-insensitive names, and `/var` resolving to `/private/var`).
 - An installed 7 Days to Die client. It is the authority for which Unity
   revision your bundle must use, and it is only ever read.
 - A Unity account you can sign in to. Unity Personal is sufficient.

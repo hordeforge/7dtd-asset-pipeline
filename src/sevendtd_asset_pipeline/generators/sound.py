@@ -324,6 +324,15 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
         boom.append(boom_shape * (math.sin(boom_phase) + 0.42 * math.sin(2.0 * boom_phase + 0.25)))
         pressure_crack.append(grit * min(time / 0.0015, 1.0) * math.exp(-time / 0.055))
 
+    shatter_band = lowpass(highpass(white, 650.0), 7800.0, passes=2)
+    shatter = [
+        value
+        * min(time / 0.004, 1.0)
+        * math.exp(-time / 0.42)
+        * (0.72 + 0.28 * math.sin(2.0 * math.pi * (31.0 * time + 7.0 * time * time)))
+        for value, time in zip(shatter_band, times, strict=True)
+    ]
+
     body = []
     phase_a = phase_b = phase_c = 0.0
     for time in times:
@@ -359,6 +368,7 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
         (0.55, shock),
         (2.1, boom),
         (0.28, pressure_crack),
+        (0.72, shatter),
         (1.25, body),
         (0.85, returns),
         (1.0, coda),

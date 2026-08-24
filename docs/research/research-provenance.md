@@ -663,6 +663,13 @@ game mixer. The follow-up makes the boom an independent 2.4-second 108→44 Hz
 pressure wave, adds a second harmonic for small-speaker audibility, extends its
 decay to 1.15 seconds, and substantially lowers the crack in the mix.
 
+Target-game listening judged that follow-up somewhat better, specifically
+validating the sustained low layer, but found it lacked the mid/high shattering
+character needed for the blast front. The next revision retains the low design
+unchanged and adds a dense 650–7,800 Hz tearing-noise burst with a 0.42-second
+decay and continuous fast amplitude variation. It is deliberately a coherent
+pressure-front texture rather than the earlier sparse debris crackling.
+
 The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
 `ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
 `Origin.position` internally. A caller must pass one absolute world coordinate;

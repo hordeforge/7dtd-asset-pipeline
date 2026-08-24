@@ -1193,3 +1193,54 @@ not called finished:
 A live client launched with `-force-vulkan` loads the bundle with **no shader
 errors at all**, which rules out the record being rejected on sight. Whether it
 *draws* is the open question, and only a look answers it.
+## The Vulkan record's 32-byte field: what it is not
+
+**Measured 2026-08-24.** The 32 bytes at words 20..27 of a Vulkan code record
+are the last undecoded piece, and these are the candidates ruled out, so nobody
+re-runs them:
+
+- **not a digest of the modules.** MD5, SHA-1, SHA-256, BLAKE2s and BLAKE2b of
+  section A, of section B, of both concatenated, and of the whole payload from
+  offset 176 all fail to match either half.
+- **not a plain `Hash128`.** Unity's `Hash128` is SpookyHash V2 - confirmed in
+  Unity's own [`SpookyHash.cs`](https://github.com/Unity-Technologies/UnityCsReference/blob/master/Runtime/Export/Hashing/SpookyHash.cs)
+  - and the reference SpookyHash V2 with zero seeds over the same five inputs
+  matches neither half. If it is SpookyHash it is seeded, or taken over
+  something other than the stored bytes.
+- **not constant.** It differs per shader, so it is content-derived rather than
+  a magic number that could simply be copied.
+
+What is known about its shape: it is **two 16-byte halves**, which is the size
+of a `Hash128`, and word 19 immediately before it is `1` in every record
+examined - consistent with a count of the entries that follow.
+
+**What this costs.** Written as zero, a live client on Vulkan loads the bundle
+with no shader errors and then draws the prop in Unity's **magenta error
+shader**: the runtime finds the sub-program and refuses it. Swapping which
+section carries which stage does not change that, so the section order is not
+the cause and this field is the remaining suspect.
+
+**That experiment has now run, and the wiring is correct.** A *whole stock
+Vulkan blob* - `Legacy Shaders/Transparent/Cutout/VertexLit`'s - was
+transplanted into this writer's shader, with the sub-programs' `m_BlobIndex`
+pointed at its type-25 record, and launched under `-force-vulkan`:
+
+> the block's build preview shows **the correct texture**, and the block
+> collides. It is no longer magenta.
+
+Magenta is Unity substituting its error shader for one it refused; a real
+texture is a sub-program that was **accepted and compiled**. So this writer's
+`PlatformBlob` for platform 18 - its indices, its `stageCounts`, its place in
+the `platforms` list - is right, and what the runtime refuses is the **content**
+of the record this writer builds. The 32-byte field is the remaining suspect,
+and the section order is already eliminated.
+
+The prop is invisible once placed in that transplant, which is expected and is
+not a second finding: it is another shader's program driven by this mod's mesh
+and material, so its vertex inputs and constant buffers do not match what is
+bound. It draws where that happens to work - the preview - and not where it
+does not.
+
+Collision is unaffected on every graphics API, including Vulkan, which is
+consistent with the collider being a prefab component rather than anything the
+shader touches.

@@ -1044,3 +1044,51 @@ like a gap and is not one.
 
 This writer emits `4` and `15`. **`18` is missing**, so a client running Vulkan
 has no sub-program at all to create.
+
+
+## The Vulkan sub-program record (platform 18), decoded
+
+**Measured 2026-08-24** with UnityPy + `lz4.block` over the Vulkan blobs of
+`Legacy Shaders/Transparent/Cutout/VertexLit`, `Standard`,
+`Game/Autodesk XFade` and `Game/EntityTintMaskSSS` in the installed game.
+This writer does **not** emit platform 18; this is the format it would have to
+produce.
+
+A Vulkan **code** record is program type **25** (not the `GL_CORE_32`/`DX11*`
+values), and unlike d3d11 and GLCore its payload is a container of its own:
+
+| word | value | meaning |
+|---|---|---|
+| 0 | `0x02000060` / `0x02000061` | version and flags |
+| 1 | varies | size of section **A** |
+| 2 | varies | size of section **B** |
+| 3 | `176` in all four | size of section A's header |
+| 4 | = word1 − 176 | section A's payload |
+| 5 | `0` | not decoded |
+
+`word1 + word2 == payload length` **exactly** in all four records:
+
+```text
+Standard        2940 = 1199 + 1741      XFade      3449 = 1708 + 1741
+EntityTintMask  3758 =  922 + 2836      VertexLit  4631 =  703 + 3928
+```
+
+Both sections hold **SMOL-V**, Unity's compressed SPIR-V: at payload offset
+`word1`, and again at offset 176 inside section A, the first four bytes are
+`4c 4f 4d 53` - the SMOL-V magic `0x534D4F4C`. Two modules per record, which is
+why `stageCounts` is 1 for Vulkan: one record carries both stages, where d3d11
+uses two records and reports 2.
+
+**What emitting this would take**, so the next session does not re-scope it:
+
+1. SPIR-V from the HLSL this writer already compiles. Available today:
+   `vkd3d-compiler -x dxbc-tpf -b spirv-binary` accepts this writer's own DXBC,
+   verified on 2026-08-24.
+2. A **SMOL-V encoder**. The format is open source -
+   [aras-p/smol-v](https://github.com/aras-p/smol-v), a single C++ file - so
+   this is a port or a vendor, not a reverse-engineering job. Unity's own
+   issue tracker documents that Vulkan shader data is SMOL-V.
+3. The 176-byte section-A header, which is the one piece with no prior art and
+   would be decoded the way this table was.
+
+None of that is blocked; it is unbuilt, and the route is the three steps above.

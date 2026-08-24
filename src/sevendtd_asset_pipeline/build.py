@@ -168,7 +168,7 @@ def run_build(config: PipelineConfig, probe: bool = False) -> Path:
     ]
     if probe:
         command.append("-sapProbe")
-    result = run_unity(command)
+    result = run_unity(command, log=log)
     if result.returncode != 0:
         raise PipelineError(f"Unity exited {result.returncode}; inspect {log}")
     built = output / built_name

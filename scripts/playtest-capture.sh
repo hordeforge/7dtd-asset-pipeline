@@ -60,7 +60,9 @@ if [[ -z "$CASE" ]]; then
     exit 2
 fi
 
-logs="$(shamway client where --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["log_dir"])')"
+where="$(shamway client where --json)"
+logs="$(printf '%s' "$where" | python3 -c 'import json,sys; print(json.load(sys.stdin)["log_dir"])')"
+shots_dir="$(printf '%s' "$where" | python3 -c 'import json,sys; print(json.load(sys.stdin)["user_data"])')/playtest-shots"
 started="$(date +%s)"
 seen=""
 
@@ -90,13 +92,15 @@ while true; do
             [[ "$case_id" == "$CASE" ]] || continue
             case " $seen " in *" $case_id "*) continue ;; esac
             seen="$seen $case_id"
-            # The game wrote it; find it and keep it beside the mod.
-            shot="$(grep -oE "\[7dtd-playtest\] shot ${case_id} x[0-9]+ -> .*" "$log" |
-                tail -1 | sed 's/.*-> //')"
-            if [[ -z "$shot" ]]; then
-                echo "playtest-capture.sh: $case_id staged but logged no shot path" >&2
+            # The game wrote it. It logs a *Windows* path under Proton
+            # ("C:\users\steamuser\..."), which does not exist on this side of
+            # the prefix, so the directory is derived from the client's own
+            # user-data path and the file named by the case.
+            if ! grep -q "\[7dtd-playtest\] shot ${case_id} " "$log"; then
+                echo "playtest-capture.sh: $case_id staged but logged no shot" >&2
                 continue
             fi
+            shot="$shots_dir/${case_id}.png"
             # Unity writes at end of frame, so the path is logged before the
             # file exists. Wait briefly rather than reporting a missing frame.
             for _ in $(seq 1 20); do

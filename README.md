@@ -43,10 +43,12 @@ written here rather than by an editor:
 shamway init "$MOD" --bundle-source synthesized --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 ```
 
-Put source files in the `assets-src/bundle/` folder that created — a `.png` is
-a texture, a `.wav` a clip, a `.glb`/`.obj`/`.stl` a mesh, a `.json`/`.txt`/`.csv`
-a text asset, each named by the stem the game's XML will ask for. Then build
-the bundle and validate the whole mod against it:
+Put source files in the `assets-src/bundle/` folder that created, each named
+by the stem the game's XML will ask for: images become textures, clips become
+`AudioClip`s, `.glb`/`.obj`/`.stl` become meshes, `.json`/`.txt`/`.csv` become
+text assets. Compressed and vector formats work too — `.ogg` and `.mp3` via
+FFmpeg, `.svg` via ImageMagick — when those are installed. Then build the
+bundle and validate the whole mod against it:
 
 ```bash
 cd "$MOD"
@@ -69,17 +71,21 @@ which of four cases a mod is in, and `shamway init --bundle-source` sets it:
 | `external` | an editor on another machine; gated and staged by `shamway stage` | no |
 | `unity` (default) | a local editor: `shamway build` starts it | yes |
 
-The writer covers **`Texture2D`, `AudioClip`, `TextAsset` and `Mesh`** — a
-mesh being any file [trimesh](docs/authoring/authoring-tools.md) reads, so
-Blender's glTF, OpenSCAD's STL and `shamway generate mesh` all reach a bundle
-with no editor between them and it.
+The writer covers **`Texture2D`, `AudioClip`, `TextAsset`, `Mesh`**, and the
+**prefab** group (`GameObject` + `Transform` + `MeshFilter` + `MeshRenderer`)
+that 7DTD's `Meshfile` and block `Model` actually load. A mesh is any file
+[trimesh](docs/authoring/authoring-tools.md) reads, so Blender's glTF,
+OpenSCAD's STL and `shamway generate mesh` all reach a bundle with no editor
+between them and it.
 
-It stops at **prefabs, materials and shaders** — for now. That is a to-do with
-a known route, not a property of the engine: a mod bundle must carry its own
-shader (borrowing one is measured closed both ways), but compiling one offline
-is an open road, since `vkd3d-compiler` emits the SM4/SM5 DXBC that d3d11
+It stops at **materials and shaders** — for now. That is a to-do with a known
+route, not a property of the engine: a mod bundle must carry its own shader
+(borrowing one is measured closed both ways), but compiling one offline is an
+open road, since `vkd3d-compiler` emits the SM4/SM5 DXBC that d3d11
 sub-programs carry and the blob container has been decoded out of the game's
-own bundle. Tracked in [Improvements](docs/status/improvements.md);
+own bundle. Until that lands a synthesized prefab has no material, so it
+loads and draws nothing — which is why `mesh_prefab` is not yet wired into the
+source folder. Tracked in [Improvements](docs/status/improvements.md);
 [Running without Unity](docs/bundles/no-unity.md) is the full page.
 
 Where an editor *does* exist, it is more useful as a checker than as a
@@ -248,9 +254,12 @@ the rules there rather than here.
   Windows-target, LZ4, strict, forced-rebuild;
 - an **editorless writer** (`bundle_writer.py`): UnityFS container,
   SerializedFile v22 with the engine's own per-revision type trees, the
-  class-142 `AssetBundle` object, `Texture2D`, `TextAsset`, `AudioClip` as
-  PCM16 in a hand-written FSB5 bank, and `Mesh` from any interchange file —
-  every structure read out of a real artifact first;
+  class-142 `AssetBundle` object, `Texture2D` (RGBA32 or BC1/BC3),
+  `TextAsset`, `AudioClip` as PCM16 in a hand-written FSB5 bank, `Mesh` from
+  any interchange file, and a `GameObject` prefab with its `Transform`,
+  `MeshFilter` and `MeshRenderer` — every structure read out of a real
+  artifact first, and cross-object `PPtr`s resolved by name so a dangling
+  reference is refused rather than written as null;
 - an optional Unity four ways — local editor, synthesized here, built
   elsewhere and staged, or no bundle at all — with the gates travelling with
   the artifact in every case;
@@ -333,7 +342,7 @@ For a user-wide command with every optional lane instead of a checkout:
 `uv tool install '.[all]'` from a clone, or
 `uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'`.
 
-Only for a bundle containing a prefab, a material or a shader, and only on the
+Only for a bundle containing a material or a shader, and only on the
 machine that builds it (see [Running without Unity](docs/bundles/no-unity.md)):
 
 - a legal, activated Unity Editor matching the installed game's own bundle
@@ -360,7 +369,7 @@ consuming mod reads them with no checkout of this repository, and
 **Bundles**
 
 - [Running without Unity](docs/bundles/no-unity.md) — synthesizing here, building elsewhere, shipping none
-- [ADR 0001: synthesize bundles without an editor](docs/adrs/0001-synthesize-bundles-without-an-editor.md) — the format research, what shipped, and the shader wall
+- [ADR 0001: synthesize bundles without an editor](docs/adrs/0001-synthesize-bundles-without-an-editor.md) — the format research, what shipped, and what is still unbuilt
 - [Bundle generation](docs/bundles/bundle-generation.md) — the complete editor build path
 - [Validation](docs/validation.md) — each gate and its proof boundary
 - [Game integration](docs/game-integration.md) — XML URIs, icons, audio, clients
@@ -398,10 +407,10 @@ See [examples/ExampleMod](examples/ExampleMod) for a minimal consumer layout.
 ## Scope
 
 This project builds, synthesizes and validates mod-owned asset bundles. It
-does not compile shaders, serialize prefabs or materials, ship copyrighted
-game assets, edit the game install, automate Unity account credentials,
-guarantee visual quality, or claim that an offline parse proves runtime
-compatibility.
+does not compile shaders or serialize materials — a gap with a known route,
+not a claim about what is possible — and it does not ship copyrighted game
+assets, edit the game install, automate Unity account credentials, guarantee
+visual quality, or claim that an offline parse proves runtime compatibility.
 
 ## License
 

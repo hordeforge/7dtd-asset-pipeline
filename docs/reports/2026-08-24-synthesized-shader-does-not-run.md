@@ -148,6 +148,54 @@ the same cube at the same zoom, so any opaque shader covers the same fraction.
 The independent number is `DRAWNOW`'s 25.0%, which no error shader produced in
 any run.
 
+### Eliminated against the corrected baseline
+
+With the container cleared, everything below was measured on **this writer's own
+shader**, each with the control cube healthy in the same frame and the GLSL
+verified to compile first. None moved it off `0.0%`.
+
+| Tried | Why it was a candidate |
+|---|---|
+| `m_PreloadTable` populated, every container entry spanning it | ours was empty; the game's has 5144 entries with per-asset slices |
+| `m_ShaderIsBaked` `False` → `True` | ours is `False`, every stock shader sampled is `True` |
+| `m_State.m_Name` `"Shamway/Unlit"` → `"FORWARD"` | **this is how `LightMode` is carried** - stock's pass tags are empty and its state name is `FORWARD` / `ShadowCaster`, while ours held the shader's own name |
+| **empty parameter blobs** for both GLCore stages | removes every uniform, texture and cbuffer binding from the question |
+| a **trivial parameter-free program** - `gl_VertexID` triangle, constant opaque fragment - on top of those empty blobs | this program cannot produce zero pixels if it executes |
+
+That last row is the important one. A shader with **no parameters, no uniforms,
+no texture, no vertex inputs**, whose fragment writes opaque red
+unconditionally, still draws nothing - in a bundle that renders a stock shader
+in the same slot, through the same material, in the same frame.
+
+So the fault is not in any binding, any parameter, any pass-state field or any
+GLSL this writer emits. It is in the **structure** of the `Shader` object
+itself, and it is something none of the field comparisons in this report has
+caught - because the parsed form matches stock field for field.
+
+### The differences that remain, against a shader known to render
+
+Compared against `Game/EntityTintMaskSSS`, which renders from this writer's own
+bundle:
+
+| Field | ours | stock |
+|---|---|---|
+| `m_FallbackName` | *(empty)* | `Diffuse` |
+| `m_Dependencies` (shader level) | `0` | `2` |
+| `m_KeywordNames` / `m_KeywordFlags` | `0` | `27` |
+| `m_ShaderIsBaked` | `False` | `True` (**tested, not the cause**) |
+| subshader `m_Tags` | `RenderType=Opaque` | `QUEUE=AlphaTest+0`, `RenderType=Transparent` |
+| subshader `m_LOD` | `100` | `0` |
+| passes | `1` | `4` |
+| platforms | `2` | `3` |
+
+`m_FallbackName` was then **tested too**: setting it to `Diffuse` changed
+nothing, and the run still reports `passes=1`. That number is itself a finding -
+**Unity did not fall back**, so it does not consider this shader failed. It
+believes the shader is fine, selects its single pass, and draws nothing.
+
+The shader-level `m_Dependencies` is the only field in that table still
+untested.
+
 ### What this actually establishes
 
 | | draws? |

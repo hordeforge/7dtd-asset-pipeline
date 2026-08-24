@@ -1352,3 +1352,34 @@ Until then the Vulkan lane's state is: everything except this field is
 byte-equivalent to stock or proven irrelevant, and the field is **validated** -
 our record carrying stock's own modules with a zero hash is refused, while
 stock's identical record with its real hash renders.
+
+
+## The Vulkan hash: offline shortcuts are exhausted, it is disassembly now
+
+**Measured 2026-08-25.** Two automated sweeps closed the cheap routes, so the
+next attempt goes straight to the binary rather than re-permuting hashes.
+
+**Debug-stripped SPIR-V** (Option C, the likeliest recipe): `spirv-opt
+--strip-debug` on each decoded stock module, then SpookyHash V2 seeds 0,0.
+No match. Stripping removed only the `OpSource` line (24 bytes), and the result
+hashes to neither stored half.
+
+**A 1.5-million-hash seed sweep** (Option B): seed1 over 0..65535, seed2 in
+{0, seed1, byte length, word length}, across six inputs - each SMOL-V module,
+each decoded SPIR-V, each debug-stripped - compared against *both* stored
+halves. Plus both concatenations (A+B, B+A, in SMOL-V and SPIR-V) over the same
+seed range, and the seeds {0, 0xDEADBEEFDEADBEEF, 0xDEADBEEF, the golden ratio
+constant, an arbitrary 64-bit value} in every pair. **Nothing matched either
+half.**
+
+The conclusion is firm: the hashed input is **not** any stored or decoded module
+buffer, or their concatenation, under any straightforward seed. It is either a
+Unity-internal representation (a canonicalised or re-serialized program struct)
+or uses a transform this side cannot guess. That is exactly what a disassembly
+reads off directly, and only a disassembly will.
+
+Starting points in `UnityPlayer.dll`, re-confirmed: SMOL-V magic at file offsets
+`0x8925bc` and `0x8e7a1b` (the latter inside `smolv::Decode`'s header check),
+SpookyHash's `0xDEADBEEFDEADBEEF` at seven sites near `0xa36ef4`. Find
+`Decode`'s caller; the buffer, length and seeds it hashes before decoding are
+the recipe.

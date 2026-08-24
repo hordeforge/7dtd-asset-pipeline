@@ -58,6 +58,20 @@ class LocationTests(unittest.TestCase):
 
 
 class DeployTests(unittest.TestCase):
+    def test_refuses_csharp_source_tree_without_a_built_dll(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mod = root / "MyMod"
+            (mod / "src/MyMod").mkdir(parents=True)
+            (mod / "src/MyMod/Thing.cs").write_text("class Thing {}")
+            (mod / "ModInfo.xml").write_text("<xml/>")
+
+            with self.assertRaisesRegex(
+                PipelineError, "contains C# mod source but no root-level DLL"
+            ):
+                client.deploy_mod(mod, root / "Mods", "MyMod")
+            self.assertFalse((root / "Mods/MyMod").exists())
+
     def test_copies_only_the_deployable_allowlist(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

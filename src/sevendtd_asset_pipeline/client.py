@@ -411,6 +411,21 @@ def _deploy_name(mod_name: str) -> str:
     return name
 
 
+def _managed_source_without_dll(mod_root: Path) -> bool:
+    """Whether this looks like a C# source modlet but carries no built DLL."""
+    if any(mod_root.glob("*.dll")):
+        return False
+    if any(mod_root.glob("*.csproj")):
+        return True
+    for source_dir in (mod_root / "src", mod_root / "Source"):
+        if source_dir.is_dir() and (
+            next(source_dir.rglob("*.cs"), None) is not None
+            or next(source_dir.rglob("*.csproj"), None) is not None
+        ):
+            return True
+    return False
+
+
 def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = True) -> list[str]:
     """Copy the deployable part of a modlet into `<mods_dir>/<mod_name>/`.
 
@@ -429,6 +444,12 @@ def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = Tr
     mod_root = Path(mod_root).resolve()
     if not (mod_root / "ModInfo.xml").is_file():
         raise PipelineError(f"{mod_root} has no ModInfo.xml; nothing deployable here")
+    if _managed_source_without_dll(mod_root):
+        raise PipelineError(
+            f"{mod_root} contains C# mod source but no root-level DLL; refusing an "
+            "XML/resources-only deployment. Build the mod and deploy its dist/release "
+            "modlet directory instead"
+        )
     destination = Path(mods_dir) / name
     if destination.exists():
         if not replace:

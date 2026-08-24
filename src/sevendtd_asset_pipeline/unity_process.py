@@ -33,10 +33,22 @@ the editor has written its bundle costs nothing to repeat, and an intermittent
 crash that clears on retry is exactly what a retry is for. When every attempt
 aborts, the error says so and names the log, rather than dressing a real
 failure up as flakiness.
+
+The same care applies to the *other* way a Unity invocation ends: the timeout.
+A batch-mode editor spawns worker children of its own (AssetImportWorker
+processes during the import pass), and killing only the direct child orphans
+them — they keep running against ``Library/`` and hold it against the next
+launch, which reads as a hung project rather than a killed one. So a bounded
+invocation puts the child alone in its own session and, when the deadline
+fires, signals that whole session; every descendant the editor created dies
+with it. Where there are no process groups (Windows), the direct-child kill is
+all the platform offers and all that happens.
 """
 
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -69,7 +81,7 @@ def run_unity(
     means something; without it, only the SIGABRT exit code is available and
     the retry is correspondingly more cautious.
     """
-    result = subprocess.run(list(command), check=False, timeout=timeout)
+    result = _run(command, timeout)
     for attempt in range(2, MAX_ATTEMPTS + 1):
         if not _is_intermittent_abort(result, log):
             return result
@@ -78,8 +90,47 @@ def run_unity(
             f"retrying ({attempt}/{MAX_ATTEMPTS})",
             file=sys.stderr,
         )
-        result = subprocess.run(list(command), check=False, timeout=timeout)
+        result = _run(command, timeout)
     return result
+
+
+def _run(command: Sequence[str], timeout: float | None) -> subprocess.CompletedProcess[bytes]:
+    """One invocation. A bounded one kills the child's whole session on expiry.
+
+    The unbounded path stays on :func:`subprocess.run` so a caller (and the
+    tests) can observe it exactly as before.
+    """
+    if timeout is None:
+        return subprocess.run(list(command), check=False)
+    process = subprocess.Popen(
+        list(command),
+        # False where there are no sessions (Windows); True nowhere else.
+        start_new_session=hasattr(os, "setsid"),
+    )
+    try:
+        returncode = process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_group(process)
+        raise
+    return subprocess.CompletedProcess(list(command), returncode)
+
+
+def _kill_group(process: subprocess.Popen[bytes]) -> None:
+    """SIGKILL the child's whole process group, then reap it.
+
+    With ``start_new_session`` the child's group id *is* its pid, so one
+    signal reaches every worker it spawned. A child that already exited races
+    the signal and loses silently; the direct-child kill covers the case
+    where no groups exist.
+    """
+    if hasattr(os, "killpg"):
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    else:
+        process.kill()
+    process.wait()
 
 
 def _is_intermittent_abort(result: subprocess.CompletedProcess[bytes], log: Path | None) -> bool:

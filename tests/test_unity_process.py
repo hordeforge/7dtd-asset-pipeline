@@ -16,8 +16,10 @@ future widening that quietly swallows real build failures fails here.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -97,6 +99,51 @@ class RetryTests(unittest.TestCase):
         with mock.patch.object(subprocess, "run", return_value=_result(ABORTED)) as run:
             self.assertEqual(run_unity(COMMAND, log=missing).returncode, ABORTED)
         self.assertEqual(run.call_count, 1)
+
+
+def _alive(pid: int) -> bool:
+    """Whether a process id still names *something*, zombies included."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+@unittest.skipUnless(os.name == "posix", "process groups are POSIX")
+class BoundedKillTests(unittest.TestCase):
+    """A timed-out editor must take the worker children it spawned with it.
+
+    A batch-mode editor runs AssetImportWorker subprocesses; killing only the
+    direct child orphans them against Library/ and the next launch hangs on
+    the lock. These tests use a shell that forks its own child so the group
+    actually has two members to lose.
+    """
+
+    GRACE_SECONDS = 5.0
+
+    def test_a_child_that_finishes_in_time_returns_normally(self) -> None:
+        self.assertEqual(run_unity(["true"], timeout=30).returncode, 0)
+
+    def test_timeout_raises_and_leaves_no_orphan_behind(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            pids_file = Path(directory) / "pids"
+            # `sleep` is exec'd directly by some shells when it is the only
+            # command; backgrounding it guarantees a real grandchild.
+            script = f"echo $$ > {pids_file}; sleep 30 & echo $! >> {pids_file}; wait"
+            started = time.monotonic()
+            with self.assertRaises(subprocess.TimeoutExpired):
+                run_unity(["bash", "-c", script], timeout=1.0)
+            # The kill must have been prompt, not the timeout silently ignored.
+            self.assertLess(time.monotonic() - started, 10.0)
+            pids = [int(value) for value in pids_file.read_text(encoding="utf-8").split()]
+            deadline = time.monotonic() + self.GRACE_SECONDS
+            while time.monotonic() < deadline and any(_alive(pid) for pid in pids):
+                time.sleep(0.05)
+            for pid in pids:
+                self.assertFalse(_alive(pid), f"pid {pid} survived the timeout")
 
 
 if __name__ == "__main__":

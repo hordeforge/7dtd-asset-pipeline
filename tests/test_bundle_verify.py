@@ -153,12 +153,15 @@ class StubEditorRunTests(BundleCase):
         self.assertEqual([("mymodnote", "TextAsset")], [(a.key, a.type) for a in report.assets])
 
     def test_a_timeout_is_a_pipeline_error_naming_the_partial_log(self) -> None:
+        # run_unity owns how a bounded editor is killed; this pins only that
+        # its TimeoutExpired reaches this caller as one error line naming the
+        # log it should read.
         self._editor("# never reached")
         bundle = self.root / "b.unity3d"
         bundle.write_bytes(b"UnityFS")
         with (
             mock.patch(
-                "sevendtd_asset_pipeline.bundle_verify.subprocess.run",
+                "sevendtd_asset_pipeline.bundle_verify.run_unity",
                 side_effect=subprocess.TimeoutExpired(cmd="editor", timeout=900),
             ),
             self.assertRaisesRegex(PipelineError, "did not finish verifying within 900s"),

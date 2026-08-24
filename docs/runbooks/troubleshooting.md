@@ -426,3 +426,14 @@ Recorded at this length because the wrong explanation is more attractive than
 the right one: the assertion names a file-descriptor limit, so a reader who has
 one that looks large will believe they have found the cause, and they will be
 able to "confirm" it on the next build that happens to succeed.
+
+## A timed-out editor leaves the project locked
+
+`run_unity` bounds every editor invocation that can hang (`verify-bundle`,
+`render-icon`; the Proton async-load starvation above is one documented way an
+editor wedges). When the deadline fires, the editor is killed **as a whole
+session**, not as one process: a batch-mode import spawns AssetImportWorker
+children, and killing only the direct child would orphan them against
+`Library/`, so the next launch would hang on a lock left by a dead run and
+read as a corrupt project. If you ever see worker processes outlive a killed
+editor, it is a bug here; do not clean them up by hand.

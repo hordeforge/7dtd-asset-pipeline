@@ -11,12 +11,11 @@ from __future__ import annotations
 import shutil
 import tempfile
 import unittest
-
-from sevendtd_asset_pipeline.generators import mesh as mesh_generator
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from sevendtd_asset_pipeline.generators import mesh as mesh_generator
 from sevendtd_asset_pipeline.mesh_check import check_mesh
 
 

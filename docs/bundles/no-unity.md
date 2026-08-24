@@ -329,8 +329,28 @@ reported: it places, it stacks, it can be walked through, and **nothing is
 drawn**. So the numbers above are true and *insufficient*, in the exact way
 this repository keeps writing down and keeps having to relearn.
 
-Two things separate the editor's verdict from the client's, and neither had
-been tested when the fix was called done:
+**Isolated the same day: it is the graphics API, and only that.** The same
+client, the same bundle, the same block, launched with `-force-glcore`:
+
+```bash
+shamway client launch --mod-name MyMod -- -force-glcore
+```
+
+```text
+Forcing GfxDevice: OpenGL Core
+Graphics API: OpenGL 4.6 (Core Profile) Mesa 26.2.1-arch3.1 (shader level 5.0)
+```
+
+The block **renders, and collides**. Under the client's default d3d11-through-
+DXVK it is invisible. One variable changed between the two runs.
+
+So the bundle, the material, the prefab, the mesh, the block XML and the
+class-142 wiring are all **correct in the game**, not merely in an editor, and
+the fault is confined to the **d3d11 sub-program** this writer emits. That also
+makes `-force-glcore` the cheapest way to separate "my asset is wrong" from
+"the d3d11 lane is wrong" for anyone hitting an invisible prop.
+
+The two candidates that were open before that run:
 
 - **The graphics API.** `verify-bundle --draw` on a Linux host creates
   **OpenGLCore**. The client runs **d3d11**, translated by **DXVK** under

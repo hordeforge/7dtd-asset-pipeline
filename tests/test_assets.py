@@ -699,6 +699,7 @@ class GeneratorTests(unittest.TestCase):
         from sevendtd_asset_pipeline.generators.sound import nuclear_blast
 
         self.assertNotIn("tanh", inspect.getsource(nuclear_blast))
+        self.assertIn("compress(mixed)", inspect.getsource(nuclear_blast))
 
     def test_the_sounds_xml_entry_omits_noise_unless_asked(self) -> None:
         """<Noise> on a sound layered over a vanilla event calls the horde twice."""

@@ -685,6 +685,12 @@ further lowers the shock/crack. A separately phased 62→44 Hz plus 43→34 Hz
 pressure layer rises over 65 ms and decays over 1.75 seconds, supplying the
 missing depth without another abrupt transient.
 
+Target-game listening rejected that deeper-pressure revision: it still had too
+much knock and weakened the previously successful perception of thunder. The
+next revision removes the added deep-pressure oscillators, restores the
+108→44 Hz PR #43 boom and its shatter/thunder layers, then limits its change to
+softening and lowering the initial shock, boom harmonic, and short crack.
+
 The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
 `ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
 `Origin.position` internally. A caller must pass one absolute world coordinate;

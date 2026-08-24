@@ -691,6 +691,12 @@ next revision removes the added deep-pressure oscillators, restores the
 108→44 Hz PR #43 boom and its shatter/thunder layers, then limits its change to
 softening and lowering the initial shock, boom harmonic, and short crack.
 
+Listening then clarified that the small remaining excess was not the initial
+knock but the delayed low/mid thump. The final current-pass adjustment changes
+only the first terrain return, at 0.34 seconds, from gain `0.78` to `0.68`.
+The accepted opening, shatter, and rolling-thunder structure is unchanged;
+further subjective revision is deferred to a later review.
+
 The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
 `ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
 `Origin.position` internally. A caller must pass one absolute world coordinate;

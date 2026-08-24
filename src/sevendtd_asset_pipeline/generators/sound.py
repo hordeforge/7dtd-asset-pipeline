@@ -364,7 +364,7 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
 
     return_noise = lowpass(white, 900.0)
     returns = [0.0] * len(times)
-    for delay, gain, decay in ((0.34, 0.78, 0.16), (0.82, 0.58, 0.24), (1.47, 0.38, 0.34)):
+    for delay, gain, decay in ((0.34, 0.68, 0.16), (0.82, 0.58, 0.24), (1.47, 0.38, 0.34)):
         offset = int(delay * RATE)
         for index in range(offset, len(times)):
             age = (index - offset) / RATE

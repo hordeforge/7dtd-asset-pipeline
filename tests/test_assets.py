@@ -707,6 +707,7 @@ class GeneratorTests(unittest.TestCase):
         self.assertIn("0.72, shatter", inspect.getsource(nuclear_blast))
         self.assertIn("shatter_reflections", inspect.getsource(nuclear_blast))
         self.assertIn("1.18, thunder", inspect.getsource(nuclear_blast))
+        self.assertIn("(0.34, 0.68, 0.16)", inspect.getsource(nuclear_blast))
 
     def test_the_sounds_xml_entry_omits_noise_unless_asked(self) -> None:
         """<Noise> on a sound layered over a vanilla event calls the horde twice."""

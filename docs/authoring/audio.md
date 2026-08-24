@@ -268,6 +268,13 @@ unchanged shatter/thunder structure. It changes only the knock balance: a
 55 ms attack, reduced boom harmonic, and lower shock, boom, and short-crack
 gains.
 
+The remaining target-game note was very small and specifically concerned the
+delayed thump, not the initial impact. The first low/mid terrain return at
+0.34 seconds is therefore reduced from `0.78` to `0.68`; the opening impact,
+shatter reflections, rolling thunder, and later returns stay unchanged. This
+is the stopping point for the current pass, with another listening review
+allowed later.
+
 The near `blast` voice itself no longer treats sparse high-band debris as a
 main layer. A target-game reviewer rejected that output as “just crackling,”
 not a bomb or blast. Its replacement uses a wider bipolar pressure hit, a

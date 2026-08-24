@@ -886,3 +886,65 @@ So a mod usually acquires the AssetBundle module by accident and works, and
 Unity resolved, not what was declared. The class-142 artifact gate is what
 actually decides, which is why it inspects the built file rather than the
 project.
+
+
+## The tail of a GLCore sub-program record
+
+**Measured 2026-08-24** with `lz4.block` + `struct` over the twelve type-6
+records of `Legacy Shaders/Transparent/Cutout/VertexLit`, read out of the
+installed game with UnityPy. Editor 2022.3.62f2, `ShaderCompilerPlatform` 15
+(GLCore), record version `202012090`.
+
+A GLCore code record **does not end at its source text**. After the source, and
+after that source is padded to a 4-byte boundary, come two more `u32` words:
+
+| Word | Value observed | Meaning |
+|---|---|---|
+| 0 | `19` or `57` | vertex-attribute bitmask |
+| 1 | `0` in all twelve | not decoded |
+
+All twelve records carry exactly eight trailing bytes; the 9–11 bytes a naive
+subtraction shows are those eight plus the source's own padding.
+
+The mask indexes Unity's `VertexAttribute` enum. That was derived, not assumed,
+from two records whose declared `in_*` names differ:
+
+| Record | Declares | Mask | Bits |
+|---|---|---|---|
+| 6 | `in_POSITION0`, `in_NORMAL0`, `in_TEXCOORD0` | 19 | 0, 1, 4 |
+| 14 | `in_POSITION0`, `in_COLOR0`, `in_TEXCOORD0`, `in_TEXCOORD1` | 57 | 0, 3, 4, 5 |
+
+The two share exactly `POSITION` and `TEXCOORD0`, and exactly bits 0 and 4;
+subtracting gives `NORMAL`=1, `COLOR`=3, `TEXCOORD1`=5. That is
+`VertexAttribute` — `Position, Normal, Tangent, Color, TexCoord0, TexCoord1, …`
+— with bit 2 (`Tangent`) unobserved here and inferred from the enum's order
+alone, so treat bit 2 as the one value in this table that no artifact
+confirmed.
+
+**Why it matters:** this writer omitted both words until 2026-08-24. The
+runtime's entire report of an eight-byte-short record was `Failed to load
+GpuProgram from binary shader data` and `Shader.isSupported == False`. It
+named no length and no field. `tests/test_shader_writer.py`,
+`GLCoreRecordTailTests`, is what keeps the tail present.
+
+## GLSL 150 needs the location extension declared in *each* half
+
+**Measured 2026-08-24** with `glslangValidator` (`/usr/bin/glslangValidator`),
+by splitting `UNLIT_GLSL` on its `#ifdef VERTEX` / `#ifdef FRAGMENT` guards —
+the way Unity's loader does — and compiling each half alone:
+
+```text
+ERROR: 0:7: 'location' : not supported for this version or the enabled extensions
+```
+
+`layout(location = ...)` is not part of GLSL 150; it needs
+`#extension GL_ARB_explicit_attrib_location : require`, and the directive is
+per-compilation-unit, so a shader whose vertex half declares it and whose
+fragment half does not is **half broken**. That was exactly this writer's bug:
+the vertex half had the line, the fragment half used `layout(location = 0) out
+vec4 SV_Target0;` without it. Stock GLCore fragment programs carry the line.
+
+Unity reports none of this. It reports an unsupported shader. The lesson is
+worth more than the fix: **a GLSL payload can be validated offline, by a
+compiler that explains itself, without an editor and without a device.** Doing
+that first would have cost one command.

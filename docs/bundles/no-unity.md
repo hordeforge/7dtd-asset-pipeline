@@ -29,9 +29,11 @@ Three questions decide it:
    the mod needs no bundle: `none`.
 2. Is everything in that bundle a texture, a sound, a text file or a **mesh**?
    Then `synthesized` writes it here, with no editor and no project.
-3. Otherwise the bundle contains a prefab, a material or a shader, and an
-   editor has to serialize it: `unity` if one lives on this machine,
-   `external` if it lives on another.
+3. Otherwise the bundle contains a **material or a shader**, and an editor
+   has to serialize it: `unity` if one lives on this machine, `external` if it
+   lives on another. A prefab is writable offline, but with no material it
+   draws nothing, so a mod whose prefabs must be *visible* is in this case
+   too.
 
 The rest of this page takes them in that order.
 
@@ -163,7 +165,15 @@ A `Mesh` is a mesh, not a model. 7DTD's `Meshfile` and block `Model` resolve
 through `DataLoader.LoadAsset<GameObject>` — a **prefab**, which needs a
 renderer, which needs a material, which needs a shader. A synthesized `Mesh`
 is reachable from a Harmony DLL through `LoadAsset<Mesh>`, and is the geometry
-half of a model whose prefab an editor still assembles.
+half of a model.
+
+`bundle_writer.mesh_prefab` writes the other half — `GameObject`, `Transform`,
+`MeshFilter`, `MeshRenderer` — and a real 2022.3.62f2 runtime resolves the
+graph. It is deliberately **not** wired into the source folder, because the
+renderer has no material to point at and an empty renderer draws nothing.
+Shipping that would be an asset that loads, passes every gate, and shows the
+player nothing. The material is the last piece
+([improvements.md](../status/improvements.md) 4b).
 
 ```bash
 shamway build
@@ -200,11 +210,17 @@ Provenance for each of those is in
 art surveyed, and what is not attempted are in
 [offline-bundle-builder.md](../adrs/0001-synthesize-bundles-without-an-editor.md).
 
-### What it cannot write, and why that is not a temporary gap
+### What it cannot write, and why that is a gap rather than a law
 
-Prefabs, materials and shaders still need an editor **today**. That is a gap,
-not a law, and this page said otherwise until 2026-08-24 — see the correction
-in [research-provenance.md](../research/research-provenance.md).
+Materials and shaders still need an editor **today**. That is a gap, not a
+law, and this page claimed otherwise until 2026-08-24 — see the correction in
+[research-provenance.md](../research/research-provenance.md).
+
+Prefabs came off this list on the same day. `bundle_writer.mesh_prefab` emits
+the `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer` group and a
+real 2022.3.62f2 runtime resolved it. It is not wired into the source folder,
+because a renderer with no material draws nothing and this pipeline does not
+ship an asset that loads and shows nothing.
 
 What is measured is narrower than the old claim. A material references a
 shader, and a mod bundle has to carry its own, because **borrowing** one is

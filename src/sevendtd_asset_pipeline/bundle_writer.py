@@ -1,10 +1,10 @@
 """Write a Unity asset bundle without Unity.
 
 `unityfs.py` reads the container; this writes one. It is the other half of the
-same format, and it exists so that a mod whose assets are textures, text and
-sound can produce `Resources/<name>.unity3d` on a machine with no editor —
-CI, a headless agent host, a laptop that will never install several gigabytes
-of Unity.
+same format, and it exists so that a mod whose assets are textures, text,
+sound and meshes can produce `Resources/<name>.unity3d` on a machine with no
+editor — CI, a headless agent host, a laptop that will never install several
+gigabytes of Unity.
 
 What it emits is the structure Unity itself emits, established by dissecting
 the bundles the installed game ships (`docs/research/research-provenance.md`):
@@ -24,10 +24,14 @@ bundle becomes a silent load failure. The same library then serializes each
 object by walking that tree, so the field order, array shape and alignment
 rules are the ones a reader of Unity's format already agrees on.
 
-The proof boundary is narrow and stated in `docs/bundles/no-unity.md`: this writes
-containers and objects for a bounded set of classes. It does not replace
-Unity's importers, its shader compiler, or its prefab serialization, and an
-offline parse of what it wrote proves construction, never acceptance.
+The proof boundary is narrow and stated in `docs/bundles/no-unity.md`: this
+writes containers and objects for a bounded set of classes — `Texture2D`,
+`AudioClip`, `TextAsset`, `Mesh`, and the `GameObject`/`Transform`/
+`MeshFilter`/`MeshRenderer` group that makes a prefab. It stops at `Material`
+and `Shader`, because a shader in a bundle is compiled platform bytecode; that
+is a gap with a known route rather than a wall (`docs/status/improvements.md`
+4b), not a claim that it cannot be done. An offline parse of what it wrote
+proves construction, never acceptance.
 """
 
 from __future__ import annotations
@@ -986,7 +990,7 @@ def collect_sources(source_dir: Path) -> list[Path]:
         raise PipelineError(
             f"no bundle source directory at {source_dir}. It is the folder whose "
             "contents become the bundle; create it and put the mod's textures, "
-            "clips and text files in it."
+            "clips, meshes and text files in it."
         )
     found: list[Path] = []
     unknown: list[str] = []

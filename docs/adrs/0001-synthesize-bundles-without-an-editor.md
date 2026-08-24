@@ -142,7 +142,8 @@ here without waiting on anyone.
 | `bundle_source = "synthesized"`, gates, staging | `build.synthesize_bundle` | built; prints what its gates are worth |
 | `shamway pack`, `shamway verify-bundle` | `cli.py`, `bundle_verify.py` | built |
 | `Mesh` (one submesh, position + normal + UV0, from any file trimesh reads) | `bundle_writer.mesh` | built 2026-08-24; a real 2022.3.62f2 runtime read both a UV-mapped and a UV-less mesh back at the authored vertex counts and bounds |
-| prefab, material, shader | — | **not built, and now measured as closed**: see below |
+| prefab: `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer`, and `Ref` for cross-object PPtrs | `bundle_writer.mesh_prefab` | built 2026-08-24; a real 2022.3.62f2 runtime resolved the graph. Not wired into the source folder: with no material the renderer draws nothing |
+| material, shader | — | **not built**; a gap with a known route, not a wall — see below |
 
 The mesh lane was the half of this row that the format allowed, and the
 prediction above held: the layout is fully documented, `check-mesh` already

@@ -152,7 +152,10 @@ REGISTRY: tuple[_Spec, ...] = (
         name="openscad",
         kind="command",
         probe="openscad",
-        unlocks=("a mod's own OpenSCAD generators",),
+        unlocks=(
+            "shamway pack (.stl meshes it exports)",
+            "a mod's own OpenSCAD generators",
+        ),
         purpose="parametric hard-surface geometry; its STL output is a bundle input, "
         "so OpenSCAD reaches a .unity3d with no editor",
         install="shamway script install-tools --with-authoring",

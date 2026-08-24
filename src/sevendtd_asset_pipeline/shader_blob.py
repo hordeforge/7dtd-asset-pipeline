@@ -379,7 +379,7 @@ def compile_spirv(dxbc: bytes) -> bytes:
         src = Path(work) / "shader.dxbc"
         out = Path(work) / "shader.spv"
         src.write_bytes(dxbc)
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [binary, "-x", "dxbc-tpf", "-b", "spirv-binary", str(src), "-o", str(out)],
             capture_output=True,
             text=True,
@@ -429,7 +429,7 @@ def compress_smolv(spirv: bytes) -> bytes:
 
 
 @functools.lru_cache(maxsize=1)
-def smolv_library() -> "ctypes.CDLL | None":
+def smolv_library() -> ctypes.CDLL | None:
     """The zmol-v shared library, or None when it is not installed."""
     candidates = []
     override = os.environ.get("ZMOLV_LIBRARY")
@@ -455,6 +455,60 @@ def smolv_library() -> "ctypes.CDLL | None":
         library.zmolv_free.restype = None
         return library
     return None
+
+
+# SPIR-V storage classes, and Unity's descriptor-set convention for them.
+STORAGE_CLASS_UNIFORM_CONSTANT = 0  # images and samplers
+STORAGE_CLASS_UNIFORM = 2  # constant buffers
+UNITY_SET_RESOURCES = 0
+UNITY_SET_CONSTANT_BUFFERS = 1
+_OP_DECORATE = 71
+_OP_VARIABLE = 59
+_DECORATION_DESCRIPTOR_SET = 34
+
+
+def unity_descriptor_sets(spirv: bytes) -> bytes:
+    """Move constant buffers to descriptor set 1, where Unity binds them.
+
+    `vkd3d-compiler` puts every resource in descriptor set 0. Unity does not:
+    decoded from its own Vulkan modules, a texture sits in **set 0** and a
+    constant buffer in **set 1**, so a module out of vkd3d collides with the
+    set Unity reserves for resources.
+
+    ```text
+    stock fragment  set 0 binding 0   texture
+                    set 1 binding 0   constant buffer
+    stock vertex    set 1 binding 1   constant buffer
+    ours (before)   set 0 binding 0   constant buffer   <- collides
+    ```
+
+    The storage class is what distinguishes them and it is in the bytecode:
+    `Uniform` is a constant buffer, `UniformConstant` an image or sampler. Only
+    the set is rewritten; bindings are left alone.
+    """
+    words = list(struct.unpack(f"<{len(spirv) // 4}I", spirv))
+    constant_buffers = set()
+    index = 5
+    while index < len(words):
+        length, opcode = words[index] >> 16, words[index] & 0xFFFF
+        if length < 1:
+            raise PipelineError("SPIR-V instruction with zero length")
+        if opcode == _OP_VARIABLE and length >= 4 and words[index + 3] == STORAGE_CLASS_UNIFORM:
+            constant_buffers.add(words[index + 2])
+        index += length
+
+    index = 5
+    while index < len(words):
+        length, opcode = words[index] >> 16, words[index] & 0xFFFF
+        if (
+            opcode == _OP_DECORATE
+            and length >= 4
+            and words[index + 2] == _DECORATION_DESCRIPTOR_SET
+            and words[index + 1] in constant_buffers
+        ):
+            words[index + 3] = UNITY_SET_CONSTANT_BUFFERS
+        index += length
+    return struct.pack(f"<{len(words)}I", *words)
 
 
 def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
@@ -951,8 +1005,8 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
                 vertex_parameters.to_bytes(),
                 fragment_parameters.to_bytes(),
                 vulkan_code_blob(
-                    compress_smolv(compile_spirv(vertex_dxbc)),
-                    compress_smolv(compile_spirv(fragment_dxbc)),
+                    compress_smolv(unity_descriptor_sets(compile_spirv(fragment_dxbc))),
+                    compress_smolv(unity_descriptor_sets(compile_spirv(vertex_dxbc))),
                 ),
             ]
         )

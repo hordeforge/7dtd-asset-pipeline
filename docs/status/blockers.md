@@ -174,6 +174,31 @@ one that made it invisible — every field of the pass's render state carried
 wrote no colour channels. `verify-bundle --draw` now reports
 `covered=38.8% zoomed-out=2.4%` for that prop **on OpenGLCore, in an editor**.
 
+**The visual check is automated, 2026-08-24.** It was not, and that cost a
+whole evening of a person placing blocks by hand and reporting what they saw,
+once per hypothesis, across three graphics APIs.
+
+`shamway acceptance-provider` now emits a **staged** case per prefab -
+`CaseDef.Staged`, which puts the prefab in front of the camera, holds it, and
+announces itself - and `shamway script playtest-capture` waits for that
+announcement and photographs the frame. Run beside the acceptance suite:
+
+```bash
+scripts/playtest-capture.sh --label vulkan &
+scripts/playtest-acceptance.sh --mod-root .
+```
+
+The graphics API is a variable now too: `7dtd-fastconnect`'s
+`launch_client.sh` hardcoded `-force-d3d11`, and **Unity takes the first
+`-force-*` argument it is given**, so no caller could override it. Fixed
+upstream - `GFX_API=vulkan|glcore|d3d11|d3d12|none` - which is what makes an
+unattended run on a chosen backend possible at all.
+
+**A staged case passing still is not a look.** It reports that the scene was
+staged, not that the prop looked right; every case in the suite passes on a prop
+that renders magenta. The frame it photographs is the evidence, and somebody -
+or a comparison against another graphics API - still has to read it.
+
 **Signed off on OpenGL Core, 2026-08-24.** A human placed a synthesized prop in
 a live client on a fresh save and confirmed all four marks of the orientation
 card: the arrow points **up**, the orange bar runs along the **bottom**, the

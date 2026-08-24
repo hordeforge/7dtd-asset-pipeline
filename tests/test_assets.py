@@ -460,6 +460,46 @@ class GeneratorTests(unittest.TestCase):
             self.assertLess(sum(top), 200, f"the first row is not a dark ground: {top}")
             self.assertGreater(sum(bottom), 500, f"the second row is not a light ground: {bottom}")
 
+    def test_mesh_optimize_simplifies_and_refuses_a_shape_that_moved(self) -> None:
+        """gltfpack's simplifier is lossy in shape, and a collapsed mesh loads.
+
+        Skipped where gltfpack is absent, which includes CI. Measured on this
+        host: a 5120-triangle icosphere at `--simplify 0.25` becomes 1280
+        triangles with 0.31% extent drift, and at 0.02 it drifts 1.54% and is
+        refused with the output deleted.
+        """
+        import shutil as shutil_module
+        import tempfile
+
+        if not shutil_module.which("gltfpack"):
+            self.skipTest("gltfpack is not installed")
+        if not has_capability("trimesh"):
+            self.skipTest("measuring the result needs trimesh")
+        import logging
+
+        import trimesh
+
+        from sevendtd_asset_pipeline.generators.mesh_optimize import main
+
+        logging.getLogger("trimesh").addHandler(logging.NullHandler())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "dense.glb"
+            trimesh.creation.icosphere(subdivisions=4, radius=0.5).export(str(source))
+
+            kept = root / "lod.glb"
+            self.assertEqual(0, main([str(source), str(kept), "--simplify", "0.25"]))
+            self.assertTrue(kept.is_file())
+            reduced = trimesh.load(str(kept), force="mesh")
+            self.assertLess(len(reduced.faces), 2000, "the simplifier did not engage")
+
+            crushed = root / "crushed.glb"
+            self.assertEqual(
+                1,
+                main([str(source), str(crushed), "--simplify", "0.02", "--max-drift", "0.005"]),
+            )
+            self.assertFalse(crushed.exists(), "a mesh over the drift limit was still written")
+
     def test_the_mesh_icon_refuses_a_bad_target_before_starting_blender(self) -> None:
         import tempfile
 

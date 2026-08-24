@@ -272,6 +272,10 @@ collect_pacman() {
 	# Arch ships /usr/bin/vkd3d-compiler in `vkd3d` (verified with pacman -Qo),
 	# currently 1.19, which reads HLSL.
 	has_vkd3d_hlsl || PACKAGES+=(vkd3d)
+	# Arch ships /usr/bin/glslangValidator in `glslang` (verified with
+	# pacman -Qo, currently 1.4.357.0). It compiles the OpenGLCore
+	# sub-program's GLSL offline, which the runtime will not explain.
+	have glslangValidator || PACKAGES+=(glslang)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -303,6 +307,8 @@ collect_apt() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(shellcheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
+	# Debian and Ubuntu ship glslangValidator in `glslang-tools`.
+	have glslangValidator || PACKAGES+=(glslang-tools)
 	# Deliberately not installed here. Debian and Ubuntu package vkd3d 1.2
 	# (measured: Ubuntu noble ships vkd3d-compiler 1.2-15build1), which
 	# predates the HLSL support this writer needs, so `apt install
@@ -345,6 +351,9 @@ collect_dnf() {
 	# Fedora names the binary's package after the binary, and ships 1.17 in
 	# Rawhide, which is new enough to read HLSL.
 	has_vkd3d_hlsl || PACKAGES+=(vkd3d-compiler)
+	# Ships glslangValidator in `glslang`. Not verified on this host:
+	# only the Arch name was checked, with pacman -Qo.
+	have glslangValidator || PACKAGES+=(glslang)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -380,6 +389,9 @@ collect_zypper() {
 	# that reads HLSL anyway, --check says MISS with the reason and the build
 	# degrades with a printed note rather than failing.
 	has_vkd3d_hlsl || PACKAGES+=(vkd3d)
+	# Ships glslangValidator in `glslang`. Not verified on this host:
+	# only the Arch name was checked, with pacman -Qo.
+	have glslangValidator || PACKAGES+=(glslang)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)

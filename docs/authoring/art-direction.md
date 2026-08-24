@@ -28,11 +28,26 @@ shamway generate cutout key assets-src/icons/thing-src.png \
 shamway check-icons
 ```
 
-Or render the item's own prefab, when the icon should *be* the item:
+Or photograph the item itself, when the icon should *be* the item. With a
+Unity editor, that is the bundle prefab, materials and all:
 
 ```bash
 shamway render-icon myModThing
 ```
+
+With no editor, it is the mesh file, rendered by headless Blender:
+
+```bash
+shamway generate mesh-icon assets-src/bundle/myModThing.glb \
+    UIAtlases/ItemIconAtlas/myModThing.png
+```
+
+The two frame the object identically — same yaw, pitch and padding — but the
+Blender one is a **clay render**: an interchange file carries no Unity
+material, so it reports silhouette, proportion and framing, not the in-game
+look. Treat it as the base coat that the rules below are applied to, and as
+the honest answer for a mod on the synthesized path, which has no prefab to
+photograph.
 
 Then look at it at 160 px, in the game, in a backpack next to vanilla items.
 Everything below is detail.

@@ -13,7 +13,7 @@ here, with no editor involved at any point.
 
 It was written as research *before* any of it existed, and is kept as the
 record of what was expected against what was measured. **It ships now**:
-`bundle_source = "synthesized"` builds textures, clips and text files, and
+`bundle_source = "synthesized"` builds textures, clips, text files and meshes, and
 `shamway pack` does the same outside any mod. What did not survive contact with
 the format is marked below; the one prediction that was wrong is marked
 **measured**, because a research page that quietly edits itself to match the
@@ -68,10 +68,12 @@ In dependency order, per lane:
   block table (LZ4 block compression; the encoder side of what `unityfs.py`
   decodes), one `CAB-<hash>` SerializedFile with platform 19 metadata and type
   trees, and the class-142 object whose `m_Container` lists every asset path.
-- **Mesh lane**: `Mesh` objects are fully documented layouts (vertex/index
-  streams, AABBs, blend shapes absent for props). The existing `check-mesh`
-  gate keeps authored glTF honest *before* conversion, so the converter's input
-  quality is already gated.
+- **Mesh lane (measured: built and loading)**: `Mesh` objects are fully
+  documented layouts (vertex/index streams, AABBs, blend shapes absent for
+  props). The existing `check-mesh` gate keeps authored glTF honest *before*
+  conversion, so the converter's input quality is already gated. All of that
+  held. What the prediction missed is that the risk is not the layout but the
+  **coordinate system**: the layout is checkable and the handedness is not.
 - **Texture lane**: RGBA32/BGRA32 or DXT-encoded `Texture2D` with `.resS`
   stream data; sizes and formats are measurable, so acceptance evidence is
   cheap.
@@ -139,15 +141,39 @@ here without waiting on anyone.
 | source directory -> bundle + Unity-shaped manifest | `bundle_writer.pack_directory` | built; `validate` cannot tell the backends apart |
 | `bundle_source = "synthesized"`, gates, staging | `build.synthesize_bundle` | built; prints what its gates are worth |
 | `shamway pack`, `shamway verify-bundle` | `cli.py`, `bundle_verify.py` | built |
-| mesh, prefab, material, shader | — | **not built, and not planned as-is**: see below |
+| `Mesh` (one submesh, position + normal + UV0, from any file trimesh reads) | `bundle_writer.mesh` | built 2026-08-24; a real 2022.3.62f2 runtime read both a UV-mapped and a UV-less mesh back at the authored vertex counts and bounds |
+| prefab, material, shader | — | **not built, and now measured as closed**: see below |
 
-The shader is the wall, not the effort. A material references a shader, and a
-shader in a bundle is compiled platform bytecode from Unity's shader compiler.
-Nothing offline produces that, so a synthesized prefab renders magenta — a
-failure no offline gate can see. The clone-and-patch idea above (harvest a
-complete vanilla `Material` from the installed game read-only, patch only
-texture PPtrs and colours) is the only route that could change this, and it is
-recorded, not attempted.
+The mesh lane was the half of this row that the format allowed, and the
+prediction above held: the layout is fully documented, `check-mesh` already
+gated the input, and nothing about it needed the shader. What it cost was the
+handedness conversion — glTF/OBJ/STL/PLY are right-handed, Unity is not — which
+is not a format fact at all and is the one thing in the lane that no gate can
+catch, because a mirrored mesh is a perfectly valid `Mesh`.
+
+The shader is the wall, not the effort, and on 2026-08-24 that stopped being
+an inference. A material references a shader, and a shader in a bundle is
+compiled platform bytecode from Unity's shader compiler. Nothing offline
+produces that, so a synthesized prefab renders magenta — a failure no offline
+gate can see. Both borrowing routes were measured against the installed game
+and both are closed (`research-provenance.md`, "Why a material cannot follow
+the mesh"): the player's `unity default resources` holds six shaders and all
+are internal, and the game's own bundles embed their shaders with
+`m_Shader.m_FileID: 0`, same-file, which a mod bundle can only match by
+compiling its own.
+
+Two routes stay recorded and unattempted, both for the same reason — each one
+can only be judged by a client that renders it, and a magenta prop is the
+exact silence this pipeline exists to remove:
+
+- **clone-and-patch**, above: harvest a complete vanilla `Material` from the
+  installed game read-only and patch texture PPtrs and colours. Its shader
+  PPtr still points into the bundle it came from.
+- **external reference**: the game's own `trees` bundle declares
+  `Resources/unity_builtin_extra` as an external, so the engine does resolve
+  cross-file PPtrs at runtime. The player has no such file on disk, and a
+  shader variant nobody compiled for the material is magenta rather than an
+  error.
 
 ## What the evidence turned out to be
 

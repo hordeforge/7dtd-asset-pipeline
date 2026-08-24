@@ -372,6 +372,52 @@ class GeneratorTests(unittest.TestCase):
                 self.assertIn("usage:", output.getvalue())
                 self.assertIn(f"shamway generate {name}", output.getvalue())
 
+    def test_the_mesh_icon_downscale_reports_what_it_actually_drew(self) -> None:
+        """The coverage number is the guard against shipping a blank cell.
+
+        It is asserted here rather than through Blender because the render is
+        slow and optional, while the arithmetic that decides pass or fail is
+        neither. A real render was measured at 28% for a cylinder and 53% for
+        a crate; the failing case is the transparent square.
+        """
+        if not has_capability("pillow"):
+            self.skipTest("the downscale needs Pillow")
+        import tempfile
+
+        from PIL import Image
+
+        from sevendtd_asset_pipeline.generators.mesh_icon import MINIMUM_COVERAGE, _downscale
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            drawn = root / "drawn.png"
+            image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+            for x in range(16, 48):
+                for y in range(16, 48):
+                    image.putpixel((x, y), (128, 128, 128, 255))
+            image.save(drawn)
+            covered = _downscale(drawn, root / "cell.png", 16)
+            # The square is a quarter of the frame; Lanczos spreads its edge
+            # over the neighbouring cells, so the count lands above that and
+            # well under half. Both bounds matter: the point of the number is
+            # that it separates "drew something" from "drew nothing".
+            self.assertGreater(covered, 0.25)
+            self.assertLess(covered, 0.5)
+            self.assertGreater(covered, MINIMUM_COVERAGE)
+
+            blank = root / "blank.png"
+            Image.new("RGBA", (64, 64), (0, 0, 0, 0)).save(blank)
+            self.assertEqual(0.0, _downscale(blank, root / "empty.png", 16))
+
+            with Image.open(root / "cell.png") as written:
+                self.assertEqual((16, 16), written.size)
+            self.assertEqual([], list(root.glob("*.tmp")), "the staged file must not survive")
+
+    def test_the_mesh_icon_refuses_a_bad_target_before_starting_blender(self) -> None:
+        from sevendtd_asset_pipeline.generators.mesh_icon import main
+
+        self.assertEqual(1, main(["/nonexistent/thing.glb", "/tmp/out.png"]))
+
     def test_an_unknown_generator_lists_the_known_ones(self) -> None:
         from sevendtd_asset_pipeline.generators import run
 

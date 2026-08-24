@@ -1,6 +1,8 @@
 # Open-source authoring and inspection tools
 
-Only Python and Unity are pipeline requirements. The tools below are optional
+Python is the only pipeline requirement; Unity is optional and, for a bundle
+of textures, clips, text files and meshes, not involved at all. The tools below
+are optional
 and selected for reproducible, scriptable workflows that humans and coding
 agents can both drive. Pin versions in each mod when output stability matters.
 
@@ -41,14 +43,42 @@ that are naturally described as constructive geometry. Its CLI exports meshes
 and accepts `-D` parameters, which makes variant generation reviewable in a
 small text diff.
 
+Its STL output is a bundle input directly — OpenSCAD to `.unity3d` involves no
+editor and no conversion step:
+
+```bash
+openscad -o assets-src/bundle/myModCrate.stl -D 'width=0.8' crate.scad
+shamway check-mesh assets-src/bundle/myModCrate.stl
+shamway build
+```
+
+STL carries no UVs, so the mesh reaches the bundle with positions and normals
+only. Export from Blender or a glTF-emitting script when the geometry needs a
+texture.
+
 - Official command-line manual:
   <https://files.openscad.org/documentation/manual/Using_OpenSCAD_in_a_command_line_environment.html>
 
-### trimesh — Python mesh generation and checks
+### trimesh — Python mesh generation, checks, and the editorless mesh lane
 
 `trimesh` is useful for procedural primitives, conversions, extents,
-watertightness checks, normals, and scripted export. It is an optional Python
-dependency for asset-generation scripts, not for the bundle pipeline itself.
+watertightness checks, normals, and scripted export.
+
+It is also the reader behind the **editorless mesh lane**: `shamway pack` and
+`bundle_source = "synthesized"` turn any file trimesh reads — `.glb`, `.gltf`,
+`.obj`, `.stl`, `.ply` — into a Unity `Mesh` inside the bundle, with no editor
+anywhere. That makes every generator on this page a bundle input rather than a
+Unity-import input:
+
+```bash
+shamway check-mesh assets-src/bundle/myModThing.glb
+shamway pack assets-src/bundle build/mymod.unity3d --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+```
+
+Read [no-unity.md](../bundles/no-unity.md#the-mesh-lane-and-what-it-is-not)
+before using it: the writer converts handedness for you, the file must be
+Y-up, and a `Mesh` is not a prefab — 7DTD's `Meshfile` wants a `GameObject`,
+which wants a material, which wants a shader an editor has to compile.
 
 - Official export API: <https://trimesh.org/trimesh.exchange.export.html>
 
@@ -252,10 +282,10 @@ or live-client gates.
 
 | Asset | Generate/author | Pre-Unity check | Final gate |
 |---|---|---|---|
-| hard-surface mesh | OpenSCAD or Blender Python | trimesh + glTF Validator | Unity import + bundle + in-game view |
-| organic/rigged mesh | Blender | glTF Validator + render turntable | bundle + animation/in-game view |
+| hard-surface mesh | OpenSCAD or Blender Python | `shamway check-mesh` (trimesh + glTF Validator) | `shamway build` straight from the exported file, or a Unity import; then in-game view |
+| organic/rigged mesh | Blender | glTF Validator + render turntable | Unity import (rigging and animation are not in the editorless lane) + in-game view |
 | PBR maps | Material Maker or seeded Python | channel/range checks + montage | `.mat` keywords/import + in-game light sweep |
-| item icon | `shamway generate cutout`, `shamway render-icon`, Pillow/ImageMagick | `shamway check-icons` + downscaled montage | client atlas lookup + human readability |
+| item icon | `shamway generate cutout`, `shamway render-icon` (editor) or `shamway generate mesh-icon` (Blender), Pillow/ImageMagick | `shamway check-icons` + downscaled montage | client atlas lookup + human readability |
 | particle card | Pillow/NumPy/Blender | alpha-edge montage | particle material state + live VFX |
 | sound | `shamway generate sound`, FFmpeg | `shamway check-sound` | sound group lookup + listening at range |
 | detail normal | `shamway generate texture-maps detail` | tiling seam check on a cylinder | in-game light sweep on the flat-colour part |

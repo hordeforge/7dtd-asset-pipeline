@@ -275,6 +275,67 @@ with mip maps generated; the writer instead writes `image data` inline with
 first pixel row is the **bottom** one — a texture written top-down loads
 without error and renders upside down, so the writer flips.
 
+### Mesh finding
+
+Measured 2026-08-24 with UnityPy against
+`Data/Bundles/Standalone/Entities/trees` in the installed game — a bundle the
+game ships, carrying 148 `Mesh` objects. `ScotsPineMed01_LOD3` was decoded
+field by field and is what `bundle_writer.mesh` reproduces:
+
+- `m_VertexData` declares the engine's **full 14-slot channel table** and
+  zeroes every slot the mesh does not use. The measured mesh filled slot 0
+  position (`format 0` float, dimension 3), 1 normal (float3), 2 tangent
+  (float4), 3 colour (`format 2`, UNorm8, dimension 4) and 4 UV0;
+- all channels sit in **stream 0**, tightly packed, at the offsets their
+  predecessors leave: 0, 12, 24, 40, 44 for a 56-byte stride. `m_DataSize` was
+  2688 bytes for 48 vertices — 48 × 56 exactly, which is what proves the
+  stride is the plain sum and not padded;
+- `m_IndexFormat: 0` is UInt16, and `m_IndexBuffer` held 192 bytes for the
+  96 indices the single submesh declares;
+- the submesh's `localAABB` equals the mesh's `m_LocalAABB` for a one-submesh
+  mesh; `m_CompressedMesh` is present with every vector empty;
+- `m_IsReadable: true` and `m_CookingOptions: 30` on a mesh the game ships.
+
+The writer fills slots 0, 1 and 4 only. It does not write tangents, so a
+normal-mapped material would have none, and it writes one submesh, so one mesh
+file is one material's worth of geometry.
+
+Runtime confirmation, 2026-08-24: a synthesized bundle carrying two meshes was
+loaded by a real Unity 2022.3.62f2 runtime through `shamway verify-bundle` —
+a UV-mapped box at `vertices=8 triangles=12 submeshes=1 uv=True bounds=(0.40,
+0.80, 0.40)`, matching the authored extents, and a UV-less icosphere at
+`vertices=42 triangles=80 uv=False`. The engine's own loader, its own `Mesh`
+class, its own bounds arithmetic.
+
+The **handedness conversion** is this writer's, not the format's: glTF, OBJ,
+STL and PLY are right-handed and Unity is left-handed, so X is negated and
+triangle winding reversed — the conversion Unity's own importers and every
+glTF runtime for Unity apply. It has no evidence in the artifact above because
+a mirrored mesh is a perfectly valid `Mesh` object; the test that holds it is
+`test_the_right_handed_source_is_converted_rather_than_mirrored`.
+
+### Why a material cannot follow the mesh
+
+Measured 2026-08-24 with UnityPy, and the reason the shader wall in
+[no-unity.md](../bundles/no-unity.md) is a property of the engine rather than
+of effort spent:
+
+- the shipped player's `7DaysToDie_Data/Resources/unity default resources`
+  carries **six** shaders, all internal: `Hidden/InternalErrorShader`,
+  `Hidden/InternalClear`, `Hidden/Internal-Colored`, `Hidden/Internal-Loading`,
+  `GUI/Text Shader`, `Hidden/FrameDebuggerRenderTargetDisplay`. Nothing a prop
+  could use;
+- the game's own `trees` bundle **embeds its shaders**: 10 `Shader` objects
+  inside the archive, and every `Material` in it points at one with
+  `m_Shader.m_FileID: 0` — same file. That is the pattern a mod bundle would
+  have to follow, and compiled shader bytecode is what an offline writer
+  cannot produce;
+- the one external that bundle declares is `Resources/unity_builtin_extra`,
+  so the engine does resolve external references at runtime. That is recorded
+  as a route, not a plan: the player has no such file on disk, and pointing a
+  synthesized material at a shader variant nobody compiled for it renders
+  magenta — a failure no offline gate sees.
+
 Runtime confirmation, same day: a synthesized bundle carrying all three classes
 was loaded by a real Unity 2022.3.62f2 runtime through
 `AssetBundle.LoadFromFile` (`shamway verify-bundle`). Every asset returned its

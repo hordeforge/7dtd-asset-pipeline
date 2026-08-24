@@ -16,11 +16,13 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
+from typing import Any
 
 from sevendtd_asset_pipeline.bundle_writer import (
     audio_clip,
     build_bundle,
     collect_sources,
+    mesh,
     pack_directory,
     render_manifest,
     text_asset,
@@ -35,6 +37,9 @@ REVISION = "2022.3.62f2"
 needs_unitypy = unittest.skipUnless(
     has_capability("UnityPy"), "the writer needs UnityPy for the engine's type trees"
 )
+needs_trimesh = unittest.skipUnless(
+    has_capability("trimesh"), "the mesh lane reads interchange files through trimesh"
+)
 
 
 def write_wav(path: Path, *, rate: int = 44100, channels: int = 1, width: int = 2) -> Path:
@@ -46,6 +51,23 @@ def write_wav(path: Path, *, rate: int = 44100, channels: int = 1, width: int = 
             struct.pack("<h", (index * 137) % 8000 - 4000) for index in range(200 * channels)
         )
         handle.writeframes(frames if width == 2 else bytes(len(frames)))
+    return path
+
+
+def write_obj(path: Path, *, uvs: bool = False, faces: bool = True) -> Path:
+    """A tetrahedron in plain OBJ text, so the fixture needs no mesh library.
+
+    The first vertex sits at x=+1 and the first face is 1/2/3, which is what
+    the handedness assertions below read back out of the written stream.
+    """
+    lines = ["v 1 0 0", "v 0 1 0", "v 0 0 1", "v 0 0 0"]
+    if uvs:
+        lines += ["vt 0 0", "vt 1 0", "vt 1 1", "vt 0 1"]
+        if faces:
+            lines += ["f 1/1 2/2 3/3", "f 1/1 3/3 4/4", "f 1/1 4/4 2/2", "f 2/2 4/4 3/3"]
+    elif faces:
+        lines += ["f 1 2 3", "f 1 3 4", "f 1 4 2", "f 2 4 3"]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
 
@@ -244,6 +266,100 @@ class SourceDirectoryTests(unittest.TestCase):
     def test_a_missing_source_directory_names_what_it_is_for(self) -> None:
         with self.assertRaisesRegex(PipelineError, "bundle source directory"):
             collect_sources(self.root / "absent")
+
+
+@needs_unitypy
+@needs_trimesh
+class MeshTests(unittest.TestCase):
+    """The mesh lane: what a real runtime later confirmed, asserted offline.
+
+    A Unity 2022.3.62f2 runtime read both shapes below back through
+    `shamway verify-bundle` (docs/research/research-provenance.md, "Mesh
+    finding"). These tests hold the layout that made that work.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def read_back(self, source: Path) -> dict[str, Any]:
+        import UnityPy
+
+        bundle = self.root / "mesh.unity3d"
+        bundle.write_bytes(build_bundle([mesh("myModThing", source)], REVISION, "mesh.unity3d"))
+        objects = {
+            int(obj.type.value): obj.read_typetree() for obj in UnityPy.load(str(bundle)).objects
+        }
+        self.assertIn(43, objects, "no Mesh object survived the round trip")
+        tree: dict[str, Any] = objects[43]
+        return tree
+
+    def test_a_mesh_without_uvs_takes_the_short_vertex_stride(self) -> None:
+        tree = self.read_back(write_obj(self.root / "myModThing.obj"))
+        data = tree["m_VertexData"]
+        self.assertEqual(4, data["m_VertexCount"])
+        self.assertEqual(24, len(bytes(data["m_DataSize"])) // 4)  # position + normal
+        filled = [channel for channel in data["m_Channels"] if channel["dimension"]]
+        self.assertEqual([3, 3], [channel["dimension"] for channel in filled])
+        self.assertEqual(14, len(data["m_Channels"]), "the full channel table is always declared")
+
+    def test_a_mesh_with_uvs_declares_the_uv0_channel_after_the_normal(self) -> None:
+        tree = self.read_back(write_obj(self.root / "myModThing.obj", uvs=True))
+        channels = tree["m_VertexData"]["m_Channels"]
+        self.assertEqual(
+            {"stream": 0, "offset": 24, "format": 0, "dimension": 2},
+            channels[4],
+            "UV0 lives in slot 4 at the offset the position and normal leave",
+        )
+        self.assertEqual(
+            32 * tree["m_VertexData"]["m_VertexCount"],
+            len(bytes(tree["m_VertexData"]["m_DataSize"])),
+        )
+
+    def test_the_right_handed_source_is_converted_rather_than_mirrored(self) -> None:
+        # The single check that separates a correct mesh from one that loads
+        # perfectly and is inside-out: X negated *and* winding reversed.
+        tree = self.read_back(write_obj(self.root / "myModThing.obj"))
+        stream = bytes(tree["m_VertexData"]["m_DataSize"])
+        first_x = struct.unpack_from("<f", stream, 0)[0]
+        self.assertEqual(-1.0, first_x, "the OBJ's x=+1 vertex must arrive at x=-1")
+        indices = struct.unpack_from("<3H", bytes(tree["m_IndexBuffer"]), 0)
+        self.assertEqual((2, 1, 0), indices, "face 1/2/3 must be written back to front")
+
+    def test_the_submesh_and_bounds_describe_the_whole_geometry(self) -> None:
+        tree = self.read_back(write_obj(self.root / "myModThing.obj"))
+        submesh = tree["m_SubMeshes"][0]
+        self.assertEqual(1, len(tree["m_SubMeshes"]))
+        self.assertEqual(12, submesh["indexCount"])  # four triangles
+        self.assertEqual(0, submesh["topology"])
+        self.assertEqual(4, submesh["vertexCount"])
+        self.assertEqual(tree["m_LocalAABB"], submesh["localAABB"])
+        self.assertAlmostEqual(0.5, tree["m_LocalAABB"]["m_Extent"]["x"], places=5)
+
+    def test_a_mesh_file_with_no_triangles_is_refused_and_names_the_gate(self) -> None:
+        empty = write_obj(self.root / "myModThing.obj", faces=False)
+        with self.assertRaisesRegex(PipelineError, "check-mesh"):
+            mesh("myModThing", empty)
+
+    def test_a_file_trimesh_cannot_parse_is_refused_not_crashed(self) -> None:
+        broken = self.root / "myModThing.glb"
+        broken.write_bytes(b"not a glb at all")
+        with self.assertRaisesRegex(PipelineError, "cannot read mesh"):
+            mesh("myModThing", broken)
+
+    def test_a_mesh_is_a_bundle_member_like_any_other_source_file(self) -> None:
+        sources = self.root / "bundle"
+        sources.mkdir()
+        write_obj(sources / "myModThing.obj")
+        (sources / "myModNote.txt").write_text("hello", encoding="utf-8")
+        bundle, manifest_text = pack_directory(sources, "mod.unity3d", REVISION)
+        written = self.root / "mod.unity3d"
+        written.write_bytes(bundle)
+        self.assertIn(43, inspect_bundle(written).class_ids)
+        self.assertIn("bundle/myModThing.obj", manifest_text)
 
 
 class ManifestTests(unittest.TestCase):

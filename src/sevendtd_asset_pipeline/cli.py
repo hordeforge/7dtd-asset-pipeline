@@ -96,7 +96,7 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--probe", action="store_true", help="build a throwaway cube bundle only")
     pack = commands.add_parser(
         "pack",
-        help="write a .unity3d from a directory of textures, clips and text files, with no Unity",
+        help="write a .unity3d from a directory of textures, clips, text files and meshes, with no Unity",
     )
     pack.add_argument("source", type=Path, help="directory whose contents become the bundle")
     pack.add_argument("output", type=Path, help="the .unity3d to write")
@@ -249,6 +249,20 @@ def _parser() -> argparse.ArgumentParser:
         help="passed through; `shamway client --help` lists them",
     )
 
+    # Registered for `--help` only; `main` intercepts it before parsing, the
+    # same way it does prompt, script and client. Without this row the command
+    # exists, works, and is documented everywhere except where someone looks.
+    acceptance_parser = commands.add_parser(
+        "acceptance-provider",
+        help="generate the 7dtd-playtest provider that loads every bundle member in a live client",
+        add_help=False,
+    )
+    acceptance_parser.add_argument(
+        "arguments",
+        nargs=argparse.REMAINDER,
+        help="passed through; `shamway acceptance-provider --help` lists them",
+    )
+
     documentation = commands.add_parser(
         "docs", help="print this pipeline's documentation, from the installed package"
     )
@@ -281,7 +295,8 @@ def _init_next_step(bundle_source: str) -> str:
         return "Next: run shamway doctor, then shamway validate. No Unity editor is needed."
     if bundle_source == "synthesized":
         return (
-            "Next: put .png, .wav and .txt/.json/.csv files in assets-src/bundle/, then run "
+            "Next: put .png, .wav, .glb/.obj and .txt/.json/.csv files in assets-src/bundle/, "
+            "then run "
             "shamway build. No editor is involved, so a fresh client is the acceptance: "
             "shamway client deploy . && shamway client launch"
         )

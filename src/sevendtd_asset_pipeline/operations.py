@@ -253,8 +253,8 @@ _DEFINITIONS: tuple[Operation, ...] = (
     ),
     Operation(
         name="pack",
-        summary="Synthesize a .unity3d from a directory of textures, clips and text files "
-        "with no Unity at all, plus the membership manifest that records what went in. "
+        summary="Synthesize a .unity3d from a directory of textures, clips, text files and "
+        "meshes with no Unity at all, plus the membership manifest that records what went in. "
         "Writes the container, the type trees and every object directly.",
         parameters=_schema(
             {

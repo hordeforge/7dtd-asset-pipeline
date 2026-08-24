@@ -87,7 +87,9 @@ prompt pattern, and the key-colour convention.
 1. Keep a high-resolution source; generate against a flat key colour rather
    than asking for transparency.
 2. Cut the background out with partial alpha and de-spill
-   (`shamway generate cutout key`), or render the prefab (`shamway render-icon`).
+   (`shamway generate cutout key`), or photograph the item itself — the bundle
+   prefab with `shamway render-icon` where an editor exists, the mesh file with
+   `shamway generate mesh-icon` where one does not.
 3. Derive the exact deployed cell — 160 x 160 for `ItemIconAtlas`.
 4. Create a contact sheet at native and 2x/4x zoom, and check it on a light
    *and* a dark background.

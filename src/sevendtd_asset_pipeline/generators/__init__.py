@@ -67,6 +67,11 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
         "author a parameterized mesh through headless Blender and export GLB",
         ("blender",),
     ),
+    "mesh-icon": (
+        "mesh_icon",
+        "photograph a mesh file into an atlas cell through headless Blender, with no editor",
+        ("blender", "pillow"),
+    ),
 }
 
 

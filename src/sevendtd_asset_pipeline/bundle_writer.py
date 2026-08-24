@@ -46,6 +46,7 @@ ASSET_BUNDLE = 142
 TEXT_ASSET = 49
 TEXTURE_2D = 28
 AUDIO_CLIP = 83
+MESH = 43
 
 SERIALIZED_VERSION = 22
 # BuildTarget.StandaloneWindows64. The shipped client loads a Windows-target
@@ -406,6 +407,22 @@ FSB5_PCM16 = 2
 AUDIO_PCM = 0
 TEXTURE_RGBA32 = 4
 
+# VertexData always declares the engine's full channel table and leaves the
+# slots a mesh does not use zeroed. The count and the slot order were read out
+# of `Data/Bundles/Standalone/Entities/trees` in the installed game with
+# UnityPy (research-provenance.md, "Mesh finding"), not from a wiki.
+MESH_CHANNELS = 14
+CHANNEL_POSITION = 0
+CHANNEL_NORMAL = 1
+CHANNEL_UV0 = 4
+VERTEX_FORMAT_FLOAT = 0
+INDEX_FORMAT_UINT16 = 0
+INDEX_FORMAT_UINT32 = 1
+TOPOLOGY_TRIANGLES = 0
+# PhysX cooking flags as the game's own meshes carry them; a MeshCollider
+# built from this mesh cooks at load rather than reading a baked blob.
+MESH_COOKING_OPTIONS = 30
+
 
 def text_asset(name: str, text: str) -> BundleObject:
     """A TextAsset: the mod's own data files, readable with `LoadAsset<TextAsset>`."""
@@ -476,6 +493,181 @@ def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
             "m_StreamData": {"offset": 0, "size": 0, "path": ""},
         },
     )
+
+
+def _vertex_channels(has_uv: bool) -> list[dict[str, int]]:
+    """The full channel table, with only the slots this writer fills set."""
+    channels = [
+        {"stream": 0, "offset": 0, "format": 0, "dimension": 0} for _ in range(MESH_CHANNELS)
+    ]
+    channels[CHANNEL_POSITION] = {
+        "stream": 0,
+        "offset": 0,
+        "format": VERTEX_FORMAT_FLOAT,
+        "dimension": 3,
+    }
+    channels[CHANNEL_NORMAL] = {
+        "stream": 0,
+        "offset": 12,
+        "format": VERTEX_FORMAT_FLOAT,
+        "dimension": 3,
+    }
+    if has_uv:
+        channels[CHANNEL_UV0] = {
+            "stream": 0,
+            "offset": 24,
+            "format": VERTEX_FORMAT_FLOAT,
+            "dimension": 2,
+        }
+    return channels
+
+
+def mesh(name: str, source: Path) -> BundleObject:
+    """A Mesh from any geometry file trimesh reads: glTF, GLB, OBJ, STL, PLY.
+
+    The interchange file is the editable source and this is its Unity form —
+    positions, normals and, when the file has them, UV0, interleaved in one
+    vertex stream with 16- or 32-bit indices. The layout is the one the game's
+    own meshes use, read out of a shipped bundle rather than reconstructed
+    from notes (`docs/research/research-provenance.md`).
+
+    Two conversions happen here, and both are the kind of silent wrong that no
+    offline gate catches, so they are done rather than left to the author:
+
+    - glTF, OBJ, STL and PLY are right-handed; Unity is left-handed. X is
+      negated and triangle winding reversed, which is the same conversion
+      Unity's own importers and every glTF runtime for Unity apply. A mesh
+      converted without it loads perfectly and is mirrored.
+    - the file must be Y-up. A Z-up export arrives lying on its face, which is
+      an exporter setting, not something this can detect from the geometry.
+
+    What it does not write: tangents, vertex colours, blend shapes, skinning,
+    and more than one submesh. A normal-mapped material needs tangents, and a
+    material needs a shader, which is the wall in `docs/bundles/no-unity.md`.
+    """
+    require_capability("trimesh")
+    import logging
+
+    import trimesh
+
+    # Without scipy, trimesh's vertex-normal path prints an ImportError
+    # traceback to stderr, falls back, and succeeds. Its logger has no handler,
+    # so Python's last-resort one prints it; a NullHandler keeps a working code
+    # path from reading as a crash in every report this writer appears in.
+    logging.getLogger("trimesh").addHandler(logging.NullHandler())
+
+    try:
+        loaded = trimesh.load(str(source), force="mesh")
+    except Exception as exc:  # noqa: BLE001 - trimesh raises many unrelated types
+        raise PipelineError(f"cannot read mesh {source}: {exc}") from exc
+
+    vertices = getattr(loaded, "vertices", None)
+    faces = getattr(loaded, "faces", None)
+    if vertices is None or faces is None or len(vertices) == 0 or len(faces) == 0:
+        raise PipelineError(
+            f"{source.name} has no triangles to write. `shamway check-mesh {source}` "
+            "reports what the file actually contains."
+        )
+    if len(vertices) > 0xFFFFFFFF:
+        raise PipelineError(f"{source.name} has {len(vertices)} vertices; Unity's limit is 2^32")
+
+    import numpy
+
+    positions = numpy.asarray(vertices, dtype="<f4").reshape(-1, 3).copy()
+    normals = numpy.asarray(loaded.vertex_normals, dtype="<f4").reshape(-1, 3).copy()
+    # Right-handed to left-handed: negate X, then reverse each triangle so its
+    # faces still point outward. Doing only one of the two is a mesh whose
+    # normals and geometry disagree — lit inside-out in the client.
+    positions[:, 0] *= -1.0
+    normals[:, 0] *= -1.0
+    triangles = numpy.asarray(faces, dtype="<u4")[:, ::-1]
+
+    uv = getattr(getattr(loaded, "visual", None), "uv", None)
+    has_uv = uv is not None and len(uv) == len(positions)
+    stride = 32 if has_uv else 24
+    stream = numpy.zeros((len(positions), stride // 4), dtype="<f4")
+    stream[:, 0:3] = positions
+    stream[:, 3:6] = normals
+    if has_uv:
+        stream[:, 6:8] = numpy.asarray(uv, dtype="<f4").reshape(-1, 2)
+
+    wide = len(positions) > 0xFFFF
+    indices = triangles.astype("<u4" if wide else "<u2").tobytes()
+    low = positions.min(axis=0)
+    high = positions.max(axis=0)
+    centre = (high + low) / 2.0
+    extent = (high - low) / 2.0
+    aabb = {
+        "m_Center": {"x": float(centre[0]), "y": float(centre[1]), "z": float(centre[2])},
+        "m_Extent": {"x": float(extent[0]), "y": float(extent[1]), "z": float(extent[2])},
+    }
+
+    return BundleObject(
+        MESH,
+        name,
+        {
+            "m_Name": name,
+            "m_SubMeshes": [
+                {
+                    "firstByte": 0,
+                    "indexCount": int(triangles.size),
+                    "topology": TOPOLOGY_TRIANGLES,
+                    "baseVertex": 0,
+                    "firstVertex": 0,
+                    "vertexCount": len(positions),
+                    "localAABB": aabb,
+                }
+            ],
+            "m_Shapes": {"vertices": [], "shapes": [], "channels": [], "fullWeights": []},
+            "m_BindPose": [],
+            "m_BoneNameHashes": [],
+            "m_RootBoneNameHash": 0,
+            "m_BonesAABB": [],
+            "m_VariableBoneCountWeights": {"m_Data": []},
+            "m_MeshCompression": 0,
+            # Unity's own default is off, but a mesh a mod ships is one another
+            # mod or a Harmony patch may want to read, and the game's shipped
+            # meshes carry it on.
+            "m_IsReadable": True,
+            "m_KeepVertices": True,
+            "m_KeepIndices": True,
+            "m_IndexFormat": INDEX_FORMAT_UINT32 if wide else INDEX_FORMAT_UINT16,
+            "m_IndexBuffer": indices,
+            "m_VertexData": {
+                "m_VertexCount": len(positions),
+                "m_Channels": _vertex_channels(has_uv),
+                "m_DataSize": stream.tobytes(),
+            },
+            "m_CompressedMesh": _empty_compressed_mesh(),
+            "m_LocalAABB": aabb,
+            "m_MeshUsageFlags": 0,
+            "m_CookingOptions": MESH_COOKING_OPTIONS,
+            "m_BakedConvexCollisionMesh": b"",
+            "m_BakedTriangleCollisionMesh": b"",
+            "m_MeshMetrics[0]": 1.0,
+            "m_MeshMetrics[1]": 1.0,
+            "m_StreamData": {"offset": 0, "size": 0, "path": ""},
+        },
+    )
+
+
+def _empty_compressed_mesh() -> dict[str, Any]:
+    """`m_CompressedMesh` with every vector empty: this writer never packs one."""
+    ranged = {"m_NumItems": 0, "m_Range": 0.0, "m_Start": 0.0, "m_Data": [], "m_BitSize": 0}
+    plain = {"m_NumItems": 0, "m_Data": [], "m_BitSize": 0}
+    return {
+        "m_Vertices": dict(ranged),
+        "m_UV": dict(ranged),
+        "m_Normals": dict(ranged),
+        "m_Tangents": dict(ranged),
+        "m_Weights": dict(plain),
+        "m_NormalSigns": dict(plain),
+        "m_TangentSigns": dict(plain),
+        "m_FloatColors": dict(ranged),
+        "m_BoneIndices": dict(plain),
+        "m_Triangles": dict(plain),
+        "m_UVInfo": 0,
+    }
 
 
 def _fsb5_pcm16(pcm: bytes, channels: int, rate: int) -> bytes:
@@ -569,7 +761,13 @@ ASSET_KINDS: dict[str, str] = {
     ".txt": "TextAsset",
     ".json": "TextAsset",
     ".csv": "TextAsset",
+    ".glb": "Mesh",
+    ".gltf": "Mesh",
+    ".obj": "Mesh",
+    ".stl": "Mesh",
+    ".ply": "Mesh",
 }
+MESH_SUFFIXES = tuple(suffix for suffix, kind in ASSET_KINDS.items() if kind == "Mesh")
 IGNORED_NAMES = {".gitkeep", ".gitignore"}
 IGNORED_SUFFIXES = {".meta"}
 
@@ -595,8 +793,8 @@ def collect_sources(source_dir: Path) -> list[Path]:
         kinds = ", ".join(sorted(ASSET_KINDS))
         raise PipelineError(
             "this backend cannot build " + ", ".join(unknown[:5]) + f"; it writes {kinds}. "
-            "A mesh, prefab, material or shader still needs Unity — see "
-            "'shamway docs no-unity'."
+            "A prefab, material or shader still needs Unity, because a shader in a "
+            "bundle is compiled platform bytecode — see 'shamway docs no-unity'."
         )
     if not found:
         raise PipelineError(f"{source_dir} holds no assets to build")
@@ -611,6 +809,8 @@ def object_for(path: Path) -> BundleObject:
         return texture_2d(stem, path)
     if suffix == ".wav":
         return audio_clip(stem, path)
+    if suffix in MESH_SUFFIXES:
+        return mesh(stem, path)
     try:
         return text_asset(stem, path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as exc:

@@ -44,7 +44,7 @@ TOPICS: dict[str, tuple[str, str]] = {
     ),
     "offline-bundle-builder": (
         "adrs/0001-synthesize-bundles-without-an-editor.md",
-        "the editorless writer: format research, what shipped, and the shader wall",
+        "the editorless writer: format research, what shipped, and what is still unbuilt",
     ),
     "mesh-icon": (
         "adrs/0006-render-icons-from-the-mesh-with-blender.md",

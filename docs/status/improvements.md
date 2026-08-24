@@ -109,10 +109,15 @@ What is open, with the pieces already on the shelf:
 4. only then a `Material` that binds it, and only then a claim about rendering
    — which, as everywhere else here, ends at a person looking at a client.
 
-**What is genuinely unknown** (unknown, not impossible): the exact bytes of the
-Unity header preceding the DXBC in a code blob, whether 7DTD's rendering path
-accepts a minimally-authored pass, and which keyword variants the engine
-demands. Each is a measurement against the game's own bundles, not a barrier.
+**What is genuinely unknown** (unknown, not impossible): whether 7DTD's
+rendering path accepts a minimally-authored pass, which keyword variants the
+engine demands, and what `m_CommonParameters` a hand-compiled shader must
+declare for the engine to bind its constant buffers. Each is a measurement
+against the game's own bundles, not a barrier. The code-blob header itself is
+no longer among them — it decoded on 2026-08-24 as eight `u32`s
+(`m_Version`, `m_ProgramType`, three instruction-count stats, a requirements
+word, a keyword count, a code length) and the table is in
+[research-provenance.md](../research/research-provenance.md).
 
 Until it is built, a mod with a prefab or a material uses `bundle_source =
 "unity"` or `"external"`, and the documentation says **unbuilt**, never

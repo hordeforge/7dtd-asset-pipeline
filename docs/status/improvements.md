@@ -85,7 +85,26 @@ built on `tests/fixtures.py`'s field-controlled builders — corrupt one field
 at a time, assert a bounded error naming the field, never a traceback. No new
 dependency in the core: it belongs in a dev extra.
 
-## 6. Tool additions worth their install
+## 6. No runtime helper for the environment lane
+
+[environment-effects.md](../authoring/environment-effects.md) documents the
+capture/clamp/restore discipline the weather and sky controls need, and the
+sentinel values (`-1f` for the force fields, alpha `0` for the fog colour)
+that make a naive reset pin the sky clear and dry. Documented is not enforced:
+every mod that ships an environment effect re-implements the same twenty
+lines, and the failure mode is invisible — nothing logs, and the player is
+left under permanent forced weather.
+
+**Close it with:** a vendored runtime helper, the way the editor scripts in
+`scaffold.PIPELINE_EDITOR_SCRIPTS` are vendored — capture once, clamp against
+the entry baseline, restore the sentinels, and reset on a world change. The
+open question is whether this repository should ship *runtime* C# at all: it
+ships editor scripts today, `make check` can only compile against an editor's
+assemblies, and a helper that lands inside a mod's Harmony assembly is closer
+to mod content than to tooling. Decide that before writing it — it is an
+[RFC](../rfcs/), not a patch.
+
+## 7. Tool additions worth their install
 
 The researched stack in [authoring-tools.md](../authoring/authoring-tools.md) covers the
 lanes; these are the additions the current gaps argue for:
@@ -106,3 +125,4 @@ never guessed at.
 If picked up in one pass: **1** (patch dry-run) buys the most silence removed
 per line of code; **5** hardens everything else; **4** is two independent
 encoders; **2** and **3** are small once 1's XML-loading machinery exists.
+**6** is a decision before it is any code.

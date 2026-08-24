@@ -276,6 +276,13 @@ KINDS: dict[str, Kind] = {
             "The black point is what removes a generator's faint background haze "
             "without hardening the puff edges. A card that keeps that haze shows up in "
             "game as a grey rectangle around every particle.",
+            "The lane below assumes the model returned a grey mask on black. When it "
+            "returned an alpha channel instead, that alpha is usually NOT the "
+            "brightness, and luma mode recomputes it — capping the card near half "
+            "opacity with nothing to flag it. Swap `luma ... --black-point 15` for "
+            "`alpha ... --size 512 --pad 1.0`, which keeps the source alpha and only "
+            "whitens the RGB. It refuses a source with no alpha and names luma in the "
+            "error, so running it is how you find out which one you have.",
         ),
         lane=(
             "shamway generate cutout luma assets-src/vfx/{stem}-mask.png \\\n"

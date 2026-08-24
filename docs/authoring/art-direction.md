@@ -390,6 +390,24 @@ The black point is what removes a generator's faint background haze without
 hardening the puff edges. A card that keeps that haze shows up in game as a
 grey rectangle around every particle.
 
+**Look at whether the file already has an alpha channel first.** Image models
+often return one, and that alpha is usually *not* the picture's brightness — a
+measured source peaked at alpha 251 where its luma peaked at 135. Running
+`luma` on such a file recomputes alpha from brightness and caps the card near
+half opacity, which nothing downstream flags. Keep the alpha instead:
+
+```bash
+shamway generate cutout alpha assets-src/vfx/haze-src.png \
+    assets-src/vfx/haze-card.png --size 512 --pad 1.0
+```
+
+`cutout alpha` refuses a source with no alpha channel and names `luma` in the
+error, so this is a question you can answer by running it rather than by
+inspecting the file. For cards that are pure falloff — rain, ash, a broad haze
+puff — skip the model entirely and draw them:
+[environment-effects.md](environment-effects.md) owns that lane and
+`shamway generate particle-card` draws both shapes.
+
 ## Cutting the background out
 
 A hard threshold produces a coloured fringe on every soft edge, and a fringe is

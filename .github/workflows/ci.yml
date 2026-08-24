@@ -150,7 +150,8 @@ jobs:
             git init -q -b badges badge-repo
             # Only the fresh-init path needs the remote: clone already has it,
             # and adding a duplicate fails the step under set -e.
-            git -C badge-repo remote add origin "$url"
+            git -C badge-repo remote remove origin 2>/dev/null || true
+          git -C badge-repo remote add origin "$url"
           fi
           cp "$RUNNER_TEMP/coverage.svg" badge-repo/
           cd badge-repo

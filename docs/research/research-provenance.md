@@ -948,3 +948,43 @@ Unity reports none of this. It reports an unsupported shader. The lesson is
 worth more than the fix: **a GLSL payload can be validated offline, by a
 compiler that explains itself, without an editor and without a device.** Doing
 that first would have cost one command.
+
+
+## `<noninit>`: the sentinel in a shader render-state value
+
+**Measured 2026-08-24** with UnityPy against `Game/EntityTintMaskSSS` and
+`Legacy Shaders/Transparent/Cutout/VertexLit`, read out of
+`Data/Bundles/Standalone/Entities/trees` in the installed game. Editor
+2022.3.62f2.
+
+Every field of a pass's `m_State` - `srcBlend`, `destBlend`, `colMask`,
+`zTest`, `zWrite`, `culling`, the stencil and fog fields - is a
+`SerializedShaderFloatValue`:
+
+```text
+{'val': 15.0, 'name': '<noninit>'}
+```
+
+`val` is the constant. `name`, when set, is the **material property** the value
+comes from instead - which is how a shader gets `Cull [_Cull]`. Unity writes the
+literal string `<noninit>` when there is no property.
+
+**`""` is not equivalent.** It is a property whose name is the empty string:
+the runtime looks it up, finds nothing, and substitutes 0. Applied to a whole
+render state that turns `colMask` into 0 - the pass writes no colour channels -
+and the object is invisible while nothing reports an error. The shader loads,
+`Shader.isSupported` is true, `Material.SetPass(0)` returns true, and Unity does
+not fall back, because from its point of view nothing failed.
+
+`SerializedShaderVectorValue` (`fogColor`) carries the same `name` field and the
+same rule.
+
+**Verified both ways.** Stock's `rtBlend0` and this writer's differ *only* in
+that string - every `val` matched - and restoring stock's `rtBlend0` alone made
+a mutated stock shader draw again, while restoring `gpuProgramID`, `culling`,
+`m_Tags` or `zTest` alone did not. With the sentinel written,
+`verify-bundle --draw` reports `covered=38.8% zoomed-out=2.4%` for a synthesized
+prop that had read `0.0%` for the whole investigation.
+
+`bundle_writer.NO_PROPERTY` holds the string; `RenderStateSentinelTests` fails
+if any render-state value carries an empty name again.

@@ -304,14 +304,24 @@ sub-program against, so `isSupported` is not a verdict:
 
 ```text
 VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=1     # -nographics: meaningless
-VERIFY-SHADER: 'Shamway/Unlit' isSupported=False passes=3    # real device: the answer
-VERIFY-MATERIAL: ... shaderSupported=False _MainTex=<unbound>
+VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=1     # real device: the answer
+VERIFY-DRAWN: shamwayselftestprop covered=38.8% zoomed-out=2.4%
+VERIFY-MATERIAL: ... shaderSupported=True _MainTex=shamwaySelfTestProp_albedo
 ```
 
-A block whose `Model` is a synthesized prefab therefore **places in 7DTD and
-renders nothing** — no error, no magenta, an invisible block. Everything around
-the shader is sound: the container, the prefab, the mesh, the material and the
-`PPtr` chain are all read back correctly by a runtime and by the game itself.
+**Fixed 2026-08-24.** For a day this said a synthesized prefab places in 7DTD
+and renders nothing, which it did. Three bugs caused it, all now fixed: the
+GLCore code record was eight bytes short of the format; the fragment half used
+`layout(location = ...)` under `#version 150` without
+`#extension GL_ARB_explicit_attrib_location`; and every field of the pass's
+render state carried `name: ""` where Unity writes the sentinel `<noninit>`.
+That last one is why it was *invisible* rather than broken — an empty name is a
+material-property lookup that fails and yields 0, so `colMask` became 0 and the
+pass wrote no colour channels. Nothing reported an error, because from the
+runtime's point of view nothing had failed.
+
+**A load is still not a look.** `covered=38.8%` says pixels were written. It
+does not say the prop looks right, and nobody has yet looked.
 
 Get the real answer with a graphics device:
 

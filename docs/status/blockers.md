@@ -164,12 +164,15 @@ measured at `160x160 rgba 53% opaque` on a generated crate.
 7 Days to Die resolves the synthesized prefab, its mesh, its material and its
 texture through the game's own `DataLoader`, on a freshly generated world.
 
-**Measured failing, 2026-08-24.** A synthesized prop places in a live client
-and **renders nothing**: the shader does not compile on a real graphics device
-(`isSupported=False`, `Failed to load GpuProgram from binary shader data`).
-Everything around it is sound — the game resolves the prefab, mesh, material
-and texture by stem. Full account, including what was ruled out and what to
-measure next:
+**Measured failing and then fixed, 2026-08-24.** A synthesized prop placed in
+a live client and **rendered nothing**. Three bugs, all now fixed: the GLCore
+code record was eight bytes short of the format, the fragment half used
+`layout(location = ...)` under `#version 150` without its extension, and — the
+one that made it invisible — every field of the pass's render state carried
+`name: ""` where Unity writes the sentinel `<noninit>`. An empty name is a
+*property lookup* that fails and yields 0, which set `colMask` to 0: the pass
+wrote no colour channels. `verify-bundle --draw` now reports
+`covered=38.8% zoomed-out=2.4%` for that prop. Full account:
 [reports/2026-08-24-synthesized-shader-does-not-run.md](../reports/2026-08-24-synthesized-shader-does-not-run.md).
 
 **Blocks:** the claim that any of it is *right*. **Nothing synthesized past a
@@ -299,13 +302,14 @@ These were open and are now closed, so the list above stays meaningful:
   VERIFY-MATERIAL: 'prop_mat' shader='Shamway/Unlit' shaderSupported=True _MainTex=prop_albedo
   ```
 
-  **Withdrawn, 2026-08-24.** Both lines were measured under `-nographics`,
-  where there is no device to compile against and `isSupported` is not a
-  verdict. With a real graphics device the same bundle reports
-  `isSupported=False`, `passes=3`, `_MainTex=<unbound>`. The shader does not
-  run, and a block using it places in 7DTD and draws nothing. What survives of
-  this entry is narrower: the *container*, the object graph and the PPtr chain
-  are read correctly by a runtime — the shader is not.
+  **Withdrawn as evidence, 2026-08-24, though the conclusion later held.**
+  Both lines were measured under `-nographics`, where there is no device to
+  compile against and `isSupported` is not a verdict — so they proved nothing
+  at the time. With a real device the same bundle then reported
+  `isSupported=False`, `passes=3`, `_MainTex=<unbound>`, and the prop drew
+  nothing. All three causes were found and fixed the same day, and the shader
+  now loads *and* draws on a real device. The lesson survives the fix:
+  `isSupported` under `-nographics` is not a measurement.
 
   That closes the claim this documentation carried in six places until that
   day: that a Unity shader "cannot be produced offline, ever". It could, and

@@ -236,6 +236,14 @@ that sustained low layer instead of consuming its headroom. This remains
 separate from the body/coda and deliberately does not restore sparse debris
 crackling.
 
+Target-game listening confirmed that this sustained-boom design improved the
+low end, but rejected it as incomplete because it lacked the mid/high
+“shatter” that makes a huge pressure front feel violent. The follow-up
+preserves the low layer and adds a dense 650–7,800 Hz tearing burst with a
+0.42-second decay. Its fast, continuously varying amplitude gives the front a
+shattering texture without reverting to isolated debris crackles, nonlinear
+overdrive, or clipping.
+
 The near `blast` voice itself no longer treats sparse high-band debris as a
 main layer. A target-game reviewer rejected that output as “just crackling,”
 not a bomb or blast. Its replacement uses a wider bipolar pressure hit, a

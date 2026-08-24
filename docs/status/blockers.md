@@ -160,6 +160,26 @@ texture, and the prefab resolving both (see the verified entry below).
 `shamway check-icons` accepts what `shamway generate mesh-icon` writes —
 measured at `160x160 rgba 53% opaque` on a generated crate.
 
+**Partially closed, 2026-08-24.** The suite was run against a live client for
+the first time, and it found a defect — in the *provider generator*, not the
+bundle. `acceptance-provider` mapped a `.glb` manifest entry to
+`LoadAsset<Mesh>` at the bare stem, but since the shader lane landed the prefab
+owns that stem:
+
+```text
+shamwayPropProof: LoadAsset<Mesh> returned null
+FAIL shamwaypropproof_bundle/load_shamwayPropProof
+PASS shamwaypropproof_bundle/load_shamwayPropProof_albedo
+PASS shamwaypropproof_bundle/absent_stem_is_null
+```
+
+The texture loaded from the same synthesized bundle, and the absent-stem case
+returned null, so the container and the class-142 lookup were working. The
+provider now derives its cases from `bundle_writer.synthesized_members`, which
+is the writer's own naming, so the two cannot drift again. **Re-running it is
+what would close the mechanical half of this entry**; nothing yet proves the
+engine resolves a synthesized `GameObject`.
+
 **Blocks:** the claim that any of it is *right*. **Nothing synthesized past a
 texture and a clip has been in front of a person, and no synthesized prefab
 has been drawn at all** — `isSupported` is the runtime saying it could compile

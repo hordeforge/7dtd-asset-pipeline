@@ -65,6 +65,11 @@ UNLIT_SHADER_NAME = "Shamway/Unlit"
 """The one shader the editorless writer emits, shared by every material."""
 
 ALBEDO_SUFFIX = "_albedo"
+# The prefab takes the source file's stem, so its mesh and material cannot.
+# Named here rather than inline because the acceptance provider has to predict
+# exactly these names to ask the engine for them.
+MESH_SUFFIX = "_mesh"
+MATERIAL_SUFFIX = "_mat"
 """A mesh `X` binds the texture `X_albedo` when one is in the same source tree.
 
 A convention rather than a guess: the prefab has to own the mesh's stem,
@@ -1348,8 +1353,8 @@ def prefab_objects(mesh_path: Path, texture_stems: set[str]) -> list[BundleObjec
     owned the stem answered to a name the game never asks for.
     """
     stem = mesh_path.stem
-    mesh_key = f"{stem}_mesh"
-    material_key = f"{stem}_mat"
+    mesh_key = f"{stem}{MESH_SUFFIX}"
+    material_key = f"{stem}{MATERIAL_SUFFIX}"
     albedo = f"{stem}{ALBEDO_SUFFIX}"
     return [
         mesh(mesh_key, mesh_path),
@@ -1399,6 +1404,40 @@ def write_artifact(path: Path, payload: bytes | str) -> None:
         temporary_path.replace(path)
     finally:
         temporary_path.unlink(missing_ok=True)
+
+
+def synthesized_members(source_dir: Path) -> list[tuple[str, str]]:
+    """Every object name this writer would emit, with the class it loads as.
+
+    The names a source file becomes are **not** derivable from the manifest,
+    which records source paths: one `prop.glb` becomes a `prop` prefab, a
+    `prop_mesh`, a `prop_mat` and a shared shader. Anything asserting what the
+    engine can load has to ask here rather than mapping an extension to a
+    class, which is how `acceptance-provider` came to request
+    `LoadAsset<Mesh>("prop")` — the name the prefab now owns — and get null
+    back from a bundle that was perfectly good.
+
+    Returns `(name, unity class)` pairs. The shader is deliberately absent: it
+    is an implementation detail of the material, has no stem a mod would ask
+    for, and `LoadAsset<Shader>` is not how anything reaches it.
+    """
+    sources = collect_sources(source_dir)
+    meshes = [path for path in sources if path.suffix.lower() in MESH_SUFFIXES]
+    prefabs = bool(meshes) and has_capability("vkd3d-compiler")
+    members: list[tuple[str, str]] = []
+    for path in sources:
+        kind = ASSET_KINDS[path.suffix.lower()]
+        if kind != "Mesh":
+            members.append((path.stem, kind))
+        elif prefabs:
+            # The prefab owns the stem, because that is the name `Meshfile` and
+            # block `Model` resolve through `LoadAsset<GameObject>`.
+            members.append((path.stem, "GameObject"))
+            members.append((f"{path.stem}{MESH_SUFFIX}", "Mesh"))
+            members.append((f"{path.stem}{MATERIAL_SUFFIX}", "Material"))
+        else:
+            members.append((path.stem, "Mesh"))
+    return members
 
 
 def pack_directory(

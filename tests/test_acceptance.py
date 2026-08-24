@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 from sevendtd_asset_pipeline import acceptance
+from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.config import PipelineConfig
 from sevendtd_asset_pipeline.errors import PipelineError
 
@@ -38,6 +39,14 @@ def _mod(root: Path, assets: list[str], mod_name: str = "ExampleMod") -> Pipelin
     body = "ManifestFileVersion: 0\nAssetBundleManifest: examplemod.unity3d\nAssets:\n"
     body += "".join(f"- bundle/{asset}\n" for asset in assets)
     manifest.write_text(body + "Dependencies: []\n", encoding="utf-8")
+    # A synthesized provider is derived from the source folder, not from the
+    # manifest, because only the writer knows that `prop.glb` becomes a prefab
+    # named `prop` plus `prop_mesh` and `prop_mat`. The files need only exist
+    # and carry the right suffix; nothing here reads their contents.
+    source_dir = root / "assets-src" / "bundle"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    for asset in assets:
+        (source_dir / asset).write_bytes(b"")
     return load_config(root / ".shamway.toml")
 
 
@@ -46,9 +55,13 @@ class PlanTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config = _mod(Path(tmp), ["panel.png", "blast.wav", "data.json"])
             planned = acceptance.plan(config)
+            # Membership, not order: a real manifest is written from a sorted
+            # scan, and the synthesized route derives its names from the same
+            # scan, so pinning the hand-written fixture's order asserted
+            # something neither producer promises.
             self.assertEqual(
-                [("panel", "Texture2D"), ("blast", "AudioClip"), ("data", "TextAsset")],
-                list(planned.stems),
+                {("panel", "Texture2D"), ("blast", "AudioClip"), ("data", "TextAsset")},
+                set(planned.stems),
             )
             self.assertEqual("ExampleMod", planned.mod_name)
             self.assertEqual("Resources/examplemod.unity3d", planned.bundle_uri_path)
@@ -68,6 +81,44 @@ class PlanTests(unittest.TestCase):
             with self.assertRaises(PipelineError) as raised:
                 acceptance.plan(config)
             self.assertIn("shamway build", str(raised.exception))
+
+
+class SynthesizedNamingTests(unittest.TestCase):
+    """The provider must ask for the names the writer actually emits.
+
+    Found by running the suite in a live client: the provider mapped `.glb` to
+    `LoadAsset<Mesh>` at the bare stem, but since the shader lane landed the
+    prefab owns that stem and the mesh moved to `<stem>_mesh`. The client
+    correctly answered null, and a perfectly good bundle read as a failure:
+
+        shamwayPropProof: LoadAsset<Mesh> returned null
+        FAIL shamwaypropproof_bundle/load_shamwayPropProof
+    """
+
+    def _cases(self, assets: list[str]) -> dict[str, str]:
+        with tempfile.TemporaryDirectory() as name:
+            return dict(acceptance.plan(_mod(Path(name), assets)).stems)
+
+    @unittest.skipUnless(
+        has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+    )
+    def test_a_mesh_source_is_asked_for_as_the_prefab_the_game_resolves(self) -> None:
+        cases = self._cases(["prop.glb", "prop_albedo.png"])
+        self.assertEqual("GameObject", cases["prop"], "Meshfile resolves a prefab, not a Mesh")
+        self.assertEqual("Mesh", cases["prop_mesh"])
+        self.assertEqual("Material", cases["prop_mat"])
+        self.assertEqual("Texture2D", cases["prop_albedo"])
+
+    @unittest.skipUnless(
+        has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+    )
+    def test_the_shader_gets_no_case(self) -> None:
+        """It has no stem a mod asks for, and LoadAsset<Shader> is not how it is reached."""
+        self.assertNotIn("Shader", set(self._cases(["prop.glb"]).values()))
+
+    def test_a_non_mesh_source_still_takes_its_own_stem(self) -> None:
+        cases = self._cases(["beep.wav", "notes.txt", "panel.png"])
+        self.assertEqual({"beep": "AudioClip", "notes": "TextAsset", "panel": "Texture2D"}, cases)
 
 
 class RenderTests(unittest.TestCase):

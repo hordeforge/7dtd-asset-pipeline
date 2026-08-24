@@ -573,6 +573,39 @@ WineHQ publishes a GPG `.sign` beside each tarball but no checksum file, so
 (`034613605baab8ba84674f8d272cf22b5e86bc6bc03fc5728ef9bce07308baa6`) and
 refuses a version override that arrives without one.
 
+### What a live client said about the synthesized bundle, first run
+
+**Measured 2026-08-24**, 7 Days to Die **V.3.10.14** through
+`shamway script playtest-acceptance`, on a bundle written with no editor:
+
+```text
+shamwayPropProof: LoadAsset<Mesh> returned null
+FAIL shamwaypropproof_bundle/load_shamwayPropProof
+shamwayPropProof_albedo: shamwayPropProof_albedo 256x256 RGBA32
+PASS shamwaypropproof_bundle/load_shamwayPropProof_albedo
+PASS shamwaypropproof_bundle/absent_stem_is_null
+```
+
+The failure was **this repository's provider generator, not the bundle**.
+`acceptance.plan` mapped a manifest entry's extension to a class — `.glb` to
+`Mesh` — and asked for it at the bare stem. Since the shader lane landed, a
+mesh source produces a *prefab* under that stem, with the mesh at
+`<stem>_mesh`. The engine answered null correctly.
+
+Two things this does establish, on a synthesized bundle in the real game:
+
+- the class-142 container's `m_Container` table resolves a **`Texture2D`** by
+  stem through `DataLoader.LoadAsset<T>`, reported back as `256x256 RGBA32`,
+  which is what was authored;
+- a stem the bundle does not contain returns null, so a pass is not a loader
+  answering everything.
+
+What it does **not** establish is anything about the prefab, the material or
+the shader in 7DTD. The provider now derives its cases from
+`bundle_writer.synthesized_members` — the writer's own naming, one source of
+truth — and the re-run is what would settle it.
+[status/blockers.md](../status/blockers.md) entry 6 holds that.
+
 ## Class-table prefix window, measured for the offline reader
 
 Measured 2026-08-24 against the installed game's own bundles (V3.1.0 b14) with

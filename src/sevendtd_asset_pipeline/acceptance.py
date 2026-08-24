@@ -47,6 +47,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from . import transcode
+from .bundle_writer import synthesized_members
 from .client import hold_for_write, user_mods_dir
 from .config import PipelineConfig, load_config
 from .errors import PipelineError
@@ -111,7 +112,8 @@ ASSET_DETAILS: dict[str, str] = {
     "AudioClip": '" channels=" + loaded.channels + " frequency=" + loaded.frequency '
     '+ " samples=" + loaded.samples + " length=" + loaded.length',
     "TextAsset": '" bytes=" + loaded.bytes.Length',
-    "GameObject": '" children=" + loaded.transform.childCount',
+    "GameObject": '" children=" + loaded.transform.childCount + " renderers=" '
+    "+ loaded.GetComponentsInChildren<Renderer>(true).Length",
     "Material": '" shader=" + loaded.shader.name',
     "Mesh": '" vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount '
     '+ " bounds=" + loaded.bounds.size',
@@ -192,7 +194,6 @@ def _template(name: str) -> str:
 def plan(config: PipelineConfig) -> ProviderPlan:
     """Derive the provider from the mod's own configuration and manifest."""
     mod_root = Path(config.mod_root)
-    mod_name = read_mod_name(mod_root / "ModInfo.xml")
     manifest = Path(config.tracked_manifest)
     if not manifest.is_file():
         raise PipelineError(
@@ -201,6 +202,22 @@ def plan(config: PipelineConfig) -> ProviderPlan:
         )
     stems: list[tuple[str, str]] = []
     unsupported: list[str] = []
+    if config.bundle_source == "synthesized":
+        # Ask the writer what it names things instead of mapping an extension
+        # to a class. Those two answers stopped agreeing the day a mesh source
+        # started producing a prefab: the manifest still lists `prop.glb`, and
+        # the object under `prop` is a GameObject, so a provider built from the
+        # extension asked for LoadAsset<Mesh>("prop") and a live client
+        # correctly returned null.
+        stems = list(synthesized_members(Path(config.bundle_source_dir)))
+        unsupported = [name for name, kind in stems if kind not in KIND_ASSERTIONS]
+        if unsupported:
+            raise PipelineError(
+                "no load case is defined for the synthesized member(s) "
+                + ", ".join(sorted(unsupported)[:5])
+                + "; add the class to acceptance.KIND_ASSERTIONS with what proves it loaded."
+            )
+        return _rendered_plan(config, mod_root, stems)
     for asset in manifest_assets(manifest):
         suffix = Path(asset).suffix.lower()
         entry = ASSET_CASES.get(suffix)
@@ -218,6 +235,18 @@ def plan(config: PipelineConfig) -> ProviderPlan:
         )
     if not stems:
         raise PipelineError(f"{manifest} lists no assets a provider case could load")
+    return _rendered_plan(config, mod_root, stems)
+
+
+def _rendered_plan(
+    config: PipelineConfig, mod_root: Path, stems: list[tuple[str, str]]
+) -> ProviderPlan:
+    """The plan itself, once the (name, class) pairs are known.
+
+    Shared by both routes into `plan`, so a synthesized mod and an
+    editor-built one cannot end up with differently shaped providers.
+    """
+    mod_name = read_mod_name(mod_root / "ModInfo.xml")
     bundle_name = Path(config.bundle_output).name
     resources = Path(config.resources_dir).name
     assembly = f"{_identifier(mod_name)}Acceptance"

@@ -186,9 +186,31 @@ namespace SevenDaysToDie.AssetPipeline
                     {
                         Debug.Log("VERIFY-DRAWNOW: not measured (" + drawNowFailed.Message + ")");
                     }
+                    // Validate this measurement path before trusting a zero
+                    // from it: a material Unity built itself, on the same cube,
+                    // measured the same way. If this reads zero, the probe is
+                    // broken and the bundle's material is not accused.
+                    Material builtIn = new Material(Shader.Find("Unlit/Texture"));
+                    control.GetComponent<Renderer>().sharedMaterial = builtIn;
+                    camera.orthographicSize = framed * 1.4f;
+                    Debug.Log("VERIFY-DRAWN-BUILTIN-MAT: built-in cube wearing a fresh " +
+                              "Unlit/Texture material covered=" +
+                              Coverage(camera, target, readback).ToString("0.0") + "%");
+
                     control.GetComponent<Renderer>().sharedMaterial = worn;
                     camera.orthographicSize = framed * 1.4f;
                     wornNear = Coverage(camera, target, readback);
+
+                    // Same material object, a shader Unity compiled itself.
+                    // Separates "this Material is broken" from "the shader it
+                    // points at is". Restored afterwards.
+                    Shader wasShader = worn.shader;
+                    worn.shader = Shader.Find("Unlit/Color");
+                    camera.orthographicSize = framed * 1.4f;
+                    Debug.Log("VERIFY-DRAWN-SWAPPED: the bundle's material wearing " +
+                              "Unlit/Color covered=" +
+                              Coverage(camera, target, readback).ToString("0.0") + "%");
+                    worn.shader = wasShader;
                     Debug.Log("VERIFY-DRAWN-MATERIAL: built-in cube wearing '" + worn.name +
                               "' covered=" + wornNear.ToString("0.0") + "%");
                 }

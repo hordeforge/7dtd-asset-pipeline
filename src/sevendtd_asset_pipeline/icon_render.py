@@ -34,6 +34,7 @@ from .capabilities import require_capability
 from .config import PipelineConfig
 from .errors import PipelineError
 from .icon_check import DEFAULT_CELL, inspect_icon
+from .unity_process import run_unity
 
 SUPERSAMPLE = 4
 MINIMUM_COVERAGE = 0.02
@@ -168,7 +169,7 @@ def render_icon(
     # Proton async-load starvation is one documented way) must fail the run
     # with its log named, not hold the command forever.
     try:
-        result = subprocess.run(command, check=False, timeout=timeout)
+        result = run_unity(command, timeout=timeout)
     except subprocess.TimeoutExpired as exc:
         raise PipelineError(
             f"Unity did not finish rendering {project_path} within {timeout}s and was "

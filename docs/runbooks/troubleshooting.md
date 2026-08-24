@@ -391,3 +391,34 @@ A Windows bundle includes D3D11/OpenGL/Vulkan variants, not Metal. Treat native
 macOS shaders as a separate platform-asset problem. Prove a macOS-target
 bundle and a runtime selection strategy; do not rename two platform files to
 the same URI and hope the loader chooses.
+
+## `Unity exited -6` with a clean build log
+
+The editor aborts on a mono assertion and the log's compile section says
+nothing is wrong:
+
+```text
+ToFileDescriptor(intptr_t): Assertion `fd < sysconf(_SC_OPEN_MAX) &&
+"Requested file descriptor exceeds maximum number of files allowed to be open
+at a time."' failed.
+```
+
+**It is the host's file-descriptor limit, not the project.** Reproduced
+2026-08-24 on a machine whose soft `RLIMIT_NOFILE` was 1048576: every build
+aborted. The same command at 65536 — same project, same editor — succeeded
+every time.
+
+`shamway` launches every batch-mode editor through `run_unity`, which lowers
+the child's limit to 65536 and leaves the parent's alone, so this should not
+reach you. If you are invoking the editor yourself, do the same:
+
+```bash
+ulimit -n 65536
+```
+
+`shamway doctor` reports the host's limit under `open files`.
+
+The mechanism inside mono is **not** established — the assertion reads as
+though a larger `_SC_OPEN_MAX` should be easier to satisfy, not harder. What is
+recorded here is the reproduction and the mitigation. Do not repeat it as a
+diagnosis.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import resource
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from .config import BUNDLE_SOURCES, PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .references import read_mod_name
+from .unity_process import SAFE_OPEN_FILE_LIMIT, open_file_limit_is_risky
 
 REQUIRED_MODULES = ("com.unity.modules.assetbundle",)
 RECOMMENDED_MODULES = (
@@ -153,6 +155,7 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
 
     if config.unity_editor:
         checks.extend(_editor_checks(config))
+        checks.append(_open_file_limit_check())
     elif config.builds_locally:
         checks.append(
             Check("WARN", "Unity editor", "set UNITY_EDITOR to build; inspection still works")
@@ -297,6 +300,29 @@ def _capability_checks() -> list[Check]:
                 )
             )
     return checks
+
+
+def _open_file_limit_check() -> Check:
+    """Report a host file-descriptor limit that has been seen to abort Unity.
+
+    Informational rather than a warning, because `run_unity` already lowers the
+    limit for the editor it launches — so a risky host is a fact about the
+    machine, not a defect in the setup. It is surfaced at all because the
+    failure it causes is a bare `Unity exited -6` with a clean compile log, and
+    somebody reading that deserves to find this line in `doctor` rather than
+    rediscover it.
+    """
+    soft, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if not open_file_limit_is_risky():
+        return Check("OK", "open files", f"soft RLIMIT_NOFILE is {soft}")
+    shown = "unlimited" if soft == resource.RLIM_INFINITY else str(soft)
+    return Check(
+        "INFO",
+        "open files",
+        f"soft RLIMIT_NOFILE is {shown}; a batch-mode editor aborts on a mono "
+        f"assertion at limits this large, so it is launched with "
+        f"{SAFE_OPEN_FILE_LIMIT}",
+    )
 
 
 def _editor_checks(config: PipelineConfig) -> list[Check]:

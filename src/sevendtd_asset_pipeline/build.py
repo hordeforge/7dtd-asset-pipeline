@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -24,6 +23,7 @@ from .config import PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .references import manifest_assets
+from .unity_process import run_unity
 from .validation import reject_ambiguous_stems, validate_bundle
 
 DISABLED_MODULE_TEXT = "is not supported because the module"
@@ -168,7 +168,7 @@ def run_build(config: PipelineConfig, probe: bool = False) -> Path:
     ]
     if probe:
         command.append("-sapProbe")
-    result = subprocess.run(command, check=False)
+    result = run_unity(command)
     if result.returncode != 0:
         raise PipelineError(f"Unity exited {result.returncode}; inspect {log}")
     built = output / built_name

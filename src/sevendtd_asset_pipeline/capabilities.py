@@ -122,9 +122,9 @@ REGISTRY: tuple[_Spec, ...] = (
         name="blender",
         kind="command",
         probe="blender",
-        unlocks=("shamway generate mesh",),
+        unlocks=("shamway generate mesh", "shamway generate mesh-icon"),
         purpose="authored mesh lane: organic, rigged, and sculpted geometry, exported "
-        "as glTF straight into an editorless bundle",
+        "as glTF straight into an editorless bundle, and the editorless icon render",
         install="shamway script install-tools --with-authoring",
     ),
     _Spec(
@@ -155,8 +155,12 @@ REGISTRY: tuple[_Spec, ...] = (
         name="numpy",
         kind="module",
         probe="numpy",
-        unlocks=("shamway generate texture-maps",),
-        purpose="seeded numeric texture synthesis",
+        unlocks=(
+            "shamway generate texture-maps",
+            "compress_textures (DXT1/DXT5 block compression)",
+        ),
+        purpose="seeded numeric texture synthesis, and the block compressor that "
+        "shrinks a synthesized texture 4-8x",
         install=extra_install("authoring"),
     ),
     _Spec(

@@ -309,6 +309,33 @@ or live-client gates.
 
 - Official repository: <https://github.com/OCB7D2D/UnityAssetExporter>
 
+## What is actually wired, and what is not
+
+A tool named on this page with nothing calling it reads like an unfinished
+integration. This table says which is which, so nobody has to guess — and so
+"integrate the OSS tools" has one place to check. Ask the live version with
+`shamway capabilities --json`.
+
+| Tool | State |
+|---|---|
+| **UnityPy** | **wired** — type trees for every class the editorless writer emits, `inspect --deep` |
+| **trimesh** | **wired** — `check-mesh`, and reads glTF/OBJ/STL/PLY into a bundle `Mesh` |
+| **Blender** | **wired** — `generate mesh` (GLB) and `generate mesh-icon` (headless Cycles render) |
+| **Pillow** | **wired** — cutouts, atlas cells, contact sheets, the texture lane |
+| **NumPy** | **wired** — `generate texture-maps`, and the BC1/BC3 block compressor |
+| **Khronos glTF Validator** | **wired** — `check-mesh --strict`; degrades to a `skipped:` line when absent |
+| **screenshot backends** | **wired** — `client capture` picks one per session type |
+| **xvfb** | **wired** — `render-icon` on a headless host |
+| **OpenSCAD** | **input only** — its STL drops straight into `assets-src/bundle/`; no command shells out to it |
+| **ImageMagick** | **for a mod's own scripts** — Pillow already covers what the pipeline needs |
+| **FFmpeg** | **for a mod's own scripts** — `generate audio convert` does resample/downmix/normalize with the standard library |
+| **bc7enc / Compressonator / ISPC / ctt** | **not wired** — BC7 only; none is packaged on Arch, Debian or Fedora, so each means a source build. BC1/BC3 are built in |
+| **gltfpack** | **not wired** — mesh quantization; useful when a mod's bundle is mesh-heavy, and nothing needs it before then |
+| **Material Maker** | **not wired** — GUI-first; its CLI export is a mod-side authoring choice |
+| **AssetRipper / AssetStudio / UABE** | **reference only, by design** — read the game to learn from it, never to copy out of it |
+| **python-fsb5** | **not wired** — decodes vanilla clips for reference listening; the writer only needs the encode side, which it has |
+| **vkd3d-compiler / glslang** | **not wired yet** — proven to emit the DXBC/SPIR-V a Unity shader carries; blocked on one undecoded descriptor ([improvements](../status/improvements.md) 4b) |
+
 ## Recommended agent-ready stack
 
 | Asset | Generate/author | Pre-Unity check | Final gate |

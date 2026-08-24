@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from ._version import __version__
+from .colour import DEFAULT_COLOUR_TOLERANCE, DEFAULT_TILE_RATIO
 from .config import BUNDLE_SOURCES, DEFAULT_BUNDLE_SOURCE
 from .docs import topics
 from .errors import PipelineError
@@ -159,6 +160,33 @@ _DEFINITIONS: tuple[Operation, ...] = (
         writes=False,
         needs_config=False,
         capabilities=("trimesh",),
+    ),
+    Operation(
+        name="check_texture",
+        summary="Check a generated texture against the two things generation gets wrong: its "
+        "mean colour against the material.color it replaces (compared in sRGB, because a "
+        "material colour is already sRGB), and whether it still tiles.",
+        parameters=_schema(
+            {
+                "texture": PATH_PARAM,
+                "matches": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "default": None,
+                },
+                "tolerance": {"type": "number", "default": DEFAULT_COLOUR_TOLERANCE},
+                "tileable": {"type": "boolean", "default": False},
+                "max_tile_ratio": {"type": "number", "default": DEFAULT_TILE_RATIO},
+            },
+            required=["texture"],
+        ),
+        returns="TextureReport: size, mean_srgb, mean_bytes, mean_linear, expected_srgb, "
+        "colour_drift, tile_ratio, problems, notes, ok",
+        cost=FAST,
+        writes=False,
+        needs_config=False,
     ),
     Operation(
         name="check_sound",

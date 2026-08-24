@@ -549,9 +549,74 @@ about forty primitives, and every lesson generalises:
   plastic strapping on screen; 0.07 reads as tape. A dark, highly metallic
   colour has almost no diffuse response left and renders brown — lower the
   metallic before brightening the colour.
+- **A material colour is sRGB. A generated albedo must match its bytes.**
+  See below; this is the one that costs a session rather than a render.
 - **Do not hand-draw the icon of a modelled item.** The source project's one
   Pillow-drawn icon sat next to photoreal renders, matched neither them nor
   its own mesh, and was replaced by `render-icon`.
+
+## Replacing a flat colour with a generated texture
+
+Sooner or later a flat `material.color` becomes a real surface: a tileable
+fabric, a detail albedo, a placard. Generating one means choosing its colour
+numerically instead of by eye, and there is exactly one trap there.
+
+**Unity converts `Color` shader properties from gamma to linear** when it
+uploads them in a linear-space project. So this:
+
+```csharp
+material.color = new Color(0.46f, 0.39f, 0.15f);
+```
+
+does not put 0.46 into the lighting equation. It puts `srgb_to_linear(0.46)`,
+which is 0.179. The triple is **sRGB**, and the bytes it stands for are
+`(117, 99, 38)`.
+
+Read those same numbers as *linear* when generating the replacement texture,
+encode them to sRGB on the way into the PNG, and the file lands at
+`(138, 126, 76)` — 18% brighter, with roughly double the blue. A mustard
+renders as cream.
+
+What makes this worth a page rather than a footnote is the second half: **the
+result looks exactly like a colour that needs darkening.** So the next change
+is a correction applied to the wrong thing, it makes the texture further from
+the material it was supposed to match, and it looks like progress while doing
+it. That is how it costs a session.
+
+The rule, once:
+
+> A generated albedo replacing a flat `material.color` must have that colour's
+> **sRGB byte values** as its mean — not those numbers read as linear.
+
+And because light does not add in gamma space, any *mixing* — grime toward a
+dirtier tone, wear toward a bleached one, a weave modulating brightness — goes
+between one decode and one encode:
+
+```python
+from sevendtd_asset_pipeline.colour import linear_to_srgb, srgb_to_linear
+
+base = srgb_to_linear(MATERIAL_COLOUR)  # the triple from the asset builder
+field = mix(base, grime, wear, weave)  # physical, so: linear
+png = linear_to_srgb(field)  # back out to bytes
+```
+
+Do not hand-roll the transfer function. The two directions have to be exact
+inverses, and the standard's own published breakpoints are rounded enough that
+a plausible hand-written pair is not.
+
+### Checking it
+
+`check-texture` turns both halves into a gate. Pass the material colour exactly
+as the asset builder writes it:
+
+```bash
+shamway check-texture Textures/myModFabricAlbedo.png --matches 0.46,0.39,0.15 --tileable
+```
+
+It fails when the mean has drifted from the colour the texture stands in for,
+and — for a texture tiled across a surface larger than itself — when the image
+has stopped wrapping. A crop, a resize, and an edge-clamped blur each destroy
+tiling silently; all three are caught.
 
 ## What is deliberately not here
 

@@ -75,6 +75,28 @@ namespace SevenDaysToDie.AssetPipeline
                               texture.format + " readable=" + texture.isReadable);
                 }
 
+                GameObject prefab = asset as GameObject;
+                if (prefab != null)
+                {
+                    // A prefab is the thing 7DTD's Meshfile and Model actually
+                    // load, so what matters is whether its renderer found a
+                    // mesh and a material. A renderer with neither loads
+                    // perfectly and draws nothing.
+                    MeshFilter filter = prefab.GetComponent<MeshFilter>();
+                    MeshRenderer renderer = prefab.GetComponent<MeshRenderer>();
+                    string meshName = filter != null && filter.sharedMesh != null
+                        ? filter.sharedMesh.name : "<none>";
+                    int materials = renderer != null ? renderer.sharedMaterials.Length : 0;
+                    Debug.Log("VERIFY-PREFAB: components=" + prefab.GetComponents<Component>().Length +
+                              " mesh=" + meshName +
+                              " materials=" + materials +
+                              " children=" + prefab.transform.childCount);
+                    if (filter != null && filter.sharedMesh == null)
+                    {
+                        Debug.LogError("VERIFY-FAIL: " + name + " has a MeshFilter with no mesh");
+                    }
+                }
+
                 Mesh mesh = asset as Mesh;
                 if (mesh != null)
                 {

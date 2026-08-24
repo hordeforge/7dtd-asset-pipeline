@@ -93,21 +93,23 @@ What is open, with the pieces already on the shelf:
 | GLSL/HLSL → **SPIR-V** (Vulkan sub-programs) | `glslangValidator`, and [Slang](https://github.com/shader-slang/slang) or [DXC](https://github.com/microsoft/DirectXShaderCompiler) as alternatives |
 | Sub-program blob container | **decoded** from `Entities/trees`: LZ4 per platform, `u32 count` + 12-byte `(offset, length, segment)` records, code blobs an 8-`u32` header then `DXBC`. Cross-checked against AssetStudio and UnityPy, which both parse it |
 | Prior art for the format | [AssetStudio `ShaderConverter.cs`](https://github.com/Perfare/AssetStudio/blob/master/AssetStudioUtility/ShaderConverter.cs), [UnityPy `ShaderConverter.py`](https://github.com/K0lb3/UnityPy/blob/master/UnityPy/export/ShaderConverter.py) — read-side implementations, which is a specification for the write side |
-| Cross-object `PPtr` wiring inside one synthesized file | **not built** — `build_bundle` assigns path ids by position and no constructor references another object yet. This is the first thing to add, and prefabs need it regardless of shaders |
+| Cross-object `PPtr` wiring inside one synthesized file | **built** 2026-08-24: `bundle_writer.Ref(key)` resolved by `build_bundle`, with a dangling reference refused by name rather than written as a null PPtr |
+| `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer` prefab | **built** 2026-08-24 as `bundle_writer.mesh_prefab`; a real 2022.3.62f2 runtime loaded one and resolved its graph (`components=3 mesh=shamwayProbeMesh materials=0`). Not wired into the source-directory lane, because a renderer with no material draws nothing |
 
 **Close it with**, in this order, because each step is verifiable on its own:
 
-1. `PPtr` support in `build_bundle`, proven by a `Material` → `Texture2D`
-   reference read back through UnityPy;
-2. a `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer` prefab over an
-   already-working `Mesh`, with an empty material slot — loadable, invisible,
-   and honest about it;
+1. ~~`PPtr` support in `build_bundle`~~ — **done**, `Ref(key)`;
+2. ~~a `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer` prefab over an
+   already-working `Mesh`, with an empty material slot~~ — **done**, loadable
+   in a real runtime, invisible, and honest about it;
 3. the smallest possible shader: one unlit textured pass, HLSL compiled by
    `vkd3d-compiler`, wrapped in the container above. `shamway verify-bundle`
    is the gate — a real runtime reports `Shader.isSupported`, which is the
    first mechanical answer to "did this work";
 4. only then a `Material` that binds it, and only then a claim about rendering
    — which, as everywhere else here, ends at a person looking at a client.
+
+Steps 3 and 4 are what remain. Nothing before them is speculative any more.
 
 **What is genuinely unknown** (unknown, not impossible): whether 7DTD's
 rendering path accepts a minimally-authored pass, which keyword variants the

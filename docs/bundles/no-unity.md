@@ -321,7 +321,33 @@ pass wrote no colour channels. Nothing reported an error, because from the
 runtime's point of view nothing had failed.
 
 **A load is still not a look.** `covered=38.8%` says pixels were written. It
-does not say the prop looks right, and nobody has yet looked.
+does not say the prop looks right.
+
+**And a look happened, in a live client, and it is still invisible there.**
+On 2026-08-24 a human placed the block in a running 7 Days to Die client and
+reported: it places, it stacks, it can be walked through, and **nothing is
+drawn**. So the numbers above are true and *insufficient*, in the exact way
+this repository keeps writing down and keeps having to relearn.
+
+Two things separate the editor's verdict from the client's, and neither had
+been tested when the fix was called done:
+
+- **The graphics API.** `verify-bundle --draw` on a Linux host creates
+  **OpenGLCore**. The client runs **d3d11**, translated by **DXVK** under
+  Proton. They are different sub-programs out of the same writer, and the
+  render-state fix - which is platform-independent - was verified only on the
+  first.
+- **The collider.** The prefab carried none, which is why the block could be
+  walked through. Fixed separately; it was never a rendering problem.
+
+What is *not* the explanation, each checked rather than assumed: the deployed
+bundle does carry the fix (`colMask` `name='<noninit>'`, read back out of the
+file the game loaded); the DXBC compiles cleanly through `vkd3d-compiler`,
+which is the same DXBC-to-SPIR-V translation DXVK performs; the d3d11 record's
+vertex-attribute tail decodes to `mask=17`, exactly the `Position|TexCoord0`
+its shader declares; and the 38-byte program-data header matches stock's shape,
+differing only in a resource count consistent with binding two constant
+buffers rather than stock's larger set.
 
 Get the real answer with a graphics device:
 

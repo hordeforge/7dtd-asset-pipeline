@@ -41,26 +41,37 @@ def _log_lines(log: Path) -> list[str]:
         raise PipelineError(f"cannot read Unity log {log}: {exc}") from exc
 
 
+def _scan_build_log(log: Path) -> tuple[list[str], list[str]]:
+    """Classify a build log in one read and one pass.
+
+    Unity logs reach tens of megabytes and the gate runs on every build and
+    stage, so `reject_disabled_modules` must not walk them twice. Two
+    independent `if`s, because a line belongs in both families exactly when it
+    matches both.
+    """
+    disabled: list[str] = []
+    curves: list[str] = []
+    for line in _log_lines(log):
+        if DISABLED_MODULE_TEXT in line and DISABLED_MODULE_SUFFIX in line:
+            disabled.append(line)
+        if PARTICLE_CURVE_MODE_TEXT in line:
+            curves.append(line)
+    return disabled, curves
+
+
 def reject_disabled_modules(log: Path) -> None:
     """Reject a log that shows Unity stripping classes or shipping a per-frame error.
 
     The name is historical; it is the build-log gate, and it now has two
     families. Each one produced a bundle that passed every other check.
     """
-    # One read serves both families: a Unity build log reaches tens of
-    # megabytes, and reading it twice per gate doubled the cost of every
-    # `build`, `stage`, and `check-log`.
-    lines = _log_lines(log)
-    hits = [
-        line for line in lines if DISABLED_MODULE_TEXT in line and DISABLED_MODULE_SUFFIX in line
-    ]
+    hits, curves = _scan_build_log(log)
     if hits:
         raise PipelineError(
             "Unity stripped engine-module classes while reporting build success:\n"
             + "\n".join(hits)
             + "\nAdd the matching com.unity.modules.* packages and rebuild."
         )
-    curves = [line for line in lines if PARTICLE_CURVE_MODE_TEXT in line]
     if curves:
         raise PipelineError(
             "a particle system mixes MinMaxCurve modes; the client logs this on every frame:\n"

@@ -207,6 +207,27 @@ WRN Entity FallingBlock_3 (EntityFallingBlock) fell off the world, pos=1,2,3
         self.assertIsInstance(data["found"], dict)
         self.assertIsInstance(data["problems"], list)
 
+    def test_a_flood_of_negative_lines_is_capped_not_accumulated(self) -> None:
+        """A runaway log reports its first problems and warnings, and stops.
+
+        One broken particle system logs thousands of lines a second; the
+        report holds 50 problems and 20 warnings, so the scan keeps only
+        those instead of every matching line in the file.
+        """
+        flood = "\n".join(
+            ["Particle Velocity curves must all be in the same mode"] * 500
+            + ["NullReferenceException: at Foo.Bar () [0x00000]"] * 100
+        )
+        text = f"Loaded Mod: MyMod (1.0)\n{self.CLEAN}\n{flood}\n"
+        report = client.scan_log_text(text, "MyMod")
+        self.assertEqual(len(report.problems), client.PROBLEM_LIMIT)
+        self.assertEqual(len(report.warnings), client.WARNING_LIMIT)
+        self.assertTrue(all(k == "particle_curve_mode" for k in
+                            (line.split(":", 1)[0] for line in report.problems)))
+        self.assertTrue(all(w.startswith("exception:") for w in report.warnings))
+        # The positive markers seen before the flood still count as found.
+        self.assertEqual(report.missing_positive, ())
+
 
 class LatestLogTests(unittest.TestCase):
     def test_requires_a_log_written_after_the_launch(self) -> None:

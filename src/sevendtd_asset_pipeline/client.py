@@ -773,12 +773,22 @@ class LogReport:
         }
 
 
+PROBLEM_LIMIT = 50
+WARNING_LIMIT = 20
+
+
 def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogReport:
     """Classify a client log by the markers this pipeline knows about.
 
     With a `mod_name`, every positive marker becomes required and any it did
     not find fails the report; callers pass `mod_name=None` to treat every
     positive marker as informational.
+
+    A runaway log (thousands of lines a second from one broken particle
+    system) is the case this must survive, so the scan carries its own stop:
+    negative lines are kept only up to their report caps, and once the caps
+    are full and every positive marker has been seen, no later line can
+    change any field of the report.
     """
     found: dict[str, str] = {}
     problems: list[str] = []
@@ -790,6 +800,7 @@ def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogRe
     # a single C-level search — and only a line it hits pays the per-marker
     # searches that attribute the match. Same verdicts, one twelfth the scans.
     any_marker = re.compile("|".join(f"(?:{marker.pattern})" for marker in markers))
+    required = {marker.key for marker in markers if marker.positive}
     for line in text.splitlines():
         if not any_marker.search(line):
             continue
@@ -799,7 +810,18 @@ def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogRe
                 found.setdefault(marker.key, stripped)
                 if marker.positive:
                     continue
-                (warnings if marker.warning else problems).append(f"{marker.key}: {stripped}")
+                if marker.warning:
+                    if len(warnings) < WARNING_LIMIT:
+                        warnings.append(f"{marker.key}: {stripped}")
+                elif len(problems) < PROBLEM_LIMIT:
+                    problems.append(f"{marker.key}: {stripped}")
+        saturated = (
+            len(problems) >= PROBLEM_LIMIT
+            and len(warnings) >= WARNING_LIMIT
+            and required <= found.keys()
+        )
+        if saturated:
+            break
     missing = (
         tuple(marker.key for marker in markers if marker.positive and marker.key not in found)
         if mod_name
@@ -810,8 +832,8 @@ def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogRe
         mod_name=mod_name,
         found=found,
         missing_positive=missing,
-        problems=tuple(problems[:50]),
-        warnings=tuple(warnings[:20]),
+        problems=tuple(problems[:PROBLEM_LIMIT]),
+        warnings=tuple(warnings[:WARNING_LIMIT]),
     )
 
 

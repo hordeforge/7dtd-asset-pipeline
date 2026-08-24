@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (2026-08-24)
 
 ## Context
 
@@ -15,6 +15,15 @@ already emits a text manifest with exact source paths at build time.
 Track Unity's own `.manifest` beside the bundle and treat manifest and bundle
 as one logical artifact committed together. Validation checks stems against
 the manifest, not against a second parser of the container format.
+
+**Correction, 2026-08-25 — who writes it.** This record was written when an
+editor built every bundle, so Unity was always the manifest's author. With
+`bundle_source = "synthesized"` now the default
+([ADR 0001](0001-synthesize-bundles-without-an-editor.md)), the writer emits
+the manifest itself from its own membership record, and Unity's file is staged
+only for a bundle an editor built (`build.py`). The decision is unchanged: one
+tracked text manifest beside the bundle, committed with it, validated against
+it rather than re-parsing the container.
 
 ## Consequences
 

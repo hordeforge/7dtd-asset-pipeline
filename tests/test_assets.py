@@ -20,6 +20,7 @@ from typing import Any
 import sevendtd_asset_pipeline
 from sevendtd_asset_pipeline import Pipeline, PipelineError
 from sevendtd_asset_pipeline.assets_src import LANES, render_readme
+from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.icon_check import (
     check_icons,
     discover_icon_references,
@@ -144,6 +145,29 @@ class IconTests(unittest.TestCase):
         self.assertFalse(report.ok)
         self.assertIn("160x160", report.problems[0])
 
+    def test_rejects_a_cell_that_is_not_square(self) -> None:
+        """The atlas packs square cells; a mismatched cell is rescaled at pack time."""
+        write_png(self.atlas / "myModThing.png", 160, 200)
+        report = check_icons(self.root, self._config("<configs/>"))
+        self.assertFalse(report.ok)
+        self.assertIn("not square", report.problems[0])
+
+    def test_two_shipped_cells_differing_only_in_case_are_a_collision(self) -> None:
+        """The atlas key is the filename stem; two casings means one wins silently."""
+        write_png(self.atlas / "myModThing.png", 160, 160)
+        write_png(self.atlas / "mymodthing.png", 160, 160)
+        report = check_icons(self.root, self._config("<configs/>"))
+        self.assertFalse(report.ok)
+        self.assertIn("differ only in case", " ".join(report.problems))
+
+    @unittest.skipUnless(has_capability("pillow"), "alpha coverage needs Pillow")
+    def test_a_subject_never_cut_out_of_its_background_fails(self) -> None:
+        """`write_png(cut_out=False)` is the fully opaque cell the gate exists for."""
+        write_png(self.atlas / "myModThing.png", 160, 160, cut_out=False)
+        report = check_icons(self.root, self._config("<configs/>"))
+        self.assertFalse(report.ok)
+        self.assertIn("never cut out", " ".join(report.problems))
+
     def test_rejects_a_cell_with_no_alpha_channel(self) -> None:
         write_png(self.atlas / "myModThing.png", 160, 160, colour_type=2)
         report = check_icons(self.root, self._config("<configs/>"))
@@ -241,6 +265,26 @@ class SoundTests(unittest.TestCase):
         clip = self.root / "long.wav"
         write_clip(clip, seconds=2.0)
         self.assertIn("exceeds", " ".join(check_sound(clip, max_seconds=1.0).problems))
+
+    def test_silence_edges_are_measured_from_the_samples(self) -> None:
+        """The published leading/trailing fields drive the late-sound and click notes.
+
+        A hand-packed body pins the arithmetic exactly: 0.3 s of zeros, then a
+        loud block that stops dead, so the trailing scan must find nothing.
+        """
+        clip = self.root / "edges.wav"
+        rate = 44100
+        with wave.open(str(clip), "wb") as handle:
+            handle.setnchannels(1)
+            handle.setsampwidth(2)
+            handle.setframerate(rate)
+            samples = array.array("h", [0] * int(0.3 * rate) + [8000] * 1000)
+            handle.writeframes(samples.tobytes())
+        report = check_sound(clip)
+        self.assertAlmostEqual(0.3, report.leading_silence_seconds, places=2)
+        self.assertEqual(0.0, report.trailing_silence_seconds)
+        self.assertTrue(any("leading silence" in note for note in report.notes))
+        self.assertTrue(any("no trailing silence" in note for note in report.notes))
 
     def test_eight_bit_audio_is_named_and_actionable(self) -> None:
         clip = self.root / "eight.wav"

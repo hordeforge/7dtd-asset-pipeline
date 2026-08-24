@@ -99,5 +99,52 @@ class StatusTests(unittest.TestCase):
         self.assertNotIn("{bundle_name}", text)
 
 
+class AgentGuideVariantsTests(unittest.TestCase):
+    """`render_agent_guide`'s per-bundle-source banner and fact block.
+
+    The guide is the first thing an agent in a consumer mod reads, so its
+    opening lines must describe *this* mod: a bundle-free scaffold whose fact
+    block still names a Unity project contradicts itself on page one. The
+    "none" rewrite had no test; these pin every variant's banner and facts.
+    """
+
+    def _render(self, bundle_source: str) -> str:
+        from sevendtd_asset_pipeline.consumer_docs import render_agent_guide
+
+        return render_agent_guide("ExampleMod", "example.unity3d", bundle_source)
+
+    def test_the_bundle_free_guide_contradicts_nothing(self) -> None:
+        text = self._render("none")
+        self.assertIn('bundle_source = "none"', text)
+        self.assertIn("ships no Unity asset bundle", text)
+        self.assertIn("This mod is scaffolded and validated with **shamway**", text)
+        self.assertNotIn("builds its Unity asset bundle", text)
+        # The rewritten fact block replaces all three Unity lines at once.
+        self.assertIn('- Bundle: none (`bundle_source = "none"`)', text)
+        self.assertNotIn("- Unity project:", text)
+        self.assertNotIn("- Bundle membership:", text)
+        self.assertIn("(none)", text)
+
+    def test_the_synthesized_banner_states_who_wrote_the_bundle(self) -> None:
+        """Never 'built': the guide teaches the word the gates constrain."""
+        text = self._render("synthesized")
+        self.assertIn("written by shamway itself", text)
+        self.assertIn('bundle_source = "synthesized"', text)
+        self.assertIn("verify-bundle", text)
+
+    def test_the_external_banner_names_stage_as_the_write_path(self) -> None:
+        text = self._render("external")
+        self.assertIn("does not build its bundle here", text)
+        self.assertIn("shamway stage BUNDLE", text)
+
+    def test_every_variant_keeps_the_title_first_and_fills_the_placeholders(self) -> None:
+        for bundle_source in ("unity", "external", "synthesized", "none"):
+            with self.subTest(bundle_source=bundle_source):
+                text = self._render(bundle_source)
+                self.assertTrue(text.startswith("# Asset pipeline: agent instructions"))
+                self.assertNotIn("{mod_name}", text)
+                self.assertNotIn("{bundle_name}", text)
+
+
 if __name__ == "__main__":
     unittest.main()

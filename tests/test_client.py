@@ -709,9 +709,12 @@ class FreshClientRunTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def _run(
-        self, *, sleep_side_effect: object | None = None, stop: bool = False
+        self, *, sleep_side_effect: BaseException | None = None, stop: bool = False
     ) -> client.AcceptanceRun:
         self.calls: list[str] = []
+        # The run window is recorded, never slept: two seconds of real idle per
+        # case bought nothing the recorded value does not pin.
+        self.slept: list[float] = []
         report = client.LogReport(log="log", mod_name=None)
 
         def fake_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
@@ -723,6 +726,11 @@ class FreshClientRunTests(unittest.TestCase):
             if stop:
                 raise RuntimeError("the stop failed")
 
+        def fake_sleep(seconds: float) -> None:
+            self.slept.append(seconds)
+            if sleep_side_effect is not None:
+                raise sleep_side_effect
+
         patches = [
             mock.patch.object(client, "set_client_mute", side_effect=fake_mute),
             mock.patch.object(client, "running_client_pids", return_value=[]),
@@ -731,9 +739,8 @@ class FreshClientRunTests(unittest.TestCase):
                 client, "latest_client_log", return_value=self.root / "client-log.txt"
             ),
             mock.patch.object(client, "scan_log", return_value=report),
+            mock.patch("time.sleep", side_effect=fake_sleep),
         ]
-        if sleep_side_effect is not None:
-            patches.append(mock.patch("time.sleep", side_effect=sleep_side_effect))
         with contextlib.ExitStack() as stack:
             for patch in patches:
                 stack.enter_context(patch)
@@ -751,6 +758,7 @@ class FreshClientRunTests(unittest.TestCase):
         # stream to un-mute, and WirePlumber would save the muted state.
         run = self._run()
         self.assertEqual(["mute", "unmute", "stop"], self.calls)
+        self.assertEqual([2], self.slept, "the requested run window is what was waited")
         self.assertTrue(run.unmuted_again)
         self.assertTrue(run.muted)
 
@@ -758,7 +766,7 @@ class FreshClientRunTests(unittest.TestCase):
         # The interrupt lands inside the run window; the finally must undo the
         # mute before the error reaches the caller.
         with self.assertRaises(KeyboardInterrupt):
-            self._run(sleep_side_effect=KeyboardInterrupt)
+            self._run(sleep_side_effect=KeyboardInterrupt())
         self.assertIn("unmute", self.calls)
         self.assertEqual(["mute", "unmute"], self.calls)
 

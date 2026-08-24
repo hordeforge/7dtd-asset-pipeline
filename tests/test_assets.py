@@ -672,6 +672,26 @@ class GeneratorTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             self.assertTrue(check_sound(first).ok, check_sound(first).problems)
 
+    def test_nuclear_blast_is_reproducible_gated_and_sustained(self) -> None:
+        """The nuclear voice must not collapse back into a short generic crack."""
+        import contextlib
+        import io
+        import wave
+
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            first, second = root / "a.wav", root / "b.wav"
+            for target in (first, second):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    run("sound", ["nuclear-blast", str(target), "--seed", "5"])
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            report = check_sound(first)
+            self.assertTrue(report.ok, report.problems)
+            with wave.open(str(first), "rb") as handle:
+                self.assertGreaterEqual(handle.getnframes() / handle.getframerate(), 15.9)
+
     def test_the_sounds_xml_entry_omits_noise_unless_asked(self) -> None:
         """<Noise> on a sound layered over a vanilla event calls the horde twice."""
         import contextlib

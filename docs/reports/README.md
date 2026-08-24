@@ -12,6 +12,7 @@ report keeps its history, the runbook stays current.
 
 ## Conventions
 
+- Start from [TEMPLATE.md](TEMPLATE.md).
 - Name reports `YYYY-MM-DD-<short-topic>.md`.
 - Every report starts with `## TL;DR`, then gives the detail needed to repeat
   the reasoning without reconstructing it from logs: what was observed, what

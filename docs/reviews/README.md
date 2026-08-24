@@ -8,6 +8,7 @@ allowed to disappear once their conclusion lands somewhere durable.
 
 ## Conventions
 
+- Start from [TEMPLATE.md](TEMPLATE.md).
 - Name files after the subject, not the date.
 - Say at the top what the notes are about and where the conclusion went when
   it moved.

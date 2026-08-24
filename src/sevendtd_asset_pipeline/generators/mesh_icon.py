@@ -44,6 +44,11 @@ from .. import atomic
 
 MINIMUM_COVERAGE = 0.02
 
+# A headless Blender that wedges (a broken userpref, a stuck GPU probe) must
+# fail this generator, not hang it: the same lane bounds gltfpack at 300s in
+# mesh_optimize.py. Rendering one clay cell is seconds of work.
+BLENDER_TIMEOUT = 300
+
 BLENDER_SCRIPT = """
 import math
 import sys
@@ -202,27 +207,37 @@ def main(argv: list[str] | None = None) -> int:
         script = Path(directory) / "render.py"
         script.write_text(BLENDER_SCRIPT, encoding="utf-8")
         rendered = Path(directory) / "icon.png"
-        result = subprocess.run(
-            [
-                blender,
-                "--background",
-                "--factory-startup",
-                "--python",
-                str(script),
-                "--",
-                str(args.mesh),
-                str(rendered),
-                str(args.size * args.supersample),
-                str(args.yaw),
-                str(args.pitch),
-                str(args.padding),
-                str(args.samples),
-            ],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
+        try:
+            result = subprocess.run(
+                [
+                    blender,
+                    "--background",
+                    "--factory-startup",
+                    "--python",
+                    str(script),
+                    "--",
+                    str(args.mesh),
+                    str(rendered),
+                    str(args.size * args.supersample),
+                    str(args.yaw),
+                    str(args.pitch),
+                    str(args.padding),
+                    str(args.samples),
+                ],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=BLENDER_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            # run() killed the child; its partial output still explains the wedge.
+            print(
+                f"ERROR: Blender did not finish within {BLENDER_TIMEOUT}s and was killed; "
+                "a wedged headless start is the usual cause.",
+                file=sys.stderr,
+            )
+            return 1
         if result.returncode != 0 or not rendered.is_file():
             print(result.stdout, file=sys.stderr)
             print(f"ERROR: Blender exited {result.returncode} without rendering", file=sys.stderr)

@@ -16,11 +16,34 @@ class CapabilityTests(unittest.TestCase):
     def test_every_capability_declares_what_it_unlocks_and_how_to_install(self) -> None:
         for capability in capabilities():
             with self.subTest(capability.name):
-                self.assertIn(capability.kind, ("command", "any-command", "module"))
+                self.assertIn(
+                    capability.kind,
+                    ("command", "any-command", "module", "provider-config"),
+                )
                 self.assertTrue(capability.unlocks, "must name what it unlocks")
                 self.assertTrue(capability.purpose)
                 self.assertTrue(capability.install, "must name an install command")
                 self.assertIsInstance(capability.available, bool)
+
+    def test_the_model_review_capability_never_probes_a_provider(self) -> None:
+        """Configured is not verified: discovery must stay offline.
+
+        The credential check reads environment presence and nothing else; if
+        this ever contacted a provider, `doctor`, `status`, `schema`, and every
+        offline build would grow a network dependency and a bill.
+        """
+        from sevendtd_asset_pipeline.capabilities import _availability
+
+        with mock.patch.dict("os.environ", {"GEMINI_API_KEY": "k"}, clear=True):
+            self.assertTrue(_availability()["model-audio-review"])
+        with mock.patch.dict("os.environ", {}, clear=True):
+            self.assertFalse(_availability()["model-audio-review"])
+            # And the refusal route names how to configure it.
+            with self.assertRaises(PipelineError) as caught:
+                require_capability("model-audio-review")
+            message = str(caught.exception)
+            self.assertIn("GEMINI_API_KEY", message)
+            self.assertIn("review-audio", message)
 
     def test_report_is_json_serializable(self) -> None:
         import json

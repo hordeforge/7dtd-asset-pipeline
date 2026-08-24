@@ -46,6 +46,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+# A headless Blender that wedges (a broken userpref, a stuck GPU probe) must
+# fail this generator, not hang it: the same lane bounds gltfpack at 300s in
+# mesh_optimize.py. Generating one primitive is seconds of work.
+BLENDER_TIMEOUT = 300
+
 BLENDER_SCRIPT = """
 import sys, bpy
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -153,24 +158,34 @@ def main(argv: list[str] | None = None) -> int:
         script = Path(directory) / "generate.py"
         script.write_text(BLENDER_SCRIPT, encoding="utf-8")
         staged = Path(directory) / "out.glb"
-        result = subprocess.run(
-            [
-                blender,
-                "--background",
-                "--factory-startup",
-                "--python",
-                str(script),
-                "--",
-                args.shape,
-                args.name,
-                str(staged),
-                *(str(value) for value in args.size),
-            ],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
+        try:
+            result = subprocess.run(
+                [
+                    blender,
+                    "--background",
+                    "--factory-startup",
+                    "--python",
+                    str(script),
+                    "--",
+                    args.shape,
+                    args.name,
+                    str(staged),
+                    *(str(value) for value in args.size),
+                ],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=BLENDER_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            # run() killed the child; its partial output still explains the wedge.
+            print(
+                f"ERROR: Blender did not finish within {BLENDER_TIMEOUT}s and was killed; "
+                "a wedged headless start is the usual cause.",
+                file=sys.stderr,
+            )
+            return 1
         if result.returncode != 0 or not staged.is_file():
             print(result.stdout, file=sys.stderr)
             print(f"ERROR: Blender exited {result.returncode} without exporting", file=sys.stderr)

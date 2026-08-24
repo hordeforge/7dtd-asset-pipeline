@@ -50,6 +50,7 @@ class ManifestTests(unittest.TestCase):
                 "stage",
                 "init",
                 "render_icon",
+                "review_audio",
                 "client_deploy",
                 "client_launch",
                 "acceptance_provider",

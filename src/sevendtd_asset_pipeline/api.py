@@ -27,8 +27,15 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
-from . import client
+from . import atomic, client
 from .acceptance import generate as generate_acceptance_provider
+from .audio_review import (
+    DEFAULT_PROVIDER,
+    DEFAULT_TIMEOUT_SECONDS,
+)
+from .audio_review import (
+    run_review as run_audio_review,
+)
 from .build import (
     expected_unity_version,
     reject_disabled_modules,
@@ -65,6 +72,7 @@ from .operations import Operation
 from .operations import get as get_operation
 from .prompts import PromptResult
 from .prompts import render as render_prompt
+from .providers import resolve_provider
 from .references import AssetReference, discover_references, manifest_assets
 from .scaffold import initialize
 from .sound_check import DEFAULT_MAX_SECONDS, SoundReport, check_sound
@@ -247,6 +255,40 @@ class Pipeline:
     ) -> SoundReport:
         """Measure a WAV clip and reject unshippable formats. No dependencies."""
         return check_sound(Path(clip), max_seconds, require_mono)
+
+    def review_audio(
+        self,
+        clip: Path | str,
+        intent: Path | str | None = None,
+        intent_text: str | None = None,
+        provider: str = DEFAULT_PROVIDER,
+        model: str | None = None,
+        output: Path | str | None = None,
+        allow_network: bool = False,
+        keep_raw_response: bool = False,
+        force: bool = False,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """Advisory semantic review of a clip by a configured audio model.
+
+        Sends the actual audio bytes plus the recorded intent to the provider
+        and returns structured criticism with an evidence document when
+        `output` is given. `allow_network` must be explicit: this uploads an
+        authored asset to a third party. The verdict is advisory evidence; it
+        can never satisfy the fresh-client human-listen gate.
+        """
+        return run_audio_review(
+            Path(clip),
+            provider=resolve_provider(provider),
+            intent_path=Path(intent) if intent is not None else None,
+            intent_text=intent_text,
+            model=model,
+            allow_network=allow_network,
+            timeout_seconds=timeout_seconds,
+            keep_raw_response=keep_raw_response,
+            output=Path(output) if output is not None else None,
+            force=force,
+        )
 
     def check_icons(
         self, atlas_root: str = DEFAULT_ATLAS_ROOT, cell: int = DEFAULT_CELL
@@ -483,6 +525,7 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "check_mesh": lambda self, p: self.check_mesh(**_mesh_params(p)),
     "check_log": lambda self, p: _check_log_result(Path(p["log"])),
     "check_sound": lambda self, p: self.check_sound(**_sound_params(p)),
+    "review_audio": lambda self, p: self.review_audio(**_review_params(p)),
     "check_texture": lambda self, p: self.check_texture(**_texture_params(p)),
     "check_icons": lambda self, p: self.check_icons(p["atlas_root"], p["cell"]),
     "render_icon": lambda self, p: self.render_icon(
@@ -575,6 +618,21 @@ def _sound_params(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _review_params(params: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "clip": params["clip"],
+        "intent": params.get("intent"),
+        "intent_text": params.get("intent_text"),
+        "provider": params["provider"],
+        "model": params.get("model"),
+        "output": params.get("output"),
+        "allow_network": params["allow_network"],
+        "keep_raw_response": params["keep_raw_response"],
+        "force": params["force"],
+        "timeout_seconds": params["timeout_seconds"],
+    }
+
+
 def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
     """Synthesize a bundle outside any mod configuration.
 
@@ -594,10 +652,15 @@ def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
             "claims to be for, and the installed game is what has to load it"
         )
     bundle, manifest_text = pack_directory(source, output.name, version)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(bundle)
+    # Published through the package's one staged-write pattern: a body written
+    # straight to the destination that dies midway (disk full, Ctrl+C) leaves a
+    # truncated bundle at the final path, indistinguishable from a complete one
+    # until something fails to load it.
+    with atomic.staged_write(output) as staged:
+        staged.write_bytes(bundle)
     manifest = Path(params["manifest"]) if params.get("manifest") else Path(f"{output}.manifest")
-    manifest.write_text(manifest_text, encoding="utf-8")
+    with atomic.staged_write(manifest) as staged:
+        staged.write_text(manifest_text, encoding="utf-8")
     return {
         "bundle": str(output),
         "manifest": str(manifest),
@@ -648,6 +711,18 @@ _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "check_mesh": lambda p: check_mesh(**_mesh_params(p)),
     "check_log": lambda p: _check_log_result(Path(p["log"])),
     "check_sound": lambda p: check_sound(**_sound_params(p)),
+    "review_audio": lambda p: run_audio_review(
+        Path(p["clip"]),
+        provider=resolve_provider(p["provider"]),
+        intent_path=Path(p["intent"]) if p.get("intent") else None,
+        intent_text=p.get("intent_text"),
+        model=p.get("model"),
+        allow_network=p["allow_network"],
+        timeout_seconds=p["timeout_seconds"],
+        keep_raw_response=p["keep_raw_response"],
+        output=Path(p["output"]) if p.get("output") else None,
+        force=p["force"],
+    ),
     "check_texture": lambda p: check_texture(**_texture_params(p)),
     "unity_release": lambda p: fetch_release(
         p["version"] if p.get("version") else _needs_version(), p["platform"]

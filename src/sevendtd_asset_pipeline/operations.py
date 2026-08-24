@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from ._version import __version__
+from .audio_review import DEFAULT_PROVIDER, DEFAULT_TIMEOUT_SECONDS
 from .colour import DEFAULT_COLOUR_TOLERANCE, DEFAULT_TILE_RATIO
 from .config import BUNDLE_SOURCES, DEFAULT_BUNDLE_SOURCE
 from .docs import topics
@@ -31,6 +32,7 @@ from .icon_check import DEFAULT_ATLAS_ROOT, DEFAULT_CELL
 from .icon_render import DEFAULT_ATLAS, DEFAULT_PADDING, DEFAULT_PITCH, DEFAULT_YAW
 from .mesh_check import DEFAULT_MAX_EXTENT
 from .prompts import KEYS, KINDS, kinds
+from .providers import PROVIDERS
 from .sound_check import DEFAULT_MAX_SECONDS
 from .unity_release import DEFAULT_PLATFORM
 
@@ -210,6 +212,68 @@ _DEFINITIONS: tuple[Operation, ...] = (
         cost=FAST,
         writes=False,
         needs_config=False,
+    ),
+    Operation(
+        name="review_audio",
+        summary="Advisory semantic review: submit the clip's actual bytes plus its "
+        "recorded intended-use intent to a configured audio-capable model and return "
+        "structured criticism. Sends an authored asset to a third party, so it refuses "
+        "without allow_network; it is evidence for the human listen, never a substitute.",
+        parameters=_schema(
+            {
+                "clip": {
+                    **PATH_PARAM,
+                    "description": "the WAV (or other accepted container) to audition",
+                },
+                "intent": {
+                    **PATH_PARAM,
+                    "description": "intent JSON file, committed beside the source; "
+                    "requires purpose and playback",
+                },
+                "intent_text": {
+                    "type": "string",
+                    "description": "inline intent JSON instead of --intent",
+                },
+                "provider": {
+                    # Derived from PROVIDERS so the published schema cannot drift
+                    # from what resolve_provider accepts.
+                    "type": "string",
+                    "enum": sorted(PROVIDERS),
+                    "default": DEFAULT_PROVIDER,
+                },
+                "model": {"type": "string", "description": "default per provider"},
+                "output": {
+                    **PATH_PARAM,
+                    "description": "write the hash-addressed evidence document here; "
+                    "an existing one is never overwritten without force",
+                },
+                "allow_network": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "explicit consent to upload the audio to the provider",
+                },
+                "keep_raw_response": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "preserve the redacted raw provider response in evidence",
+                },
+                "force": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "overwrite an existing evidence document at --output",
+                },
+                "timeout_seconds": {"type": "number", "default": DEFAULT_TIMEOUT_SECONDS},
+            },
+            required=["clip"],
+        ),
+        returns="Review: advisory_only, clip, provider, model, review{summary, strengths, "
+        "issues[at_seconds], recommended_changes, rubric_scores, confidence, limitations}, "
+        "usage, disclosure, evidence{path, sha256}",
+        cost=SECONDS,
+        writes=True,
+        needs_config=False,
+        needs_network=True,
+        capabilities=("model-audio-review",),
     ),
     Operation(
         name="check_icons",

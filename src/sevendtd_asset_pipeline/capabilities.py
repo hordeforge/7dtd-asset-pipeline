@@ -23,6 +23,7 @@ from pathlib import Path
 
 from . import shader_blob
 from .errors import PipelineError
+from .providers import configuration_state
 
 
 @dataclass(frozen=True)
@@ -31,8 +32,9 @@ class Capability:
 
     name: str
     kind: str
-    """"command" (an executable on PATH), "module" (an importable), or
-    "any-command" (satisfied by any one of several interchangeable tools)."""
+    """"command" (an executable on PATH), "module" (an importable),
+    "any-command" (satisfied by any one of several interchangeable tools), or
+    "provider-config" (a credential present in the environment)."""
     unlocks: tuple[str, ...]
     """The `shamway` commands or generator scripts this makes usable."""
     purpose: str
@@ -327,6 +329,20 @@ REGISTRY: tuple[_Spec, ...] = (
         "plus conversion, normalization and filtering for a mod's own scripts",
         install="shamway script install-tools --with-authoring",
     ),
+    _Spec(
+        name="model-audio-review",
+        kind="provider-config",
+        probe="sevendtd_asset_pipeline.providers",
+        unlocks=("shamway review-audio",),
+        purpose="submit an authored clip's actual bytes plus its recorded intended-use "
+        "intent to a configured audio-capable model (Gemini) for an advisory critique. "
+        "Availability reports a credential present in the environment — configured, "
+        "not verified: nothing contacts the provider until a review is submitted, and "
+        "the verdict never satisfies the human-listen gate",
+        # The one capability installed by setting an environment variable
+        # rather than installing a tool; the command below is still exact.
+        install="export GEMINI_API_KEY=<key>  # create one at https://aistudio.google.com/apikey",
+    ),
 )
 
 
@@ -363,6 +379,28 @@ def _module_version(module: str) -> str | None:
 
 
 def _resolve(spec: _Spec, probe_versions: bool) -> Capability:
+    if spec.kind == "provider-config":
+        # Credential presence only, from environment variables: discovery,
+        # `doctor`, and `status` must never contact a provider or verify a
+        # key. "Configured" is therefore not "verified" — the verification
+        # happens at submission time and nowhere else.
+        state = configuration_state()
+        configured = sorted(name for name, found in state.items() if found == "configured")
+        available = bool(configured)
+        return Capability(
+            name=spec.name,
+            kind=spec.kind,
+            unlocks=spec.unlocks,
+            purpose=spec.purpose,
+            install=spec.install,
+            available=available,
+            path=None,
+            version=None,
+            unusable_reason=None
+            if available
+            else f"no provider credential is configured (checked offline: "
+            f"{', '.join(sorted(state))}); {spec.install}",
+        )
     if spec.kind == "module":
         available = importlib.util.find_spec(spec.probe) is not None
         return Capability(
@@ -428,11 +466,13 @@ def require_capability(name: str) -> None:
         raise PipelineError(f"unknown capability {name!r}")
     # A tool that is present but too old needs a different sentence from one
     # that is absent: "install it" is useless advice when it is installed.
+    # (For provider-config capabilities the same distinction separates an
+    # unconfigured credential from anything PATH-shaped.)
     found = next((item for item in capabilities() if item.name == name), None)
     if found is not None and found.unusable_reason:
         raise PipelineError(
             f"{', '.join(spec.unlocks)} needs the optional capability {spec.name!r} "
-            f"({spec.purpose}), and the one on PATH cannot be used: "
+            f"({spec.purpose}), and the one on this host cannot be used: "
             f"{found.unusable_reason}"
         )
     raise PipelineError(

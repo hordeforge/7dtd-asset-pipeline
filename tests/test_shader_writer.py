@@ -127,6 +127,80 @@ class CompileTests(unittest.TestCase):
         self.assertEqual(len(full) - len(full[:-8]), 8)
 
 
+class CompileTimeoutTests(unittest.TestCase):
+    """Every compiler run is bounded, and a wedged one dies as a named error.
+
+    `build` and `pack` are published operations reachable through
+    `shamway serve`, so one hung vkd3d-compiler would block that long-lived
+    session on a request forever. The bound is pinned here without needing a
+    real compiler installed: `which` and `subprocess.run` are both faked.
+    """
+
+    @staticmethod
+    def compile_calls() -> list[tuple[collections.abc.Callable[[], Any], str]]:
+        """Each compiler entry point with the tool it must name on expiry."""
+        return [
+            (
+                lambda: shader_blob.compile_hlsl(shader_blob.UNLIT_VERTEX_HLSL, "vs_4_0"),
+                "vkd3d-compiler",
+            ),
+            (lambda: shader_blob.compile_spirv(b"DXBC"), "vkd3d-compiler"),
+            (
+                lambda: shader_blob.compile_spirv_glslang(shader_blob.UNLIT_VERTEX_HLSL, "vert"),
+                "glslangValidator",
+            ),
+        ]
+
+    @staticmethod
+    def _recording_run(seen: dict[str, Any]) -> collections.abc.Callable[..., Any]:
+        def record(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            seen.update(kwargs)
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        return record
+
+    def test_every_compile_runs_under_a_timeout(self) -> None:
+        for action, _tool in self.compile_calls():
+            seen: dict[str, Any] = {}
+            with (
+                mock.patch(
+                    "sevendtd_asset_pipeline.shader_blob.shutil.which",
+                    return_value="/usr/bin/fake-tool",
+                ),
+                mock.patch(
+                    "sevendtd_asset_pipeline.shader_blob.subprocess.run",
+                    side_effect=self._recording_run(seen),
+                ),
+                # The fake output file never appears, so the caller refuses;
+                # what this asserts is the kwargs that reached subprocess.run.
+                self.assertRaises(PipelineError),
+            ):
+                action()
+            self.assertEqual(seen.get("timeout"), shader_blob.SHADER_COMPILE_TIMEOUT)
+
+    def test_a_wedged_compiler_is_killed_and_named(self) -> None:
+        for action, tool in self.compile_calls():
+
+            def wedge(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                raise subprocess.TimeoutExpired(command[0], shader_blob.SHADER_COMPILE_TIMEOUT)
+
+            with (
+                mock.patch(
+                    "sevendtd_asset_pipeline.shader_blob.shutil.which",
+                    return_value="/usr/bin/fake-tool",
+                ),
+                mock.patch(
+                    "sevendtd_asset_pipeline.shader_blob.subprocess.run",
+                    side_effect=wedge,
+                ),
+                self.assertRaises(PipelineError) as caught,
+            ):
+                action()
+            message = str(caught.exception)
+            self.assertIn(tool, message)
+            self.assertIn("killed", message)
+
+
 @needs_unitypy
 @needs_vkd3d
 class ShaderObjectTests(unittest.TestCase):

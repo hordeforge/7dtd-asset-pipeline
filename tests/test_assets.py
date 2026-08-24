@@ -510,6 +510,62 @@ class GeneratorTests(unittest.TestCase):
             output = Path(name) / "out.png"
             self.assertEqual(1, main(["/nonexistent/thing.glb", str(output)]))
 
+    def test_a_wedged_blender_is_killed_and_reported(self) -> None:
+        """A headless Blender that never finishes must not hang the generator.
+
+        Both mesh lanes run Blender as a child with no other bound: a wedged
+        start (a broken userpref, a stuck GPU probe) would otherwise block
+        forever, because nothing here times the child out. The timeout is what
+        turns that into a killed child and an error line.
+        """
+        import subprocess as subprocess_module
+        import tempfile
+        from unittest import mock
+
+        from sevendtd_asset_pipeline.generators.mesh import BLENDER_TIMEOUT
+        from sevendtd_asset_pipeline.generators.mesh import main as mesh_main
+        from sevendtd_asset_pipeline.generators.mesh_icon import (
+            BLENDER_TIMEOUT as ICON_TIMEOUT,
+        )
+        from sevendtd_asset_pipeline.generators.mesh_icon import (
+            main as icon_main,
+        )
+
+        def wedge(command: list[str], **kwargs: object) -> None:
+            raise subprocess_module.TimeoutExpired(command[0], 300)
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            with (
+                mock.patch(
+                    "sevendtd_asset_pipeline.generators.mesh.shutil.which",
+                    return_value="/usr/bin/fake-blender",
+                ),
+                mock.patch(
+                    "sevendtd_asset_pipeline.generators.mesh.subprocess.run",
+                    side_effect=wedge,
+                ),
+            ):
+                self.assertEqual(1, mesh_main([str(root / "out.glb"), "--name", "wedged"]))
+            self.assertFalse((root / "out.glb").exists(), "a timed-out run wrote no mesh")
+
+            mesh_file = root / "thing.glb"
+            mesh_file.write_bytes(b"glTF-fake-bytes")
+            with (
+                mock.patch(
+                    "sevendtd_asset_pipeline.generators.mesh_icon.shutil.which",
+                    return_value="/usr/bin/fake-blender",
+                ),
+                mock.patch(
+                    "sevendtd_asset_pipeline.generators.mesh_icon.subprocess.run",
+                    side_effect=wedge,
+                ),
+            ):
+                self.assertEqual(1, icon_main([str(mesh_file), str(root / "cell.png")]))
+            self.assertFalse((root / "cell.png").exists(), "a timed-out run wrote no cell")
+        # The two lanes share one convention with gltfpack's bound next door.
+        self.assertEqual(BLENDER_TIMEOUT, ICON_TIMEOUT)
+
     @unittest.skipUnless(has_capability("pillow"), "the cutout lane needs Pillow")
     def test_cutout_alpha_keeps_an_alpha_that_is_not_the_luma(self) -> None:
         """The trap this mode exists for: a mask whose alpha is not its brightness.

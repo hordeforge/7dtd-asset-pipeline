@@ -564,7 +564,11 @@ def disable_discord_integration(user_reg: Path) -> bool:
     pattern = re.compile(r'^("DiscordDisabled_h\d+"=dword:)[0-9a-fA-F]+$', re.MULTILINE)
     rewritten, count = pattern.subn(r"\g<1>00000001", text)
     if count:
-        user_reg.write_text(rewritten, encoding="utf-8")
+        # Published through a rename, never truncated in place: `user.reg` is
+        # the whole Proton registry hive, and a write that dies midway would
+        # corrupt every setting in the prefix, not just this one pref.
+        with atomic.staged_write(user_reg) as staged:
+            staged.write_text(rewritten, encoding="utf-8")
     return bool(count)
 
 

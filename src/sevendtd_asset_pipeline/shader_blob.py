@@ -303,6 +303,34 @@ def source_blob(program_type: int, source: str, vertex_attributes: int = 0) -> b
     return bytes(writer.out)
 
 
+# A compiler that never answers must not hold its caller forever: build and
+# pack are published operations reachable through `shamway serve`, where one
+# wedged vkd3d-compiler would block the whole session past any consumer's
+# patience. Compiling one short HLSL file is sub-second work, so this bounds a
+# hung tool rather than a slow one.
+SHADER_COMPILE_TIMEOUT = 60
+
+
+def _compile(argv: list[str], tool: str, what: str) -> subprocess.CompletedProcess[str]:
+    """Run one shader compiler bounded by `SHADER_COMPILE_TIMEOUT`.
+
+    `subprocess.run` kills the child when the bound fires; the timeout reaches
+    the caller as a named error instead of an eternal wait.
+    """
+    try:
+        return subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=SHADER_COMPILE_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise PipelineError(
+            f"{tool} did not finish {what} within {SHADER_COMPILE_TIMEOUT}s and was killed"
+        ) from exc
+
+
 def compile_hlsl(source: str, profile: str) -> bytes:
     """Compile one HLSL entry point to a DXBC container with `vkd3d-compiler`.
 
@@ -321,7 +349,7 @@ def compile_hlsl(source: str, profile: str) -> bytes:
         src = Path(work) / "shader.hlsl"
         out = Path(work) / "shader.dxbc"
         src.write_text(source, encoding="utf-8")
-        result = subprocess.run(
+        result = _compile(
             [
                 binary,
                 "-x",
@@ -336,9 +364,8 @@ def compile_hlsl(source: str, profile: str) -> bytes:
                 "-o",
                 str(out),
             ],
-            capture_output=True,
-            text=True,
-            check=False,
+            "vkd3d-compiler",
+            f"compiling the {profile} stage",
         )
         if result.returncode != 0 or not out.exists():
             detail = (result.stderr or result.stdout).strip()
@@ -379,11 +406,10 @@ def compile_spirv(dxbc: bytes) -> bytes:
         src = Path(work) / "shader.dxbc"
         out = Path(work) / "shader.spv"
         src.write_bytes(dxbc)
-        result = subprocess.run(
+        result = _compile(
             [binary, "-x", "dxbc-tpf", "-b", "spirv-binary", str(src), "-o", str(out)],
-            capture_output=True,
-            text=True,
-            check=False,
+            "vkd3d-compiler",
+            "translating the DXBC to SPIR-V",
         )
         if result.returncode != 0 or not out.exists():
             detail = (result.stderr or result.stdout).strip()
@@ -423,7 +449,7 @@ def compile_spirv_glslang(source: str, stage: str) -> bytes:
         src = Path(work) / f"shader.{stage}.hlsl"
         out = Path(work) / "shader.spv"
         src.write_text(source, encoding="utf-8")
-        result = subprocess.run(
+        result = _compile(
             [
                 binary,
                 "-D",  # the source is HLSL
@@ -437,9 +463,8 @@ def compile_spirv_glslang(source: str, stage: str) -> bytes:
                 "-o",
                 str(out),
             ],
-            capture_output=True,
-            text=True,
-            check=False,
+            "glslangValidator",
+            f"compiling the {stage} stage",
         )
         if result.returncode != 0 or not out.exists():
             detail = (result.stdout or result.stderr).strip()

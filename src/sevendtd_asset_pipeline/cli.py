@@ -9,6 +9,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from . import audio_review
 from .api import Pipeline, call_json
 from .build import (
     expected_unity_version,
@@ -42,6 +43,7 @@ from .icon_render import (
 from .mesh_check import DEFAULT_MAX_EXTENT, check_mesh
 from .operations import manifest
 from .prompts import main as prompt_main
+from .providers import resolve_provider
 from .references import discover_references
 from .scaffold import initialize
 from .serve import serve
@@ -228,6 +230,52 @@ def _parser() -> argparse.ArgumentParser:
         help="permit a multi-channel clip (a deliberate 2D UI or music cue)",
     )
     sound.add_argument("--json", action="store_true")
+
+    review = commands.add_parser(
+        "review-audio",
+        help="advisory semantic review of a clip by a configured audio model "
+        "(explicit network consent required)",
+    )
+    review.add_argument("clip", type=Path)
+    review.add_argument(
+        "--intent",
+        type=Path,
+        help="intent JSON file, committed beside the source; requires purpose and "
+        "playback (see docs/authoring/audio.md)",
+    )
+    review.add_argument("--intent-text", help="inline intent JSON instead of --intent")
+    review.add_argument(
+        "--provider",
+        default=audio_review.DEFAULT_PROVIDER,
+        help=f"audio-review provider (default {audio_review.DEFAULT_PROVIDER})",
+    )
+    review.add_argument("--model", help="provider model identifier; default per provider")
+    review.add_argument(
+        "--output",
+        type=Path,
+        help="write the hash-addressed evidence document here; never overwrites without --force",
+    )
+    review.add_argument(
+        "--allow-network",
+        action="store_true",
+        help="consent to uploading the audio to the provider; without it the command "
+        "refuses before touching credentials",
+    )
+    review.add_argument(
+        "--keep-raw-response",
+        action="store_true",
+        help="preserve the redacted raw provider response in the evidence document",
+    )
+    review.add_argument(
+        "--force", action="store_true", help="overwrite an existing evidence document"
+    )
+    review.add_argument(
+        "--timeout",
+        type=float,
+        default=audio_review.DEFAULT_TIMEOUT_SECONDS,
+        help=f"seconds to wait for the provider (default {audio_review.DEFAULT_TIMEOUT_SECONDS:g})",
+    )
+    review.add_argument("--json", action="store_true")
 
     icons = commands.add_parser(
         "check-icons", help="check UIAtlases PNGs and every CustomIcon key under Config/"
@@ -533,6 +581,45 @@ def run(args: argparse.Namespace) -> int:
                 print(f"problem: {problem}")
             print("OK" if sound.ok else "FAILED")
         return 0 if sound.ok else 1
+    if args.command == "review-audio":
+        report = audio_review.run_review(
+            args.clip,
+            provider=resolve_provider(args.provider),
+            intent_path=args.intent,
+            intent_text=args.intent_text,
+            model=args.model,
+            allow_network=args.allow_network,
+            timeout_seconds=args.timeout,
+            keep_raw_response=args.keep_raw_response,
+            output=args.output,
+            force=args.force,
+            notify=print,
+        )
+        if args.json:
+            print(json.dumps(report, indent=2, sort_keys=True))
+        else:
+            verdict = report["review"]
+            print(f"summary: {verdict['summary']}")
+            for strength in verdict["strengths"]:
+                print(f"strength: {strength}")
+            for issue in verdict["issues"]:
+                moment = issue.get("at_seconds")
+                at = f" [{moment[0]:g}-{moment[1]:g} s]" if moment else ""
+                print(f"issue: {issue['description']}{at}")
+            for change in verdict["recommended_changes"]:
+                print(f"change: {change}")
+            for key, value in sorted(verdict["rubric_scores"].items()):
+                print(f"score: {key} = {'unjudgeable' if value is None else value:g}")
+            print(f"confidence: {verdict['confidence']:g}")
+            for limitation in verdict["limitations"]:
+                print(f"limitation: {limitation}")
+            usage = report["usage"]
+            if not usage.get("reported_by_provider", False):
+                print("usage: unavailable (the provider reported none; nothing estimated)")
+            if report["evidence"]["path"]:
+                print(f"evidence: {report['evidence']['path']}")
+            print(f"note: {report['note']}")
+        return 0
     if args.command == "pack":
         if args.game_dir:
             version, source = game_unity_version(args.game_dir.resolve())

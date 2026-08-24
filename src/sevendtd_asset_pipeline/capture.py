@@ -19,6 +19,16 @@ The manifest holds one entry per label: re-capturing a label replaces its
 earlier entry, each carrying the observable, the backend that took it, and the
 image's own hash and mtime. The verdict field is deliberately left `null` —
 nothing here writes a pass.
+
+Recording is a read-modify-write of one shared file, and this host runs several
+agent sessions at once, so both halves of a record are serialized: the frame is
+written to a writer-unique staged name and renamed into place, and the manifest
+read-modify-write happens under an flock sidecar beside it — the same
+serialization discipline as the shared client lock (see `client.py` and
+docs/sibling-repos.md). Without that, two captures publishing together lose one
+sign-off record silently, which is the worst kind of evidence to lose. Where
+flock does not exist (a native Windows client) recording degrades to the
+unsynchronized write rather than refusing evidence.
 """
 
 from __future__ import annotations
@@ -26,10 +36,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
+from importlib.util import find_spec
 from pathlib import Path
 
 from . import atomic
@@ -180,6 +194,39 @@ def _write_manifest(root: Path, entries: list[dict[str, object]]) -> Path:
     return path
 
 
+@contextmanager
+def _manifest_lock(root: Path) -> Iterator[None]:
+    """Serialize one read-modify-write of the manifest across processes.
+
+    `_record` reads every entry, drops the label being replaced, appends, and
+    publishes. Two captures running that sequence together lose one entry:
+    each writes from its own snapshot, and the second publish erases the
+    first's append. This host runs several agent sessions at once — the shared
+    client lock exists for exactly that reason — so the whole sequence holds an
+    exclusive flock on a sidecar beside the manifest. Function scope keeps the
+    Unix-only module out of every import; a host without flock has no protocol
+    to join, so recording degrades to today's unsynchronized write instead of
+    refusing evidence.
+    """
+    if find_spec("fcntl") is None:
+        yield
+        return
+    import fcntl
+
+    sidecar = Path(root) / f"{MANIFEST_NAME}.flock"
+    with open(sidecar, "a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _staged_path(destination: Path) -> Path:
+    """A writer-unique temporary name beside `destination`, like atomic.staged_write."""
+    return destination.with_name(f".{destination.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
+
+
 def _safe_stem(label: str) -> str:
     """A label as a filename stem, so it cannot escape the evidence directory.
 
@@ -215,26 +262,40 @@ def capture(
     if wait_seconds > 0:
         time.sleep(wait_seconds)
 
-    argv = backend.command(output)
+    # The grabber aims at a writer-unique staged name, not the cited path: two
+    # captures of one label then cannot interleave writes into one image, and
+    # an interrupted grab strands a dot-temp instead of a half frame where the
+    # manifest would cite it.
+    staged = _staged_path(output)
     try:
-        result = subprocess.run(argv, check=False, capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise PipelineError(f"{backend.name} could not run: {exc}") from exc
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "").strip().splitlines()
-        raise PipelineError(
-            f"{backend.name} failed ({result.returncode})" + (f": {detail[-1]}" if detail else "")
+        argv = backend.command(staged)
+        try:
+            result = subprocess.run(argv, check=False, capture_output=True, text=True, timeout=120)
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise PipelineError(f"{backend.name} could not run: {exc}") from exc
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip().splitlines()
+            raise PipelineError(
+                f"{backend.name} failed ({result.returncode})"
+                + (f": {detail[-1]}" if detail else "")
+            )
+        if not staged.is_file() or staged.stat().st_size == 0:
+            raise PipelineError(
+                f"{backend.name} exited zero but wrote no image to {output}. A screenshot "
+                "tool that cannot reach the compositor often reports success; try another "
+                "backend, or capture by hand and record it with --file."
+            )
+        return _record(
+            staged,
+            output,
+            label.strip(),
+            observable.strip(),
+            backend.name,
+            session_type(env),
+            directory,
         )
-    if not output.is_file() or output.stat().st_size == 0:
-        raise PipelineError(
-            f"{backend.name} exited zero but wrote no image to {output}. A screenshot "
-            "tool that cannot reach the compositor often reports success; try another "
-            "backend, or capture by hand and record it with --file."
-        )
-
-    return _record(
-        output, label.strip(), observable.strip(), backend.name, session_type(env), directory
-    )
+    finally:
+        staged.unlink(missing_ok=True)
 
 
 def record_existing(
@@ -254,29 +315,73 @@ def record_existing(
     directory = Path(root)
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / f"{_safe_stem(label.strip())}{source.suffix or '.png'}"
+    # Copied to a staged name rather than straight onto the destination, so a
+    # copy that dies midway leaves the previous frame at the cited path.
+    staged = None
     if source.resolve() != destination.resolve():
-        shutil.copy2(source, destination)
-    return _record(
-        destination, label.strip(), observable.strip(), "provided", session_type(), directory
-    )
+        staged = _staged_path(destination)
+        try:
+            shutil.copy2(source, staged)
+        except OSError:
+            staged.unlink(missing_ok=True)
+            raise
+    try:
+        return _record(
+            destination if staged is None else staged,
+            destination,
+            label.strip(),
+            observable.strip(),
+            "provided",
+            session_type(),
+            directory,
+        )
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
 
 
 def _record(
-    output: Path, label: str, observable: str, backend: str, session: str, directory: Path
+    staged: Path,
+    final: Path,
+    label: str,
+    observable: str,
+    backend: str,
+    session: str,
+    directory: Path,
 ) -> Capture:
-    stat = output.stat()
+    """Publish one frame and enter it into the manifest as one serialized step.
+
+    The rename and the manifest read-modify-write hold the same sidecar flock:
+    published separately, another capture's record could slip between them, or
+    ours between theirs — either way one recorded sign-off disappears. The
+    digest is taken from `staged` before the lock, because those bytes are this
+    run's own; when `staged` is already `final` (a provided image recorded in
+    place) there is nothing to move. On any failure the staged name is unlinked
+    and the previous frame and manifest stand.
+    """
+    source_is_final = staged == final
+    stat = staged.stat()
     entry = Capture(
         label=label,
         observable=observable,
-        file=output.name,
+        file=final.name,
         backend=backend,
         session=session,
         bytes=stat.st_size,
-        sha256=_digest(output),
+        sha256=_digest(staged),
         captured_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stat.st_mtime)),
         notes=[] if observable else ["no observable recorded; a frame without one proves nothing"],
     )
-    entries = [item for item in read_manifest(directory) if item.get("label") != label]
-    entries.append(entry.as_dict())
-    _write_manifest(directory, entries)
+    try:
+        with _manifest_lock(directory):
+            if not source_is_final:
+                staged.replace(final)
+            entries = [item for item in read_manifest(directory) if item.get("label") != label]
+            entries.append(entry.as_dict())
+            _write_manifest(directory, entries)
+    finally:
+        # Only a staged name may be unlinked: when it already was `final`,
+        # this frame is the caller's own file and the record cites it.
+        if not source_is_final:
+            staged.unlink(missing_ok=True)
     return entry

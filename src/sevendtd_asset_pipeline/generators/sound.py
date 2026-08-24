@@ -287,7 +287,7 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
         positive = math.exp(-time / 0.075)
         negative_time = max(time - 0.085, 0.0)
         negative = 0.72 * math.exp(-negative_time / 0.12) if time >= 0.085 else 0.0
-        shock.append(math.tanh((positive - negative) * 2.8 + grit * math.exp(-time / 0.22) * 0.9))
+        shock.append((positive - negative) * 1.6 + grit * math.exp(-time / 0.22) * 0.32)
 
     body = []
     phase_a = phase_b = phase_c = 0.0
@@ -298,10 +298,10 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
         shape = math.exp(-time / 3.2) * min(time / 0.025, 1.0)
         body.append(
             shape
-            * math.tanh(
-                1.35 * math.sin(phase_a)
-                + 0.9 * math.sin(phase_b + 0.4)
-                + 0.32 * math.sin(phase_c + 1.1)
+            * (
+                0.78 * math.sin(phase_a)
+                + 0.52 * math.sin(phase_b + 0.4)
+                + 0.18 * math.sin(phase_c + 1.1)
             )
         )
 
@@ -321,8 +321,7 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
     ]
 
     mixed = mix((1.6, shock), (1.25, body), (0.85, returns), (1.0, coda))
-    saturated = [math.tanh(value * 1.65) for value in mixed]
-    return normalize(remove_dc(fade_tail(saturated, 2.0)), -0.2)
+    return normalize(remove_dc(fade_tail(mixed, 2.0)), -0.2)
 
 
 def tick(generator: random.Random) -> list[float]:

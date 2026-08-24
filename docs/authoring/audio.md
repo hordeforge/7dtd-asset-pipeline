@@ -204,11 +204,18 @@ a nuclear detonation. For a near nuclear layer, use the dedicated voice:
 shamway generate sound nuclear-blast assets-src/audio/nuclear-near.wav --seed 7
 ```
 
-It uses a broad saturated pressure wall instead of a millisecond crack, moves
+It uses a broad pressure wall instead of a millisecond crack, moves
 the pressure body into the 35–115 Hz band that ordinary speakers reproduce,
 adds separated terrain returns, and sustains a dense low-mid coda. It is a
 game-audio rendering, not a calibrated scientific pressure trace; human
 listening in the target mixer remains the acceptance gate.
+
+Do not nonlinear-saturate the nuclear voice to manufacture loudness. A fresh
+target-game listen found that the first saturated version had better overall
+character but sounded artificially overdriven, unclean, and crackling at the
+loud end. The voice now stays linear through its shock, tonal body, returns,
+and final mix before DC removal and peak normalization. Obtain additional
+in-game level through mixer/source placement, not by crushing the waveform.
 
 The near `blast` voice itself no longer treats sparse high-band debris as a
 main layer. A target-game reviewer rejected that output as “just crackling,”

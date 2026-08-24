@@ -12,6 +12,7 @@ byte-for-byte.
     shamway generate sound blast   art/audio/blast-far.wav  --seed 7 --distant
     shamway generate sound tick    art/audio/fuse-tick.wav
     shamway generate sound whoosh  art/audio/throw.wav --seconds 1.4
+    shamway generate sound bomb-whistle art/audio/fall.wav --seconds 4
     shamway generate sound hum     art/audio/generator-loop.wav --loop
     shamway generate sound beep    art/audio/ui-confirm.wav --hz 880 --beeps 2
     shamway generate sound sounds-xml myModBlast --distant myModBlastDistant
@@ -314,6 +315,35 @@ def whoosh(duration: float, generator: random.Random) -> list[float]:
     return normalize(remove_dc(fade_tail(shaped, min(0.15, duration * 0.2))), -3.0)
 
 
+def bomb_whistle(
+    duration: float, generator: random.Random, start_hz: float, end_hz: float
+) -> list[float]:
+    """A descending aerodynamic whistle for a bomb falling past the listener.
+
+    Integrating the changing frequency keeps phase continuous; multiplying a
+    sine by a changing frequency would create the wrong instantaneous pitch.
+    A restrained turbulent layer keeps the result from reading as a clean
+    electronic test tone.
+    """
+    times = seconds(duration)
+    white = noise(len(times), generator)
+    air = lowpass(highpass(white, 180.0), 3400.0)
+    phase = 0.0
+    output: list[float] = []
+    for index, time in enumerate(times):
+        position = min(time / duration, 1.0)
+        # Ease the descent so it reads as a continuous fall rather than a siren.
+        frequency = start_hz + (end_hz - start_hz) * (position**1.15)
+        phase += 2.0 * math.pi * frequency / RATE
+        flutter = 0.88 + 0.08 * math.sin(2.0 * math.pi * 3.2 * time)
+        tone = math.sin(phase) + 0.24 * math.sin(2.0 * phase + 0.35)
+        output.append(tone * flutter + 0.16 * air[index])
+    attack = min(int(0.04 * RATE), len(output))
+    for index in range(attack):
+        output[index] *= index / max(attack, 1)
+    return normalize(remove_dc(fade_tail(output, min(0.18, duration * 0.12))), -4.0)
+
+
 def hum(duration: float, generator: random.Random, base_hz: float, loop: bool) -> list[float]:
     """Electrical hum: a fundamental with harmonics and a little noise on top.
 
@@ -503,6 +533,11 @@ def main(argv: list[str] | None = None) -> int:
     whoosh_parser = voice("whoosh", "a thrown or passing object")
     whoosh_parser.add_argument("--seconds", type=float, default=1.2)
 
+    whistle_parser = voice("bomb-whistle", "a bomb falling with gradually descending pitch")
+    whistle_parser.add_argument("--seconds", type=float, default=4.0)
+    whistle_parser.add_argument("--start-hz", type=float, default=1100.0)
+    whistle_parser.add_argument("--end-hz", type=float, default=360.0)
+
     hum_parser = voice("hum", "electrical hum for machinery or ambience")
     hum_parser.add_argument("--seconds", type=float, default=3.0)
     hum_parser.add_argument("--hz", type=float, default=60.0, help="mains fundamental")
@@ -561,6 +596,12 @@ def main(argv: list[str] | None = None) -> int:
             samples = one
     elif args.command == "whoosh":
         samples = whoosh(args.seconds, generator)
+    elif args.command == "bomb-whistle":
+        if args.seconds <= 0 or args.start_hz <= 0 or args.end_hz <= 0:
+            raise SystemExit("ERROR: duration and whistle frequencies must be positive")
+        if args.end_hz >= args.start_hz:
+            raise SystemExit("ERROR: --end-hz must be lower than --start-hz")
+        samples = bomb_whistle(args.seconds, generator, args.start_hz, args.end_hz)
     elif args.command == "hum":
         samples = hum(args.seconds, generator, args.hz, args.loop)
     elif args.command == "beep":

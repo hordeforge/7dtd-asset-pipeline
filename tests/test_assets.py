@@ -360,6 +360,16 @@ class GeneratorTests(unittest.TestCase):
     imaging or mesh packages installed.
     """
 
+    def test_bomb_whistle_is_reproducible_and_descends(self) -> None:
+        import random
+
+        from sevendtd_asset_pipeline.generators.sound import bomb_whistle
+
+        first = bomb_whistle(1.0, random.Random(7), 1100.0, 360.0)
+        second = bomb_whistle(1.0, random.Random(7), 1100.0, 360.0)
+        self.assertEqual(first, second)
+        self.assertEqual(44_100, len(first))
+
     def test_every_registered_generator_imports(self) -> None:
         from sevendtd_asset_pipeline.generators import GENERATORS, load
 

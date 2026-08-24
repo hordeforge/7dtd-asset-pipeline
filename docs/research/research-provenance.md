@@ -988,3 +988,37 @@ prop that had read `0.0%` for the whole investigation.
 
 `bundle_writer.NO_PROPERTY` holds the string; `RenderStateSentinelTests` fails
 if any render-state value carries an empty name again.
+
+
+## The prefab needs a collider, and a box is what there is an artifact for
+
+**Reported from a live client 2026-08-24** and confirmed there: blocks built
+from a synthesized prefab place, stack, and can be **walked through**. 7DTD's
+`ModelEntity` block takes its collision from the model, and this writer's
+prefab carried a `Transform`, a `MeshFilter` and a `MeshRenderer` and no
+collider at all.
+
+**Measured** with UnityPy over the installed game's
+`Data/Bundles/Standalone/Entities/trees`: the bundle contains `BoxCollider`,
+`CapsuleCollider` and `SphereCollider` objects and **no `MeshCollider`**. So a
+box is the collider there is a real field layout for, and it is also the cheap
+one and an exact hull for the boxy props this writer makes.
+
+`BoxCollider` is class **65**, and its 2022.3 layout is:
+
+```text
+m_GameObject, m_Material, m_IncludeLayers {m_Bits}, m_ExcludeLayers {m_Bits},
+m_LayerOverridePriority, m_IsTrigger, m_ProvidesContacts, m_Enabled,
+m_Size {x,y,z}, m_Center {x,y,z}
+```
+
+`m_IncludeLayers`, `m_ExcludeLayers` and `m_LayerOverridePriority` are the
+fields 2022.3 added; an older layout copied from a wiki omits them.
+
+**`m_Size` is a full size, `m_LocalAABB.m_Extent` is a half-extent**, so the
+writer doubles it. A collider at half the mesh's size is the kind of error that
+looks right in a dump and is wrong in the world.
+
+Limitation, recorded rather than hidden: a sculpted mesh gets a box that
+over-covers it. That is in
+[../status/improvements.md](../status/improvements.md), not a silent surprise.

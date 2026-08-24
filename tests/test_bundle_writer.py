@@ -18,6 +18,7 @@ import wave
 from pathlib import Path
 from typing import Any
 
+from sevendtd_asset_pipeline import bundle_writer
 from sevendtd_asset_pipeline.bundle_writer import (
     audio_clip,
     build_bundle,
@@ -502,3 +503,49 @@ class ManifestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PrefabColliderTests(unittest.TestCase):
+    """A prefab without a collider is walked through.
+
+    7DTD's `ModelEntity` block takes its collision from the model, so a block
+    whose prefab has no collider places, stacks, and stops nothing. Reported
+    from a live client on 2026-08-24: the blocks were placeable and could be
+    walked through.
+
+    A `BoxCollider` rather than a `MeshCollider` because the game's own bundles
+    carry `Box`, `Capsule` and `Sphere` colliders and no `MeshCollider` at all -
+    a box is the shape there is a real artifact for.
+    """
+
+    AABB = {
+        "m_Center": {"x": 0.0, "y": 0.25, "z": 0.0},
+        "m_Extent": {"x": 0.15, "y": 0.25, "z": 0.1},
+    }
+
+    def test_a_prefab_with_bounds_gets_a_collider_covering_the_mesh(self) -> None:
+        objects = bundle_writer.mesh_prefab("prop", "prop:mesh", ("prop:mat",), self.AABB)
+        colliders = [o for o in objects if o.class_id == bundle_writer.BOX_COLLIDER]
+        self.assertEqual(len(colliders), 1)
+        fields = colliders[0].fields
+        # Unity's BoxCollider takes a full size; the mesh AABB carries half-extents.
+        self.assertEqual(fields["m_Size"], {"x": 0.3, "y": 0.5, "z": 0.2})
+        self.assertEqual(fields["m_Center"], self.AABB["m_Center"])
+        self.assertTrue(fields["m_Enabled"])
+        self.assertFalse(fields["m_IsTrigger"])
+
+    def test_the_game_object_lists_the_collider_as_a_component(self) -> None:
+        objects = bundle_writer.mesh_prefab("prop", "prop:mesh", ("prop:mat",), self.AABB)
+        game_object = next(o for o in objects if o.class_id == bundle_writer.GAME_OBJECT)
+        self.assertEqual(
+            len(game_object.fields["m_Component"]),
+            4,
+            "transform, filter, renderer, collider - a collider the GameObject does not "
+            "list is a collider the runtime never attaches",
+        )
+
+    def test_without_bounds_there_is_no_collider_and_no_dangling_component(self) -> None:
+        objects = bundle_writer.mesh_prefab("prop", "prop:mesh", ("prop:mat",))
+        self.assertEqual([o for o in objects if o.class_id == bundle_writer.BOX_COLLIDER], [])
+        game_object = next(o for o in objects if o.class_id == bundle_writer.GAME_OBJECT)
+        self.assertEqual(len(game_object.fields["m_Component"]), 3)

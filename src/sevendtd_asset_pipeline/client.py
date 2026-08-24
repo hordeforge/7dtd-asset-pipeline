@@ -719,7 +719,13 @@ def ships_localization(mods_dir: Path | None, mod_name: str | None) -> bool:
 
 
 def markers_for(mod_name: str | None, expect_localization: bool = True) -> tuple[Marker, ...]:
-    name = re.escape(mod_name) if mod_name else r"[^\s]+"
+    # A specific name must not match by prefix: without the boundary after it,
+    # scanning for MyMod accepts a log line naming MyModPlus, and a verdict
+    # can pass on another mod's load. The engine writes `<Name> (<version>)`,
+    # so whitespace, an open parenthesis or end of line are the only things
+    # that may follow.
+    end = r"(?=[\s(]|$)"
+    name = (re.escape(mod_name) + end) if mod_name else r"[^\s]+"
     return (
         Marker(
             "mod_loaded", rf"Loaded Mod: {name}", "the mod folder was discovered and loaded", True

@@ -217,23 +217,34 @@ repository reads, prints, or stores them.
 
 ## 4. Configure machine-local paths
 
-Environment variables take precedence over blank config values:
+Environment variables take precedence over blank config values. One is worth
+setting on every host:
 
 ```bash
 export SEVEN_DAYS_TO_DIE_DIR="/absolute/path/to/7 Days To Die"
+```
+
+The other only where an editor exists, and only for the three things that use
+one — `bundle_source = "unity"`, `verify-bundle`, and `render-icon`. Leaving it
+unset is not a problem anywhere else:
+
+```bash
 export UNITY_EDITOR="/absolute/path/to/Unity/Hub/Editor/2022.3.62f2/Editor/Unity"
 ```
 
 On Windows, `UNITY_EDITOR` ends in `Editor/Unity.exe`. On macOS it points at
 the executable inside the editor application bundle. Do not commit either
-path. The pipeline reads these two variables and the two `shamway client`
-overrides in [configuration.md](../configuration.md); it reads no `.local.env`
-or other dotenv file, so a mod that keeps one must export it itself.
+path. The pipeline reads these two variables, `SHAMWAY_BUNDLE_SOURCE`, and the
+two `shamway client` overrides in [configuration.md](../configuration.md); it
+reads no `.local.env` or other dotenv file, so a mod that keeps one must export
+it itself.
 
 `doctor` compares what `UNITY_EDITOR -version` reports against the project's
 pinned revision and **fails** on a difference. That check exists because a
 wrong editor does not fail: batch mode opens the project, upgrades it
-silently, and builds a bundle the game rejects.
+silently, and builds a bundle the game rejects. It runs only for a mod that
+opted into an editor; on the default path there is no project to compare
+against and the row is absent rather than warning.
 
 ## 5. Prove setup
 

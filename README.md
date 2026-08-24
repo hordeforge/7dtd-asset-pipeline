@@ -134,7 +134,7 @@ These produce or move the bundle:
 | `shamway build --probe` | prove the environment on a throwaway bundle; stages nothing |
 | `shamway pack SRC OUT` | synthesize a bundle outside any mod |
 | `shamway stage BUNDLE` | gate and stage a bundle an editor elsewhere built |
-| `shamway verify-bundle` | load a bundle in a real Unity runtime; proves construction |
+| `shamway verify-bundle` | load a bundle in a real Unity runtime; needs an editor, proves construction |
 | `shamway unity-release --json` | the official editor URL, changeset and MD5 for a revision |
 
 `build` (without `--probe`), `stage` and `render-icon` are the only commands
@@ -265,8 +265,6 @@ the rules there rather than here.
 
 **Bundle production**
 
-- a real editor-side `BuildPipeline.BuildAssetBundles` implementation:
-  Windows-target, LZ4, strict, forced-rebuild;
 - an **editorless writer** (`bundle_writer.py`), which is the default path:
   UnityFS container, SerializedFile v22 with the engine's own per-revision type
   trees, the class-142 `AssetBundle` object, `Texture2D` (RGBA32 or BC1/BC3),
@@ -277,9 +275,12 @@ the rules there rather than here.
   resolves — every structure read out of a real artifact first, and
   cross-object `PPtr`s resolved by name so a dangling reference is refused
   rather than written as null;
-- an **opt-in** Unity, four ways — synthesized here by default, a local editor,
-  built elsewhere and staged, or no bundle at all — with the gates travelling
-  with the artifact in every case;
+- an **opt-in** editor-side `BuildPipeline.BuildAssetBundles` implementation
+  for the bundle that needs one — Windows-target, LZ4, strict, forced-rebuild;
+- four bundle sources, three of them editorless — synthesized here by default,
+  built elsewhere and staged, no bundle at all, or a local editor — with the
+  gates travelling with the artifact in every case, and a CI job that proves
+  the default one on a runner that has never had an editor;
 - a throwaway probe bundle that tests setup before art is involved;
 - atomic staging of the bundle and its tracked manifest, so a rejected
   candidate never replaces what is already in `Resources/`;
@@ -342,11 +343,14 @@ the rules there rather than here.
 
 **Project**
 
-- host-tooling and Unity-editor installers that start from a bare machine;
-- a mod-scaffolding command and generic Unity project template;
+- a host-tooling installer that starts from a bare machine, and an *optional*
+  Unity-editor installer beside it;
+- a mod-scaffolding command, and an opt-in Unity project template it copies
+  only when a mod asks for one;
 - an editor-script compile gate that needs no running editor
   (`scripts/compile-editor-scripts.sh`, in `make check`);
-- unit tests with generated good and broken UnityFS fixtures.
+- unit tests with generated good and broken UnityFS fixtures, and a CI job
+  that scaffolds, builds and validates a real mod with no editor on the host.
 
 ## Requirements
 
@@ -390,14 +394,14 @@ consuming mod reads them with no checkout of this repository, and
 
 - [Documentation index](docs/README.md) — every page, by category
 - [Quickstart](docs/getting-started/quickstart.md) — bare machine to a validated bundle
-- [Setup](docs/getting-started/setup.md) — Python, game path, Unity, licensing, Windows module
+- [Setup](docs/getting-started/setup.md) — Python, game path, and the optional Unity, licensing and Windows module
 - [Mod repo layout](docs/mod-repo-layout.md) — what lives in the mod, what lives here
 
 **Bundles**
 
 - [Running without Unity](docs/bundles/no-unity.md) — synthesizing here, building elsewhere, shipping none
 - [ADR 0001: synthesize bundles without an editor](docs/adrs/0001-synthesize-bundles-without-an-editor.md) — the format research, what shipped, and what is still unbuilt
-- [Bundle generation](docs/bundles/bundle-generation.md) — the complete editor build path
+- [Bundle generation](docs/bundles/bundle-generation.md) — the opt-in editor build path, end to end
 - [Validation](docs/validation.md) — each gate and its proof boundary
 - [Game integration](docs/game-integration.md) — XML URIs, icons, audio, clients
 

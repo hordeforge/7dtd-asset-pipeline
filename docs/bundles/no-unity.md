@@ -19,6 +19,14 @@ Every other command — `status`, `doctor`, `refs`, `validate`, `inspect`
 `client` family — is Python reading files, and always ran on a machine with no
 editor and no game.
 
+**That is measured, not asserted.** CI's `scaffold` job runs on a hosted Linux
+runner with no editor and no game install: it scaffolds a modlet with no flags,
+fails if a Unity project appears, authors a mesh and a texture, runs `build` and
+`validate`, and asserts the bundle carries `AssetBundle`, `GameObject`,
+`Transform`, `MeshFilter`, `MeshRenderer`, `Mesh`, `Material`, `Shader` and
+`Texture2D`. Take `vkd3d-compiler` away and it fails. A change that puts an
+editor back on the default path stops CI rather than reaching this page.
+
 So the real question is never "can I use shamway without Unity". It is **where
 the `.unity3d` comes from**, or whether the mod needs one at all. That has four
 answers, and the configuration states which one applies:
@@ -113,6 +121,65 @@ shamway init . --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 Then re-apply whatever you had edited into the old files — `code_references`,
 mod-specific agent rules — and delete the backups. `assets-src/` and
 `UIAtlases/` are left alone by a second `init`; nothing you authored is lost.
+
+## Moving a mod off the editor lane
+
+A mod scaffolded before `"synthesized"` was the default, or one that opted into
+an editor and no longer needs it, moves in two steps. Whether it *can* move is
+the first question: the writer emits one unlit opaque pass, so a mod whose
+props are lit, transparent, normal-mapped or multi-pass, or that ships
+particles or rigging, stays on `"unity"`. Check what is actually in the bundle
+first:
+
+```bash
+shamway inspect --deep Resources/mymod.unity3d
+```
+
+**Just this machine, reversibly.** The committed configuration is the mod's
+decision; where *this* host gets a bundle from is not. Nothing is edited:
+
+```bash
+export SHAMWAY_BUNDLE_SOURCE=synthesized
+shamway build
+```
+
+**Permanently.** Two keys change together, and they have to: `source_root`
+means a path *inside the Unity project* for `"unity"` and a path *in the mod*
+for `"synthesized"`, so changing one without the other points the writer at a
+folder that does not exist. `load_config` refuses that combination by name
+rather than letting a build print "create this folder", which would be the
+wrong fix.
+
+Edit `.shamway.toml`:
+
+```toml
+bundle_source = "synthesized"
+source_root = "assets-src/bundle"
+```
+
+Then move the **source files** — images, clips, meshes, text — out of
+`tools/shamway/UnityProject/Assets/ModAssets/Bundle/` and into
+`assets-src/bundle/`, without their `.meta` files, which mean nothing off the
+editor lane:
+
+```bash
+cd /path/to/MyMod
+mkdir -p assets-src/bundle
+find tools/shamway/UnityProject/Assets/ModAssets/Bundle -type f ! -name '*.meta' -exec cp {} assets-src/bundle/ \;
+shamway build
+shamway validate
+```
+
+What does **not** move is anything the editor authored rather than imported: a
+`.prefab`, a `.mat`, a `.shader`, a particle system. `collect_sources` refuses
+those by name instead of skipping them, and the writer builds the prefab,
+material and shader itself from each mesh file — so a prop whose prefab was
+composed from primitives in the editor has to be re-authored as a mesh
+(`shamway generate mesh`, Blender, OpenSCAD) before it can make the trip.
+
+Keep the Unity project until a fresh client has accepted the synthesized
+bundle. Deleting it is the one step that cannot be undone from git alone if
+any `.meta` went with it.
 
 ## A bundle this tool writes itself
 

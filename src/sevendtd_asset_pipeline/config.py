@@ -41,6 +41,17 @@ BUNDLE_SOURCES = {
     "unity": "a local editor builds it: shamway build",
 }
 DEFAULT_BUNDLE_SOURCE = "synthesized"
+# What `source_root` means differs per bundle source, so each one owns its
+# default here rather than in the caller. `"unity"` names a path inside the
+# project the editor collects from; every other source has no project, so the
+# same key is read against the mod root and must point somewhere in it.
+UNITY_SOURCE_ROOT = "Assets/ModAssets/Bundle"
+SYNTHESIZED_SOURCE_ROOT = "assets-src/bundle"
+
+
+def default_source_root(bundle_source: str) -> str:
+    """The membership folder a bundle source expects when none was given."""
+    return UNITY_SOURCE_ROOT if bundle_source == "unity" else SYNTHESIZED_SOURCE_ROOT
 
 
 def resolve_bundle_source(bundle_source: str | None, adopting: bool) -> str:
@@ -284,6 +295,28 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         compress_textures=bool(data.get("compress_textures", False)),
         code_references=tuple(item.strip() for item in code_references),
     )
+    # `source_root` means two different things per bundle source: a path inside
+    # the Unity project for "unity", and a path in the mod for "synthesized".
+    # A configuration switched from the first to the second without moving it
+    # therefore points at <mod>/Assets/ModAssets/Bundle, which does not exist —
+    # and the "create that folder" error a build would print is the wrong
+    # advice, since the fix is to change the key. Caught here, before any work
+    # starts. Only "synthesized" reads the key at all: "external" gets a bundle
+    # someone else built and "none" has none, so both keep the scaffolded
+    # default harmlessly and must not be refused for it.
+    if (
+        bundle_source == "synthesized"
+        and config.source_root.startswith("Assets/")
+        and not config.bundle_source_dir.is_dir()
+    ):
+        raise PipelineError(
+            f"source_root {config.source_root!r} is a path inside a Unity project, but "
+            'bundle_source = "synthesized" has no project — so it is read against the mod '
+            f"root and resolves to {config.bundle_source_dir}, which does not exist. Point "
+            "source_root at a folder in the mod (the scaffolded default is "
+            '"assets-src/bundle") and put the source files there. Moving a mod off the '
+            "editor lane: 'shamway docs no-unity'."
+        )
     for field, owned_path in (
         ("resources_dir", config.resources_dir),
         ("config_dir", config.config_dir),
@@ -298,7 +331,7 @@ def render_config(
     bundle_name: str,
     unity_version: str,
     unity_project: str = "tools/shamway/UnityProject",
-    source_root: str = "Assets/ModAssets/Bundle",
+    source_root: str | None = None,
     manifest_dir: str = "tools/shamway/manifests",
     bundle_source: str = DEFAULT_BUNDLE_SOURCE,
 ) -> str:
@@ -313,9 +346,15 @@ def render_config(
     that builds its own bundle, stages one built elsewhere, or has none — the
     only key that decides whether this machine needs a Unity editor.
 
+    An unstated `source_root` follows the bundle source rather than a single
+    literal: a path inside the Unity project for `"unity"`, and one in the mod
+    for everything else. A shared default silently rendered a project-relative
+    path into a configuration with no project, which resolves nowhere.
+
     Every interpolated value goes through `_toml_string`: these strings come
     from ModInfo.xml and command lines, which are untrusted here.
     """
+    source_root = source_root or default_source_root(bundle_source)
     if bundle_source == "none":
         return f"""# Paths are relative to this file unless absolute.
 schema_version = 1

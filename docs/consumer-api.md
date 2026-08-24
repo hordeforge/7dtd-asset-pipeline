@@ -42,7 +42,7 @@ returns, and three fields a caller needs before running anything:
 
 | Field | Meaning |
 |---|---|
-| `cost` | `instant`, `fast`, `seconds`, or `minutes` — `minutes` starts Unity |
+| `cost` | `instant`, `fast`, `seconds`, or `minutes` — the worst case, so `build` declares `minutes` for the editor it *may* start. With the default `bundle_source = "synthesized"` it starts none and finishes in milliseconds |
 | `writes` | whether it modifies files; `build`, `pack`, `stage`, `init`, `render_icon`, `acceptance_provider`, `client_deploy`, and `client_launch` do |
 | `needs_config` | whether it must run inside a scaffolded modlet |
 | `capabilities` | optional tools it requires, e.g. `["UnityPy"]` |

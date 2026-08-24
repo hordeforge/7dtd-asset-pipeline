@@ -71,4 +71,4 @@ jobs:
           VERSION="${TAG#v}"
           gh release create "$TAG" dist/*.whl dist/*.tar.gz \
             --title "Shamway / Asset Pipeline ${VERSION}" \
-            --notes "HordeForge Release ${TAG}: Build and validate Unity asset bundles for 7 Days to Die mods."
+            --notes "HordeForge Release ${TAG}: Write, gate and validate Unity asset bundles for 7 Days to Die mods, with no Unity editor."

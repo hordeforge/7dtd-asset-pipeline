@@ -9,7 +9,8 @@ Accepted
 Programmatic consumers differ — Python callers, other languages, CI, agents —
 but a build tool with several interfaces that describe themselves differently
 is worse than one with a single interface. Separately: this tool reads a game
-install and drives a Unity editor on the same machine, so a listening port
+install and writes files on the same machine — and can drive a Unity editor
+there, for a mod that opted into one — so a listening port
 would be a liability.
 
 ## Decision

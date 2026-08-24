@@ -42,6 +42,24 @@ shamway build
 The environment variable is machine state, like `UNITY_EDITOR`; the committed
 configuration stays as the mod wants it. See [no-unity.md](../bundles/no-unity.md).
 
+## “source_root ... is a path inside a Unity project, but bundle_source ...”
+
+The configuration was switched off the editor lane without moving
+`source_root` with it. That key means a path *inside the Unity project* for
+`bundle_source = "unity"` and a path *in the mod* for `"synthesized"`, so the
+old value now resolves to `<mod>/Assets/ModAssets/Bundle`, which does not
+exist. Creating that folder is **not** the fix — it would put bundle content
+somewhere neither lane reads. Change both keys together:
+
+```toml
+bundle_source = "synthesized"
+source_root = "assets-src/bundle"
+```
+
+The whole move, including which assets can make the trip and which have to be
+re-authored, is in [no-unity.md](../bundles/no-unity.md) under "Moving a mod
+off the editor lane".
+
 ## `stage` printed “not run:” lines
 
 Nothing failed — those name the gates whose *evidence* was missing. `--log`
@@ -331,17 +349,29 @@ command files into the manifest looking exactly like evidence, and the next
 reader has no way to tell. Launch a client first, or pass `--allow-no-client`
 when you genuinely mean to capture whatever is on screen.
 
-## `doctor` cannot find game or editor
+## `doctor` cannot find the game
 
-Use absolute machine-local environment variables:
+Use an absolute machine-local environment variable:
 
 ```bash
 export SEVEN_DAYS_TO_DIE_DIR="/path/containing/Data/Config/items.xml"
+shamway doctor
+```
+
+## `doctor` cannot find the editor
+
+Only a mod that opted into one has an editor to find. On the default
+`bundle_source = "synthesized"` there is no Unity row at all, so an editor
+`doctor` "cannot find" means the configuration says `"unity"` — either point at
+the editor, or reconsider whether this mod needs one
+([no-unity.md](../bundles/no-unity.md)):
+
+```bash
 export UNITY_EDITOR="/path/ending/Editor/Unity"
 shamway doctor
 ```
 
-Do not commit these paths.
+Do not commit either path.
 
 ## Probe fails before a useful Unity log exists
 

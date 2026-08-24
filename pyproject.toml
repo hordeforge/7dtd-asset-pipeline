@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "7dtd-asset-pipeline"
 version = "0.1.0"
-description = "Build and validate Unity asset bundles for 7 Days to Die mods"
+description = "Write, gate and validate Unity asset bundles for 7 Days to Die mods, with no Unity editor"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

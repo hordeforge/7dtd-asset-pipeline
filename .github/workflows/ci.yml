@@ -92,8 +92,11 @@ jobs:
       - run: make check test
 
   scaffold:
-    # Prove the consumer path end to end: a bare modlet becomes a scaffolded
-    # one whose status is machine-readable. Needs no Unity and no game install.
+    # Prove the consumer path end to end on a runner that has never had a Unity
+    # editor: a bare modlet is scaffolded, an asset is authored into it, a real
+    # bundle is written, and every XML reference to it validates. This job is
+    # the gate on the claim that Unity is opt-in — if the default path ever
+    # needs an editor again, nothing else here would notice.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -101,17 +104,56 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-      # Core only, no dev tools: this job drives the CLI, it does not lint.
-      - run: uv sync --locked --no-dev
+      # vkd3d-compiler is what turns a mesh into the prefab the game resolves.
+      # Installed here so the assertion below is on the whole lane rather than
+      # on its degraded form; the pipeline itself only needs Python.
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends vkd3d-compiler
+      # The optional extras carry trimesh (reads the mesh) and Pillow (writes
+      # the texture). Still no editor, no game install, and no network at run
+      # time.
+      - run: uv sync --locked --no-dev --all-extras
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-      - run: |
-          mkdir -p /tmp/MyMod
+      - name: Scaffold a modlet with no flags, and prove the default is editorless
+        run: |
+          mkdir -p /tmp/MyMod/Config
           printf '<xml><Name value="MyMod" /></xml>\n' > /tmp/MyMod/ModInfo.xml
           shamway init /tmp/MyMod --unity-version 2022.3.62f2
           test -f /tmp/MyMod/tools/shamway/AGENTS.md
+          test -d /tmp/MyMod/assets-src/bundle
+          # No editor was requested, so none of its scaffolding may appear.
+          test ! -e /tmp/MyMod/tools/shamway/UnityProject
+          grep -q 'bundle_source = "synthesized"' /tmp/MyMod/.shamway.toml
           cd /tmp/MyMod && shamway status --json || true
           cd /tmp/MyMod && shamway refs
           cd /tmp/MyMod && shamway call capabilities > /dev/null
+      - name: Author an asset, build the bundle, and validate the mod against it
+        env:
+          UNITY_EDITOR: ""
+        run: |
+          cd /tmp/MyMod
+          shamway generate mesh assets-src/bundle/myModThing.glb --shape box --size 0.4 0.4 0.4
+          python -c "from PIL import Image; Image.new('RGBA', (64, 64), (120, 60, 40, 255)).save('assets-src/bundle/myModThing_albedo.png')"
+          printf '%s\n' \
+            '<configs><append xpath="/blocks"><block name="myModBlock">' \
+            '<property name="Model" value="#@modfolder(MyMod):Resources/mymod.unity3d?myModThing.prefab" />' \
+            '</block></append></configs>' > Config/blocks.xml
+          shamway build
+          shamway validate
+      - name: The bundle must carry the whole prefab chain, not a bare mesh
+        run: |
+          cd /tmp/MyMod
+          shamway inspect --deep --json Resources/mymod.unity3d > /tmp/deep.json
+          python - <<'CHECK'
+          import json
+          types = json.load(open("/tmp/deep.json"))["type_counts"]
+          required = {
+              "AssetBundle", "GameObject", "Transform", "MeshFilter",
+              "MeshRenderer", "Mesh", "Material", "Shader", "Texture2D",
+          }
+          missing = sorted(required - set(types))
+          assert not missing, f"editorless bundle is missing {missing}; got {sorted(types)}"
+          print("OK: every class the game resolves, written with no editor:", sorted(types))
+          CHECK
 
   coverage-badge:
     # Publishes the line-coverage badge to the badges branch, which

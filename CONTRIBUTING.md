@@ -28,6 +28,31 @@ the editor), probed
 (`shamway build --probe` ran it), or executed for real (`render-icon`, a
 generator, a fresh client). Never describe the first as the third.
 
+## The editorless path is a CI gate, not a claim
+
+"Unity is opt-in" is the kind of statement that rots quietly, because the
+machine that would notice usually has an editor on it. So the `scaffold` job in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) proves it on a hosted
+runner that has never had one: it scaffolds a modlet with **no flags**, asserts
+no Unity project appeared and that the configuration says `synthesized`,
+authors a mesh and a texture into `assets-src/bundle/`, runs `shamway build`
+and `shamway validate`, and then fails unless the bundle contains every class
+the game resolves —
+
+```text
+AssetBundle GameObject Transform MeshFilter MeshRenderer Mesh Material Shader Texture2D
+```
+
+That last assertion is the one that matters, and it is not decorative: with
+`vkd3d-compiler` removed it fails with
+`editorless bundle is missing ['GameObject', 'Material', 'MeshFilter',
+'MeshRenderer', 'Shader', 'Transform']`. A change that quietly puts an editor
+back on the default path, or that degrades the prefab lane, stops CI rather
+than reaching a page nobody re-reads.
+
+Do not weaken that job to make a change pass. It is the only place in this
+repository where the absence of Unity is measured rather than asserted.
+
 ## Portability
 
 The CLI claims to run on Linux, macOS, and Windows

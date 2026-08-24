@@ -529,6 +529,24 @@ pixels in the right rows, and the AudioClip `channels=1 frequency=44100
 samples=4410`. That is the engine's own loader and its own class definitions,
 not this repository's parser — but it is not 7DTD, and it is not acceptance.
 
+## Class-table prefix window, measured for the offline reader
+
+Measured 2026-08-24 against the installed game's own bundles (V3.1.0 b14) with
+a scratch dissector over this repository's `unityfs.py`, plus `cProfile` on the
+same call. The shipped `Data/Bundles/Standalone/Entities/trees` bundle is a
+650 MB archive whose single directory node is a 111.6 MB serialized file; its
+type table holds **23 types and ends 127,888 bytes into that node**. The
+reader's fixed decompression window was then 32 MiB, so every
+`doctor`/`status`/`validate` call that reads the game revision decompressed 257
+LZ4HC blocks to reach a table that ends inside block 2: **1323 ms per
+`inspect_bundle` call** (4.07 s of it `_lz4_decompress` under the profiler).
+
+The window now starts at 1 MiB and grows ×4 up to the same 32 MiB cap before a
+full-node read, which answers this bundle in **40.7 ms** with byte-identical
+class IDs (`2022.3.62f2`, 23 classes). The growth ladder is pinned by tests:
+a fixture whose table runs ~1.4 MiB parses on the second rung, and a table
+truncated past the first window still fails with the bounded error.
+
 ## Official and community references
 
 - Unity `BuildPipeline.BuildAssetBundles`:

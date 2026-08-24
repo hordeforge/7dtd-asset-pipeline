@@ -60,7 +60,7 @@ class SoundReport:
         return data
 
 
-def _read(path: Path) -> tuple[list[int], int, int, int]:
+def _read(path: Path) -> tuple[array.array[int], int, int, int]:
     try:
         with wave.open(str(path), "rb") as handle:
             channels = handle.getnchannels()
@@ -81,16 +81,19 @@ def _read(path: Path) -> tuple[list[int], int, int, int]:
             f"{path} declares {channels} channel(s) at {rate} Hz; the WAV header "
             "is damaged beyond measurement"
         )
+    # The samples stay in a two-byte array buffer rather than a list of Python
+    # ints: a contract-max clip is 2.9 million samples, and materializing each
+    # one as an int object peaked at 172 MB where the buffer needs about 6.
     samples = array.array("h")
     samples.frombytes(frames)
     # WAV holds little-endian samples; 'h' is native order, so a big-endian
     # host reads every measurement from byte-swapped values without this.
     if sys.byteorder == "big":
         samples.byteswap()
-    return list(samples), channels, rate, width * 8
+    return samples, channels, rate, width * 8
 
 
-def _silence_edges(mono: list[int], rate: int, floor: float) -> tuple[float, float]:
+def _silence_edges(mono: array.array[int], rate: int, floor: float) -> tuple[float, float]:
     threshold = floor * FULL_SCALE
     leading = 0
     while leading < len(mono) and abs(mono[leading]) <= threshold:
@@ -116,15 +119,20 @@ def check_sound(
         raise PipelineError(f"{clip} contains no audio frames")
 
     frames = len(samples) // max(channels, 1)
+    # The downmix stays an array too, for the same reason as in _read: the
+    # zip groups one frame's channels at C speed and the generator is drained
+    # straight into the buffer, so no per-sample list is ever built.
     mono = (
         samples
         if channels == 1
-        else [
-            int(sum(samples[index : index + channels]) / channels)
-            for index in range(0, len(samples), channels)
-        ]
+        else array.array(
+            "h",
+            # strict: readframes only ever returns whole frames, so a group
+            # short by a channel would mean a damaged WAV, not a tail to drop.
+            (int(sum(frame) / channels) for frame in zip(*[iter(samples)] * channels, strict=True)),
+        )
     )
-    peak = max(abs(value) for value in mono)
+    peak = max(map(abs, mono))
     clipped = sum(1 for value in mono if value >= 32767 or value <= -32767)
     energy = math.sqrt(sum(value * value for value in mono) / len(mono))
     mean = sum(mono) / len(mono)

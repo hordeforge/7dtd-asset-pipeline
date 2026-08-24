@@ -17,6 +17,8 @@ import zlib
 from pathlib import Path
 from typing import Any
 
+from fixtures import filesystem_is_case_insensitive
+
 import sevendtd_asset_pipeline
 from sevendtd_asset_pipeline import Pipeline, PipelineError
 from sevendtd_asset_pipeline.assets_src import LANES, render_readme
@@ -27,8 +29,6 @@ from sevendtd_asset_pipeline.icon_check import (
     read_png_header,
 )
 from sevendtd_asset_pipeline.sound_check import check_sound
-
-from fixtures import filesystem_is_case_insensitive
 
 
 def write_png(

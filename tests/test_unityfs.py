@@ -69,6 +69,25 @@ class TypeTreeTests(BundleCase):
         info = inspect_bundle(self.write(lz4_bundle([142] * 6, has_type_tree=True)))
         self.assertEqual((142,) * 6, info.class_ids)
 
+    def test_a_type_table_past_the_first_window_still_parses(self) -> None:
+        """The reader grows its window when the table outgrows it, not never.
+
+        The initial window covers one megabyte; this fixture's table runs
+        about 1.4, so the first attempt must fail into the growth ladder and
+        the second must answer exactly what a single full read would.
+        """
+        info = inspect_bundle(self.write(unityfs_bundle([142] * 20_000, has_type_tree=True)))
+        self.assertEqual(20_000, len(info.class_ids))
+        self.assertTrue(info.has_assetbundle_object)
+
+    def test_a_truncated_table_beyond_the_first_window_is_bounded(self) -> None:
+        """Growth stops at the whole node, and the honest error survives it."""
+        payload = serialized_file([142] * 20_000, has_type_tree=True)
+        short = payload[:-8]
+        bundle = build_bundle([(short, len(short), 0)], node_size=len(short))
+        with self.assertRaisesRegex(PipelineError, "truncated Unity bundle|first directory node"):
+            inspect_bundle(self.write(bundle))
+
     def test_a_truncated_type_tree_is_a_bounded_error(self) -> None:
         payload = serialized_file([142], has_type_tree=True)
         short = payload[:-8]

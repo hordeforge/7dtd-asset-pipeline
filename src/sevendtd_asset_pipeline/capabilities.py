@@ -111,6 +111,18 @@ REGISTRY: tuple[_Spec, ...] = (
         install=extra_install("mesh"),
     ),
     _Spec(
+        name="fsb5",
+        kind="module",
+        probe="fsb5",
+        unlocks=(
+            "shamway generate audio from-bank",
+            "the writer's own FSB5 round-trip check",
+        ),
+        purpose="decode an FSB5 bank back to PCM — the independent reader for the "
+        "banks this project hand-writes, and for hearing a vanilla clip",
+        install=extra_install("audio"),
+    ),
+    _Spec(
         name="gltf_validator",
         kind="command",
         probe="gltf_validator",

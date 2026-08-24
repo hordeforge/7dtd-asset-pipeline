@@ -193,12 +193,22 @@ Judge the result with a **composited** PSNR, never a raw one: a transparent
 pixel's colour is renderer noise, and grading it makes a good encoder look
 broken (`shamway docs improvements`, gap 4).
 
-### python-fsb5 — FSB5 decoding for reference
+### python-fsb5 — FSB5 decoding, for reference and for proof
 
-The game stores every clip as an FSB5 bank inside `.resource` streams;
-python-fsb5 decodes those to WAV so a sound designer can hear exactly what a
-vanilla clip contains, at its true rate and channel count. Read-only,
-reference use.
+**Wired**, and for two jobs. The game stores every clip as an FSB5 bank inside
+a `.resource` stream, so decoding one lets a sound designer hear exactly what
+a vanilla clip contains at its true rate and channel count:
+
+```bash
+shamway generate audio from-bank vanilla.resource reference/
+```
+
+The second job is why it is a dependency rather than a suggestion. This
+pipeline **hand-writes** those banks — `_fsb5_pcm16` packs the header bit by
+bit — and a bank read back only by the code that wrote it has not been read
+back at all. The suite decodes our own output with python-fsb5 and asserts the
+PCM returns byte-identical, the same independent-reader rule the block
+compressor follows with `texture2ddecoder`.
 
 - Official repository: <https://github.com/HearthSim/python-fsb5>
 
@@ -352,7 +362,7 @@ integration. This table says which is which, so nobody has to guess — and so
 | **gltfpack** | **not wired** — mesh quantization; useful when a mod's bundle is mesh-heavy, and nothing needs it before then |
 | **Material Maker** | **not wired** — GUI-first; its CLI export is a mod-side authoring choice |
 | **AssetRipper / AssetStudio / UABE** | **reference only, by design** — read the game to learn from it, never to copy out of it |
-| **python-fsb5** | **not wired** — decodes vanilla clips for reference listening; the writer only needs the encode side, which it has |
+| **python-fsb5** | **wired** — `generate audio from-bank`, and the independent reader that grades the hand-written FSB5 banks |
 | **vkd3d-compiler / glslang** | **not wired yet** — proven to emit the DXBC/SPIR-V a Unity shader carries; blocked on one undecoded descriptor ([improvements](../status/improvements.md) 4b) |
 
 ## Recommended agent-ready stack

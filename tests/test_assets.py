@@ -423,6 +423,33 @@ class GeneratorTests(unittest.TestCase):
                 self.assertEqual((16, 16), written.size)
             self.assertEqual([], list(root.glob("*.tmp")), "the staged file must not survive")
 
+    def test_the_contact_sheet_shows_the_icon_on_both_grounds(self) -> None:
+        """One ground hides one of the two ways an icon fails.
+
+        A dark-edged subject vanishes into an inventory slot; a cutout that
+        kept a white halo only shows it against light. The sheet used to be
+        dark alone, so half of that was unreviewable.
+        """
+        if not has_capability("pillow"):
+            self.skipTest("the sheet is drawn with Pillow")
+        import tempfile
+
+        from PIL import Image
+
+        from sevendtd_asset_pipeline.generators.icon import contact_sheet
+
+        with tempfile.TemporaryDirectory() as directory:
+            sheet_path = Path(directory) / "sheet.png"
+            icon = Image.new("RGBA", (16, 16), (255, 0, 0, 255))
+            contact_sheet(icon, sheet_path)
+            with Image.open(sheet_path) as sheet:
+                pixels = sheet.convert("RGB")
+                # Top-left of each row is bare background: one dark, one light.
+                top = pixels.getpixel((2, 2))
+                bottom = pixels.getpixel((2, pixels.height - 3))
+            self.assertLess(sum(top), 200, f"the first row is not a dark ground: {top}")
+            self.assertGreater(sum(bottom), 500, f"the second row is not a light ground: {bottom}")
+
     def test_the_mesh_icon_refuses_a_bad_target_before_starting_blender(self) -> None:
         import tempfile
 

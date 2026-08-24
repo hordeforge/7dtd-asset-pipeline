@@ -91,8 +91,11 @@ prompt pattern, and the key-colour convention.
    prefab with `shamway render-icon` where an editor exists, the mesh file with
    `shamway generate mesh-icon` where one does not.
 3. Derive the exact deployed cell — 160 x 160 for `ItemIconAtlas`.
-4. Create a contact sheet at native and 2x/4x zoom, and check it on a light
-   *and* a dark background.
+4. Create a contact sheet at native and 2x/4x zoom, on a light *and* a dark
+   background: `shamway generate icon … --contact-sheet sheet.png` writes both
+   rows. Two grounds because the two ways an icon fails are opposite, and each
+   is invisible on the other — a dark-edged subject vanishes into an inventory
+   slot, and a cutout that kept a white halo only shows it against light.
 5. Place the PNG in `UIAtlases/ItemIconAtlas/`, not the bundle.
 6. Run `shamway check-icons`: cell shape, alpha, and every `CustomIcon` key.
 7. Test atlas lookup by stem and inspect in inventory/perk/recipe contexts.

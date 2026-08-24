@@ -1244,3 +1244,42 @@ does not.
 Collision is unaffected on every graphics API, including Vulkan, which is
 consistent with the collider being a prefab component rather than anything the
 shader touches.
+
+
+## The Vulkan platform needs its own parameter records
+
+**Measured 2026-08-24** over the Vulkan blob of
+`Legacy Shaders/Transparent/Cutout/VertexLit`. This is the best-supported
+explanation left for why a Vulkan sub-program out of this writer is refused,
+and it is a **structural** difference rather than a value one.
+
+A Vulkan blob's records are `{3: 10, 25: 12, 5: 2}` - the 25s are the code
+records, the rest parameters. One Vulkan parameter record declares **both
+stages at once**, with stage-prefixed buffer names:
+
+```text
+PGlobals1706107946   _Cutoff                                    (P = pixel)
+VGlobals1706107946   _Color, _Emission, _MainTex_ST, _Shininess (V = vertex)
+```
+
+That matches `stageCounts` being 1 for Vulkan: one record carries both stages,
+so one parameter record describes both.
+
+**This writer emits two**, copied verbatim from the d3d11 platform, declaring
+`UnityPerDraw` and `UnityPerFrame`. Those are the names d3d11 binds by; nothing
+in the Vulkan blob uses them.
+
+What is eliminated around it, each measured in a live client on
+`-force-vulkan`, and none of them the cause:
+
+| Tried | Result |
+|---|---|
+| a whole **stock** Vulkan blob in this writer's shader | **renders** - so the platform wiring, `PlatformBlob` indices and `stageCounts` are correct |
+| our modules with **stock's 32-byte hash** | magenta - so that field is not what is checked |
+| swapping which section carries which stage | magenta, and the order was later **proven** the other way from `OpEntryPoint` |
+| constant buffers moved to **descriptor set 1**, Unity's convention | magenta |
+| SPIR-V from **glslang** rather than translated from DXBC, matching Unity's own generator | magenta |
+
+So: the container is right, the wiring is right, the modules are valid SPIR-V
+compiled the way Unity compiles them, and what remains unlike Unity's is the
+parameter description beside them.

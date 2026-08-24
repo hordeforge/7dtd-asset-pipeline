@@ -10,8 +10,8 @@
 # the right thing when run. State that difference when reporting.
 #
 # Needs: mcs (Mono), and an installed editor — UNITY_EDITOR, or the Hub layout
-# ~/Unity/Hub/Editor/<revision>/ for the revision in the template's
-# ProjectVersion.txt.
+# (~/Unity/Hub/Editor on Linux, /Applications/Unity/Hub/Editor on macOS) for
+# the revision in the template's ProjectVersion.txt.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -36,8 +36,10 @@ OPTIONS
   --with DIR          A second folder of .cs files compiled in the same unit
                       (a mod's generators need the vendored scripts)
   --editor-data DIR   The editor's Data/ directory (…/Editor/Data). Defaults
-                      to UNITY_EDITOR's, then ~/Unity/Hub/Editor/<revision>/
-                      for the template's ProjectVersion.txt revision
+                      to UNITY_EDITOR's, then the newest 2022.3 editor under
+                      Hub's install root (~/Unity/Hub/Editor, or
+                      /Applications/Unity/Hub/Editor on macOS) for the
+                      template's ProjectVersion.txt revision
   --quiet-missing     Exit 0 with a note when mcs or the editor is absent,
                       so `make check` can run this opportunistically
   -h, --help          Show this help
@@ -81,16 +83,38 @@ if [[ -z "$EDITOR_DATA" ]]; then
 		# the installed game's. Without UNITY_EDITOR, take the newest 2022.3
 		# editor Hub has installed — the one a developer of this repo builds with.
 		revision="$(sed -n 's/^m_EditorVersion: //p' "$TEMPLATE/ProjectSettings/ProjectVersion.txt" | head -n1)"
-		if [[ -z "$revision" || ! -d "$HOME/Unity/Hub/Editor/$revision" ]]; then
-		revision="$(for editor in "$HOME/Unity/Hub/Editor"/2022.3.*/; do
-			[[ -d "$editor" ]] && basename "$editor"
-		done | sort -V | tail -n1)" || true
-		# `|| true`: an unmatched glob fails the loop once, and pipefail would
-		# turn that into a failed assignment under set -e, dying here instead
-		# of reaching the graceful skip below. Empty means nothing installed.
+		# Hub installs under a different root per host OS: ~/Unity/Hub/Editor on
+		# Linux, /Applications/Unity/Hub/Editor on macOS. Probe both, so the
+		# discovery works wherever this repository claims to run.
+		hub_roots=("$HOME/Unity/Hub/Editor" "/Applications/Unity/Hub/Editor")
+		hub_root=""
+		if [[ -n "$revision" ]]; then
+			for candidate_root in "${hub_roots[@]}"; do
+				if [[ -d "$candidate_root/$revision" ]]; then
+					hub_root="$candidate_root"
+					break
+				fi
+			done
 		fi
-		[[ -n "$revision" ]] || skip "no Unity 2022.3 editor under ~/Unity/Hub/Editor and no UNITY_EDITOR"
-		EDITOR_DATA="$HOME/Unity/Hub/Editor/$revision/Editor/Data"
+		if [[ -z "$hub_root" ]]; then
+			# Nothing at the template's revision (or no revision): fall through to
+			# the newest 2022.3 either Hub root has. An unmatched glob fails the
+			# loop once, and pipefail would turn that into a failed assignment
+			# under set -e; empty means nothing installed, which is the skip below.
+			revision=""
+			for candidate_root in "${hub_roots[@]}"; do
+				newest="$(for editor in "$candidate_root"/2022.3.*/; do
+					[[ -d "$editor" ]] && basename "$editor"
+				done | sort -V | tail -n1)" || true
+				if [[ -n "$newest" ]]; then
+					revision="$newest"
+					hub_root="$candidate_root"
+					break
+				fi
+			done
+		fi
+		[[ -n "$hub_root" ]] || skip "no Unity 2022.3 editor under ${hub_roots[*]} and no UNITY_EDITOR"
+		EDITOR_DATA="$hub_root/$revision/Editor/Data"
 	fi
 fi
 [[ -d "$EDITOR_DATA/Managed/UnityEngine" ]] || skip "no editor assemblies at $EDITOR_DATA/Managed/UnityEngine"

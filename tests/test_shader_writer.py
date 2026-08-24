@@ -13,6 +13,7 @@ What it proved is recorded in docs/research/research-provenance.md.
 from __future__ import annotations
 
 import collections
+import ctypes
 import shutil
 import struct
 import subprocess
@@ -710,6 +711,46 @@ class VulkanSubProgramTests(unittest.TestCase):
             platforms = [p.platform for p in shader_blob.unlit_textured().platforms]
         self.assertNotIn(shader_blob.SHADER_COMPILER_PLATFORM_VULKAN, platforms)
         self.assertIn(shader_blob.SHADER_COMPILER_PLATFORM_D3D11, platforms)
+
+
+class LibraryDiscoveryTests(unittest.TestCase):
+    """The zmol-v search order, on every host the CLI claims to run on.
+
+    `ZMOLV_LIBRARY` must win over everything; the platform's own library
+    search (`ctypes.util.find_library`, which names `.dylib`/`.dll` correctly
+    per host) comes next; the Linux directories stay as the last leg for a
+    freshly installed library the linker cache has not picked up yet.
+    """
+
+    def test_an_explicit_override_outranks_every_discovery_route(self) -> None:
+        with (
+            mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": "/opt/zmolv/libzmolv.so"}),
+            mock.patch.object(ctypes.util, "find_library", return_value=None),
+        ):
+            candidates = shader_blob._library_candidates()
+        self.assertEqual(candidates[0], Path("/opt/zmolv/libzmolv.so"))
+
+    def test_the_platform_library_search_is_consulted(self) -> None:
+        with (
+            mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),
+            mock.patch.object(ctypes.util, "find_library", return_value="/usr/lib/libzmolv.dylib"),
+        ):
+            candidates = shader_blob._library_candidates()
+        self.assertIn(Path("/usr/lib/libzmolv.dylib"), candidates)
+        self.assertEqual(candidates.index(Path("/usr/lib/libzmolv.dylib")), 0)
+
+    def test_the_linux_directories_are_the_final_fallback(self) -> None:
+        with (
+            mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),
+            mock.patch.object(ctypes.util, "find_library", return_value=None),
+        ):
+            candidates = shader_blob._library_candidates()
+        self.assertEqual(
+            candidates[-2:],
+            [Path("/usr/local/lib/libzmolv.so"), Path("/usr/lib/libzmolv.so")],
+        )
+        # No discovery route may sit behind the fallback it is meant to beat.
+        self.assertNotIn(None, candidates)
 
 
 class DescriptorSetTests(unittest.TestCase):

@@ -16,6 +16,7 @@ sub-programs the game carries. No Unity is involved in producing it.
 from __future__ import annotations
 
 import ctypes
+import ctypes.util
 import functools
 import os
 import shutil
@@ -509,16 +510,32 @@ def compress_smolv(spirv: bytes) -> bytes:
     return encoded
 
 
-@functools.lru_cache(maxsize=1)
-def smolv_library() -> ctypes.CDLL | None:
-    """The zmol-v shared library, or None when it is not installed."""
-    candidates = []
+def _library_candidates() -> list[Path]:
+    """Where to look for the zmol-v shared library, most explicit first.
+
+    `ZMOLV_LIBRARY` wins, then the platform's own library search
+    (`ctypes.util.find_library`, which resolves `libzmolv.so`, `libzmolv.dylib`
+    and `zmolv.dll` per host), then the two directories a plain `zig build -p
+    /usr/local` install lands in on Linux. The last leg is a fallback rather
+    than the only route because find_library reads the linker cache, which a
+    freshly copied library is absent from.
+    """
+    candidates: list[Path] = []
     override = os.environ.get("ZMOLV_LIBRARY")
     if override:
         candidates.append(Path(override))
+    found = ctypes.util.find_library("zmolv")
+    if found:
+        candidates.append(Path(found))
     for directory in ("/usr/local/lib", "/usr/lib"):
         candidates.append(Path(directory) / "libzmolv.so")
-    for candidate in candidates:
+    return candidates
+
+
+@functools.lru_cache(maxsize=1)
+def smolv_library() -> ctypes.CDLL | None:
+    """The zmol-v shared library, or None when it is not installed."""
+    for candidate in _library_candidates():
         if not candidate.is_file():
             continue
         try:

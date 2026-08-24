@@ -276,6 +276,13 @@ design, its shader lane, and what is still unbuilt inside it.
   synthesized bundle, because it is the engine's own loader. When an editor is
   present, run it and say so; when it is not, say that too. It still proves
   construction, never acceptance.
+- **Never quote `Shader.isSupported` from a headless run.** `verify-bundle`
+  passes `-nographics`, where there is no device to compile a sub-program
+  against and the value is `true` for a shader that does not run — this
+  repository recorded exactly that as proof a synthesized shader worked, and it
+  was not. Use `xvfb-run -a shamway verify-bundle --draw`, which drops
+  `-nographics`, prints the graphics device beside the verdict, and photographs
+  each prefab to answer *does it rasterize* rather than *does it load*.
 
 ## Safety rules
 

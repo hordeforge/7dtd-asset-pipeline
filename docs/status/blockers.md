@@ -291,6 +291,14 @@ These were open and are now closed, so the list above stays meaningful:
   VERIFY-MATERIAL: 'prop_mat' shader='Shamway/Unlit' shaderSupported=True _MainTex=prop_albedo
   ```
 
+  **Withdrawn, 2026-08-24.** Both lines were measured under `-nographics`,
+  where there is no device to compile against and `isSupported` is not a
+  verdict. With a real graphics device the same bundle reports
+  `isSupported=False`, `passes=3`, `_MainTex=<unbound>`. The shader does not
+  run, and a block using it places in 7DTD and draws nothing. What survives of
+  this entry is narrower: the *container*, the object graph and the PPtr chain
+  are read correctly by a runtime — the shader is not.
+
   That closes the claim this documentation carried in six places until that
   day: that a Unity shader "cannot be produced offline, ever". It could, and
   the tool that proved it was already installed. What it does **not** close is

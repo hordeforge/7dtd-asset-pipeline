@@ -25,6 +25,160 @@ namespace SevenDaysToDie.AssetPipeline
     /// </summary>
     public static class BundleVerifier
     {
+        // The camera setup is IconRenderer's, deliberately: that one is known to
+        // produce a frame in batch mode, and an ad-hoc camera here reported
+        // 100% coverage for a built-in cube as readily as for a bundle prefab -
+        // a measurement that agreed with itself and would have convicted a
+        // shader of this gate's own bug. ARGB32 and allowHDR=false are the two
+        // details that differed.
+        private const int DrawProbePixels = 128;
+
+        /// <summary>Whether this run was asked to photograph prefabs.</summary>
+        private static bool DrawRequested()
+        {
+            foreach (string argument in Environment.GetCommandLineArgs())
+            {
+                if (argument == "-shamwayDraw") { return true; }
+            }
+            return false;
+        }
+
+        /// <summary>Fraction of the frame a camera actually rasterized.</summary>
+        private static double Coverage(Camera camera, RenderTexture target, Texture2D readback)
+        {
+            RenderTexture previous = RenderTexture.active;
+            camera.Render();
+            RenderTexture.active = target;
+            readback.ReadPixels(new Rect(0f, 0f, DrawProbePixels, DrawProbePixels), 0, 0);
+            readback.Apply();
+            RenderTexture.active = previous;
+            int drawn = 0;
+            Color32[] pixels = readback.GetPixels32();
+            foreach (Color32 pixel in pixels)
+            {
+                if (pixel.a > 8) { drawn++; }
+            }
+            return 100.0 * drawn / pixels.Length;
+        }
+
+        /// <summary>
+        /// Photograph the prefab and report how much of the frame it filled.
+        ///
+        /// <para>Every other check here answers "did it load". A prefab can
+        /// load with its mesh, material and shader all present and still
+        /// rasterize nothing, or rasterize everywhere: a vertex shader reading
+        /// its matrices from the wrong offsets puts the geometry somewhere the
+        /// camera is not, and <c>Shader.isSupported</c> stays true throughout.
+        /// Only a rendered frame can tell.</para>
+        ///
+        /// <para>Two zooms and a control, because one number proves nothing. A
+        /// real object's coverage falls with the zoom; geometry ignoring the
+        /// transform fills every frame; and a built-in cube rendered through
+        /// the same camera says whether this measurement works at all before
+        /// any of it is read as a verdict.</para>
+        /// </summary>
+        private static void ReportDrawn(string name, GameObject prefab)
+        {
+            GameObject instance = null;
+            GameObject rig = null;
+            GameObject control = null;
+            RenderTexture target = null;
+            Texture2D readback = null;
+            try
+            {
+                instance = UnityEngine.Object.Instantiate(prefab);
+                Bounds bounds = new Bounds(Vector3.zero, Vector3.one);
+                bool any = false;
+                foreach (Renderer each in instance.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (any) { bounds.Encapsulate(each.bounds); } else { bounds = each.bounds; any = true; }
+                }
+                if (!any)
+                {
+                    Debug.LogError("VERIFY-FAIL: " + name + " has no renderer to draw");
+                    return;
+                }
+
+                target = new RenderTexture(DrawProbePixels, DrawProbePixels, 24,
+                                           RenderTextureFormat.ARGB32);
+                readback = new Texture2D(DrawProbePixels, DrawProbePixels,
+                                         TextureFormat.RGBA32, false);
+                rig = new GameObject("shamway-verify-rig");
+                Camera camera = rig.AddComponent<Camera>();
+                camera.orthographic = true;
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = new Color(0f, 0f, 0f, 0f);
+                camera.allowHDR = false;
+                camera.allowMSAA = false;
+                camera.targetTexture = target;
+
+                Quaternion view = Quaternion.Euler(20f, 205f, 0f);
+                rig.transform.rotation = view;
+                float radius = Mathf.Max(bounds.extents.magnitude, 0.001f);
+                rig.transform.position = bounds.center - view * Vector3.forward * (radius * 4f);
+                camera.nearClipPlane = 0.01f;
+                camera.farClipPlane = radius * 12f;
+                float framed = Mathf.Max(bounds.extents.x, bounds.extents.y, bounds.extents.z);
+                camera.orthographicSize = framed * 1.4f;
+
+                double near = Coverage(camera, target, readback);
+                camera.orthographicSize = framed * 5.6f;
+                double far = Coverage(camera, target, readback);
+
+                // The control: a built-in cube of the same size, same camera,
+                // same texture. If this does not behave, nothing below is a
+                // verdict on the bundle.
+                instance.SetActive(false);
+                control = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                control.transform.position = bounds.center;
+                control.transform.localScale = bounds.size;
+                camera.orthographicSize = framed * 1.4f;
+                double controlNear = Coverage(camera, target, readback);
+                camera.orthographicSize = framed * 5.6f;
+                double controlFar = Coverage(camera, target, readback);
+                instance.SetActive(true);
+
+                Debug.Log("VERIFY-DRAWN-CONTROL: built-in cube covered=" +
+                          controlNear.ToString("0.0") + "% zoomed-out=" + controlFar.ToString("0.0") + "%");
+                bool controlSane = controlNear > 2.0 && controlNear < 99.0 && controlFar < controlNear;
+                if (!controlSane)
+                {
+                    Debug.Log("VERIFY-DRAWN: " + name + " not measured (the control cube read " +
+                              controlNear.ToString("0.0") + "%/" + controlFar.ToString("0.0") +
+                              "%, so this host's offscreen render is not usable)");
+                    return;
+                }
+
+                Debug.Log("VERIFY-DRAWN: " + name + " covered=" + near.ToString("0.0") +
+                          "% zoomed-out=" + far.ToString("0.0") + "%");
+                if (near <= 0.01)
+                {
+                    Debug.LogError("VERIFY-FAIL: " + name + " loaded but rasterized nothing, " +
+                                   "while a built-in cube in the same frame drew " +
+                                   controlNear.ToString("0.0") + "%.");
+                }
+                else if (near > 99.0 && far > 99.0)
+                {
+                    Debug.LogError("VERIFY-FAIL: " + name + " fills the frame at every zoom while " +
+                                   "the control cube does not, so its geometry is not following " +
+                                   "the camera transform. Suspect the vertex shader's " +
+                                   "constant-buffer offsets.");
+                }
+            }
+            catch (Exception error)
+            {
+                Debug.Log("VERIFY-DRAWN: " + name + " not measured (" + error.GetType().Name + ")");
+            }
+            finally
+            {
+                if (control != null) { UnityEngine.Object.DestroyImmediate(control); }
+                if (rig != null) { UnityEngine.Object.DestroyImmediate(rig); }
+                if (readback != null) { UnityEngine.Object.DestroyImmediate(readback); }
+                if (target != null) { target.Release(); UnityEngine.Object.DestroyImmediate(target); }
+                if (instance != null) { UnityEngine.Object.DestroyImmediate(instance); }
+            }
+        }
+
         public static void Verify()
         {
             string path = CommandLineValue("-bundle");
@@ -83,12 +237,28 @@ namespace SevenDaysToDie.AssetPipeline
                     // sub-program it can use on this GPU and API, which is
                     // exactly how a hand-wrapped bytecode blob fails. A
                     // shader that loads is not a shader that runs.
+                    // ...and it is only a verdict when there is a device to
+                    // give it. Under -nographics this same shader reports
+                    // isSupported=true passes=1, and with a real device
+                    // isSupported=false passes=3: the headless answer is not a
+                    // weaker measurement, it is a different question. This
+                    // repository recorded the headless value as evidence that
+                    // a synthesized shader runs. It is not evidence of that.
+                    bool device = SystemInfo.graphicsDeviceType !=
+                                  UnityEngine.Rendering.GraphicsDeviceType.Null;
                     Debug.Log("VERIFY-SHADER: '" + shader.name +
                               "' isSupported=" + shader.isSupported +
                               " passes=" + shader.passCount +
                               " renderQueue=" + shader.renderQueue +
-                              " properties=" + shader.GetPropertyCount());
-                    if (!shader.isSupported)
+                              " properties=" + shader.GetPropertyCount() +
+                              " device=" + SystemInfo.graphicsDeviceType);
+                    if (!device)
+                    {
+                        Debug.Log("VERIFY-SHADER-NOTE: no graphics device, so isSupported above " +
+                                  "is not a verdict on this shader. Re-run with --draw (and " +
+                                  "xvfb-run -a on a headless host) to get one.");
+                    }
+                    else if (!shader.isSupported)
                     {
                         Debug.LogError("VERIFY-FAIL: " + name +
                                        " loaded but the runtime reports it unsupported");
@@ -137,6 +307,7 @@ namespace SevenDaysToDie.AssetPipeline
                     {
                         Debug.LogError("VERIFY-FAIL: " + name + " has a MeshFilter with no mesh");
                     }
+                    if (DrawRequested()) { ReportDrawn(name, prefab); }
                 }
 
                 Mesh mesh = asset as Mesh;

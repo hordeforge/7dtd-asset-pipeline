@@ -60,6 +60,36 @@ every item or block that sets no `CustomIcon`, because that is the engine's
 default sprite lookup. A key this mod does not provide is reported, never
 failed: referencing a vanilla key is normal.
 
+### `isSupported` is not a verdict without a graphics device
+
+`shamway verify-bundle` runs the editor with `-nographics`, which is right for
+everything it checks by loading. It is **wrong** for one thing: with no device,
+Unity has nothing to compile a shader sub-program against, and
+`Shader.isSupported` comes back `true` for a shader that does not run. The same
+bundle, same editor:
+
+```text
+isSupported=True  passes=1   device=Null          # -nographics
+isSupported=False passes=3   device=OpenGLCore    # a real device
+```
+
+This repository recorded the first line as evidence that a synthesized shader
+runs. It was not evidence of that, and the claim is withdrawn everywhere it
+appeared. `verify-bundle` now prints the device beside the verdict and says
+outright that a headless answer is not one.
+
+```bash
+xvfb-run -a shamway verify-bundle --draw
+```
+
+`--draw` drops `-nographics`, photographs each prefab, and reports what
+fraction of the frame it filled — the only offline answer to *does it
+rasterize*, as opposed to *does it load*. It renders a built-in cube through
+the same camera as a control and **refuses to report a number at all** when
+that control misbehaves: an early version of this probe reported 100% coverage
+for the cube and the bundle alike, and would have convicted a shader of the
+probe's own bug.
+
 ### The absence of an editor is itself gated
 
 Every claim on this page about what runs without Unity is checked on each push.

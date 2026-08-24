@@ -21,7 +21,7 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from sevendtd_asset_pipeline import shader_blob
+from sevendtd_asset_pipeline import bundle_writer, shader_blob
 from sevendtd_asset_pipeline.bundle_writer import (
     UNLIT_SHADER_NAME,
     build_bundle,
@@ -480,7 +480,7 @@ class GLSLCompilesTests(unittest.TestCase):
             for suffix, body in self._halves().items():
                 path = Path(directory) / f"unlit.{suffix}"
                 path.write_text(body, encoding="utf-8")
-                finished = subprocess.run(  # noqa: S603
+                finished = subprocess.run(
                     ["glslangValidator", str(path)],  # noqa: S607
                     capture_output=True,
                     text=True,
@@ -491,3 +491,52 @@ class GLSLCompilesTests(unittest.TestCase):
                     0,
                     f"the {suffix} half does not compile:\n{finished.stdout}{finished.stderr}",
                 )
+
+
+class RenderStateSentinelTests(unittest.TestCase):
+    """`name` in a shader render-state value is not free-form.
+
+    A `SerializedShaderFloatValue` carries a constant in `val` **or** the name
+    of a material property in `name`. Unity writes the sentinel `<noninit>`
+    when there is no property. The empty string is not that sentinel - it is a
+    property whose name happens to be empty, so the runtime looks it up, finds
+    nothing, and takes 0.
+
+    This writer wrote `""` for every field of every pass's render state, which
+    made `colMask` 0: the pass wrote no colour channels and the object was
+    invisible, while every symptom looked healthy. The shader loaded,
+    `Shader.isSupported` was true, `Material.SetPass(0)` returned true, and
+    Unity never fell back because it did not consider the shader failed.
+
+    Found on 2026-08-24 by mutating a stock shader that draws toward this one a
+    field at a time: restoring stock's `rtBlend0` alone brought the object back,
+    and inside it every `val` already matched - only this string differed.
+    """
+
+    def _state(self) -> dict[str, Any]:
+        return bundle_writer._shader_state("FORWARD")
+
+    def test_no_render_state_value_carries_an_empty_property_name(self) -> None:
+        empty: list[str] = []
+
+        def walk(node: object, path: str) -> None:
+            if isinstance(node, dict):
+                name = node.get("name")
+                if isinstance(name, str) and name == "":
+                    empty.append(path)
+                for key, value in node.items():
+                    walk(value, f"{path}.{key}")
+
+        walk(self._state(), "m_State")
+        self.assertEqual(
+            empty,
+            [],
+            "an empty `name` is a property lookup that fails and yields 0; use "
+            f"{bundle_writer.NO_PROPERTY!r}",
+        )
+
+    def test_the_colour_mask_survives_as_a_constant(self) -> None:
+        """The specific field whose zero made the prop invisible."""
+        mask = self._state()["rtBlend0"]["colMask"]
+        self.assertEqual(mask["val"], 15.0)
+        self.assertEqual(mask["name"], bundle_writer.NO_PROPERTY)

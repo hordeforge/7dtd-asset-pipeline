@@ -32,4 +32,4 @@ report keeps its history, the runbook stays current.
 
 ## Reports
 
-- [2026-08-24 — a synthesized prop places in 7DTD and renders nothing](2026-08-24-synthesized-shader-does-not-run.md) — the shader does not compile on a real device, and `-nographics` had been reporting it fine
+- [2026-08-24 — a synthesized prop places in 7DTD and renders nothing](2026-08-24-synthesized-shader-does-not-run.md) — **solved.** Three bugs: an eight-byte-short GLCore code record, a missing GLSL extension, and a render state whose `name` was `""` instead of `<noninit>`, which set `colMask` to 0. Also records a wrong conclusion published and retracted the same day

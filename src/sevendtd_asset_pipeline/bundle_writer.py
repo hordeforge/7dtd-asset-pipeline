@@ -871,9 +871,29 @@ def mesh_prefab(
     ]
 
 
+# The sentinel Unity writes in a `SerializedShaderFloatValue`'s `name` when the
+# value is the constant in `val` rather than a material property. It is not
+# decoration and it is not interchangeable with the empty string.
+NO_PROPERTY = "<noninit>"
+
+
 def _float_value(value: float) -> dict[str, Any]:
-    """Unity's `SerializedShaderFloatValue`: a constant, or a named property."""
-    return {"val": float(value), "name": ""}
+    """Unity's `SerializedShaderFloatValue`: a constant, or a named property.
+
+    `name` empty is **not** "no property" - it is a property whose name is the
+    empty string. The runtime looks it up, finds nothing, and takes 0. Every
+    field of a pass's render state is one of these, so an empty name turns
+    `colMask` into 0: the pass writes no colour channels at all, and the object
+    is invisible while every other symptom looks healthy - the shader loads,
+    `Shader.isSupported` is true, `Material.SetPass(0)` returns true, and Unity
+    does not fall back because it does not consider the shader failed.
+
+    That was this repository's invisible prop, and it was found by mutating a
+    stock shader that draws toward this writer's one field at a time: restoring
+    stock's `rtBlend0` alone brought it back. The only difference inside it was
+    this string - every `val` already matched.
+    """
+    return {"val": float(value), "name": NO_PROPERTY}
 
 
 def _blend_state(colour_mask: float = 15.0) -> dict[str, Any]:
@@ -934,7 +954,9 @@ def _shader_state(name: str) -> dict[str, Any]:
                 "y": _float_value(0.0),
                 "z": _float_value(0.0),
                 "w": _float_value(0.0),
-                "name": "",
+                # Same rule as `_float_value`: a `SerializedShaderVectorValue`
+                # takes a property when `name` is set, and "" is a property.
+                "name": NO_PROPERTY,
             },
             "fogMode": 0,
             "gpuProgramID": 0,

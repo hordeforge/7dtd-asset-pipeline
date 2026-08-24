@@ -2,39 +2,59 @@
 
 ## TL;DR
 
-- **Observed:** a block whose `Model` is a synthesized prefab places in a live
-  client, has collision, and draws nothing. No error, no magenta, no missing
-  asset. Every offline gate passed and the in-client acceptance suite passed
-  `5/5`.
-- **Read the CORRECTION section first.** A conclusion published in #66/#67 -
-  that no shader this writer serializes can render - was retracted the same day.
-  The container is cleared; the fault is in the shader content this writer
-  builds.
-- **Cause of the shader failure: two bugs in the GLCore code record**, both
-  found and both fixed.
-  1. The fragment half of `UNLIT_GLSL` used `layout(location = 0)` under
-     `#version 150` without `#extension GL_ARB_explicit_attrib_location`.
-     `glslangValidator` says so in one line; Unity says nothing about it.
-  2. `source_blob()` ended the record at the padded source. Every stock GLCore
-     record carries **two further u32 words** — a vertex-attribute mask and a
-     zero — so the runtime was decoding a record eight bytes short.
-- **Result:** on a real device, for the first time,
-  `Shader.isSupported=True`, no `Failed to load GpuProgram`, and the material's
-  `_MainTex` binds to the texture instead of reading `<unbound>`.
-- **Why nothing caught it:** `verify-bundle` ran the editor with `-nographics`.
-  With no device there is nothing to compile a sub-program against, so
-  `isSupported` returned `True` for a shader that did not run — and that value
-  was recorded across five pages as evidence the shader worked. Fixed:
-  `verify-bundle --draw`.
-- **Still open — the prop still does not draw.** The shader now loads and the
-  probe is now trustworthy (its control cube reads a healthy `38.8% / 2.4%` in
-  the same frame), and the prop reads `0.0%`. That is a *different* fault from
-  the one this report opened on, and it is the next thing to measure.
-- **Not measured at all: d3d11.** Everything here is OpenGLCore, because that
-  is what a Linux editor creates. The game runs d3d11 through Proton. Both come
-  from `shader_blob.py`, and a fix for one is not evidence for the other.
+- **SOLVED.** A synthesized prop now draws. `verify-bundle --draw` reports
+  `VERIFY-DRAWN: shamwayselftestprop covered=38.8% zoomed-out=2.4%`, with
+  `_MainTex` bound and the control cube healthy in the same frame.
+- **Root cause: one string.** Every field of a pass's render state is a
+  `SerializedShaderFloatValue`, which carries a constant in `val` **or** the
+  name of a material property in `name`. Unity writes the sentinel
+  `<noninit>` when there is no property. This writer wrote `""`.
+  The empty string is **not** that sentinel - it is a property whose name is
+  empty. The runtime looks it up, finds nothing, and takes **0**.
+- **Which made `colMask` 0**: the pass wrote no colour channels at all. The
+  geometry rasterized and nothing reached the framebuffer.
+- **Why every symptom looked healthy**: the shader loaded, `Shader.isSupported`
+  was `True`, `Material.SetPass(0)` returned `True`, and Unity never fell back,
+  because nothing about the shader had *failed*. It was told to write no
+  colour.
+- **Two earlier bugs, also real, also fixed** (they are what made the shader
+  *load*; they were never going to make it draw): the GLCore code record was
+  eight bytes short of the format, and the fragment half used
+  `layout(location = ...)` under `#version 150` without
+  `#extension GL_ARB_explicit_attrib_location`.
+- **Still owed**: a human look. The prop draws; nobody has yet seen whether it
+  looks *right*. And **d3d11 is still unmeasured** - everything here is
+  OpenGLCore, and d3d11 is what the game runs through Proton.
 
-## How the two bugs were found
+## How it was found
+
+By mutating a stock shader **that draws in this writer's own bundle**
+(`Game/EntityTintMaskSSS`) toward this writer's shader one block at a time, and
+measuring the frame each step - the technique the earlier sections argued for,
+finally applied with a baseline known to render:
+
+| Mutation of the stock shader | Draws? |
+|---|---|
+| reduced to a single pass | **yes**, 38.8% |
+| ... plus **this writer's whole `m_State`** | **no**, 0.0% |
+| ... `m_State` but keeping stock's `rtBlend0` alone | **yes**, 38.8% |
+| ... `m_State` but keeping stock's `gpuProgramID` / `culling` / `m_Tags` / `zTest` | no |
+
+`rtBlend0` alone brought it back. Inside `rtBlend0`, **every `val` already
+matched stock** - `srcBlend` 1, `destBlend` 0, `colMask` 15. The only
+difference in the entire block was `name`: `""` against `"<noninit>"`.
+
+```text
+field         ours                      stock
+colMask       {'val': 15.0, 'name': ''} {'val': 15.0, 'name': '<noninit>'}
+```
+
+`NO_PROPERTY` now names that sentinel in `bundle_writer.py`, and
+`RenderStateSentinelTests` fails if any render-state value ever carries an
+empty name again.
+
+## The road there (kept: the eliminations still hold)
+
 
 Mutating a *stock* shader object toward this one, one field at a time, keeping
 the record indices consistent — the shape the previous entry in this report

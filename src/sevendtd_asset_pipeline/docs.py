@@ -61,6 +61,10 @@ TOPICS: dict[str, tuple[str, str]] = {
         "sound synthesis, sounds.xml, and why a loaded clip can be silent",
     ),
     "vfx": ("authoring/vfx.md", "particle budgets, LOD tiers, and two silent material failures"),
+    "environment-effects": (
+        "authoring/environment-effects.md",
+        "weather, fog and light: the effect the bundle cannot carry",
+    ),
     "agent-workflows": (
         "authoring/agent-workflows.md",
         "the lane each asset type follows, and the evidence packet",

@@ -145,6 +145,52 @@ Added by the second sweep of the source project (2026-08-23), each from
   `[Obsolete(…, true)]` (`ilspycmd -t UnityEditor.AudioImporter UnityEditor.dll`),
   found 2026-08-23 by `scripts/compile-editor-scripts.sh`.
 
+### Environment: weather, fog, and light
+
+Recorded 2026-08-24 by `ilspycmd` against the installed `Assembly-CSharp.dll`
+for `Constants` 3/10/14 — `V 3.1.0 (b14)` in the engine's own display form,
+`V.3.10.14` as `VersionInformation.SerializableString` prints the raw fields.
+The editor matched to it is Unity 2022.3.62f2. These are the facts the
+[environment-effects lane](../authoring/environment-effects.md) rests on; the
+tool run was made in `ywy50/7dtd-mods` against this machine's install, and the
+symbols were read from the decompile rather than from a mod's source.
+
+- `WeatherManager.forceClouds` and `forceRain` override cover and
+  precipitation on `0`–`1`, and are **`-1f` when unforced**; every reader gates
+  on `>= 0f`. `SkyManager.fogDebugDensity` is `-1f` unforced, and
+  `fogDebugColor` is ignored while its alpha is `0`. Restoring these means
+  writing the sentinel back, not zero — zero is a valid forced value meaning
+  permanently clear and dry.
+- `WeatherManager.GetCloudThickness()` returns a percentage (`0`–`100`) and
+  equals `forceClouds * 100f` while forced;
+  `WeatherManager.Instance.GetCurrentCloudThicknessPercent()` is the same value
+  on the `0`–`1` scale. `GetCurrentRainfallPercent()` is already `0`–`1` and
+  returns `forceRain` while forced. So a baseline re-read during the effect
+  returns the effect's own override, and a per-frame re-capture ratchets.
+- `SkyManager.SetFogDebug(density, start, end)`, `SetFogDebugColor(color)`,
+  `GetFogDensity()`, and `SetWeatherLightScale(scale)` are the fog and daylight
+  controls; `WeatherManager.Instance.CloudsFrameUpdateNow()` applies a cloud
+  change immediately.
+- `WeatherManager.ParticlesFrameUpdate` applies the stock storm light scale at
+  its end, so a mod's light reduction survives only as a postfix on it. It is
+  an instance method taking an `EntityPlayerLocal` (called with the primary
+  player), which makes it client-only independently of any
+  `GameManager.IsDedicatedServer` guard.
+- `WeatherManager.Cleanup()` resets `forceClouds`, `forceRain`,
+  `forceSnowfall`, `forceTemperature`, and `forceWind`; `SkyManager.Cleanup()`
+  calls `SetFogDebug()` and `SkyManager.Reset()` returns `weatherLightScale`
+  to `1f`. All three run at teardown only, so they cover leaving a world and
+  never cover an effect ending inside one.
+- `EntityPlayerLocal.OnUpdateLive` is the local player's per-tick update and
+  exists only where a local player does; a dedicated server never constructs
+  one.
+
+Authoring fact from the same pass, measured with Pillow rather than a
+decompiler: a generated "opacity mask" may carry a **real alpha channel that is
+not its own luma** (the measured source peaked at alpha 251 against luma 135).
+Deriving alpha from brightness there caps the card near half opacity, which is
+why `shamway generate cutout` has an `alpha` mode alongside `luma`.
+
 ### Evidence tiers
 
 `strings` on an assembly proves a name exists, not a method body; treat such

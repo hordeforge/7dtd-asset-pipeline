@@ -9,10 +9,11 @@ the step between "a generated picture" and "an asset", and it is where most of
 the quality is won or lost: a hard threshold leaves a coloured fringe on every
 soft edge, and a fringe is exactly what makes an icon look pasted on.
 
-Two modes, because two kinds of source need opposite treatment:
+Three modes, because three kinds of source need opposite treatment:
 
-    shamway generate cutout key  concept.png cut.png            # flat chroma background
-    shamway generate cutout luma smoke-mask.png smoke-card.png  # grayscale opacity mask
+    shamway generate cutout key   concept.png cut.png
+    shamway generate cutout luma  smoke-mask.png smoke-card.png
+    shamway generate cutout alpha haze-src.png haze-card.png --size 512
 
 **key** removes a solid background colour, keeping partial alpha across the
 transition band so soft edges survive, and de-spills the leftover key tint that
@@ -22,6 +23,13 @@ otherwise rims the subject.
 alpha and RGB becomes white, so the particle system's own colour-over-lifetime
 tints it. Raising the black point removes the faint halo a generator leaves in
 "empty" space without hardening the puff edges.
+
+**alpha** is for a source that already carries a real alpha channel — which a
+generated "opacity mask" often does, with alpha that is *not* its own
+brightness. It keeps that alpha untouched and only whitens the RGB. Running
+`luma` on such a source silently recomputes alpha from brightness and can cap
+a card near half opacity; check `--size` padding rather than reaching for
+`luma` when the source already has transparency.
 
 Needs Pillow; `shamway capabilities --missing` prints the install command for this host.
 
@@ -170,6 +178,29 @@ def luma_to_alpha(
     return output, covered / float(width * height)
 
 
+def keep_alpha(image: Image.Image, white_rgb: bool) -> tuple[Image.Image, float]:
+    """Keep a source's own alpha channel and only whiten its RGB.
+
+    A generated "opacity mask" often arrives with alpha **already baked in and
+    unequal to its luma** — the source this mode was written for peaks at alpha
+    251 where its brightness peaks at 135. Recomputing alpha from brightness
+    there does not clean the card up; it caps it near half opacity, and the
+    result is a visibly fainter particle that nothing in the pipeline flags.
+
+    So: when the source already has real alpha, keep it. `luma` is for the
+    other case, a mask drawn as grey on black with no alpha at all.
+    """
+    output = image.convert("RGBA")
+    alpha = output.getchannel("A")
+    if white_rgb:
+        white = Image.new("RGB", output.size, (255, 255, 255))
+        white.putalpha(alpha)
+        output = white
+    histogram = alpha.histogram()
+    covered = sum(histogram[9:])
+    return output, covered / float(output.width * output.height)
+
+
 def finish(image: Image.Image, args: argparse.Namespace) -> Image.Image:
     if args.trim:
         box = image.getbbox()
@@ -187,6 +218,15 @@ def finish(image: Image.Image, args: argparse.Namespace) -> Image.Image:
             image = padded
         else:
             image = image.resize((args.size, args.size), Image.LANCZOS)
+    if getattr(args, "white_rgb", False):
+        # Padding above adds fully transparent *black* texels, and a card's
+        # RGB is read at the edge whatever its alpha says: bilinear filtering
+        # blends those texels into the visible rim and darkens it. A white
+        # card must be white everywhere, including where it is invisible.
+        alpha = image.getchannel("A")
+        white = Image.new("RGB", image.size, (255, 255, 255))
+        white.putalpha(alpha)
+        image = white
     return image
 
 
@@ -274,6 +314,17 @@ def main(argv: list[str] | None = None) -> int:
         help="keep the source RGB instead of making it white",
     )
 
+    alpha_parser = commands.add_parser(
+        "alpha", help="source that already has alpha: keep it, whiten the RGB"
+    )
+    common(alpha_parser)
+    alpha_parser.add_argument(
+        "--keep-colour",
+        dest="white_rgb",
+        action="store_false",
+        help="keep the source RGB instead of making it white",
+    )
+
     args = parser.parse_args(argv)
     require_imaging()
     if not args.source.is_file():
@@ -287,11 +338,25 @@ def main(argv: list[str] | None = None) -> int:
             image, key, args.transparent_threshold, args.opaque_threshold, args.despill
         )
         print(f"key:      #{key[0]:02x}{key[1]:02x}{key[2]:02x}")
-    else:
+    elif args.command == "luma":
         result, coverage = luma_to_alpha(image, args.black_point, args.white_rgb)
         print(f"black:    {args.black_point:.0f}%")
+    else:
+        if "A" not in image.getbands():
+            raise SystemExit(
+                f"ERROR: {args.source} has no alpha channel to keep "
+                "(bands: {}); use `cutout luma` for a grayscale mask, or "
+                "`cutout key` for a flat key background.".format("".join(image.getbands()))
+            )
+        result, coverage = keep_alpha(image, args.white_rgb)
+        print("alpha:    kept from the source")
 
     if coverage < 0.01:
+        if args.command == "alpha":
+            raise SystemExit(
+                "ERROR: the source's alpha channel is essentially empty. It may be a "
+                "grayscale mask with a placeholder alpha; try `cutout luma`."
+            )
         raise SystemExit(
             "ERROR: the result is essentially empty; the key matched the subject too. "
             "Widen --transparent-threshold's gap to --opaque-threshold, or pass an "

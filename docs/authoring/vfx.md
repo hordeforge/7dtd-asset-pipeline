@@ -175,7 +175,15 @@ retiming to 95 s more than doubled overlap without touching a single cap.
 ## Persistent, viewer-attached ambience
 
 A one-shot explosion is not the only pattern. A zone effect — haze, drizzle,
-ash, fog inside a contaminated area — is the other, and it has its own rules:
+ash, fog inside a contaminated area — is the other, and it has its own rules.
+
+**Particles are the character layer, never the effect itself.** A zone effect
+built only from the systems below reads as floating specks in unchanged sunny
+weather, because the game's own weather, fog, and daylight are still saying
+"nice afternoon". Drive those first;
+[environment-effects.md](environment-effects.md) owns that lane, its engine
+controls, and the restore discipline they need. Everything here applies to the
+layer that goes on top:
 
 - **Looping systems in local simulation space, parented to or repositioned
   at the local player every update.** The client is never told a boundary;

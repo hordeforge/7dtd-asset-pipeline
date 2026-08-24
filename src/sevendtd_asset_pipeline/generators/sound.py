@@ -306,6 +306,8 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
     shock = []
     boom = []
     boom_phase = 0.0
+    deep_impact = []
+    deep_phase_a = deep_phase_b = 0.0
     pressure_crack = []
     for time, grit in zip(times, pressure_noise, strict=True):
         positive = math.exp(-time / 0.075)
@@ -318,10 +320,17 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
         # positional game mixers. The short crack sits above it; it must never
         # consume the headroom and reduce the whole detonation to a dry thump.
         progress = min(time / 2.4, 1.0)
-        boom_hz = 108.0 * ((44.0 / 108.0) ** progress)
+        boom_hz = 92.0 * ((38.0 / 92.0) ** progress)
         boom_phase += 2.0 * math.pi * boom_hz / RATE
-        boom_shape = min(time / 0.035, 1.0) * math.exp(-time / 1.25)
-        boom.append(boom_shape * (math.sin(boom_phase) + 0.42 * math.sin(2.0 * boom_phase + 0.25)))
+        boom_shape = min(time / 0.055, 1.0) * math.exp(-time / 1.35)
+        boom.append(boom_shape * (math.sin(boom_phase) + 0.28 * math.sin(2.0 * boom_phase + 0.25)))
+
+        deep_phase_a += 2.0 * math.pi * (62.0 - 18.0 * min(time / 2.8, 1.0)) / RATE
+        deep_phase_b += 2.0 * math.pi * (43.0 - 9.0 * min(time / 3.4, 1.0)) / RATE
+        deep_shape = min(time / 0.065, 1.0) * math.exp(-time / 1.75)
+        deep_impact.append(
+            deep_shape * (0.72 * math.sin(deep_phase_a + 0.35) + 0.48 * math.sin(deep_phase_b))
+        )
         pressure_crack.append(grit * min(time / 0.0015, 1.0) * math.exp(-time / 0.055))
 
     shatter_band = lowpass(highpass(white, 650.0), 7800.0, passes=2)
@@ -378,9 +387,10 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
     ]
 
     mixed = mix(
-        (0.38, shock),
-        (1.72, boom),
-        (0.20, pressure_crack),
+        (0.25, shock),
+        (1.30, boom),
+        (1.10, deep_impact),
+        (0.16, pressure_crack),
         (0.72, shatter),
         (0.58, shatter_reflections),
         (1.18, thunder),

@@ -1317,3 +1317,38 @@ player, and the function that reads this record can be found in a disassembly
 of the Vulkan GfxDevice - or the hash can be brute-checked against seeded
 SpookyHash with the section sizes as seeds, which is one script rather than a
 session.
+
+
+## Hunting the Vulkan hash: what the player binary says, and what is left
+
+**Measured 2026-08-25** against `UnityPlayer.dll` (31 MB) in the installed game,
+by scanning for constants:
+
+- the SMOL-V magic `0x534D4F4C` appears at **two** sites - the decoder is in
+  the player;
+- SpookyHash's `0xDEADBEEFDEADBEEF` appears at **seven** - Unity's `Hash128`
+  machinery is there too.
+
+So the field is almost certainly a SpookyHash-derived `Hash128` pair. What it is
+**not**, each candidate computed with the reference SpookyHash V2 and compared
+against a stock record's stored halves:
+
+| Input | Variants tried |
+|---|---|
+| each SMOL-V module | seeds (0,0); seeds from a 12-value sweep including both section sizes, 176, 25, 18; seed pairs equal to each length |
+| both modules | one-shot concat, incremental Init/Update/Update/Final, both orders |
+| chained | hash(A) then hash(B) seeded with A's result, and the reverse |
+| each **decoded SPIR-V** module | seeds (0,0), the chained pairs, MD5/SHA-1/SHA-256 |
+
+None matches either half. The input is therefore not the stored bytes or the
+decoded module under any straightforward convention.
+
+**The remaining route is disassembly**: the two SMOL magic sites in
+`UnityPlayer.dll` locate the record reader, and the code around them says what
+is hashed, with which seeds, before the modules are decoded. That is bounded
+work with a named starting address, not an open search.
+
+Until then the Vulkan lane's state is: everything except this field is
+byte-equivalent to stock or proven irrelevant, and the field is **validated** -
+our record carrying stock's own modules with a zero hash is refused, while
+stock's identical record with its real hash renders.

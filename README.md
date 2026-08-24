@@ -257,6 +257,10 @@ environment variables by this project.
 
 ## Documentation
 
+[docs/README.md](docs/README.md) indexes every page by category and explains
+what each category holds; `shamway docs index` prints it from an installed
+package. The pages read most often:
+
 - [Quickstart](docs/getting-started/quickstart.md) — bare machine to a validated bundle
 - [Mod repo layout](docs/mod-repo-layout.md) — what lives in the mod, what lives here
 - [Setup](docs/getting-started/setup.md) — Python, game path, Unity, licensing, Windows module

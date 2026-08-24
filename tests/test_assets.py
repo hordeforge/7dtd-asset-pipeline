@@ -538,6 +538,45 @@ class DocumentationTests(unittest.TestCase):
                 self.assertEqual("true", entry["available"])
                 self.assertTrue(entry["summary"])
 
+    def test_every_directory_indexes_its_own_pages(self) -> None:
+        """Each docs/ subdirectory is a category with a README that lists it.
+
+        The categories are the navigation: an agent that lands in
+        `docs/authoring/` must be able to tell what the directory is for and
+        what is in it without going back up. A page added to a category and
+        left out of its index is a page nobody finds.
+        """
+        root = Path(__file__).resolve().parents[1] / "docs"
+        if not root.is_dir():
+            self.skipTest("running from a packaged install without the repo docs/")
+        for directory in sorted(path for path in root.iterdir() if path.is_dir()):
+            index = directory / "README.md"
+            with self.subTest(directory.name):
+                self.assertTrue(index.is_file(), f"docs/{directory.name}/ has no README.md")
+                listed = index.read_text(encoding="utf-8")
+                for page in sorted(directory.glob("*.md")):
+                    if page.name == "README.md":
+                        continue
+                    self.assertIn(
+                        page.name,
+                        listed,
+                        f"docs/{directory.name}/{page.name} is not named in its README",
+                    )
+
+    def test_the_root_index_names_every_top_level_page(self) -> None:
+        root = Path(__file__).resolve().parents[1] / "docs"
+        if not root.is_dir():
+            self.skipTest("running from a packaged install without the repo docs/")
+        index = (root / "README.md").read_text(encoding="utf-8")
+        for page in sorted(root.glob("*.md")):
+            if page.name == "README.md":
+                continue
+            with self.subTest(page.name):
+                self.assertIn(page.name, index)
+        for directory in sorted(path for path in root.iterdir() if path.is_dir()):
+            with self.subTest(directory.name):
+                self.assertIn(f"{directory.name}/", index)
+
     def test_packaged_pages_are_the_repo_pages(self) -> None:
         """A wheel ships `src/sevendtd_asset_pipeline/docs/`; a checkout reads `docs/`.
 

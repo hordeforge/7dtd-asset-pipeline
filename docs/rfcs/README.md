@@ -19,6 +19,7 @@ What does not belong: a capability gap awaiting implementation
 
 ## Conventions
 
+- Start from [TEMPLATE.md](TEMPLATE.md).
 - Files are numbered `NNNN-<short-title>.md`; take the next free number.
 - Status is one of `Open`, `Decided`, `Withdrawn`. An Open RFC states its
   recommendation; a Decided one names the ADR.

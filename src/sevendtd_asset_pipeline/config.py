@@ -96,11 +96,6 @@ class PipelineConfig:
         return self.bundle_source in LOCAL_BUNDLE_SOURCES
 
     @property
-    def needs_editor(self) -> bool:
-        """Whether anything in this mod's build path starts a Unity editor."""
-        return self.bundle_source == "unity"
-
-    @property
     def bundle_source_dir(self) -> Path:
         """The folder whose contents become the bundle.
 

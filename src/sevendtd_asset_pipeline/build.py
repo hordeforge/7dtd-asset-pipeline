@@ -41,18 +41,6 @@ def _log_lines(log: Path) -> list[str]:
         raise PipelineError(f"cannot read Unity log {log}: {exc}") from exc
 
 
-def disabled_module_lines(log: Path) -> list[str]:
-    return [
-        line
-        for line in _log_lines(log)
-        if DISABLED_MODULE_TEXT in line and DISABLED_MODULE_SUFFIX in line
-    ]
-
-
-def particle_curve_mode_lines(log: Path) -> list[str]:
-    return [line for line in _log_lines(log) if PARTICLE_CURVE_MODE_TEXT in line]
-
-
 def reject_disabled_modules(log: Path) -> None:
     """Reject a log that shows Unity stripping classes or shipping a per-frame error.
 

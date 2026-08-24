@@ -84,6 +84,36 @@ uv_material = bpy.data.materials.new(name=name + "_uv")
 uv_material.use_nodes = True
 obj.data.materials.append(uv_material)
 
+# A box gets every face mapped to the WHOLE texture, not Blender's default
+# cube-cross atlas. This pipeline binds one `<stem>_albedo` image to the whole
+# prefab, so the atlas layout makes each face sample a different sixth of it:
+# a prop textured with a single image shows fragments - part of a motif on one
+# face, an edge stripe on another - and looks like the UVs are rotated when
+# they are merely sharing one image between six faces. Seen in a live client on
+# 2026-08-24 with the orientation-card albedo, which is exactly the texture
+# designed to make it obvious.
+#
+# Only the box. A cylinder's and a sphere's unwraps are their natural ones and
+# resetting those would be wrong: they wrap a texture around, not repeat it.
+if shape == "box":
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.reset()
+    bpy.ops.object.mode_set(mode="OBJECT")
+    # `uv.reset()` gives each face the whole square but a quarter turn out of
+    # true: measured on the exported box, `u` ran with world *up* and `v` with
+    # world *left*, so a texture authored the right way up arrives on its side.
+    # Seen in a live client with the orientation-card albedo: every face showed
+    # the whole card, and every card's arrow pointed sideways.
+    #
+    # (u, v) -> (1 - v, u) puts `u` on world +X and `v` on world +Y. Checked
+    # against all four corners of the front face: right-bottom (0,0) -> (1,0),
+    # right-top (1,0) -> (1,1), left-top (1,1) -> (0,1), left-bottom
+    # (0,1) -> (0,0).
+    for loop_uv in obj.data.uv_layers.active.data:
+        u, v = loop_uv.uv
+        loop_uv.uv = (1.0 - v, u)
+
 bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_selection=False)
 dims = obj.dimensions
 print("BLENDER_EXTENTS %.6f %.6f %.6f" % (dims.x, dims.y, dims.z))

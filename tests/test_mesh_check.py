@@ -8,8 +8,11 @@ remove — so the unusable report is a problem line, like any other failed gate.
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
+
+from sevendtd_asset_pipeline.generators import mesh as mesh_generator
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -61,3 +64,45 @@ class GlTFValidatorReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BoxUVTests(unittest.TestCase):
+    """A generated box maps every face to the whole texture.
+
+    This pipeline binds one `<stem>_albedo` image to the whole prefab, so
+    Blender's default cube-cross atlas - where each face gets its own sixth of
+    the image - makes a prop show fragments: part of a motif on one face, an
+    edge stripe on another. It reads as rotated UVs when it is six faces
+    sharing one image.
+
+    Seen in a live client on 2026-08-24, with the orientation-card albedo that
+    exists to make exactly this obvious: at the block's default rotation the
+    card's orange bottom bar appeared as a stripe down one side.
+
+    Needs Blender, and skips without it rather than asserting a host into a
+    failure: it is a registered optional capability.
+    """
+
+    def test_every_face_spans_the_full_texture(self) -> None:
+        if shutil.which("blender") is None:
+            self.skipTest("blender is not installed")
+        try:
+            import trimesh
+        except ImportError:
+            self.skipTest("trimesh is not installed")
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / "box.glb"
+            code = mesh_generator.main(
+                ["--shape", "box", "--size", "0.3", "0.2", "0.5", "--name", "box", str(out)]
+            )
+            self.assertEqual(code, 0)
+            loaded = trimesh.load(out, force="mesh")
+            uv = loaded.visual.uv
+            self.assertIsNotNone(uv, "the exporter dropped the UV layer")
+            corners = {(round(float(u), 3), round(float(v), 3)) for u, v in uv}
+            self.assertEqual(
+                corners,
+                {(0.0, 0.0), (0.0, 1.0), (1.0, 0.0), (1.0, 1.0)},
+                "a box's UVs must be the four corners of the image; anything between "
+                "them is an atlas layout, and one albedo cannot fill an atlas",
+            )

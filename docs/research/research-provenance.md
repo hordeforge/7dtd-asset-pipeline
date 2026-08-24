@@ -1084,14 +1084,20 @@ uses two records and reports 2.
 1. SPIR-V from the HLSL this writer already compiles. Available today:
    `vkd3d-compiler -x dxbc-tpf -b spirv-binary` accepts this writer's own DXBC,
    verified on 2026-08-24.
-2. A **SMOL-V encoder**. The format is open source -
-   [aras-p/smol-v](https://github.com/aras-p/smol-v), a single C++ file - so
-   this is a port or a vendor, not a reverse-engineering job. Unity's own
-   issue tracker documents that Vulkan shader data is SMOL-V.
+2. A **SMOL-V encoder**. **Built**, and deliberately not here:
+   [ywy50/zmol-v](https://github.com/ywy50/zmol-v) is a Zig implementation of
+   [aras-p/smol-v](https://github.com/aras-p/smol-v), checked byte-for-byte
+   against the reference C++ encoder on real SPIR-V modules. It lives outside
+   this repository because a SPIR-V codec has nothing to do with 7 Days to Die -
+   it is useful to anyone reading or writing Unity Vulkan shader data, and
+   vendoring it here would be the "re-solved locally" pattern this repository
+   exists to avoid.
 3. The 176-byte section-A header, which is the one piece with no prior art and
    would be decoded the way this table was.
 
 None of that is blocked; it is unbuilt, and the route is the three steps above.
+The container decode in this section is mirrored in `zmol-v`'s README, so the
+codec and the format it is used for are documented together.
 
 
 ## Unity's `UnityPerFrame` layout, and why getting it wrong is invisible

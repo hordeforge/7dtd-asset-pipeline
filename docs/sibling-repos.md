@@ -11,6 +11,16 @@ Every description below is the repository's own, taken from its `README.md`.
 Nothing on this page describes anyone's machine or how any of these are
 deployed; that varies per contributor, and this repository cannot see it.
 
+## Outside the organization
+
+`hordeforge` is only for things specifically about 7 Days to Die. Work that
+turns out to be general gets its own repository elsewhere rather than being
+vendored here, and this is where to look for it:
+
+| Repository | What it owns | Why it is not here |
+|---|---|---|
+| [`ywy50/zmol-v`](https://github.com/ywy50/zmol-v) | SMOL-V in Zig - compressing SPIR-V shader modules - and the Unity shader blob container that carries them | a SPIR-V codec has nothing to do with this game. It is useful to anyone reading or writing Unity Vulkan shader data, and copying it in here would be the "re-solved locally" pattern this repository exists to avoid |
+
 ## The index
 
 | Repository | Called | What its README says it owns |

@@ -1092,3 +1092,53 @@ uses two records and reports 2.
    would be decoded the way this table was.
 
 None of that is blocked; it is unbuilt, and the route is the three steps above.
+
+
+## Unity's `UnityPerFrame` layout, and why getting it wrong is invisible
+
+**Measured 2026-08-24** by reading the `RDEF` chunk of this writer's own
+`vs_4_0` bytecode - the bytecode's account of where it will look - and
+comparing it against the offsets the runtime fills.
+
+A constant buffer is filled by the runtime to **its** layout and read by the
+bytecode **by offset**. The HLSL must therefore reproduce Unity's member order
+byte for byte, *including members the shader never reads*.
+
+`UnityPerFrame`, as Unity lays it out:
+
+| offset | member |
+|---|---|
+| 0 | `glstate_lightmodel_ambient` |
+| 16 | `unity_AmbientSky` |
+| 32 | `unity_AmbientEquator` |
+| 48 | `unity_AmbientGround` |
+| 64 | `unity_IndirectSpecColor` |
+| 80 | `glstate_matrix_projection` |
+| 144 | `unity_MatrixV` |
+| 208 | `unity_MatrixInvV` |
+| **272** | **`unity_MatrixVP`** |
+| 336 | `unity_StereoEyeIndex` |
+
+This writer's HLSL omitted the four ambient `float4`s. Everything after them
+packed **64 bytes early**, so `unity_MatrixVP` compiled to offset **208** while
+the runtime writes it at **272**: the vertex shader read the tail of
+`unity_MatrixInvV` as its view-projection matrix and put every vertex nowhere.
+
+**Nothing reported it.** The shader loaded, `Shader.isSupported` was true, the
+pass set up, and no error appeared in any log. And it was wrong on **d3d11
+only** - GLSL binds uniforms by name, so the OpenGL Core sub-program out of the
+same writer, with the same declared metadata, rendered correctly. A live client
+showed an invisible block on its default API and a correct, textured, solid one
+under `-force-glcore`, which is what isolated it.
+
+`shader_blob.assert_cbuffer_layout` now refuses any buffer whose compiled
+offsets disagree with the declared ones, and runs on every synthesize.
+Deleting the four members again produces
+`UnityPerFrame.glstate_matrix_projection is declared at byte 80 but the
+compiled bytecode reads it at 16`.
+
+**The general rule, worth more than the fix:** a constant-buffer layout is a
+contract with the runtime, not a convenience for the author. Padding is not
+optional, and an offline check that reads `RDEF` is the only cheap place to
+catch a violation - the expensive place is a person looking at a block on two
+graphics APIs.

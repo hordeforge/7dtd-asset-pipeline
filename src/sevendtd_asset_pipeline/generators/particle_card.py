@@ -16,9 +16,10 @@ system's own colour-over-lifetime tints it. One card therefore serves every
 colour of rain you will ever need — tint it in the material, not here.
 
 For a haze card with real drawn structure, prompt for one instead
-(`shamway prompt opacity-mask`) and bring it through `cutout luma`. This
-generator is the answer when a card has to exist with no network, no model,
-and no host packages beyond Pillow.
+(`shamway prompt opacity-mask`) and bring it through `cutout alpha` when the
+model returned an alpha channel, or `cutout luma` when it returned a grey
+mask on black. This generator is the answer when a card has to exist with no
+network, no model, and no host packages beyond Pillow.
 
 Needs Pillow; `shamway capabilities --missing` prints the install command for
 this host.

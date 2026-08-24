@@ -321,17 +321,27 @@ def _staged_case(prefab_stem: str) -> str:
                     Report.Info("{name}: no local player, so there is no camera to stage in front of");
                     return false;
                 }}
-                // An arm's length ahead and at eye height, so the frame is the
-                // prop rather than the ground it would otherwise sit on.
-                var eye = player.position + Vector3.up * 1.6f;
-                var ahead = player.transform.forward;
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
                 {variable}Staged = UnityEngine.Object.Instantiate(prefab);
-                {variable}Staged.transform.position = eye + ahead * 1.2f;
+                {variable}Staged.transform.position = camera.position + ahead * 1.2f;
+                // Face the camera, and keep the prop's own up axis upright so
+                // the orientation card is readable rather than lying on edge.
                 {variable}Staged.transform.rotation =
                     Quaternion.LookRotation(-ahead, Vector3.up);
                 var renderers = {variable}Staged.GetComponentsInChildren<Renderer>(true);
                 Report.Info("{name}: staged at " + {variable}Staged.transform.position
-                    + " with " + renderers.Length + " renderer(s)");
+                    + ", camera at " + camera.position
+                    + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;
             }},

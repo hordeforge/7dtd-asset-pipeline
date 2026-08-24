@@ -396,6 +396,62 @@ def compile_spirv(dxbc: bytes) -> bytes:
     return data
 
 
+def compile_spirv_glslang(source: str, stage: str) -> bytes:
+    """Compile HLSL straight to SPIR-V with `glslangValidator`.
+
+    **Unity's own Vulkan modules are glslang output** - decoded from a shipped
+    bundle, their generator is `Khronos Glslang Reference Front End` - so this
+    reaches SPIR-V the same way Unity does rather than translating the d3d11
+    bytecode. Translating with `vkd3d-compiler` also produces valid SPIR-V, and
+    a live client refused it: that module declared a `gl_PointSize` output Unity
+    never emits, carried no `GLSL.std.450` import, and had five times the id
+    count for the same shader.
+
+    The cost is that the d3d11 and Vulkan sub-programs no longer come from one
+    compiler. They still come from **one HLSL source**, so the two can differ
+    only in how a compiler renders the same program, not in what the program
+    says.
+    """
+    binary = shutil.which("glslangValidator")
+    if binary is None:
+        raise PipelineError(
+            "glslangValidator is not installed; it compiles this writer's HLSL to the "
+            "SPIR-V a Vulkan sub-program carries. Install it with "
+            "'shamway script install-tools'."
+        )
+    with tempfile.TemporaryDirectory() as work:
+        src = Path(work) / f"shader.{stage}.hlsl"
+        out = Path(work) / "shader.spv"
+        src.write_text(source, encoding="utf-8")
+        result = subprocess.run(
+            [
+                binary,
+                "-D",  # the source is HLSL
+                "-e",
+                "main",
+                "-S",
+                stage,
+                "--target-env",
+                "vulkan1.0",
+                str(src),
+                "-o",
+                str(out),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0 or not out.exists():
+            detail = (result.stdout or result.stderr).strip()
+            raise PipelineError(f"glslangValidator could not compile the {stage} stage: {detail}")
+        data = out.read_bytes()
+    if len(data) < 4 or struct.unpack_from("<I", data, 0)[0] != SPIRV_MAGIC:
+        raise PipelineError(
+            f"glslangValidator produced {len(data)} bytes that are not a SPIR-V module"
+        )
+    return data
+
+
 def compress_smolv(spirv: bytes) -> bytes:
     """Compress a SPIR-V module to SMOL-V, which is what Unity stores.
 
@@ -1005,8 +1061,12 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
                 vertex_parameters.to_bytes(),
                 fragment_parameters.to_bytes(),
                 vulkan_code_blob(
-                    compress_smolv(unity_descriptor_sets(compile_spirv(fragment_dxbc))),
-                    compress_smolv(unity_descriptor_sets(compile_spirv(vertex_dxbc))),
+                    compress_smolv(
+                        unity_descriptor_sets(compile_spirv_glslang(fragment_source, "frag"))
+                    ),
+                    compress_smolv(
+                        unity_descriptor_sets(compile_spirv_glslang(UNLIT_VERTEX_HLSL, "vert"))
+                    ),
                 ),
             ]
         )
@@ -1052,8 +1112,8 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
                 3,
                 stage_count=1,
             ),
-        )
-        + vulkan,
+            *vulkan,
+        ),
         texture_name=texture_property,
         dxbc={"vertex": vertex_dxbc, "fragment": fragment_dxbc},
     )

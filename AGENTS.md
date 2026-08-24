@@ -159,7 +159,7 @@ those lines from a report — an unrun or by-construction gate reads exactly lik
 a passed one — and **never call a synthesized bundle "built"**: that word
 carries a claim about who serialized it.
 [docs/bundles/no-unity.md](docs/bundles/no-unity.md) owns those paths and
-[docs/bundles/offline-bundle-builder.md](docs/bundles/offline-bundle-builder.md) the writer's
+[docs/adrs/0001-synthesize-bundles-without-an-editor.md](docs/adrs/0001-synthesize-bundles-without-an-editor.md) the writer's
 design and its shader wall.
 
 - Changes to `bundle_writer.py` need the same evidence `unityfs.py` does —

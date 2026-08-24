@@ -42,7 +42,7 @@ TOPICS: dict[str, tuple[str, str]] = {
         "the four answers to where the bundle comes from, three of them editorless",
     ),
     "offline-bundle-builder": (
-        "bundles/offline-bundle-builder.md",
+        "adrs/0001-synthesize-bundles-without-an-editor.md",
         "the editorless writer: format research, what shipped, and the shader wall",
     ),
     "consumer-api": ("consumer-api.md", "schema, call, serve, and the Python facade"),

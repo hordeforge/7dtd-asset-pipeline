@@ -78,7 +78,7 @@ output, and every synthesize says so. The trust model answers it by inverting
 the relationship: where an editor *does* exist it becomes a verifier
 (`verify-bundle`) rather than a builder, and where it does not, a fresh client
 is the acceptance rather than the confirmation. See
-  [offline-bundle-builder.md](bundles/offline-bundle-builder.md).
+  [ADR 0001](adrs/0001-synthesize-bundles-without-an-editor.md).
 
 `build` and
 `stage` are the same pipeline with one step removed: the gates live in Python
@@ -99,20 +99,15 @@ refuse them before anything starts.
 The writer's boundary is deliberate too: `bundle_writer.py` covers textures,
 clips and text files, and stops at meshes, prefabs, materials and shaders,
 because a shader in a bundle is compiled platform bytecode only Unity's shader
-compiler produces. [offline-bundle-builder.md](bundles/offline-bundle-builder.md)
+compiler produces. [ADR 0001](adrs/0001-synthesize-bundles-without-an-editor.md)
 records that research and what is not attempted; [no-unity.md](bundles/no-unity.md)
 states what a synthesized bundle owes instead.
 
 ## Why a tracked manifest
 
-The bundle object's container could be deserialized to obtain membership, but
-that would make basic validation depend on a large changing parser. Unity
-already emits a text manifest with exact source paths. Tracking it gives CI a
-stable source of membership, catches forgotten rebuilds in review, and keeps
-the deployable package clean because the manifest itself is not shipped.
-
-The manifest and bundle are one logical artifact and must be committed
-together.
+The decision and its costs are [ADR 0002](adrs/0002-membership-is-a-tracked-manifest-committed-beside-the-bundle.md):
+membership comes from Unity's own text manifest tracked beside the bundle,
+never from a second deserializer, and the two are committed together.
 
 ## Failure-safe staging
 
@@ -122,10 +117,10 @@ rename. Failed candidates do not overwrite the last accepted bundle.
 
 ## One bundle per config
 
-Schema 1 intentionally owns one bundle. This keeps naming/reference/version
-validation exhaustive and simple. Multiple bundles can use multiple configs
-today; a future schema may model an array only when real consumers need shared
-build orchestration.
+[ADR 0003](adrs/0003-one-bundle-per-config.md) records the decision: schema 1
+intentionally owns one bundle; multiple bundles use multiple configs today. A
+future schema may model an array only when real consumers need shared build
+orchestration.
 
 ## Portability
 
@@ -136,27 +131,18 @@ not require a relative checkout of it at build time once the CLI is installed.
 
 ## One registry, several surfaces
 
-Programmatic consumers differ — Python callers, other languages, CI, agents —
-but a build tool with several interfaces that describe themselves differently
-is worse than one with a single interface. `operations.py` holds the contract;
-the `Pipeline` facade, `call`, `serve`, and the published `schema` all dispatch
-through it. A test asserts the registry and the dispatch table name the same
-operations, so the published schema cannot describe behaviour that does not
-exist.
-
-No server is built in. This tool reads a game install and drives a Unity editor
-on the same machine, so a listening port would be a liability, and `schema`
-publishes enough for a consumer to generate whatever protocol wrapper they
-actually need.
+[ADR 0004](adrs/0004-one-operation-registry-and-no-network-server.md) records
+the decision: `operations.py` holds the contract and every surface dispatches
+through it, so the published schema cannot describe behaviour that does not
+exist. No server is built in — `serve` is stdio JSON, and `schema` publishes
+enough for a consumer to generate whatever wrapper they need.
 
 ## Why the editor install is resolved, not pinned
 
-A changeset hardcoded in a script is correct until the game updates its engine
-and then silently wrong. `unity_release.py` asks Unity's official release
-service for the changeset, archive URL, and MD5 belonging to whatever revision
-the project needs, and the installer refuses any download Unity published no
-checksum for. The version itself still comes from the installed game, so the
-chain is game bundle -> revision -> official download -> verified bytes.
+[ADR 0005](adrs/0005-editor-install-is-resolved-not-pinned.md) records the
+decision: the changeset comes from Unity's official release service for
+whatever revision the installed game ships, never from a hardcoded pin, and a
+download without a published checksum is refused.
 
 ## Security and destructive-action policy
 

@@ -261,7 +261,7 @@ environment variables by this project.
 - [Mod repo layout](docs/mod-repo-layout.md) — what lives in the mod, what lives here
 - [Setup](docs/getting-started/setup.md) — Python, game path, Unity, licensing, Windows module
 - [Running without Unity](docs/bundles/no-unity.md) — synthesizing a bundle here, a bundle built elsewhere, and a mod with none
-- [Offline bundle builder](docs/bundles/offline-bundle-builder.md) — the format research, what shipped, and what the shader wall is
+- [Offline bundle builder](docs/adrs/0001-synthesize-bundles-without-an-editor.md) — the format research, what shipped, and what the shader wall is
 - [Bundle generation](docs/bundles/bundle-generation.md) — the complete build path
 - [Configuration](docs/configuration.md) — every `.shamway.toml` key
 - [Game integration](docs/game-integration.md) — XML URIs, icons, audio, clients

@@ -1,6 +1,12 @@
+# ADR 0001 — Synthesize bundles without an editor
+
+Status: **Accepted** (2026). The page below is the original design record,
+written as research *before* the writer existed and kept as written — including
+the one prediction that did not survive measurement.
+
 # Building a bundle with no Unity anywhere
 
-[no-unity.md](no-unity.md) answers "where does the `.unity3d` come from" four
+[no-unity.md](../bundles/no-unity.md) answers "where does the `.unity3d` come from" four
 ways: a local editor, **this tool**, an editor elsewhere, or no bundle at all.
 This page is the design record for the second one — synthesizing the bundle
 here, with no editor involved at any point.
@@ -72,7 +78,7 @@ In dependency order, per lane:
 - **Material/prefab lane**: GameObject + Transform + components + Material
   with correct shader keywords. Two sub-options:
   - author every field (risky: the keyword traps in
-    [bundle-generation.md](bundle-generation.md#script-authored-materials)
+    [bundle-generation.md](../bundles/bundle-generation.md#script-authored-materials)
     exist precisely because half-set materials pass every check but render
     wrong), or
   - **clone-and-patch**: harvest complete vanilla `Material` objects from the
@@ -105,7 +111,7 @@ author. But two change *meaning* when the artifact is our own output:
 
 So for a synthesized bundle **the fresh client stops being confirmation and
 becomes the only acceptance**, which is why this stays unbuilt until its
-evidence plan exists. The bar, from AGENTS.md and [no-unity.md](no-unity.md):
+evidence plan exists. The bar, from AGENTS.md and [no-unity.md](../bundles/no-unity.md):
 
 1. generated fixtures for **acceptance and rejection** (a writer that can only
    produce files its own reader accepts has not been tested);

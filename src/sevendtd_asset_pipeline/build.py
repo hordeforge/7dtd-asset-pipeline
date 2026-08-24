@@ -267,7 +267,7 @@ def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:
     same author cannot cross-examine each other; `SYNTHESIZED_CAVEATS` says so
     in the words every caller prints.
 
-    See `bundle_writer.py` for the format and `docs/bundles/offline-bundle-builder.md`
+    See `bundle_writer.py` for the format and `docs/adrs/0001-synthesize-bundles-without-an-editor.md`
     for why a modlet bundle is the tractable case.
     """
     version = expected_unity_version(config)

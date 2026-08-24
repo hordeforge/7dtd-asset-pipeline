@@ -224,6 +224,14 @@ compression before normalization. Smooth gain reduction frees headroom so
 normalization lifts body and coda; no individual sample is waveshaped or hard
 clipped.
 
+The compressed version was still human-rejected as a slightly improved poof:
+it lacked an explosion-impact onset. The original pressure pulse was largely
+one-sided and low-frequency, so the required 12 Hz high-pass removed much of
+its audible identity. `nuclear-blast` now starts with one coherent impact: a
+165→42 Hz boom sweep plus a single dense 120–5,200 Hz pressure crack. This is
+separate from the sustained body/coda and deliberately does not restore sparse
+debris crackling.
+
 The near `blast` voice itself no longer treats sparse high-band debris as a
 main layer. A target-game reviewer rejected that output as “just crackling,”
 not a bomb or blast. Its replacement uses a wider bipolar pressure hit, a

@@ -302,13 +302,24 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
     times = seconds(duration)
     white = noise(len(times), generator)
 
-    tearing = lowpass(white, 6500.0)
+    pressure_noise = lowpass(highpass(white, 120.0), 5200.0)
     shock = []
-    for time, grit in zip(times, tearing, strict=True):
+    impact = []
+    impact_phase = 0.0
+    for time, grit in zip(times, pressure_noise, strict=True):
         positive = math.exp(-time / 0.075)
         negative_time = max(time - 0.085, 0.0)
         negative = 0.72 * math.exp(-negative_time / 0.12) if time >= 0.085 else 0.0
-        shock.append((positive - negative) * 1.6 + grit * math.exp(-time / 0.22) * 0.32)
+        shock.append((positive - negative) * 0.65)
+
+        # One coherent explosion impact: a rapidly falling audible boom plus
+        # one dense pressure crack. It is intentionally not sparse debris.
+        progress = min(time / 0.65, 1.0)
+        impact_hz = 165.0 * ((42.0 / 165.0) ** progress)
+        impact_phase += 2.0 * math.pi * impact_hz / RATE
+        boom = math.sin(impact_phase) * min(time / 0.003, 1.0) * math.exp(-time / 0.30)
+        crack = grit * min(time / 0.0015, 1.0) * math.exp(-time / 0.075)
+        impact.append(1.35 * boom + 0.72 * crack)
 
     body = []
     phase_a = phase_b = phase_c = 0.0
@@ -341,7 +352,7 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
         for low, mid, time in zip(low_coda, mid_coda, times, strict=True)
     ]
 
-    mixed = mix((1.6, shock), (1.25, body), (0.85, returns), (1.0, coda))
+    mixed = mix((0.55, shock), (1.45, impact), (1.25, body), (0.85, returns), (1.0, coda))
     return normalize(remove_dc(fade_tail(compress(mixed), 2.0)), -0.2)
 
 

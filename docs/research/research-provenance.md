@@ -651,6 +651,13 @@ normalization. This changes level through smooth gain control, not sample
 waveshaping, so body and coda can rise without restoring the overdriven
 harmonics the first follow-up removed.
 
+The compressed follow-up remained a human-rejected poof because it lacked an
+explosion-impact onset. Inspection showed the designed pressure pulse was
+largely one-sided and low-frequency before the mandatory 12 Hz high-pass. The
+next design adds an explicitly audible impact layer—a 165→42 Hz boom sweep and
+one dense band-limited pressure crack—while retaining the clean compressed
+body/coda and excluding the old sparse debris crackling.
+
 The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
 `ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
 `Origin.position` internally. A caller must pass one absolute world coordinate;

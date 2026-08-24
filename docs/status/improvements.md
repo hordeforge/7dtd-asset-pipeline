@@ -205,3 +205,42 @@ If picked up in one pass: **1** (patch dry-run) buys the most silence removed
 per line of code; **5** hardens everything else; **4** is two independent
 encoders; **2** and **3** are small once 1's XML-loading machinery exists.
 **6** is a decision before it is any code.
+
+
+## The Vulkan sub-program, and what is left of it
+
+`bundle_source = "synthesized"` renders on **OpenGL Core**, **Direct3D 11** and
+therefore **Direct3D 12** - there is no separate d3d12 shader platform, and it
+consumes the same DXBC. Both of the first two are confirmed by eye in a live
+client.
+
+**Vulkan is emitted and refused.** The prop renders as Unity's magenta error
+shader under `-force-vulkan`. This is what is known, all of it measured:
+
+| | |
+|---|---|
+| the container | decoded, and the record this writer builds satisfies every invariant measured across four stock shaders |
+| the platform wiring | **correct** - a whole stock Vulkan blob transplanted into this writer's shader renders |
+| the section order | **proven** - `OpEntryPoint Fragment` in section A, `Vertex` in B |
+| the 32-byte field | **not the cause** - our modules carrying stock's own bytes still go magenta |
+| descriptor sets | moved to Unity's convention (constant buffers in set 1); no change |
+| the SPIR-V producer | glslang, as Unity uses, rather than a vkd3d translation; no change |
+
+**The one difference left is the parameter records.** The Vulkan platform reuses
+the d3d11 ones, which declare `UnityPerDraw` and `UnityPerFrame`. Unity's Vulkan
+parameter record declares **both stages in a single record**, with stage-prefixed
+names - `VGlobals<hash>` and `PGlobals<hash>` - which is consistent with
+`stageCounts` being 1 for Vulkan, where one code record also carries both stages.
+Nothing in a Vulkan blob uses the d3d11 names.
+
+That is the next thing to build, and the loop to check it with is now one
+command and nobody watching:
+
+```bash
+scripts/playtest-capture.sh --case look_myProp --label vulkan &
+scripts/playtest-acceptance.sh --mod-root .
+```
+
+Vulkan is optional in the writer, so none of this blocks a mod: without the
+SMOL-V encoder the bundle carries the two platforms it always did, and the game
+reaches for platform 18 only under `-force-vulkan`.

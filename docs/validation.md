@@ -224,6 +224,38 @@ attribute. Opting out is a deliberate flag, and a report that used it says so:
 shamway script playtest-acceptance --reuse-save
 ```
 
+### The editorless path has its own live-client regression
+
+`playtest-acceptance` accepts *a mod*. What proves **this pipeline** still
+works is a second script that brings its own:
+
+```bash
+shamway script playtest-synthesized
+```
+
+It generates a throwaway modlet in a temporary directory, authors a mesh and a
+texture into it, builds the bundle with no editor, wires a block `Model` at the
+prefab, runs the whole thing through a live client, and then asserts by value —
+not by case name — the four things that could each be wrong while every offline
+gate passed:
+
+| Assertion | The failure it catches |
+|---|---|
+| the prefab returns with `renderers=1` | an empty `GameObject`, which loads and draws nothing |
+| mesh `bounds=(0.30, 0.50, 0.20)` | a broken vertex stream, or a lost Y-up conversion |
+| material `shader=Shamway/Unlit` | a `PPtr` chain that did not survive serialization |
+| texture at its authored size | a `Texture2D` that decoded to something else |
+
+It refuses to run its assertions when the bundle carries no prefab, because
+without a usable `vkd3d-compiler` the writer packs a bare `Mesh` **by design**
+and a missing capability must not be reported as a broken bundle.
+
+This is the check that caught the one failure nothing offline could: a
+structurally perfect bundle that `DataLoader.LoadAsset<T>` answered null for,
+because the provider asked at a stem the prefab had taken over. It needs a game
+install, a dedicated server and the client lock, so it is not part of
+`make check test`; it is what to run before believing the writer still works.
+
 The provider is generated rather than hand-written because the cases *are* the
 bundle's membership: a member with no case is a member nobody proved. For a
 synthesized mod the names come from `bundle_writer.synthesized_members`, the

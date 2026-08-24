@@ -1,8 +1,8 @@
 """The host scripts, reachable from an installed `shamway` without a checkout.
 
 `install-tools.sh`, `install-unity-editor.sh`, `compile-editor-scripts.sh`,
-and `playtest-acceptance.sh` are host-setup and acceptance steps a mod needs
-once per machine. A mod is told never to keep
+`playtest-acceptance.sh` and `playtest-synthesized.sh` are host-setup and
+acceptance steps a mod needs once per machine. A mod is told never to keep
 a path into a checkout of this repository, so the scripts ship inside the
 package (staged by setup.py, the way docs/ is) and run as
 
@@ -40,6 +40,10 @@ SCRIPTS: dict[str, tuple[str, str]] = {
     "playtest-acceptance": (
         "playtest-acceptance.sh",
         "run the mod's bundle-acceptance suite in a live client, via hordeforge/7dtd-playtest",
+    ),
+    "playtest-synthesized": (
+        "playtest-synthesized.sh",
+        "self test: build a bundle with no editor and prove a live client loads every object",
     ),
 }
 

@@ -351,7 +351,8 @@ Machine-readable output for agents and CI:
 | `shamway generate --list` | the packaged asset generators, callable from any mod |
 | `shamway prompt --list` | the house-style image prompts, rendered with the lane that consumes them |
 | `shamway docs [TOPIC]` | this repository's documentation, served from the package |
-| `shamway script NAME` | the host scripts (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance), served from the package |
+| `shamway script NAME` | the host scripts (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized), served from the package |
+| `shamway script playtest-synthesized` | the editorless writer's own live-client regression: builds a throwaway modlet and asserts the game loaded its prefab, mesh, material and texture |
 | `shamway client where --json` | the client's per-user `Mods/` and `logs/` paths |
 | `shamway client deploy MOD` | copy the deployable modlet there (writes outside the install only) |
 | `shamway client launch --mod-name NAME` | a genuinely fresh client, then its log classified; refuses a running one |

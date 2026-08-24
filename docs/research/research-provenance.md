@@ -670,6 +670,13 @@ unchanged and adds a dense 650–7,800 Hz tearing-noise burst with a 0.42-second
 decay and continuous fast amplitude variation. It is deliberately a coherent
 pressure-front texture rather than the earlier sparse debris crackling.
 
+Target-game listening again found the direction better, but the initial thump
+remained slightly too prominent relative to the shatter and thunder character.
+The follow-up slows the boom attack from 12 to 35 ms and reduces the shock,
+boom, and short-crack mix gains. It spends the recovered headroom on three
+overlapping delayed copies of the dense shatter front and a separately filtered
+32–520 Hz rolling thunder bed with a 160 ms onset and 2.6-second decay.
+
 The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
 `ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
 `Origin.position` internally. A caller must pass one absolute world coordinate;

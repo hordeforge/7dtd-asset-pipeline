@@ -244,6 +244,14 @@ preserves the low layer and adds a dense 650–7,800 Hz tearing burst with a
 shattering texture without reverting to isolated debris crackles, nonlinear
 overdrive, or clipping.
 
+That version improved the target-game result again, but listening still found
+the initial thump slightly too prominent compared with the rest of the event.
+The next balance slows the boom attack from 12 to 35 ms, reduces the shock,
+boom, and short crack gains, and redistributes their headroom into three
+overlapping shatter reflections plus a 32–520 Hz rolling thunder bed beginning
+160 ms after the front. The thunder decays over 2.6 seconds, so the event
+unfolds instead of collapsing into one dominant hit.
+
 The near `blast` voice itself no longer treats sparse high-band debris as a
 main layer. A target-game reviewer rejected that output as “just crackling,”
 not a bomb or blast. Its replacement uses a wider bipolar pressure hit, a

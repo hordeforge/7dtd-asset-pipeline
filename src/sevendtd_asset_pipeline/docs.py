@@ -65,6 +65,10 @@ TOPICS: dict[str, tuple[str, str]] = {
         "the unbuilt contextual model-audition and advisory-review contract",
     ),
     "vfx": ("authoring/vfx.md", "particle budgets, LOD tiers, and two silent material failures"),
+    "skinned-gear": (
+        "authoring/skinned-gear.md",
+        "worn armor: why it leaves the editorless lane, and the bone names it binds to",
+    ),
     "environment-effects": (
         "authoring/environment-effects.md",
         "weather, fog and light: the effect the bundle cannot carry",

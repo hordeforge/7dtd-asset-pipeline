@@ -85,12 +85,26 @@ From the engine research, in the order they are checked:
 `{race}`, `{variant}` and `{hair}` substitute **only on the `head` part**;
 everything else gets `{sex}` and nothing more.
 
-**Inferred, untested:** the path is handed to the same
-`LoadManager.LoadAsset<GameObject>` that resolves a `Meshfile`, so a
-`#@modfolder(<Mod>):Resources/<bundle>.unity3d?<prefab>.prefab` URI should
-serve a garment out of a mod's own bundle exactly as it serves a held mesh. No
-mod has shipped one, so treat the first attempt as the experiment that settles
-it, and report the result back here either way.
+**A mod bundle can serve the prefab.** Verified from IL against the installed
+build rather than inferred: the slot path is handed to
+`LoadManager.LoadAsset<GameObject>`, which parses it with
+`DataLoader.ParseDataPathIdentifier`, and that method
+
+1. runs `ModManager.PatchModPathString(uri)` first, which resolves
+   `#@modfolder(<Mod>):` to a real path and returns non-null precisely when the
+   URI *was* a mod path;
+2. then treats any URI beginning `#` and containing `?` as a bundle reference,
+   splitting bundle path from asset name and setting `FromMod` from whether
+   step 1 patched anything;
+3. and `LoadManager.LoadAsset` passes that `FromMod` flag straight to
+   `AssetBundleManager.LoadAssetBundle`.
+
+So `#@modfolder(<Mod>):Resources/<bundle>.unity3d?<prefab>.prefab` reaches a
+mod's own bundle here exactly as it does for a `Meshfile`. Marker substitution
+runs before the load and leaves a URI containing no `{sex}` alone.
+
+Still true: **no mod has shipped a garment through this path**, so the loading
+is settled and the deformation is not.
 
 ## Order of work
 
@@ -110,7 +124,8 @@ deforms wrongly.
 
 ## What has no answer yet
 
-- Whether a mod bundle can serve the prefab at all (see above).
+- Whether a garment served from a mod bundle *deforms* correctly once loaded.
+  The load path is settled (above); nothing has exercised the bind.
 - Whether a garment skinned to an approximate armature, rather than to TFP's
   actual rig asset, deforms acceptably. Bone *names* are what bind; bind poses
   and weights are the authoring problem, and nobody has measured how much

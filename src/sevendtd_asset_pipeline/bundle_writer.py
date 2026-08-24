@@ -995,7 +995,10 @@ def _program(variants: list[tuple[int, int, int]]) -> dict[str, Any]:
         ],
     ]
     program["m_ParameterBlobIndices"] = [
-        [], [], [], [parameter for _type, _blob, parameter in variants]
+        [],
+        [],
+        [],
+        [parameter for _type, _blob, parameter in variants],
     ]
     return program
 
@@ -1044,14 +1047,18 @@ def shader(name: str, texture_property: str = "_MainTex") -> BundleObject:
         "m_State": _shader_state(name),
         # 6 = vertex | fragment, the two stages this pass fills.
         "m_ProgramMask": 6,
-        "progVertex": _program([
-            (p.vertex_program_type, p.vertex_blob_index, p.vertex_parameter_index)
-            for p in platforms
-        ]),
-        "progFragment": _program([
-            (p.fragment_program_type, p.fragment_blob_index, p.fragment_parameter_index)
-            for p in platforms
-        ]),
+        "progVertex": _program(
+            [
+                (p.vertex_program_type, p.vertex_blob_index, p.vertex_parameter_index)
+                for p in platforms
+            ]
+        ),
+        "progFragment": _program(
+            [
+                (p.fragment_program_type, p.fragment_blob_index, p.fragment_parameter_index)
+                for p in platforms
+            ]
+        ),
         "progGeometry": _empty_program(),
         "progHull": _empty_program(),
         "progDomain": _empty_program(),
@@ -1415,9 +1422,7 @@ def pack_directory(
     # `shamway capabilities` and `doctor` are where the difference shows.
     prefabs = bool(meshes) and has_capability("vkd3d-compiler")
     objects = [
-        object_for(path, compress_textures)
-        for path in sources
-        if not (prefabs and path in meshes)
+        object_for(path, compress_textures) for path in sources if not (prefabs and path in meshes)
     ]
     if prefabs:
         for path in meshes:

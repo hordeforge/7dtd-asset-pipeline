@@ -140,7 +140,9 @@ cbuffer UnityPerFrame : register(b1)
 };
 """
 
-UNLIT_VERTEX_HLSL = _UNITY_CBUFFERS_HLSL + """
+UNLIT_VERTEX_HLSL = (
+    _UNITY_CBUFFERS_HLSL
+    + """
 struct VertexIn
 {
     float4 vertex : POSITION;
@@ -162,6 +164,7 @@ VertexOut main(VertexIn input)
     return output;
 }
 """
+)
 
 UNLIT_FRAGMENT_HLSL = """
 Texture2D<float4> _MainTex : register(t0);
@@ -258,16 +261,30 @@ def compile_hlsl(source: str, profile: str) -> bytes:
             "vkd3d-compiler is not installed; it compiles the HLSL this writer "
             "turns into a shader's DXBC bytecode. Install it with "
             "'shamway script install-tools --with-authoring', or declare "
-            "bundle_source other than \"synthesized\" for a bundle with a shader."
+            'bundle_source other than "synthesized" for a bundle with a shader.'
         )
     with tempfile.TemporaryDirectory() as work:
         src = Path(work) / "shader.hlsl"
         out = Path(work) / "shader.dxbc"
         src.write_text(source, encoding="utf-8")
         result = subprocess.run(
-            [binary, "-x", "hlsl", "-b", "dxbc-tpf", "-p", profile,
-             "-e", "main", str(src), "-o", str(out)],
-            capture_output=True, text=True, check=False,
+            [
+                binary,
+                "-x",
+                "hlsl",
+                "-b",
+                "dxbc-tpf",
+                "-p",
+                profile,
+                "-e",
+                "main",
+                str(src),
+                "-o",
+                str(out),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if result.returncode != 0 or not out.exists():
             detail = (result.stderr or result.stdout).strip()
@@ -287,8 +304,8 @@ def dxbc_chunks(data: bytes) -> dict[str, bytes]:
     chunks: dict[str, bytes] = {}
     for offset in struct.unpack_from(f"<{count}I", data, 0x20):
         size = struct.unpack_from("<I", data, offset + 4)[0]
-        chunks[data[offset:offset + 4].decode("ascii", "replace")] = data[
-            offset + 8:offset + 8 + size
+        chunks[data[offset : offset + 4].decode("ascii", "replace")] = data[
+            offset + 8 : offset + 8 + size
         ]
     return chunks
 
@@ -306,7 +323,7 @@ def _walk_tokens(data: bytes):
         token = words[index]
         opcode = token & 0x7FF
         length = (token >> 24) & 0x7F
-        if opcode == _OP_CUSTOMDATA:      # length is the following dword
+        if opcode == _OP_CUSTOMDATA:  # length is the following dword
             length = words[index + 1] if index + 1 < len(words) else 2
         if length == 0:
             raise PipelineError(
@@ -358,7 +375,10 @@ def program_data(dxbc: bytes, gs_input_primitive: int = 0) -> bytes:
         if not 0 <= value <= 255:
             raise PipelineError(f"{label} count {value} does not fit the one-byte header field")
     header = bytes([2, srv, cbuffer, sampler, 0, gs_input_primitive]) + b"\x00" * 32
-    assert len(header) == PROGRAM_DATA_HEADER
+    if len(header) != PROGRAM_DATA_HEADER:  # pragma: no cover - arithmetic guard
+        raise PipelineError(
+            f"built a {len(header)}-byte program-data header, not {PROGRAM_DATA_HEADER}"
+        )
     return header + dxbc
 
 
@@ -430,10 +450,10 @@ def code_blob(program_type: int, dxbc: bytes, bind_inputs: bool = True) -> bytes
     writer = _Writer()
     writer.i32(BLOB_VERSION)
     writer.i32(program_type)
-    for _ in range(3):                    # ALU, TEX, flow instruction counts
+    for _ in range(3):  # ALU, TEX, flow instruction counts
         writer.i32(0)
     writer.i32(temp_register_count(dxbc))
-    writer.i32(0)                         # keyword count: this writer emits no variants
+    writer.i32(0)  # keyword count: this writer emits no variants
     payload = program_data(dxbc)
     writer.i32(len(payload))
     writer.out += payload
@@ -451,7 +471,7 @@ class TextureEntry:
     name: str
     index: int
     sampler_index: int
-    dimension: int = 2                     # Tex2D
+    dimension: int = 2  # Tex2D
     multi_sampled: bool = False
 
 
@@ -484,7 +504,7 @@ class ParameterBlob:
         # Stock blobs always open with a nameless, zero-size buffer: it is the
         # "base" constant buffer, and every one of the 3403 measured records
         # has it.
-        buffers = (CBuffer("", 0),) + self.buffers
+        buffers = (CBuffer("", 0), *self.buffers)
         writer.i32(len(buffers))
         for buffer in buffers:
             writer.string(buffer.name)
@@ -498,7 +518,7 @@ class ParameterBlob:
                 writer.i32(1 if member.is_matrix else 0)
                 writer.i32(member.array_size)
                 writer.i32(member.index)
-            writer.i32(0)                  # struct params: none
+            writer.i32(0)  # struct params: none
         entries = len(self.textures) + len(self.bindings) + len(self.samplers)
         writer.i32(entries)
         for texture in self.textures:
@@ -529,7 +549,7 @@ def assemble_blob(records: list[bytes]) -> bytes:
     for record in records:
         table.u32(offset + len(payload))
         table.u32(len(record))
-        table.u32(0)                       # segment: 0 in every stock record
+        table.u32(0)  # segment: 0 in every stock record
         payload += record
     return bytes(table.out) + bytes(payload)
 
@@ -538,10 +558,9 @@ def compress_lz4(data: bytes) -> bytes:
     """LZ4 block compression, the codec every stock platform blob uses."""
     try:
         import lz4.block
-    except ImportError as exc:            # pragma: no cover - capability gated
+    except ImportError as exc:  # pragma: no cover - capability gated
         raise PipelineError(
-            "the lz4 module is required to compress a shader blob; it ships "
-            "with the UnityPy extra."
+            "the lz4 module is required to compress a shader blob; it ships with the UnityPy extra."
         ) from exc
     return bytes(lz4.block.compress(data, mode="high_compression", store_size=False))
 
@@ -612,34 +631,56 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
         textures=(TextureEntry(texture_property, index=0, sampler_index=0),),
         samplers=(SamplerEntry(f"sampler{texture_property}", bind_point=0, sampler=0),),
     )
-    d3d11_raw = assemble_blob([
-        vertex_parameters.to_bytes(),
-        fragment_parameters.to_bytes(),
-        code_blob(DX11_VERTEX_SM40, vertex_dxbc),
-        code_blob(DX11_PIXEL_SM40, fragment_dxbc, bind_inputs=False),
-    ])
+    d3d11_raw = assemble_blob(
+        [
+            vertex_parameters.to_bytes(),
+            fragment_parameters.to_bytes(),
+            code_blob(DX11_VERTEX_SM40, vertex_dxbc),
+            code_blob(DX11_PIXEL_SM40, fragment_dxbc, bind_inputs=False),
+        ]
+    )
     # The OpenGLCore variant exists so a Linux editor can actually load a
     # sub-program: a d3d11-only shader has nothing that host can create, and
     # `shamway verify-bundle` then reports it unsupported for a reason that
     # says nothing about the bundle. The game runs d3d11 under Proton.
-    glsl = UNLIT_GLSL if texture_property == "_MainTex" else UNLIT_GLSL.replace(
-        "_MainTex", texture_property
+    glsl = (
+        UNLIT_GLSL
+        if texture_property == "_MainTex"
+        else UNLIT_GLSL.replace("_MainTex", texture_property)
     )
-    gl_raw = assemble_blob([
-        vertex_parameters.to_bytes(),
-        fragment_parameters.to_bytes(),
-        source_blob(GL_CORE_32, glsl),
-        source_blob(GL_CORE_32, glsl),
-    ])
+    gl_raw = assemble_blob(
+        [
+            vertex_parameters.to_bytes(),
+            fragment_parameters.to_bytes(),
+            source_blob(GL_CORE_32, glsl),
+            source_blob(GL_CORE_32, glsl),
+        ]
+    )
     return CompiledShader(
         platforms=(
             PlatformBlob(
-                SHADER_COMPILER_PLATFORM_D3D11, compress_lz4(d3d11_raw), len(d3d11_raw),
-                DX11_VERTEX_SM40, DX11_PIXEL_SM40, 0, 1, 2, 3, stage_count=2,
+                SHADER_COMPILER_PLATFORM_D3D11,
+                compress_lz4(d3d11_raw),
+                len(d3d11_raw),
+                DX11_VERTEX_SM40,
+                DX11_PIXEL_SM40,
+                0,
+                1,
+                2,
+                3,
+                stage_count=2,
             ),
             PlatformBlob(
-                SHADER_COMPILER_PLATFORM_GL_CORE, compress_lz4(gl_raw), len(gl_raw),
-                GL_CORE_32, GL_CORE_32, 0, 1, 2, 3, stage_count=1,
+                SHADER_COMPILER_PLATFORM_GL_CORE,
+                compress_lz4(gl_raw),
+                len(gl_raw),
+                GL_CORE_32,
+                GL_CORE_32,
+                0,
+                1,
+                2,
+                3,
+                stage_count=1,
             ),
         ),
         texture_name=texture_property,

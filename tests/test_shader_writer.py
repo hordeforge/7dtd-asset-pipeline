@@ -43,9 +43,15 @@ def one_pixel_png(path: Path) -> Path:
     import zlib
 
     raw = b"\x00\xff\x00\x00\xff"
+
     def chunk(tag: bytes, body: bytes) -> bytes:
-        return (struct.pack(">I", len(body)) + tag + body
-                + struct.pack(">I", zlib.crc32(tag + body) & 0xFFFFFFFF))
+        return (
+            struct.pack(">I", len(body))
+            + tag
+            + body
+            + struct.pack(">I", zlib.crc32(tag + body) & 0xFFFFFFFF)
+        )
+
     path.write_bytes(
         b"\x89PNG\r\n\x1a\n"
         + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
@@ -107,9 +113,7 @@ class CompileTests(unittest.TestCase):
 
     def test_a_pixel_record_still_writes_an_empty_channel_block(self) -> None:
         fragment = shader_blob.compile_hlsl(shader_blob.UNLIT_FRAGMENT_HLSL, "ps_4_0")
-        record = shader_blob.code_blob(
-            shader_blob.DX11_PIXEL_SM40, fragment, bind_inputs=False
-        )
+        record = shader_blob.code_blob(shader_blob.DX11_PIXEL_SM40, fragment, bind_inputs=False)
         self.assertEqual(record[-8:], struct.pack("<ii", 0, 0))
 
     def test_a_record_without_its_channel_block_is_short(self) -> None:
@@ -144,7 +148,7 @@ class ShaderObjectTests(unittest.TestCase):
         self.assertIn(shader_blob.SHADER_COMPILER_PLATFORM_D3D11, list(parsed.platforms))
         # d3d11 keeps vertex and fragment as separate programs; OpenGLCore
         # carries both stages in one source.
-        self.assertEqual(list(parsed.stageCounts)[0], 2)
+        self.assertEqual(next(iter(parsed.stageCounts)), 2)
 
     def test_every_code_blob_puts_dxbc_at_offset_38(self) -> None:
         from UnityPy.helpers import CompressionHelper
@@ -154,7 +158,7 @@ class ShaderObjectTests(unittest.TestCase):
         blob = bytes(parsed.compressedBlob)
         start = parsed.offsets[index][0]
         data = CompressionHelper.decompress_lz4(
-            blob[start:start + parsed.compressedLengths[index][0]],
+            blob[start : start + parsed.compressedLengths[index][0]],
             parsed.decompressedLengths[index][0],
         )
         count = struct.unpack_from("<I", data, 0)[0]
@@ -163,13 +167,14 @@ class ShaderObjectTests(unittest.TestCase):
             offset, _length, segment = struct.unpack_from("<III", data, 4 + i * 12)
             self.assertEqual(segment, 0, "stock records carry a zero segment word")
             if struct.unpack_from("<I", data, offset + 4)[0] in (
-                shader_blob.DX11_VERTEX_SM40, shader_blob.DX11_PIXEL_SM40
+                shader_blob.DX11_VERTEX_SM40,
+                shader_blob.DX11_PIXEL_SM40,
             ):
                 position = offset + 24
                 keywords = struct.unpack_from("<I", data, position)[0]
                 self.assertEqual(keywords, 0, "this writer emits no keyword variants")
                 size = struct.unpack_from("<I", data, position + 4)[0]
-                payload = bytes(data[position + 8:position + 8 + size])
+                payload = bytes(data[position + 8 : position + 8 + size])
                 self.assertEqual(payload[38:42], b"DXBC")
                 found += 1
         self.assertEqual(found, 2, "one vertex and one fragment sub-program")
@@ -177,11 +182,13 @@ class ShaderObjectTests(unittest.TestCase):
     def test_a_material_binds_its_shader_and_texture_by_path_id(self) -> None:
         with tempfile.TemporaryDirectory() as work:
             png = one_pixel_png(Path(work) / "albedo.png")
-            read = self.read_back([
-                shader(UNLIT_SHADER_NAME),
-                texture_2d("albedo", png),
-                material("propmat", UNLIT_SHADER_NAME, "albedo"),
-            ])
+            read = self.read_back(
+                [
+                    shader(UNLIT_SHADER_NAME),
+                    texture_2d("albedo", png),
+                    material("propmat", UNLIT_SHADER_NAME, "albedo"),
+                ]
+            )
         found = read["Material"]
         self.assertEqual(found.m_Name, "propmat")
         self.assertNotEqual(found.m_Shader.m_PathID, 0, "a null shader is the magenta failure")
@@ -207,7 +214,8 @@ class RejectionTests(unittest.TestCase):
         with self.assertRaises(PipelineError) as caught:
             build_bundle(
                 [shader(UNLIT_SHADER_NAME), material("m", UNLIT_SHADER_NAME, "absentTexture")],
-                REVISION, "x.unity3d",
+                REVISION,
+                "x.unity3d",
             )
         self.assertIn("absentTexture", str(caught.exception))
 
@@ -223,9 +231,9 @@ class SourceLaneTests(unittest.TestCase):
     """A mesh source file becomes a prefab only where a shader compiler exists."""
 
     def pack(self, work: Path):
-        from sevendtd_asset_pipeline.bundle_writer import pack_directory
-
         import UnityPy
+
+        from sevendtd_asset_pipeline.bundle_writer import pack_directory
 
         bundle, _manifest = pack_directory(work, "lane.unity3d", REVISION)
         path = work / "out.unity3d"

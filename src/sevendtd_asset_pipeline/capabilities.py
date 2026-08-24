@@ -115,7 +115,7 @@ REGISTRY: tuple[_Spec, ...] = (
         kind="command",
         probe="vkd3d-compiler",
         unlocks=(
-            'shamway pack (prefabs and materials)',
+            "shamway pack (prefabs and materials)",
             'shamway build with bundle_source = "synthesized" (prefabs and materials)',
         ),
         purpose="compile the unlit shader's HLSL to the DXBC shader model 4 bytecode a "

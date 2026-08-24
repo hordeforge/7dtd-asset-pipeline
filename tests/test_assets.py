@@ -692,6 +692,18 @@ class GeneratorTests(unittest.TestCase):
             with wave.open(str(first), "rb") as handle:
                 self.assertGreaterEqual(handle.getnframes() / handle.getframerate(), 15.9)
 
+    def test_regular_blast_has_clean_layered_impact(self) -> None:
+        """A conventional blast needs more than one processed crack."""
+        import inspect
+
+        from sevendtd_asset_pipeline.generators.sound import blast
+
+        source = inspect.getsource(blast)
+        self.assertNotIn("tanh", source)
+        self.assertIn("compress(mixed)", source)
+        self.assertIn("fracture_returns", source)
+        self.assertIn("thunder_band", source)
+
     def test_nuclear_blast_does_not_overdrive_its_waveform(self) -> None:
         """Target-game listening rejected nonlinear saturation as unclean crackling."""
         import inspect

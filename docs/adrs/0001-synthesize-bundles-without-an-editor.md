@@ -4,7 +4,7 @@ Status: **Accepted** (2026). The page below is the original design record,
 written as research *before* the writer existed and kept as written — including
 the one prediction that did not survive measurement.
 
-# Building a bundle with no Unity anywhere
+## Building a bundle with no Unity anywhere
 
 [no-unity.md](../bundles/no-unity.md) answers "where does the `.unity3d` come from" four
 ways: a local editor, **this tool**, an editor elsewhere, or no bundle at all.

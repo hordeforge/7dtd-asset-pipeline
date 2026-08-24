@@ -239,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"wrote {args.output} ({args.size}x{args.size}, {coverage:.1%} covered)")
     print("It is a clay render: silhouette and framing, not the in-game look.")
-    print(f"Gate it: shamway check-icons  —  then look at it next to the game's own icons.")
+    print("Gate it: shamway check-icons  —  then look at it next to the game's own icons.")
     return 0
 
 

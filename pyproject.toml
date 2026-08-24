@@ -65,6 +65,11 @@ sevendtd_asset_pipeline = ["templates/**/*", "docs/**/*.md", "scripts/*.sh", "sc
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# The self-test fixture's tools/ directory is what `shamway init` writes into a
+# consuming mod, not source this repository authors. Formatting it would make
+# the fixture differ from what a real consumer gets, which is the one thing it
+# exists to be.
+extend-exclude = ["examples/SelfTestMod/tools"]
 
 [tool.ruff.lint]
 # E501 stays unselected until every line is wrapped to the 100-column cap

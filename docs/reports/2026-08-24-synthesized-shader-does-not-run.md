@@ -53,6 +53,71 @@ inconsistent by construction — the stock parameter blob beside it names stock'
 uniforms, not ours. It isolates nothing, and no conclusion was drawn from it.
 The GLSL fix rests on `glslangValidator` alone, which needs no Unity at all.
 
+## Eliminated after the record fix, so these negatives count
+
+Every row below was measured against the **fixed** writer, with the control
+cube reading a healthy `38.8% / 2.4%` in the same frame and the GLSL verified
+to compile before the run. None of them changed `0.0%`.
+
+| Tried | Why it was a candidate |
+|---|---|
+| `$Globals` of individual uniform members instead of the d3d11 cbuffers | stock GLCore uses that shape |
+| one shared source record, both stages at the same index | stock's shape, `stageCounts=1` |
+| a vertex stage reading **no** inputs and no uniforms | would prove or kill the transform hypothesis |
+| a fragment writing **constant opaque red** | would prove or kill alpha-zero from an unbound sampler |
+| **GLCore-only** shader, the d3d11 platform dropped entirely | would catch cross-platform blob-index confusion |
+| `m_ShaderRequirements` `0` → `1` | ours was `0`; no stock shader sampled has `0` (min seen: `1`) |
+| a real keyword vocabulary plus `m_SerializedKeywordStateMask` | the recurring error names keyword state, and ours declared none |
+| `m_NameIndices` populated | ours was `[]`, stock's is `[('$Globals', 1), ('_Cutoff', 2), ('_MainTex', 0)]` |
+
+`Incompatible keyword states` still appears in **every** run, including with a
+full keyword vocabulary and a consistent state mask. It is not a description of
+the cause; treat it as noise until something else explains it.
+
+### What matches stock exactly
+
+Checked field by field rather than assumed, against
+`Legacy Shaders/Transparent/Cutout/VertexLit` read out of the installed game:
+
+- **every scalar on the pass** — `m_ProgramMask` 6, `m_Type` 0, `m_UseName`,
+  `m_Name`, `m_TextureName`, both instancing flags, and the subshader's
+  `m_LOD` 100;
+- **`m_CommonParameters`** — empty in ours *and* in all eight stock shaders
+  sampled, so its emptiness is correct, not a gap;
+- **the tier slot** — stock puts its player sub-programs in `tier[3]`, as this
+  writer does.
+
+### The sub-program indexing is correct, and here is the artifact that says so
+
+Worth recording because it looked like the most likely fault and is not. In
+stock's `tier[3]`, the d3d11 entries come first and the GLCore entries follow,
+and **`sp[0]` (`type=15`, d3d11) and `sp[6]` (`type=6`, GLCore) both carry
+`m_BlobIndex: 6`**:
+
+```text
+sp[0] blob=  6 type=15 kwIdx=[]
+sp[6] blob=  6 type= 6 kwIdx=[]
+```
+
+So `m_BlobIndex` is an index **into that platform's own blob**, and two
+platforms sharing an index is normal. This writer sharing index 2 across d3d11
+and GLCore is right, and the GLCore-only build confirmed it from the other
+direction.
+
+`m_SerializedKeywordStateMask` was decoded from the same artifact: it lists the
+**keyword indices that participate in variant selection**, and a sub-program's
+`m_KeywordIndices` names the subset it is compiled for, with `[]` being the
+base variant.
+
+### Still untested
+
+- the GLSL **preamble**: stock carries `HLSLCC_ENABLE_UNIFORM_BUFFERS`,
+  `UNITY_LOCATION`/`UNITY_BINDING` and a `GL_ARB_shader_bit_encoding` guard that
+  this writer's source does not;
+- `m_EditorDataHash`, empty here and populated in stock - probably editor-only,
+  but that is a guess and is written down as one;
+- **d3d11**, which nothing in this report has measured.
+
 ## The program loads, and is never executed
 
 The sharpest statement this investigation has reached, from one asymmetry:

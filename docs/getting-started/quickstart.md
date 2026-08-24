@@ -250,6 +250,11 @@ look at it, or listen to it, and say that you did. [Validation](../validation.md
 lists exactly what offline parsing cannot prove; [Release
 checklist](../runbooks/release-checklist.md) is the full list.
 
+For a C# mod, point `deploy` at the built dist/release modlet, not its source
+root. A source tree with `.cs`/`.csproj` inputs but no root-level DLL is
+refused: deploying only its XML and resources produces cascading missing-class
+errors while looking superficially successful.
+
 ## Creating the assets themselves
 
 `shamway generate` ships reproducible generators for

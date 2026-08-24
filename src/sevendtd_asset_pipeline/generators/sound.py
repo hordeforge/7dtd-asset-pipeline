@@ -320,7 +320,7 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
         progress = min(time / 2.4, 1.0)
         boom_hz = 108.0 * ((44.0 / 108.0) ** progress)
         boom_phase += 2.0 * math.pi * boom_hz / RATE
-        boom_shape = min(time / 0.012, 1.0) * math.exp(-time / 1.15)
+        boom_shape = min(time / 0.035, 1.0) * math.exp(-time / 1.25)
         boom.append(boom_shape * (math.sin(boom_phase) + 0.42 * math.sin(2.0 * boom_phase + 0.25)))
         pressure_crack.append(grit * min(time / 0.0015, 1.0) * math.exp(-time / 0.055))
 
@@ -332,6 +332,19 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
         * (0.72 + 0.28 * math.sin(2.0 * math.pi * (31.0 * time + 7.0 * time * time)))
         for value, time in zip(shatter_band, times, strict=True)
     ]
+    shatter_reflections = [0.0] * len(times)
+    for delay, gain in ((0.17, 0.48), (0.36, 0.34), (0.61, 0.22)):
+        offset = int(delay * RATE)
+        for index in range(offset, len(times)):
+            shatter_reflections[index] += shatter[index - offset] * gain
+
+    thunder_band = lowpass(highpass(white, 32.0), 520.0, passes=2)
+    thunder = []
+    for value, time in zip(thunder_band, times, strict=True):
+        age = max(time - 0.16, 0.0)
+        shape = 0.0 if time < 0.16 else min(age / 0.11, 1.0) * math.exp(-age / 2.6)
+        roll = 0.72 + 0.28 * math.sin(2.0 * math.pi * (1.7 * age + 0.16 * age * age))
+        thunder.append(value * shape * roll)
 
     body = []
     phase_a = phase_b = phase_c = 0.0
@@ -365,10 +378,12 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
     ]
 
     mixed = mix(
-        (0.55, shock),
-        (2.1, boom),
-        (0.28, pressure_crack),
+        (0.38, shock),
+        (1.72, boom),
+        (0.20, pressure_crack),
         (0.72, shatter),
+        (0.58, shatter_reflections),
+        (1.18, thunder),
         (1.25, body),
         (0.85, returns),
         (1.0, coda),

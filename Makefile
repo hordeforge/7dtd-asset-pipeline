@@ -11,8 +11,10 @@ PYTHON := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project pyt
 
 all: check test
 
-SHELL_SCRIPTS := scripts/bootstrap scripts/install-tools.sh scripts/install-unity-editor.sh \
-	scripts/compile-editor-scripts.sh scripts/playtest-acceptance.sh
+# Every shell script the repo tracks, not a hand-kept list: playtest-capture.sh
+# and playtest-synthesized.sh shipped unlinted for three commits because this
+# line named only their older siblings. The wildcard cannot forget one.
+SHELL_SCRIPTS := scripts/bootstrap $(wildcard scripts/*.sh)
 
 check: lint typecheck
 	$(PYTHON) -m compileall -q src tests scripts/github_asset_url.py

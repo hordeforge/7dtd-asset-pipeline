@@ -48,6 +48,9 @@ ALPHA_COLOUR_TYPES = (4, 6)
 COLOUR_TYPE_NAMES = {0: "grayscale", 2: "rgb", 3: "palette", 4: "grayscale+alpha", 6: "rgba"}
 # The V3 item atlas cell measured from the game's own itemicons bundle.
 DEFAULT_CELL = 160
+# The atlas directory every modlet keeps relative to its root; shared with the
+# published schema (operations.py) and the CLI (--atlas-root).
+DEFAULT_ATLAS_ROOT = "UIAtlases"
 ICON_PROPERTIES = ("CustomIcon",)
 # `<display_entry icon="...">` in progression.xml names an atlas sprite too.
 DISPLAY_ENTRY_ICON = re.compile(r'<display_entry\b[^>]*\bicon\s*=\s*"([^"]+)"')
@@ -344,7 +347,7 @@ def discover_icon_references(
 def check_icons(
     mod_root: Path,
     config_dir: Path | None = None,
-    atlas_root: str = "UIAtlases",
+    atlas_root: str = DEFAULT_ATLAS_ROOT,
     cell: int = DEFAULT_CELL,
 ) -> IconReport:
     """Check this mod's atlas PNGs and reconcile them with its `CustomIcon` keys."""

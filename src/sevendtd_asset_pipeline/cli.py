@@ -31,17 +31,23 @@ from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .generators import describe as describe_generators
 from .generators import run as run_generator
-from .icon_check import check_icons
-from .icon_render import render_icon
-from .mesh_check import check_mesh
+from .icon_check import DEFAULT_ATLAS_ROOT, DEFAULT_CELL, check_icons
+from .icon_render import (
+    DEFAULT_ATLAS,
+    DEFAULT_PADDING,
+    DEFAULT_PITCH,
+    DEFAULT_YAW,
+    render_icon,
+)
+from .mesh_check import DEFAULT_MAX_EXTENT, check_mesh
 from .operations import manifest
 from .prompts import main as prompt_main
 from .references import discover_references
 from .scaffold import initialize
 from .serve import serve
-from .sound_check import check_sound
+from .sound_check import DEFAULT_MAX_SECONDS, check_sound
 from .status import collect_status
-from .unity_release import fetch_release
+from .unity_release import DEFAULT_PLATFORM, fetch_release
 from .unityfs import inspect_bundle
 from .validation import validate_bundle, validate_mod
 
@@ -163,7 +169,9 @@ def _parser() -> argparse.ArgumentParser:
     release.add_argument(
         "--version", help="Unity revision; defaults to the configured project's ProjectVersion.txt"
     )
-    release.add_argument("--platform", default="LINUX", help="editor host platform (default LINUX)")
+    release.add_argument(
+        "--platform", default=DEFAULT_PLATFORM, help="editor host platform (default LINUX)"
+    )
     release.add_argument("--json", action="store_true")
 
     status = commands.add_parser(
@@ -176,7 +184,10 @@ def _parser() -> argparse.ArgumentParser:
     )
     mesh.add_argument("mesh", type=Path)
     mesh.add_argument(
-        "--max-extent", type=float, default=16.0, help="largest allowed size in metres"
+        "--max-extent",
+        type=float,
+        default=DEFAULT_MAX_EXTENT,
+        help="largest allowed size in metres",
     )
     mesh.add_argument("--strict", action="store_true", help="treat glTF warnings as failures")
     mesh.add_argument("--json", action="store_true")
@@ -209,7 +220,7 @@ def _parser() -> argparse.ArgumentParser:
         "check-sound", help="measure a WAV clip and reject unshippable formats"
     )
     sound.add_argument("clip", type=Path)
-    sound.add_argument("--max-seconds", type=float, default=30.0)
+    sound.add_argument("--max-seconds", type=float, default=DEFAULT_MAX_SECONDS)
     sound.add_argument(
         "--allow-stereo",
         dest="require_mono",
@@ -221,8 +232,10 @@ def _parser() -> argparse.ArgumentParser:
     icons = commands.add_parser(
         "check-icons", help="check UIAtlases PNGs and every CustomIcon key under Config/"
     )
-    icons.add_argument("--atlas-root", default="UIAtlases")
-    icons.add_argument("--cell", type=int, default=160, help="expected atlas cell size in pixels")
+    icons.add_argument("--atlas-root", default=DEFAULT_ATLAS_ROOT)
+    icons.add_argument(
+        "--cell", type=int, default=DEFAULT_CELL, help="expected atlas cell size in pixels"
+    )
     icons.add_argument("--json", action="store_true")
 
     render = commands.add_parser(
@@ -230,11 +243,15 @@ def _parser() -> argparse.ArgumentParser:
     )
     render.add_argument("prefab", help="bundle stem, or a project-relative Assets/... path")
     render.add_argument("--output", type=Path, help="default: UIAtlases/<atlas>/<stem>.png")
-    render.add_argument("--size", type=int, default=160)
-    render.add_argument("--atlas", default="ItemIconAtlas")
-    render.add_argument("--yaw", type=float, default=208.0, help="camera yaw in degrees")
-    render.add_argument("--pitch", type=float, default=8.0, help="camera pitch in degrees")
-    render.add_argument("--padding", type=float, default=1.22, help="framing headroom factor")
+    render.add_argument("--size", type=int, default=DEFAULT_CELL)
+    render.add_argument("--atlas", default=DEFAULT_ATLAS)
+    render.add_argument("--yaw", type=float, default=DEFAULT_YAW, help="camera yaw in degrees")
+    render.add_argument(
+        "--pitch", type=float, default=DEFAULT_PITCH, help="camera pitch in degrees"
+    )
+    render.add_argument(
+        "--padding", type=float, default=DEFAULT_PADDING, help="framing headroom factor"
+    )
     render.add_argument("--json", action="store_true")
 
     capability = commands.add_parser(

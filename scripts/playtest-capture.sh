@@ -72,7 +72,8 @@ seen=""
 # already made once, reading numbers off a stale log and believing them.
 newest_log() {
     local candidate
-    candidate="$(ls -t "$logs"/output_log_client_*.txt 2>/dev/null | head -1)" || return 1
+    candidate="$(find "$logs" -maxdepth 1 -name 'output_log_client_*.txt' -printf '%T@ %p\n' 2>/dev/null |
+        sort -rn | head -n 1 | cut -d' ' -f2-)" || return 1
     [[ -n "$candidate" ]] || return 1
     [[ "$(stat -c %Y "$candidate")" -ge "$started" ]] || return 1
     printf '%s\n' "$candidate"

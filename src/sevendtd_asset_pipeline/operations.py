@@ -27,7 +27,12 @@ from .config import BUNDLE_SOURCES, DEFAULT_BUNDLE_SOURCE
 from .docs import topics
 from .errors import PipelineError
 from .generators import describe
+from .icon_check import DEFAULT_ATLAS_ROOT, DEFAULT_CELL
+from .icon_render import DEFAULT_ATLAS, DEFAULT_PADDING, DEFAULT_PITCH, DEFAULT_YAW
+from .mesh_check import DEFAULT_MAX_EXTENT
 from .prompts import KEYS, KINDS, kinds
+from .sound_check import DEFAULT_MAX_SECONDS
+from .unity_release import DEFAULT_PLATFORM
 
 # Cost classes, so a caller can decide what to run in a tight loop.
 INSTANT = "instant"  # no I/O beyond the mod directory
@@ -149,7 +154,7 @@ _DEFINITIONS: tuple[Operation, ...] = (
         parameters=_schema(
             {
                 "mesh": PATH_PARAM,
-                "max_extent": {"type": "number", "default": 16.0},
+                "max_extent": {"type": "number", "default": DEFAULT_MAX_EXTENT},
                 "strict": {"type": "boolean", "default": False},
             },
             required=["mesh"],
@@ -195,7 +200,7 @@ _DEFINITIONS: tuple[Operation, ...] = (
         parameters=_schema(
             {
                 "clip": PATH_PARAM,
-                "max_seconds": {"type": "number", "default": 30.0},
+                "max_seconds": {"type": "number", "default": DEFAULT_MAX_SECONDS},
                 "require_mono": {"type": "boolean", "default": True},
             },
             required=["clip"],
@@ -213,8 +218,8 @@ _DEFINITIONS: tuple[Operation, ...] = (
         "see them.",
         parameters=_schema(
             {
-                "atlas_root": {"type": "string", "default": "UIAtlases"},
-                "cell": {"type": "integer", "default": 160},
+                "atlas_root": {"type": "string", "default": DEFAULT_ATLAS_ROOT},
+                "cell": {"type": "integer", "default": DEFAULT_CELL},
             }
         ),
         returns="IconReport: atlas_dir, icons[], resolved, external, problems, notes, ok",
@@ -230,11 +235,11 @@ _DEFINITIONS: tuple[Operation, ...] = (
             {
                 "prefab": {"type": "string", "description": "bundle stem or Assets/... path"},
                 "output": PATH_PARAM,
-                "size": {"type": "integer", "default": 160},
-                "atlas": {"type": "string", "default": "ItemIconAtlas"},
-                "yaw": {"type": "number", "default": 208.0},
-                "pitch": {"type": "number", "default": 8.0},
-                "padding": {"type": "number", "default": 1.22},
+                "size": {"type": "integer", "default": DEFAULT_CELL},
+                "atlas": {"type": "string", "default": DEFAULT_ATLAS},
+                "yaw": {"type": "number", "default": DEFAULT_YAW},
+                "pitch": {"type": "number", "default": DEFAULT_PITCH},
+                "padding": {"type": "number", "default": DEFAULT_PADDING},
             },
             required=["prefab"],
         ),
@@ -258,7 +263,10 @@ _DEFINITIONS: tuple[Operation, ...] = (
         summary="Resolve the official Unity editor download for a revision: changeset, "
         "archive URL, and the MD5 each download must match.",
         parameters=_schema(
-            {"version": {"type": "string"}, "platform": {"type": "string", "default": "LINUX"}}
+            {
+                "version": {"type": "string"},
+                "platform": {"type": "string", "default": DEFAULT_PLATFORM},
+            }
         ),
         returns="Release: version, changeset, editor_url, editor_md5, "
         "windows_mono_url, windows_mono_md5",

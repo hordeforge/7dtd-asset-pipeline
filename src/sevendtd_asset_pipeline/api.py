@@ -51,18 +51,25 @@ from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, run_doctor
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
-from .icon_check import IconReport, check_icons
-from .icon_render import RenderResult, render_icon
-from .mesh_check import MeshReport, check_mesh
+from .icon_check import DEFAULT_ATLAS_ROOT, DEFAULT_CELL, IconReport, check_icons
+from .icon_render import (
+    DEFAULT_ATLAS,
+    DEFAULT_PADDING,
+    DEFAULT_PITCH,
+    DEFAULT_YAW,
+    RenderResult,
+    render_icon,
+)
+from .mesh_check import DEFAULT_MAX_EXTENT, MeshReport, check_mesh
 from .operations import Operation
 from .operations import get as get_operation
 from .prompts import PromptResult
 from .prompts import render as render_prompt
 from .references import AssetReference, discover_references, manifest_assets
 from .scaffold import initialize
-from .sound_check import SoundReport, check_sound
+from .sound_check import DEFAULT_MAX_SECONDS, SoundReport, check_sound
 from .status import Status, collect_status
-from .unity_release import Release, fetch_release
+from .unity_release import DEFAULT_PLATFORM, Release, fetch_release
 from .unityfs import BundleInfo, inspect_bundle
 from .validation import ValidationReport, validate_bundle, validate_mod
 
@@ -216,7 +223,7 @@ class Pipeline:
         reject_disabled_modules(Path(log))
 
     def check_mesh(
-        self, mesh: Path | str, max_extent: float = 16.0, strict: bool = False
+        self, mesh: Path | str, max_extent: float = DEFAULT_MAX_EXTENT, strict: bool = False
     ) -> MeshReport:
         """Check an authored mesh before Unity import. Needs trimesh."""
         return check_mesh(Path(mesh), max_extent, strict)
@@ -233,12 +240,17 @@ class Pipeline:
         return check_texture(Path(texture), matches, tolerance, tileable, max_tile_ratio)
 
     def check_sound(
-        self, clip: Path | str, max_seconds: float = 30.0, require_mono: bool = True
+        self,
+        clip: Path | str,
+        max_seconds: float = DEFAULT_MAX_SECONDS,
+        require_mono: bool = True,
     ) -> SoundReport:
         """Measure a WAV clip and reject unshippable formats. No dependencies."""
         return check_sound(Path(clip), max_seconds, require_mono)
 
-    def check_icons(self, atlas_root: str = "UIAtlases", cell: int = 160) -> IconReport:
+    def check_icons(
+        self, atlas_root: str = DEFAULT_ATLAS_ROOT, cell: int = DEFAULT_CELL
+    ) -> IconReport:
         """Check the mod's atlas PNGs and its CustomIcon keys. Icons are not bundle members."""
         return check_icons(self.config.mod_root, self.config.config_dir, atlas_root, cell)
 
@@ -255,7 +267,9 @@ class Pipeline:
         """Classify the newest client log (or a given one)."""
         return _client_log(path, log_dir, mod_name, self.config.game_dir)
 
-    def unity_release(self, version: str | None = None, platform: str = "LINUX") -> Release:
+    def unity_release(
+        self, version: str | None = None, platform: str = DEFAULT_PLATFORM
+    ) -> Release:
         """Resolve the official editor download for a revision. Uses the network."""
         return fetch_release(version or project_unity_version(self.config.unity_project), platform)
 
@@ -265,11 +279,11 @@ class Pipeline:
         self,
         prefab: str,
         output: Path | str | None = None,
-        size: int = 160,
-        atlas: str = "ItemIconAtlas",
-        yaw: float = 208.0,
-        pitch: float = 8.0,
-        padding: float = 1.22,
+        size: int = DEFAULT_CELL,
+        atlas: str = DEFAULT_ATLAS,
+        yaw: float = DEFAULT_YAW,
+        pitch: float = DEFAULT_PITCH,
+        padding: float = DEFAULT_PADDING,
     ) -> RenderResult:
         """Render a bundle prefab into an atlas icon. Starts a real editor."""
         return render_icon(self.config, prefab, output, size, atlas, yaw, pitch, padding)

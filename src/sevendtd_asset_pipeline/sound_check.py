@@ -24,6 +24,8 @@ from pathlib import Path
 from .errors import PipelineError
 
 FULL_SCALE = 32768.0
+# Shared with the published schema (operations.py) and the CLI (--max-seconds).
+DEFAULT_MAX_SECONDS = 30.0
 # 7DTD ships 44.1 kHz content and Unity resamples anything else on import; the
 # other two are common source rates that survive that path without surprises.
 EXPECTED_RATES = (22050, 44100, 48000)
@@ -106,7 +108,7 @@ def _silence_edges(mono: array.array[int], rate: int, floor: float) -> tuple[flo
 
 def check_sound(
     clip: Path,
-    max_seconds: float = 30.0,
+    max_seconds: float = DEFAULT_MAX_SECONDS,
     require_mono: bool = True,
     silence_floor: float = 0.002,
 ) -> SoundReport:

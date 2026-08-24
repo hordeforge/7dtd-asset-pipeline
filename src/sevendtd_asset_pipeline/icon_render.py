@@ -38,6 +38,13 @@ from .unity_process import run_unity
 
 SUPERSAMPLE = 4
 MINIMUM_COVERAGE = 0.02
+# The camera and framing a rendered icon is accepted at, shared with the
+# published schema (operations.py) and the CLI (--size/--atlas/--yaw/--pitch/
+# --padding). `DEFAULT_ATLAS` is the inventory atlas those angles were tuned on.
+DEFAULT_ATLAS = "ItemIconAtlas"
+DEFAULT_YAW = 208.0
+DEFAULT_PITCH = 8.0
+DEFAULT_PADDING = 1.22
 
 
 @dataclass(frozen=True)
@@ -105,10 +112,10 @@ def render_icon(
     prefab: str,
     output: Path | str | None = None,
     size: int = DEFAULT_CELL,
-    atlas: str = "ItemIconAtlas",
-    yaw: float = 208.0,
-    pitch: float = 8.0,
-    padding: float = 1.22,
+    atlas: str = DEFAULT_ATLAS,
+    yaw: float = DEFAULT_YAW,
+    pitch: float = DEFAULT_PITCH,
+    padding: float = DEFAULT_PADDING,
     *,
     timeout: int = 900,
 ) -> RenderResult:

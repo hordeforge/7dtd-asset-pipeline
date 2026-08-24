@@ -23,6 +23,9 @@ from .errors import PipelineError
 RELEASE_API = "https://services.api.unity.com/unity/editor/release/v1/releases"
 CHANGESET = re.compile(r"/download_unity/([0-9a-f]+)/")
 WINDOWS_MONO_MODULE = "windows-mono"
+# The host platform the editor is downloaded for, shared with the published
+# schema (operations.py) and the CLI (--platform).
+DEFAULT_PLATFORM = "LINUX"
 # Hoisted so the request construction stays on one line.
 _JSON_HEADERS = {"Accept": "application/json"}
 
@@ -62,7 +65,9 @@ def _md5(integrity: object) -> str | None:
     return digest if re.fullmatch(r"[0-9a-f]{32}", digest) else None
 
 
-def parse_release(payload: dict[str, object], version: str, platform: str = "LINUX") -> Release:
+def parse_release(
+    payload: dict[str, object], version: str, platform: str = DEFAULT_PLATFORM
+) -> Release:
     # The body is whatever json.loads produced, so its shape is asserted, not
     # assumed: a changed or hostile response must fail as the module's own
     # PipelineError, not as an AttributeError past every handler.
@@ -116,7 +121,7 @@ def parse_release(payload: dict[str, object], version: str, platform: str = "LIN
     )
 
 
-def fetch_release(version: str, platform: str = "LINUX", timeout: int = 30) -> Release:
+def fetch_release(version: str, platform: str = DEFAULT_PLATFORM, timeout: int = 30) -> Release:
     query = urllib.parse.urlencode({"version": version, "limit": 1})
     # RELEASE_API is a fixed https URL; only the urlencoded query varies.
     request = urllib.request.Request(f"{RELEASE_API}?{query}", headers=_JSON_HEADERS)  # noqa: S310

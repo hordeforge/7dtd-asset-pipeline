@@ -27,6 +27,9 @@ from .capabilities import extra_install, has_capability
 from .errors import PipelineError
 
 GLTF_SUFFIXES = (".glb", ".gltf")
+# Shared with the published schema (operations.py) and the CLI (--max-extent),
+# so the three surfaces cannot disagree on what "too large" is.
+DEFAULT_MAX_EXTENT = 16.0
 # `skipped` gains exactly one entry per lane: trimesh's absence from
 # `_measure`, and either gltf_validator's absence or the not-a-glTF scope
 # note. Two entries therefore mean no lane produced any evidence at all.
@@ -142,7 +145,9 @@ def _validate_gltf(path: Path, report: MeshReport, strict: bool) -> None:
         report.problems.append(f"glTF validation reported {report.gltf_warnings} warning(s)")
 
 
-def check_mesh(path: Path, max_extent: float = 16.0, strict: bool = False) -> MeshReport:
+def check_mesh(
+    path: Path, max_extent: float = DEFAULT_MAX_EXTENT, strict: bool = False
+) -> MeshReport:
     path = path.resolve()
     if not path.is_file():
         raise PipelineError(f"no such mesh: {path}")

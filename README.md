@@ -103,11 +103,12 @@ Ubuntu package 1.2):
 scripts/install-tools.sh --with-vkd3d-source
 ```
 
-What is **not** built yet is lit and transparent shading, keyword variants, and
-graphics APIs beyond d3d11 and OpenGLCore — an unlit opaque pass is what ships,
-and an unlit prop draws at full brightness at midnight.
-[Improvements](docs/status/improvements.md) tracks it and
-[Running without Unity](docs/bundles/no-unity.md) is the full page.
+What is **not** built yet is lit and transparent shading and keyword variants —
+an unlit opaque pass is what ships, and an unlit prop draws at full brightness
+at midnight. A Vulkan sub-program rides along when `glslangValidator` and the
+SMOL-V encoder are installed, but the client still renders it magenta; only
+Metal has none at all. [Improvements](docs/status/improvements.md) tracks both
+and [Running without Unity](docs/bundles/no-unity.md) is the full page.
 
 Where an editor *does* exist, it is a checker rather than a builder — this is
 the one offline check in the project that the project did not also author:
@@ -463,9 +464,10 @@ See [examples/ExampleMod](examples/ExampleMod) for a minimal consumer layout.
 ## Scope
 
 This project synthesizes, builds and validates mod-owned asset bundles. Its
-shader lane emits one unlit opaque d3d11 pass; lit and transparent shading,
-keyword variants and other graphics APIs are unbuilt — a gap with a known
-route, not a claim about what is possible. It does not ship copyrighted game
+shader lane emits one unlit opaque pass per platform — Direct3D 11 and
+OpenGL Core that render, plus an optional Vulkan one the client does not accept
+yet; lit and transparent shading and keyword variants are unbuilt — a gap with
+a known route, not a claim about what is possible. It does not ship copyrighted game
 assets, edit the game install, automate Unity account credentials, guarantee
 visual quality, or claim that an offline parse proves runtime compatibility.
 

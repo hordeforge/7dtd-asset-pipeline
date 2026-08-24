@@ -523,9 +523,11 @@ rule this repository knew.
 
 Two things the runtime did **not** establish, and no offline gate can:
 
-- **it is a load, not a look.** Nobody has yet seen this shader draw. The test
-  cube carries no UVs, so its texture samples one texel; a stretched or
-  upside-down texture passes every check above.
+- **it is a load, not a look.** At this measurement nobody had yet seen this
+  shader draw; the first live-client look has since happened and signed off
+  against an orientation card ([blockers.md](../status/blockers.md)). The rule
+  stands either way: every check above passes identically on a stretched or
+  upside-down texture.
 - **it is not 7DTD.** A Unity editor is not the game. Acceptance still ends at
   `shamway acceptance-provider`, a fresh client, and a person looking.
 

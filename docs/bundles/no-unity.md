@@ -283,7 +283,9 @@ it if it were.
 
 ### The shader it writes, and the ones it does not
 
-One pass: an unlit textured pass, d3d11 and OpenGLCore, no keyword variants,
+One pass: an unlit textured pass, d3d11 and OpenGLCore — plus Vulkan when
+`glslangValidator` and the SMOL-V encoder are installed (see the caveat at the
+end of this page) — no keyword variants,
 no hardware tiers. The HLSL is compiled by
 [`vkd3d-compiler`](https://gitlab.winehq.org/wine/vkd3d) to the same shader
 model 4 `DXBC` the game's own sub-programs carry, and wrapped in the container
@@ -298,9 +300,11 @@ them still wants `unity` or `external`. **An unlit prop is unaffected by
 scene lighting** — it draws at full brightness at midnight, which is a look
 decision, not a defect.
 
-**The shader does not run yet, and this page said otherwise.** The lines below
-were measured under `-nographics`, where there is no device to compile a
-sub-program against, so `isSupported` is not a verdict:
+**The shader runs. Getting here took a chain of verdicts, each one retracted by
+a stronger measurement, and they are kept so the next reader knows which
+numbers mean nothing.** The lines below were measured under `-nographics`,
+where there is no device to compile a sub-program against, so `isSupported` is
+not a verdict:
 
 ```text
 VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=1     # -nographics: meaningless
@@ -323,7 +327,7 @@ runtime's point of view nothing had failed.
 **A load is still not a look.** `covered=38.8%` says pixels were written. It
 does not say the prop looks right.
 
-**And a look happened, in a live client, and it is still invisible there.**
+**And a look happened next, in a live client, and it was invisible there.**
 On 2026-08-24 a human placed the block in a running 7 Days to Die client and
 reported: it places, it stacks, it can be walked through, and **nothing is
 drawn**. So the numbers above are true and *insufficient*, in the exact way
@@ -342,23 +346,27 @@ Graphics API: OpenGL 4.6 (Core Profile) Mesa 26.2.1-arch3.1 (shader level 5.0)
 ```
 
 The block **renders, and collides**. Under the client's default d3d11-through-
-DXVK it is invisible. One variable changed between the two runs.
+DXVK it was invisible at that moment. One variable changed between the two
+runs.
 
 So the bundle, the material, the prefab, the mesh, the block XML and the
 class-142 wiring are all **correct in the game**, not merely in an editor, and
-the fault is confined to the **d3d11 sub-program** this writer emits. That also
-makes `-force-glcore` the cheapest way to separate "my asset is wrong" from
-"the d3d11 lane is wrong" for anyone hitting an invisible prop.
+the fault is confined to the **d3d11 sub-program** this writer emits.
 
-The two candidates that were open before that run:
-
-- **The graphics API.** `verify-bundle --draw` on a Linux host creates
-  **OpenGLCore**. The client runs **d3d11**, translated by **DXVK** under
-  Proton. They are different sub-programs out of the same writer, and the
-  render-state fix - which is platform-independent - was verified only on the
-  first.
-- **The collider.** The prefab carried none, which is why the block could be
-  walked through. Fixed separately; it was never a rendering problem.
+**Found and fixed the same day: a constant-buffer layout, not a broken
+sub-program.** This writer's `UnityPerFrame` omitted Unity's four ambient
+float4s, so every later member packed 64 bytes early — `unity_MatrixVP`
+compiled to offset 208 while the runtime writes it at 272, and the vertex
+shader read the tail of `unity_MatrixInvV` as its view-projection matrix,
+putting every vertex nowhere. Nothing logged a word. Fixed by reproducing
+Unity's member order byte for byte; `assert_cbuffer_layout` now reads the
+compiled bytecode's RDEF chunk on every synthesize and refuses any declared
+offset the bytecode does not read. Both OpenGL Core and Direct3D 11 have since
+been confirmed by eye in a live client — the orientation-card sign-off is
+recorded in [blockers.md](../status/blockers.md) — so an invisible prop on a
+default client is no longer the shipped writer's known failure mode. When it
+does happen, `-force-glcore` still separates "my asset is wrong" from "the
+d3d11 lane is wrong" at the cost of one launch.
 
 What is *not* the explanation, each checked rather than assumed: the deployed
 bundle does carry the fix (`colMask` `name='<noninit>'`, read back out of the
@@ -375,8 +383,10 @@ Get the real answer with a graphics device:
 xvfb-run -a shamway verify-bundle --draw
 ```
 
-That is the engine's own loader and its own verdict, and it is still **a load,
-not a look**: nobody has yet watched this shader draw. See
+That is the engine's own loader and its own verdict, and it remains **a load,
+not a look**: the verdict that counts happens in the live client, by a person,
+and the first one is recorded in
+[blockers.md](../status/blockers.md). See
 [research-provenance.md](../research/research-provenance.md).
 
 ```bash
@@ -412,7 +422,7 @@ was read out of a real artifact rather than guessed:
 Provenance for each of those is in
 [research-provenance.md](../research/research-provenance.md); the design record, the prior
 art surveyed, and what is not attempted are in
-[offline-bundle-builder.md](../adrs/0001-synthesize-bundles-without-an-editor.md).
+[ADR 0001, synthesize bundles without an editor](../adrs/0001-synthesize-bundles-without-an-editor.md).
 
 ### What it does not write yet, and why none of it is a law
 
@@ -426,7 +436,13 @@ is written here. What is left is **inside** the shader lane, not outside it:
 | transparency and cut-out | a second blend state and a render-queue tag, both already representable in `_shader_state` |
 | normal mapping | tangents in the mesh lane, plus a second texture property |
 | instancing and multi-pass | more than one `m_Passes` entry, and the instancing variant flag |
-| Vulkan and Metal sub-programs | `glslangValidator` for SPIR-V; the container is the same |
+| Metal sub-programs | a Metal source lane; the blob container is already proven by the other three platforms |
+
+Vulkan sub-programs are **written, not yet accepted**: when `glslangValidator`
+and the SMOL-V encoder are present the bundle carries platform 18, and a client
+running it renders Unity's magenta error shader. Every elimination is measured
+in [Improvements](../status/improvements.md); what is left is Unity's
+two-stage parameter record shape.
 
 A prop that needs one of those still uses `unity` or `external`, and neither is
 second-class. Everything else does not.

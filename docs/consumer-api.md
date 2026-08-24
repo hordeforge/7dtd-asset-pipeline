@@ -43,7 +43,7 @@ returns, and three fields a caller needs before running anything:
 | Field | Meaning |
 |---|---|
 | `cost` | `instant`, `fast`, `seconds`, or `minutes` — the worst case, so `build` declares `minutes` for the editor it *may* start. With the default `bundle_source = "synthesized"` it starts none and finishes in milliseconds |
-| `writes` | whether it modifies files; `build`, `pack`, `stage`, `init`, `render_icon`, `acceptance_provider`, `client_deploy`, and `client_launch` do |
+| `writes` | whether it modifies files; `build`, `pack`, `stage`, `init`, `render_icon`, `review_audio`, `acceptance_provider`, `client_deploy`, and `client_launch` do |
 | `needs_config` | whether it must run inside a scaffolded modlet |
 | `capabilities` | optional tools it requires, e.g. `["UnityPy"]` |
 
@@ -162,7 +162,7 @@ machine**. Only three ever do, and `build` only when the mod set
 | `build --probe` | no | only if `bundle_source = "unity"` | no | prove the environment; stages nothing |
 | `build` | no | only if `bundle_source = "unity"` | **yes** | build or synthesize, gate, stage bundle + manifest |
 | `stage BUNDLE [--manifest M] [--log L]` | no | **no** | **yes** | gate and stage a bundle an editor elsewhere built |
-| `pack SOURCE OUTPUT` | no | **no** | **yes** | synthesize a .unity3d from textures, clips, text files, meshes, materials and shaders |
+| `pack SOURCE OUTPUT` | no | **no** | **yes** | synthesize a .unity3d from textures, clips, text files and meshes — each mesh becomes a prefab with its material and shader |
 | `verify-bundle [BUNDLE]` | no | yes | no | load it in a real runtime and report every asset |
 | `init MOD_ROOT` | no | no | **yes** | scaffold into a modlet, or `--adopt` its existing Unity project |
 | `capabilities [--json]` | no | no | no | optional capabilities and how to install them |
@@ -175,8 +175,8 @@ machine**. Only three ever do, and `build` only when the mod set
 | `generate NAME [ARGS]` | no | Blender for `mesh` | **yes** (writes what you ask for) | run a packaged asset generator |
 | `prompt KIND --subject …` | no | no | no | render a house-style image prompt and its lane |
 | `docs [TOPIC]` | no | no | no | print packaged documentation |
-| `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance) |
-| `client where\|deploy\|launch\|log\|mute\|unmute\|capture\|disable-discord` | no | no | **deploy/launch** write outside the modlet; **capture** writes `.local/acceptance/` inside it | fresh-client acceptance plumbing |
+| `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized, playtest-capture) |
+| `client where\|deploy\|hold\|launch\|log\|mute\|unmute\|capture\|disable-discord` | no | no | **deploy/launch** write outside the modlet; **capture** writes `.local/acceptance/` inside it; `hold` runs another command under the deploy lock | fresh-client acceptance plumbing |
 | `schema` / `call NAME` / `serve` | no | no | per operation | the machine-readable surface |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |
 
@@ -463,8 +463,8 @@ if has_capability("UnityPy"):
 | `collect_status(config)` | `Status`; the non-raising orientation call |
 | `run_doctor(config)` / `failed(checks)` | `list[Check]` and its verdict |
 | `run_build(config, probe=False)` | build, gate, stage; returns the bundle path |
-| `stage_bundle(config, bundle, manifest=None, log=None)` | gate and stage a bundle built elsewhere |
-| `pack_directory(source_dir, bundle_name, unity_version)` | synthesize a bundle and its manifest, with no editor |
+| `build.stage_bundle(config, bundle, manifest=None, log=None)` | gate and stage a bundle built elsewhere (`from sevendtd_asset_pipeline.build import stage_bundle`) |
+| `bundle_writer.pack_directory(source_dir, bundle_name, unity_version)` | synthesize a bundle and its manifest, with no editor (`from sevendtd_asset_pipeline.bundle_writer import pack_directory`) |
 | `validate_mod(config)` | `ValidationReport` over bundle and XML |
 | `validate_bundle(path, expected_version=None)` | one bundle's gates |
 | `inspect_bundle(path)` | `BundleInfo` without any gate |

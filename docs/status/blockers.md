@@ -83,12 +83,12 @@ has no bundle-load, incompatibility, wrong-name, shader, or particle errors.
 
 **Blocks:** any claim that `shamway render-icon` works. Its Python side is
 exercised — prefab resolution, the missing-editor and missing-Pillow errors,
-the coverage gate, and the atlas-cell check — and since 2026-08-23 all four
+the coverage gate, and the atlas-cell check — and since 2026-08-23 all five
 editor scripts **compile** against Unity 2022.3.62f2's own assemblies
 (`scripts/compile-editor-scripts.sh`, run by `make check`; it immediately
 found and fixed a hard-obsolete `AudioImporter.preloadAudioData`). On the same
 day a `shamway build --probe` with Unity 2022.3.62f2 opened a freshly
-scaffolded project, compiled all four scripts with no `error CS` line,
+scaffolded project, compiled all five scripts with no `error CS` line,
 executed `BundleBuilder`, and produced a class-142 bundle. A non-probe
 `shamway build` on the same throwaway mod, with one `[ShamwayPreBuild]`
 generator, then proved the hook end to end — `pre-build: 1 generator(s)`,
@@ -216,36 +216,38 @@ collider, so blocks could be walked through; and the mesh carried Blender's
 cube-cross atlas UVs, so a single albedo arrived as six fragments and then, once
 that was fixed, a quarter turn out of true.
 
-**Still the open blocker: the d3d11 sub-program, and nothing else.**
-A human placed the block in a running client: invisible
+**Live client, 2026-08-24: invisible on the default graphics API, visible under
+`-force-glcore`.** A human placed the block in a running client: invisible
 under the default d3d11-through-DXVK, and **visible, textured and solid** when
 the same client is relaunched with `-force-glcore`. One variable between the
-two runs.
+two runs. That cleared the bundle, the material, the prefab, the mesh, the
+block XML and the class-142 wiring **in the game itself** rather than in an
+editor, and confined the fault to the d3d11 code path.
 
-That clears the bundle, the material, the prefab, the mesh, the block XML and
-the class-142 wiring **in the game itself** rather than in an editor, and
-confines the fault to the d3d11 code path. It also gives every consumer a
-one-flag triage for an invisible prop:
-
-```bash
-shamway client launch --mod-name MyMod -- -force-glcore
-```
-
-Visible under that flag means the asset is fine and the d3d11 lane is not.
-Full account:
+**Resolved the same day: the d3d11 constant-buffer layout, not the sub-program's
+validity.** This writer's `UnityPerFrame` omitted Unity's four ambient float4s,
+so every later member packed 64 bytes early: `unity_MatrixVP` compiled to
+offset 208 while the runtime writes it at 272, and the vertex shader read the
+tail of `unity_MatrixInvV` as its view-projection matrix, putting every vertex
+nowhere. Fixed by reproducing Unity's member order byte for byte, and gated
+offline by `assert_cbuffer_layout`, which reads the compiled bytecode's RDEF
+chunk on every synthesize and refuses any declared offset the bytecode does not
+read. Both OpenGL Core and Direct3D 11 have since been confirmed by eye in a
+live client ([improvements.md](improvements.md)); what is left of the graphics-
+API matrix is Vulkan's parameter records, tracked there. Full account:
 [reports/2026-08-24-synthesized-shader-does-not-run.md](../reports/2026-08-24-synthesized-shader-does-not-run.md).
 
-**Blocks:** the claim that any of it is *right*. **Nothing synthesized past a
-texture and a clip has been in front of a person, and no synthesized prefab has
-been drawn at all.** A live `LoadAsset<GameObject>` returning a prefab with
-`renderers=1` says the engine built the object graph; it does not say one pixel
-was rasterized, and the case would pass identically on a prop that draws
-nowhere. Three failures are live and none is visible offline or in the suite: a
-mesh whose winding or up-axis is wrong loads perfectly and looks mirrored or
+**Blocks:** the claim that anything beyond that one prop is *right*. A live
+`LoadAsset<GameObject>` returning a prefab with `renderers=1` says the engine
+built the object graph; it does not say one pixel was rasterized where it
+should be, and every case passes identically on a prop that draws nowhere.
+Three failures are live and none is visible offline or in the suite: a mesh
+whose winding or up-axis is wrong loads perfectly and looks mirrored or
 face-down, which is exactly what the writer's conversions exist to prevent; an
-unlit pass whose constant-buffer offsets are wrong draws the geometry in the
-wrong place rather than failing; and a clay-rendered icon either reads as an
-item at 160 px beside vanilla art or reads as a grey blob.
+unlit pass whose constant-buffer offsets drift draws the geometry in the wrong
+place rather than failing (`assert_cbuffer_layout` closes the one measured shape
+of this); and a clay-rendered icon either reads as an item at 160 px beside
+vanilla art or reads as a grey blob.
 
 A deployable mod for exactly this look is at hand: `ShamwayPropProof` places
 `shamwayPropProofBlock`, whose model is the synthesized prefab — asymmetric at

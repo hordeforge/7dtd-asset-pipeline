@@ -204,10 +204,10 @@ REGISTRY: tuple[_Spec, ...] = (
         name="glslangValidator",
         kind="command",
         probe="glslangValidator",
-        unlocks=("the writer's own GLSL check for the OpenGLCore sub-program",),
-        purpose="compile the unlit shader's GLSL halves offline and report the line and "
-        "reason when they are wrong - the runtime reports only that the shader is "
-        "unsupported, and a prop using it draws nothing",
+        unlocks=("the SPIR-V a Vulkan sub-program carries, alongside the SMOL-V encoder",),
+        purpose="compile this writer's HLSL to SPIR-V for shader platform 18 the way "
+        "Unity itself does. A host with the SMOL-V encoder but without it refuses to "
+        "synthesize a shader rather than silently dropping that platform",
         install="shamway script install-tools",
     ),
     _Spec(

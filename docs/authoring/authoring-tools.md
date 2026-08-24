@@ -466,7 +466,7 @@ integration. This table says which is which, so nobody has to guess — and so
 | **AssetRipper / AssetStudio / UABE** | **reference only, by design** — read the game to learn from it, never to copy out of it |
 | **python-fsb5** | **wired** — `generate audio from-bank`, and the independent reader that grades the hand-written FSB5 banks |
 | **vkd3d-compiler** | **wired** — compiles the editorless shader's pass to SM4 `DXBC`; the prefab lane degrades to a bare `Mesh` without it |
-| **glslang** | **not wired** — would add the SPIR-V sub-programs a Vulkan platform carries; the same container already handles d3d11 and OpenGLCore |
+| **glslang** | **wired** — `glslangValidator` compiles the same HLSL to the SPIR-V a Vulkan sub-program carries, the route Unity itself uses; with the SMOL-V encoder the bundle then carries platform 18 |
 
 ## Recommended agent-ready stack
 

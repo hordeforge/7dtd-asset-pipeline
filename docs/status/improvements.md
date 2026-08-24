@@ -116,13 +116,14 @@ the AGENTS.md rule that came out of it.
 | `Shader` (class 48) | **built** — `bundle_writer.shader`, `shader_blob.py` |
 | `Material` (class 21) | **built** — `bundle_writer.material` |
 | prefabs in the source-directory lane | **built** — `bundle_writer.prefab_objects`; a mesh file becomes prefab + mesh + material, sharing one shader |
-| runtime evidence | **withdrawn** — `isSupported = true` was measured under `-nographics`, where there is no device and the value is not a verdict. With a real device: `isSupported=False`, `_MainTex=<unbound>`. The shader **does not run** |
+| runtime evidence | **superseded twice over** — the `-nographics` `isSupported = true` first recorded here was withdrawn, then a real device measured `isSupported=True` with pixels drawn (`covered=38.8%`), then a live client was looked at: the prop is visible, textured and solid |
 
-**What is built is the container, not a working shader.** The `Shader` and
-`Material` objects serialize, load, and wire to the prefab by name — a runtime
-reads the whole chain. The pass itself does not compile on a real device, so a
-prop using it draws nothing in 7DTD. That is the open end of this row, and it
-is the next thing to measure with `shamway verify-bundle --draw`.
+**What is built is a working shader on two of the three desktop platforms.**
+The `Shader` and `Material` objects serialize, load, wire to the prefab by
+name, and draw: signed off by eye in a live client on OpenGL Core, and on
+Direct3D 11 after the constant-buffer layout fix recorded in
+[blockers.md](blockers.md). The remaining graphics-API gap is Vulkan's
+parameter records — [measured at the bottom of this page](#the-vulkan-sub-program-and-what-is-left-of-it).
 
 **What is deliberately not built.** The pass is unlit, textured, opaque and
 variant-free. Lit, shadowed, transparent, cut-out, normal-mapped, instanced
@@ -130,16 +131,20 @@ and multi-pass shaders need keyword variants and constant buffers this writer
 does not declare; a mod that needs one wants `unity` or `external`. "Shaders
 work" would be a wider claim than the evidence supports.
 
+**Settled since this entry was written:**
+
+1. **whether 7DTD's own rendering path accepts this pass.** It does. The
+   prop places, collides, and renders in a live client — see
+   [blockers.md](blockers.md) for the isolation that proved it and the bug the
+   look caught;
+2. **what it looks like.** A human checked it against an orientation card
+   (arrow up, bar along the bottom, stripes left and right, `R` readable): no
+   rotation, no mirroring, no stretch. The mesh lane's UVs are exercised too —
+   a generated box carries a whole texture, the right way up.
+
 **Still genuinely unknown** (unknown, not impossible):
 
-1. **whether 7DTD's own rendering path accepts this pass.** A Unity editor
-   loading it is not the game drawing it. This is the next measurement, and
-   `shamway acceptance-provider` plus a client launch is how it is taken;
-2. **what it looks like.** Nobody has watched this shader draw. An unlit pass
-   ignores scene lighting by construction, and the mesh lane's UV handling is
-   unexercised — the test cube has no UVs, so its texture samples one texel.
-   A stretched, mirrored or upside-down texture passes every gate here;
-3. header byte 4 of the program-data header (UAV-related), and the meaning of
+1. header byte 4 of the program-data header (UAV-related), and the meaning of
    the three empty `m_PlayerSubPrograms` groups. Neither blocks this lane;
    both are recorded upstream as not decoded.
 
@@ -148,9 +153,10 @@ player carries six shaders and all are internal, and the game's own bundles
 embed theirs `m_Shader.m_FileID: 0`, same-file. Authoring made borrowing
 unnecessary rather than disproving it.
 
-Until it is built, a mod with a prefab or a material uses `bundle_source =
-"unity"` or `"external"`, and the documentation says **unbuilt**, never
-impossible.
+A mod with a prefab or a material needs no editor: `bundle_source =
+"synthesized"` writes this shader itself. What stays on the other side of the
+line is everything [deliberately not built](#4b-the-editorless-writers-shader-scope)
+above, plus the Vulkan parameter records below.
 
 ## 5. No property-based testing of the parser
 

@@ -39,6 +39,7 @@ or an operational failure and its recovery
 ## Inventory
 
 <!-- inventory:adr:start -->
+- [ADR 0006 — Render an icon from the mesh with Blender when there is no editor](0006-render-icons-from-the-mesh-with-blender.md) — Accepted
 - [ADR 0005 — The editor install is resolved from the game's revision, not pinned](0005-editor-install-is-resolved-not-pinned.md) — Accepted
 - [ADR 0004 — One operation registry behind every surface, and no network server](0004-one-operation-registry-and-no-network-server.md) — Accepted
 - [ADR 0003 — One bundle per config](0003-one-bundle-per-config.md) — Accepted

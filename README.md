@@ -369,6 +369,7 @@ consuming mod reads them with no checkout of this repository, and
 - [Art direction](docs/authoring/art-direction.md) — the house style, prompt patterns, and the icon lanes
 - [Agent workflows](docs/authoring/agent-workflows.md) — reproducible asset-as-code patterns
 - [Authoring tools](docs/authoring/authoring-tools.md) — the researched OSS toolchain and which gate each belongs to
+- [ADR 0006: icons from the mesh with Blender](docs/adrs/0006-render-icons-from-the-mesh-with-blender.md) — the editorless icon lane and its honest downside
 - [Sound](docs/authoring/audio.md) — synthesis, `sounds.xml`, and why a loaded clip can be silent
 - [Visual effects](docs/authoring/vfx.md) — budgets, LOD tiers, and the two silent material failures
 

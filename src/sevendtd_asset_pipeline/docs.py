@@ -46,6 +46,10 @@ TOPICS: dict[str, tuple[str, str]] = {
         "adrs/0001-synthesize-bundles-without-an-editor.md",
         "the editorless writer: format research, what shipped, and the shader wall",
     ),
+    "mesh-icon": (
+        "adrs/0006-render-icons-from-the-mesh-with-blender.md",
+        "the editorless icon lane, and why it renders clay rather than the in-game look",
+    ),
     "consumer-api": ("consumer-api.md", "schema, call, serve, and the Python facade"),
     "game-integration": ("game-integration.md", "XML URIs, icons, audio, inheritance, packaging"),
     "art-direction": (

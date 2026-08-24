@@ -26,13 +26,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import secrets
 import shutil
 import subprocess
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from . import atomic
 from .errors import PipelineError
 
 MANIFEST_NAME = "manifest.json"
@@ -169,18 +169,14 @@ def _write_manifest(root: Path, entries: list[dict[str, object]]) -> Path:
     """Replace the manifest atomically, so an interrupted run cannot truncate it.
 
     The temporary name carries this process's pid plus a random suffix and is
-    unlinked on every exit path, like every other atomic writer in this
-    package (`client._write_lock`, `build._atomic_copy`, the generators): a
-    fixed `<name>.tmp` is shared by two concurrent writers truncating one file,
-    and a body half-written when a run dies must never survive as state.
+    unlinked on every exit path (`atomic.staged_write`): a fixed `<name>.tmp`
+    is shared by two concurrent writers truncating one file, and a body
+    half-written when a run dies must never survive as state.
     """
     path = Path(root) / MANIFEST_NAME
-    temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
-    try:
-        temporary.write_text(json.dumps(entries, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
+    body = json.dumps(entries, indent=2, sort_keys=True) + "\n"
+    with atomic.staged_write(path) as staged:
+        staged.write_text(body, encoding="utf-8")
     return path
 
 

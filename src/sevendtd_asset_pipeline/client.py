@@ -57,6 +57,7 @@ from datetime import UTC, datetime
 from importlib.util import find_spec
 from pathlib import Path
 
+from . import atomic
 from .capture import DEFAULT_ROOT, capture, read_manifest, record_existing
 from .errors import PipelineError
 from .references import read_mod_name
@@ -258,15 +259,9 @@ def _write_lock(path: Path, fields: dict[str, str]) -> None:
     bytes, or the second `os.replace` renames a file the first already moved
     and dies, taking the heartbeat down with it.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
     body = "".join(f"{key}={value}\n" for key, value in fields.items())
-    temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
-    try:
-        temporary.write_text(body, encoding="utf-8")
-        os.replace(temporary, path)
-    finally:
-        with contextlib.suppress(OSError):
-            temporary.unlink()
+    with atomic.staged_write(path) as staged:
+        staged.write_text(body, encoding="utf-8")
 
 
 @contextmanager

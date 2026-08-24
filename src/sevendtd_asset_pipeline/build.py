@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import os
 import shutil
-import tempfile
 from pathlib import Path
 
+from . import atomic
 from .bundle_writer import pack_directory, write_artifact
 from .capabilities import capabilities
 from .config import PipelineConfig
@@ -82,15 +82,8 @@ def reject_disabled_modules(log: Path) -> None:
 
 
 def _atomic_copy(source: Path, destination: Path) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{destination.name}.", dir=destination.parent)
-    os.close(descriptor)
-    temporary_path = Path(temporary)
-    try:
-        shutil.copy2(source, temporary_path)
-        temporary_path.replace(destination)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+    with atomic.staged_write(destination) as staged:
+        shutil.copy2(source, staged)
 
 
 def expected_unity_version(config: PipelineConfig) -> str:

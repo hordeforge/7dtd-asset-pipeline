@@ -18,10 +18,9 @@ ImageMagick's ecosystem, or `uv pip install pillow`).
 from __future__ import annotations
 
 import argparse
-import os
-import tempfile
 from pathlib import Path
 
+from .. import atomic
 from ..capabilities import extra_install
 
 MISSING = None
@@ -44,17 +43,8 @@ def require_imaging() -> None:
 
 
 def save_atomically(image: Image.Image, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".png", dir=path.parent
-    )
-    os.close(descriptor)
-    temporary_path = Path(temporary)
-    try:
-        image.save(temporary_path, "PNG")
-        temporary_path.replace(path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+    with atomic.staged_write(path) as staged:
+        image.save(staged, "PNG")
 
 
 def build_icon(

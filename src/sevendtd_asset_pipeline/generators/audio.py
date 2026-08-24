@@ -20,13 +20,13 @@ from __future__ import annotations
 import argparse
 import array
 import math
-import os
 import random
 import struct
 import sys
-import tempfile
 import wave
 from pathlib import Path
+
+from .. import atomic
 
 # The largest magnitude a 16-bit sample can hold, so clamped writes never
 # overflow 'h'. Not the dBFS full-scale reference `check-sound` divides by
@@ -58,25 +58,17 @@ def read_wav(path: Path) -> tuple[array.array[int], int, int]:
 
 
 def write_wav(path: Path, samples: array.array[int], rate: int, channels: int = 1) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    os.close(descriptor)
-    temporary_path = Path(temporary)
-    try:
-        with wave.open(temporary, "wb") as handle:
-            handle.setnchannels(channels)
-            handle.setsampwidth(2)
-            handle.setframerate(rate)
-            # WAV holds little-endian samples; 'h' is native order. Swap a copy,
-            # never the caller's array: it stays in host order for arithmetic.
-            payload = samples
-            if sys.byteorder == "big":
-                payload = array.array("h", samples)
-                payload.byteswap()
-            handle.writeframes(payload.tobytes())
-        temporary_path.replace(path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+    with atomic.staged_write(path) as staged, wave.open(str(staged), "wb") as handle:
+        handle.setnchannels(channels)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        # WAV holds little-endian samples; 'h' is native order. Swap a copy,
+        # never the caller's array: it stays in host order for arithmetic.
+        payload = samples
+        if sys.byteorder == "big":
+            payload = array.array("h", samples)
+            payload.byteswap()
+        handle.writeframes(payload.tobytes())
 
 
 def describe(path: Path, samples: array.array[int], channels: int, rate: int) -> None:

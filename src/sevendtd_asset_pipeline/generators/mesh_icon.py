@@ -40,6 +40,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from .. import atomic
+
 MINIMUM_COVERAGE = 0.02
 
 BLENDER_SCRIPT = """
@@ -157,10 +159,11 @@ def _downscale(rendered: Path, target: Path, size: int) -> float:
         alpha = image.getchannel("A")
         # One byte per pixel in mode "L", so the raw buffer is the alpha list.
         coverage = sum(1 for value in alpha.tobytes() if value > 8) / float(size * size)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        staged = target.with_suffix(target.suffix + ".tmp")
-        image.save(staged, format="PNG")
-    staged.replace(target)
+        # The format is named explicitly because PIL infers nothing from a
+        # temporary name; the publish is atomic, so a run that dies midway
+        # leaves no half-written cell or stray dotfile in the atlas directory.
+        with atomic.staged_write(target) as staged:
+            image.save(staged, "PNG")
     return coverage
 
 

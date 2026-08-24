@@ -59,12 +59,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import shutil
 import sys
-import tempfile
 from pathlib import Path
 
+from .. import atomic
 from ..capabilities import extra_install
 
 MISSING = None
@@ -91,17 +90,8 @@ def require_imaging() -> None:
 
 
 def save_atomically(array: np.ndarray, path: Path, mode: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".png", dir=path.parent
-    )
-    os.close(descriptor)
-    temporary_path = Path(temporary)
-    try:
-        Image.fromarray(array, mode).save(temporary_path, "PNG", optimize=True)
-        temporary_path.replace(path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+    with atomic.staged_write(path) as staged:
+        Image.fromarray(array, mode).save(staged, "PNG", optimize=True)
 
 
 def promote(path: Path, also: Path | None) -> Path | None:

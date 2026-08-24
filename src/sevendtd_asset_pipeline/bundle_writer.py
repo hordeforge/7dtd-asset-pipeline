@@ -37,15 +37,13 @@ proves construction, never acceptance.
 from __future__ import annotations
 
 import hashlib
-import os
 import struct
-import tempfile
 from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 
-from . import block_compress, shader_blob, transcode
+from . import atomic, block_compress, shader_blob, transcode
 from .capabilities import has_capability, require_capability
 from .errors import PipelineError
 
@@ -1362,6 +1360,24 @@ IGNORED_NAMES = {".gitkeep", ".gitignore"}
 IGNORED_SUFFIXES = {".meta"}
 
 
+def _is_mesh_source(path: Path) -> bool:
+    return path.suffix.lower() in MESH_SUFFIXES
+
+
+def _prefab_lane(sources: list[Path]) -> bool:
+    """Whether mesh sources become prefab groups rather than bare `Mesh` objects.
+
+    One rule for every reader, because `synthesized_members` has to predict
+    exactly what `pack_directory` will emit: the lane needs at least one mesh
+    source **and** a shader compiler. Without the compiler this writes the
+    bare `Mesh` it always did rather than failing — a mesh-only bundle is
+    still reachable through `LoadAsset<Mesh>`, and refusing to pack a mod that
+    packed yesterday would be a worse answer than packing less of it.
+    `shamway capabilities` and `doctor` are where the difference shows.
+    """
+    return any(map(_is_mesh_source, sources)) and has_capability("vkd3d-compiler")
+
+
 def collect_sources(source_dir: Path) -> list[Path]:
     """Every buildable file below `source_dir`, sorted for a reproducible build."""
     if not source_dir.is_dir():
@@ -1488,21 +1504,9 @@ def write_artifact(path: Path, payload: bytes | str) -> None:
 
     A plain ``write_bytes`` that dies midway (disk full, Ctrl+C) leaves a
     truncated artifact at the final path, indistinguishable from a complete one
-    until something fails to load it. The unique temporary name and the
-    unlink-on-every-exit are the package's atomic-write pattern, shared with
-    `build._atomic_copy`, `client._write_lock`, `capture._write_manifest` and
-    the generators.
+    until something fails to load it.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data = payload.encode("utf-8") if isinstance(payload, str) else payload
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    os.close(descriptor)
-    temporary_path = Path(temporary)
-    try:
-        temporary_path.write_bytes(data)
-        temporary_path.replace(path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+    atomic.write(path, payload)
 
 
 def synthesized_members(source_dir: Path) -> list[tuple[str, str]]:
@@ -1521,8 +1525,7 @@ def synthesized_members(source_dir: Path) -> list[tuple[str, str]]:
     for, and `LoadAsset<Shader>` is not how anything reaches it.
     """
     sources = collect_sources(source_dir)
-    meshes = [path for path in sources if path.suffix.lower() in MESH_SUFFIXES]
-    prefabs = bool(meshes) and has_capability("vkd3d-compiler")
+    prefabs = _prefab_lane(sources)
     members: list[tuple[str, str]] = []
     for path in sources:
         kind = ASSET_KINDS[path.suffix.lower()]
@@ -1552,19 +1555,18 @@ def pack_directory(
     it, which is the pair `build` stages together.
     """
     sources = collect_sources(source_dir)
-    meshes = [path for path in sources if path.suffix.lower() in MESH_SUFFIXES]
+    # The prefab lane needs a shader compiler; see `_prefab_lane` for why the
+    # fallback is packing less rather than refusing.
+    prefabs = _prefab_lane(sources)
+    objects = [
+        object_for(path, compress_textures)
+        for path in sources
+        if not (prefabs and _is_mesh_source(path))
+    ]
+    meshes = [path for path in sources if _is_mesh_source(path)]
     texture_stems = {
         path.stem for path in sources if ASSET_KINDS.get(path.suffix.lower()) == "Texture2D"
     }
-    # The prefab lane needs a shader compiler. Without one this writes the
-    # bare `Mesh` it always did rather than failing: a mesh-only bundle is
-    # still reachable through `LoadAsset<Mesh>`, and refusing to pack a mod
-    # that packed yesterday would be a worse answer than packing less of it.
-    # `shamway capabilities` and `doctor` are where the difference shows.
-    prefabs = bool(meshes) and has_capability("vkd3d-compiler")
-    objects = [
-        object_for(path, compress_textures) for path in sources if not (prefabs and path in meshes)
-    ]
     if prefabs:
         for path in meshes:
             objects.extend(prefab_objects(path, texture_stems))

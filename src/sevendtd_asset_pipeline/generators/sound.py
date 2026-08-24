@@ -35,13 +35,13 @@ from __future__ import annotations
 import argparse
 import array
 import math
-import os
 import random
 import shutil
 import sys
-import tempfile
 import wave
 from pathlib import Path
+
+from .. import atomic
 
 RATE = 44100
 
@@ -545,7 +545,6 @@ def beep(hz: float, count: int, generator: random.Random) -> list[float]:
 
 def write_wav(path: Path, samples: list[float], rate: int = RATE) -> None:
     """Write through a temporary file so a failed run leaves no half-written clip."""
-    path.parent.mkdir(parents=True, exist_ok=True)
     pcm = array.array(
         "h", (max(-PCM_PEAK, min(PCM_PEAK, int(value * PCM_PEAK))) for value in samples)
     )
@@ -553,18 +552,11 @@ def write_wav(path: Path, samples: list[float], rate: int = RATE) -> None:
     # host would write byte-swapped samples without this.
     if sys.byteorder == "big":
         pcm.byteswap()
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    os.close(descriptor)
-    temporary_path = Path(temporary)
-    try:
-        with wave.open(temporary, "wb") as handle:
-            handle.setnchannels(1)
-            handle.setsampwidth(2)
-            handle.setframerate(rate)
-            handle.writeframes(pcm.tobytes())
-        temporary_path.replace(path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+    with atomic.staged_write(path) as staged, wave.open(str(staged), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(pcm.tobytes())
 
 
 def describe(path: Path, samples: list[float], rate: int, seed: int) -> None:

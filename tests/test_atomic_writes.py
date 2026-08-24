@@ -5,8 +5,9 @@ replace, and every one of them must unlink that temporary on *every* exit path:
 a body half-written when a run dies is otherwise a stray dotfile forever, and
 in the atlas directory it is clutter next to the very cells `check-icons`
 reads. Three writers had drifted to fixed names with no failure-path cleanup;
-these tests pin the house pattern (`client._write_lock`, `build._atomic_copy`,
-the four generators) so the next writer copies it rather than the drift.
+the pattern now lives once in `sevendtd_asset_pipeline.atomic`, and these tests
+pin the writers (`client._write_lock`, `build._atomic_copy`, the generators,
+both icon downscales) so the next writer copies it rather than the drift.
 """
 
 from __future__ import annotations
@@ -107,6 +108,50 @@ class IconDownscaleTests(unittest.TestCase):
             self.assertRaises(OSError),
         ):
             _downscale(self.source, self.destination, 4)
+        self.assertEqual([], dotfiles(self.destination.parent))
+
+
+@unittest.skipUnless(has_capability("pillow"), "mesh-icon downscale needs Pillow")
+class MeshIconDownscaleTests(unittest.TestCase):
+    """The editorless lane photographs through Blender, then downscales with
+    the same lifecycle: its cell must publish atomically too, or a run dying
+    mid-write leaves a truncated atlas cell that `check-icons` then reads."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        from PIL import Image
+
+        self.source = self.root / "rendered.png"
+        Image.new("RGBA", (8, 8), (0, 0, 0, 255)).save(self.source)
+        self.destination = self.root / "UIAtlases" / "ItemIconAtlas" / "cell.png"
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_a_downscaled_cell_is_published_with_no_temporary_left(self) -> None:
+        from sevendtd_asset_pipeline.generators.mesh_icon import _downscale
+
+        coverage = _downscale(self.source, self.destination, 4)
+        self.assertEqual(1.0, coverage)
+        from PIL import Image
+
+        with Image.open(self.destination) as written:
+            self.assertEqual((4, 4), written.size)
+        self.assertEqual([], dotfiles(self.destination.parent))
+
+    def test_a_failed_publish_cleans_its_temporary_and_leaves_no_cell(self) -> None:
+        from sevendtd_asset_pipeline.generators.mesh_icon import _downscale
+
+        def exploding(self: Path, target: object) -> Path:
+            raise ReplaceError(28, "No space left on device")
+
+        with (
+            mock.patch.object(Path, "replace", exploding),
+            self.assertRaises(OSError),
+        ):
+            _downscale(self.source, self.destination, 4)
+        self.assertFalse(self.destination.exists())
         self.assertEqual([], dotfiles(self.destination.parent))
 
 

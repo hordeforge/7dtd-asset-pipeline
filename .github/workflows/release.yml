@@ -61,6 +61,15 @@ jobs:
 
       - run: uv build
 
+      # A CycloneDX 1.5 inventory of exactly what the committed uv.lock
+      # resolves to for the released wheel: every optional extra, no dev
+      # tooling. Attached beside the artifacts so consumers and vulnerability
+      # scanners can see what shipped without parsing the wheel. uv produces
+      # it from the lockfile itself, so no new dependency and nothing fetched.
+      - run:
+          uv export --preview-features sbom-export --format cyclonedx1.5
+          --no-dev --all-extras -o dist/sbom.cdx.json
+
       - name: Create the GitHub Release
         shell: bash
         env:
@@ -69,6 +78,6 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          gh release create "$TAG" dist/*.whl dist/*.tar.gz \
+          gh release create "$TAG" dist/*.whl dist/*.tar.gz dist/sbom.cdx.json \
             --title "Shamway / Asset Pipeline ${VERSION}" \
             --notes "HordeForge Release ${TAG}: Write, gate and validate Unity asset bundles for 7 Days to Die mods, with no Unity editor."

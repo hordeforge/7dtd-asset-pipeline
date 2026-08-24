@@ -23,7 +23,15 @@ classifiers = [
 # Deep bundle inspection: proves which objects and components actually
 # survived serialization. Pin the minor version; UnityPy documents that minor
 # releases may break its API.
-inspect = ["UnityPy>=1.20,<2"]
+#
+# lz4 and texture2ddecoder are imported directly by this repository
+# (shader_blob.py compresses every shader blob with lz4.block; the suite's
+# independent block-compression cross-check decodes with texture2ddecoder) but
+# today arrive only as UnityPy's own dependencies. Declaring them here keeps
+# the extra self-contained if UnityPy ever swaps one out: without a
+# declaration that swap would silently break shader writing and silently stop
+# running the cross-check, both discovered at build time instead of install time.
+inspect = ["UnityPy>=1.20,<2", "lz4>=1", "texture2ddecoder>=1"]
 # The Python authoring lanes in src/sevendtd_asset_pipeline/generators/.
 authoring = ["pillow>=10", "numpy>=1.24"]
 # Pre-Unity mesh checks for the Blender/OpenSCAD lane.
@@ -32,7 +40,15 @@ mesh = ["trimesh>=4"]
 # the independent decoder that keeps the audio lane from being graded only
 # by the code that wrote it.
 audio = ["fsb5>=1"]
-all = ["UnityPy>=1.20,<2", "pillow>=10", "numpy>=1.24", "trimesh>=4", "fsb5>=1"]
+all = [
+  "UnityPy>=1.20,<2",
+  "lz4>=1",
+  "texture2ddecoder>=1",
+  "pillow>=10",
+  "numpy>=1.24",
+  "trimesh>=4",
+  "fsb5>=1",
+]
 
 # Lint and type-check versions are load-bearing: verdicts change between
 # releases, so every checkout and every CI job must agree on exactly one.

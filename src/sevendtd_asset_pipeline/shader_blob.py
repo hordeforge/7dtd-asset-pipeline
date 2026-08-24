@@ -949,7 +949,8 @@ def compress_lz4(data: bytes) -> bytes:
         import lz4.block
     except ImportError as exc:  # pragma: no cover - capability gated
         raise PipelineError(
-            "the lz4 module is required to compress a shader blob; it ships with the UnityPy extra."
+            "the lz4 module is required to compress a shader blob; "
+            "it is declared with UnityPy in the inspect extra."
         ) from exc
     return bytes(lz4.block.compress(data, mode="high_compression", store_size=False))
 

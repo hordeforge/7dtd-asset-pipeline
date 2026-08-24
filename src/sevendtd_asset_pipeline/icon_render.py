@@ -25,11 +25,11 @@ because a real resampler is what keeps thin geometry from breaking into dashes.
 from __future__ import annotations
 
 import os
-import secrets
 import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from . import atomic
 from .capabilities import require_capability
 from .config import PipelineConfig
 from .errors import PipelineError
@@ -89,19 +89,10 @@ def _downscale(source: Path, destination: Path, size: int) -> float:
 
     with Image.open(source) as image:
         resized = image.convert("RGBA").resize((size, size), Image.LANCZOS)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        # The format is named explicitly because the temporary name ends in
-        # `.png.<pid>.<hex>`, and PIL infers nothing from that; the unique name
-        # and the unlink-on-every-path are the package's atomic-write pattern
-        # (`client._write_lock`, `build._atomic_copy`, the generators).
-        temporary = destination.with_name(
-            f".{destination.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}.png"
-        )
-        try:
-            resized.save(temporary, "PNG")
-            temporary.replace(destination)
-        finally:
-            temporary.unlink(missing_ok=True)
+        # The format is named explicitly because PIL infers nothing from a
+        # temporary name.
+        with atomic.staged_write(destination) as staged:
+            resized.save(staged, "PNG")
         counts = resized.getchannel("A").histogram()
     opaque: int = sum(counts[9:])
     return opaque / float(size * size)

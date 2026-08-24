@@ -79,7 +79,7 @@ old shape.
 ### A complete generator, proven in an editor
 
 The editor script below is the one this repository ran through a real
-`shamway build` on Unity 2022.3.62f2 (see [blockers.md](blockers.md)); every
+`shamway build` on Unity 2022.3.62f2 (see [blockers.md](../status/blockers.md)); every
 helper it calls executed and every state it sets was read back out of the
 built `.mat` and the bundle. It lives in a folder of the mod's own — it
 **must** be under an `Editor/` directory, because `UnityEditor` APIs are
@@ -260,7 +260,7 @@ client load, and no missing asset. Human rendering review remains mandatory.
 
 `GeneratedAsset.StandardMaterial`, `EmissiveMaterial`, `Tile`, and
 `ParticleMaterial` set every one of those states; the `.mat` grep in
-[vfx.md](vfx.md) reads them back.
+[vfx.md](../authoring/vfx.md) reads them back.
 
 ## Compiling the editor scripts without an editor
 

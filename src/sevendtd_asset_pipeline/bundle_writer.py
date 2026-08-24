@@ -7,7 +7,7 @@ CI, a headless agent host, a laptop that will never install several gigabytes
 of Unity.
 
 What it emits is the structure Unity itself emits, established by dissecting
-the bundles the installed game ships (`docs/research-provenance.md`):
+the bundles the installed game ships (`docs/research/research-provenance.md`):
 
     UnityFS header, format 8, revision <the game's own>
       block table: one uncompressed block
@@ -24,7 +24,7 @@ bundle becomes a silent load failure. The same library then serializes each
 object by walking that tree, so the field order, array shape and alignment
 rules are the ones a reader of Unity's format already agrees on.
 
-The proof boundary is narrow and stated in `docs/no-unity.md`: this writes
+The proof boundary is narrow and stated in `docs/bundles/no-unity.md`: this writes
 containers and objects for a bounded set of classes. It does not replace
 Unity's importers, its shader compiler, or its prefab serialization, and an
 offline parse of what it wrote proves construction, never acceptance.
@@ -385,7 +385,7 @@ def build_bundle(
 # One constructor per class this backend can write. Each returns the object in
 # the shape its type tree expects; the values that are not obvious were read
 # back out of a bundle a real editor built from the same source file, so the
-# defaults are Unity's, not invented (docs/research-provenance.md).
+# defaults are Unity's, not invented (docs/research/research-provenance.md).
 
 # FMOD's sample-rate table, indexed by the sample header's 4-bit field. A rate
 # outside it needs a frequency chunk; the pipeline rejects it instead and says

@@ -27,7 +27,7 @@ exist for, on the other half of the Config lane.
 `Data/Config/*.xml` read-only, applies each mod patch with ElementTree +
 the engine's own match semantics, and fails on any `<patch>` selector that
 matches zero nodes. Needs the decompiled patch-application rules recorded in
-[research-provenance.md](research-provenance.md) first, so the dry-run
+[research-provenance.md](../research/research-provenance.md) first, so the dry-run
 implements what the engine does rather than what seems natural. Until then:
 grep every XPath you author against `$SEVEN_DAYS_TO_DIE_DIR/Data/Config/`
 by hand.
@@ -87,7 +87,7 @@ dependency in the core: it belongs in a dev extra.
 
 ## 6. Tool additions worth their install
 
-The researched stack in [authoring-tools.md](authoring-tools.md) covers the
+The researched stack in [authoring-tools.md](../authoring/authoring-tools.md) covers the
 lanes; these are the additions the current gaps argue for:
 
 | Tool | Lane | What it adds here |

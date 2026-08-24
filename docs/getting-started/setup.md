@@ -13,7 +13,7 @@ scripts/install-tools.sh --check --with-authoring --with-unity-prereqs
 install through `pacman`, `apt-get`, `dnf`, or `zypper`. Only Python is
 required for the CLI itself; `--with-unity-prereqs` covers the editor
 installer's needs, `--with-authoring` the optional art tooling in
-[Authoring tools](authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
+[Authoring tools](../authoring/authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
 and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy) —
 `--with-desktop-capture` a screenshot tool (`grim` on Wayland, `maim` on X11)
 so `shamway client capture` can record what a person looked at during
@@ -95,7 +95,7 @@ Record how that revision was verified in the mod's documentation.
 Skip this whole section if this machine does not build the bundle. A mod that
 declares `bundle_source = "none"` ships no bundle and needs no editor; a mod
 that declares `"external"` has its bundle built elsewhere and gated here with
-`shamway stage`. [Running without Unity](no-unity.md) covers both, including
+`shamway stage`. [Running without Unity](../bundles/no-unity.md) covers both, including
 what the build host does instead.
 
 The editor revision must match the installed game exactly, and **Windows Build
@@ -216,7 +216,7 @@ export UNITY_EDITOR="/absolute/path/to/Unity/Hub/Editor/2022.3.62f2/Editor/Unity
 On Windows, `UNITY_EDITOR` ends in `Editor/Unity.exe`. On macOS it points at
 the executable inside the editor application bundle. Do not commit either
 path. The pipeline reads these two variables and the two `shamway client`
-overrides in [configuration.md](configuration.md); it reads no `.local.env`
+overrides in [configuration.md](../configuration.md); it reads no `.local.env`
 or other dotenv file, so a mod that keeps one must export it itself.
 
 `doctor` compares what `UNITY_EDITOR -version` reports against the project's
@@ -259,4 +259,4 @@ It also exposes license failures that `Unity -version` cannot.
   copy arbitrary shared objects into the project.
 - The build target is configurable, but `StandaloneWindows64` is the supported
   and proven default. macOS Metal shader support can require a separate asset
-  strategy; see [Game integration](game-integration.md).
+  strategy; see [Game integration](../game-integration.md).

@@ -24,7 +24,7 @@ repository layout.
 
 ## Quick start
 
-[Quickstart](docs/quickstart.md) is the complete path from a bare machine to a
+[Quickstart](docs/getting-started/quickstart.md) is the complete path from a bare machine to a
 validated bundle. The short form follows; everything after it is detail.
 
 Install host tooling (`pacman`, `apt-get`, `dnf`, or `zypper`; `--check` installs
@@ -79,7 +79,7 @@ builder:
 shamway verify-bundle
 ```
 
-[Running without Unity](docs/no-unity.md) is the full page, including what the
+[Running without Unity](docs/bundles/no-unity.md) is the full page, including what the
 gates are worth on a bundle this tool wrote. The rest of this quick start
 builds the bundle with an editor.
 
@@ -245,7 +245,7 @@ shamway client capture --list
 - an installed 7 Days to Die client as read-only version authority.
 
 Only for building a bundle, and only on the machine that builds it (see
-[Running without Unity](docs/no-unity.md)):
+[Running without Unity](docs/bundles/no-unity.md)):
 
 - a legal, activated Unity Editor matching the installed game's own bundle
   revision;
@@ -257,27 +257,27 @@ environment variables by this project.
 
 ## Documentation
 
-- [Quickstart](docs/quickstart.md) — bare machine to a validated bundle
+- [Quickstart](docs/getting-started/quickstart.md) — bare machine to a validated bundle
 - [Mod repo layout](docs/mod-repo-layout.md) — what lives in the mod, what lives here
-- [Setup](docs/setup.md) — Python, game path, Unity, licensing, Windows module
-- [Running without Unity](docs/no-unity.md) — synthesizing a bundle here, a bundle built elsewhere, and a mod with none
-- [Offline bundle builder](docs/offline-bundle-builder.md) — the format research, what shipped, and what the shader wall is
-- [Bundle generation](docs/bundle-generation.md) — the complete build path
+- [Setup](docs/getting-started/setup.md) — Python, game path, Unity, licensing, Windows module
+- [Running without Unity](docs/bundles/no-unity.md) — synthesizing a bundle here, a bundle built elsewhere, and a mod with none
+- [Offline bundle builder](docs/bundles/offline-bundle-builder.md) — the format research, what shipped, and what the shader wall is
+- [Bundle generation](docs/bundles/bundle-generation.md) — the complete build path
 - [Configuration](docs/configuration.md) — every `.shamway.toml` key
 - [Game integration](docs/game-integration.md) — XML URIs, icons, audio, clients
 - [Consumer interfaces](docs/consumer-api.md) — schema, call, serve, Python API
-- [Blockers](docs/blockers.md) — what still needs a human, a licence, or a client
+- [Blockers](docs/status/blockers.md) — what still needs a human, a licence, or a client
 - [Contributing](CONTRIBUTING.md) — proof boundaries and the uv toolchain
 - [Validation](docs/validation.md) — each gate and its proof boundary
-- [Art direction](docs/art-direction.md) — the house style, prompt patterns, and the two icon lanes
-- [Sound](docs/audio.md) — synthesis, `sounds.xml`, and why a loaded clip can be silent
-- [Visual effects](docs/vfx.md) — budgets, LOD tiers, and the two silent material failures
-- [Authoring tools](docs/authoring-tools.md) — researched OSS tools for humans and agents
-- [Agent workflows](docs/agent-workflows.md) — reproducible asset-as-code patterns
-- [Troubleshooting](docs/troubleshooting.md) — failure messages and root causes
+- [Art direction](docs/authoring/art-direction.md) — the house style, prompt patterns, and the two icon lanes
+- [Sound](docs/authoring/audio.md) — synthesis, `sounds.xml`, and why a loaded clip can be silent
+- [Visual effects](docs/authoring/vfx.md) — budgets, LOD tiers, and the two silent material failures
+- [Authoring tools](docs/authoring/authoring-tools.md) — researched OSS tools for humans and agents
+- [Agent workflows](docs/authoring/agent-workflows.md) — reproducible asset-as-code patterns
+- [Troubleshooting](docs/runbooks/troubleshooting.md) — failure messages and root causes
 - [Architecture](docs/architecture.md) — design, boundaries, and trust model
-- [Research provenance](docs/research-provenance.md) — where the 7DTD-specific rules came from
-- [Release checklist](docs/release-checklist.md) — artifact and live acceptance
+- [Research provenance](docs/research/research-provenance.md) — where the 7DTD-specific rules came from
+- [Release checklist](docs/runbooks/release-checklist.md) — artifact and live acceptance
 - [AGENTS.md](AGENTS.md) — the contract for coding agents working here
 
 See [examples/ExampleMod](examples/ExampleMod) for a minimal consumer layout.

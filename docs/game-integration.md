@@ -27,7 +27,7 @@ half of that behavior.
 ### How the engine resolves it
 
 The chain, decompiled from V 3.1.0 b14 with `ilspycmd` (see
-[research-provenance.md](research-provenance.md)):
+[research-provenance.md](research/research-provenance.md)):
 
 1. `DataLoader.ParseDataPathIdentifier` runs `ModManager.PatchModPathString`
    **first**, which rewrites `@modfolder(Name):` to the loaded mod's real path.
@@ -178,7 +178,7 @@ the AudioSource prefab's `maxDistance`, and `DistantFadeStart` defaults to `-1`
 (never), so a `DistantClip` authored without setting it never plays. A
 long-range event needs a deliberately authored source rather than a
 grenade-scale vanilla one. The whole lane, with the gates and the listening
-checklist, is in [audio.md](audio.md).
+checklist, is in [audio.md](authoring/audio.md).
 
 ## Models and item state
 

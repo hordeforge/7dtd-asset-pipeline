@@ -12,7 +12,7 @@ def serialized_file(
 
     `has_type_tree` emits, after every type entry, one 32-byte tree node plus a
     four-byte string buffer and an empty dependency table — the shape the
-    shipped game's bundles carry (`docs/research-provenance.md`: nodes are 32
+    shipped game's bundles carry (`docs/research/research-provenance.md`: nodes are 32
     bytes, type trees present). Every real bundle takes that branch; the
     default keeps the older, shorter fixtures byte-stable.
     """

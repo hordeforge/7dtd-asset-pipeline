@@ -13,7 +13,7 @@ tooling only. It owns no art, no mod, and no game install.
 
 Read [README.md](README.md) and the relevant page under [docs/](docs/) before
 changing behavior. [docs/architecture.md](docs/architecture.md) explains the
-trust boundaries; [docs/research-provenance.md](docs/research-provenance.md)
+trust boundaries; [docs/research/research-provenance.md](docs/research/research-provenance.md)
 records where each 7DTD-specific rule came from.
 
 ## Working on this repository
@@ -58,7 +58,7 @@ it — in **whichever** repository the change lands, this one or a sibling. A ne
 command goes in this file's command table and in the page that owns its
 subject; a new operation goes in `operations.OPERATIONS`; a new doc page goes
 in `docs.TOPICS`; a new host script goes in `scripts.SCRIPTS`; a new engine
-fact goes in [docs/research-provenance.md](docs/research-provenance.md) with
+fact goes in [docs/research/research-provenance.md](docs/research/research-provenance.md) with
 the tool that produced it. An undocumented capability is one the next session
 will rebuild from scratch, and an undocumented gate is one it will delete.
 
@@ -119,7 +119,7 @@ no Unity, and no game install.
 
 These exist because each one caught a real failure. Removing one needs
 stronger evidence than the evidence that introduced it, recorded in
-`docs/research-provenance.md`.
+`docs/research/research-provenance.md`.
 
 | Gate | What it catches |
 |---|---|
@@ -158,8 +158,8 @@ worth when the artifact and the checker share an author. Never drop one of
 those lines from a report — an unrun or by-construction gate reads exactly like
 a passed one — and **never call a synthesized bundle "built"**: that word
 carries a claim about who serialized it.
-[docs/no-unity.md](docs/no-unity.md) owns those paths and
-[docs/offline-bundle-builder.md](docs/offline-bundle-builder.md) the writer's
+[docs/bundles/no-unity.md](docs/bundles/no-unity.md) owns those paths and
+[docs/bundles/offline-bundle-builder.md](docs/bundles/offline-bundle-builder.md) the writer's
 design and its shader wall.
 
 - Changes to `bundle_writer.py` need the same evidence `unityfs.py` does —
@@ -167,7 +167,7 @@ design and its shader wall.
   which parses Unity's format with none of this repository's code. Adding an
   asset class means adding it to `ASSET_KINDS`, giving it a constructor whose
   field values came from a real artifact rather than from a wiki, and saying in
-  `docs/research-provenance.md` which artifact. Never invent a field layout: a
+  `docs/research/research-provenance.md` which artifact. Never invent a field layout: a
   class without a type tree for the target revision is refused, deliberately.
 - `shamway verify-bundle` is the strongest offline evidence available for a
   synthesized bundle, because it is the engine's own loader. When an editor is
@@ -195,7 +195,7 @@ design and its shader wall.
 
 ## Using the pipeline in a mod
 
-Full walkthrough: [docs/quickstart.md](docs/quickstart.md). The short form:
+Full walkthrough: [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md). The short form:
 
 - `scripts/install-tools.sh --with-unity-prereqs` — host packages
 - `scripts/bootstrap` — the CLI
@@ -301,14 +301,14 @@ fast, read-only, and need neither Unity nor the network.
 
 ## Asset authoring
 
-[docs/agent-workflows.md](docs/agent-workflows.md) defines the reproducible
+[docs/authoring/agent-workflows.md](docs/authoring/agent-workflows.md) defines the reproducible
 asset-as-code patterns (mesh, texture, icon, audio, VFX lanes) and the evidence
 packet a release candidate must carry.
-[docs/authoring-tools.md](docs/authoring-tools.md) lists the researched
+[docs/authoring/authoring-tools.md](docs/authoring/authoring-tools.md) lists the researched
 open-source tools and which gate each one belongs to.
-[docs/art-direction.md](docs/art-direction.md) is the style contract for
+[docs/authoring/art-direction.md](docs/authoring/art-direction.md) is the style contract for
 generated and drawn 2D assets — read it before writing any generation prompt.
-[docs/audio.md](docs/audio.md) and [docs/vfx.md](docs/vfx.md) own the sound and
+[docs/authoring/audio.md](docs/authoring/audio.md) and [docs/authoring/vfx.md](docs/authoring/vfx.md) own the sound and
 particle lanes, including the runtime behaviours that make a correctly built
 asset silent or invisible.
 
@@ -322,7 +322,7 @@ rather than starting a new pattern.
 ready image-generation prompt — the asset-type line, the key colour, the
 negative list, and the commands that consume the model's output. Use it rather
 than improvising a prompt; improvising is the specific failure
-[docs/art-direction.md](docs/art-direction.md) opens with. Adding a prompt kind
+[docs/authoring/art-direction.md](docs/authoring/art-direction.md) opens with. Adding a prompt kind
 means adding it to `prompts.KINDS`, and it is published in `shamway schema`.
 
 The offline gates end at a fresh client and a human look. `shamway client

@@ -2,7 +2,7 @@
 # Install the host tooling this pipeline builds and inspects assets with.
 #
 # Only Python 3.11+ and a game-matched Unity editor are pipeline requirements.
-# Everything else here supports the authoring lanes in docs/authoring-tools.md
+# Everything else here supports the authoring lanes in docs/authoring/authoring-tools.md
 # and is opt-in, so a build host never installs desktop art packages it has no
 # use for.
 set -euo pipefail
@@ -68,7 +68,7 @@ WITH --with-research
   dotnet (8 SDK)     Hosts ilspycmd; installed as a global dotnet tool into
                      ~/.dotnet/tools, which must be on PATH
   ilspycmd           Decompiles Assembly-CSharp.dll: the named source every
-                     new engine fact in docs/research-provenance.md cites
+                     new engine fact in docs/research/research-provenance.md cites
   monodis            Mono's IL disassembler, the second opinion on a method
                      body (and mcs, for compiling a throwaway check)
 
@@ -76,7 +76,7 @@ SUPPORTED PACKAGE MANAGERS
   pacman, apt-get, dnf, zypper. On anything else the script refuses to guess
   package names; install what --check lists by hand.
 
-This script never handles Unity credentials or licenses. See docs/setup.md.
+This script never handles Unity credentials or licenses. See docs/getting-started/setup.md.
 HELP
 }
 

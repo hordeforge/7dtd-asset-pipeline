@@ -53,7 +53,7 @@ class TypeTreeTests(BundleCase):
     """The branch every real bundle takes: type trees present.
 
     The shipped game's own bundles carry `has_type_tree = 1`
-    (docs/research-provenance.md, dissected from `Data/Bundles/…/Entities`),
+    (docs/research/research-provenance.md, dissected from `Data/Bundles/…/Entities`),
     so the per-type tree skip is the production path of the class-ID gate —
     and until these fixtures it was the one path no test ever read.
     """

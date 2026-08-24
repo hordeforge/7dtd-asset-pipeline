@@ -15,7 +15,7 @@ outcome is worth nothing next time.
 
 The user directed that the mode be exposed rather than held behind the
 phase-4 gate at the bottom of this page. That deviation is deliberate and
-recorded here and in [blockers.md](blockers.md): every synthesize prints what
+recorded here and in [blockers.md](../status/blockers.md): every synthesize prints what
 its gates are worth, and the fresh-client acceptance is still owed.
 
 ## Why this is tractable at all
@@ -32,7 +32,7 @@ A 7DTD modlet bundle is the friendliest possible case for an offline writer:
 2. **The installed game publishes authoritative typetrees.** The game's own
    shipped bundles carry type trees *on* (`Entities/trees`, measured:
    serialized platform 19, UnityFS flags `0x243`; see
-   [research-provenance.md](research-provenance.md)). Every class layout the
+   [research-provenance.md](../research/research-provenance.md)). Every class layout the
    writer needs can be harvested read-only from the install the player already
    has, rather than guessed from community notes. A wrong guess about a field
    order becomes impossible if the writer refuses to serialize any class whose
@@ -41,7 +41,7 @@ A 7DTD modlet bundle is the friendliest possible case for an offline writer:
    class-142 `AssetBundle` object per bundle, `m_RuntimeCompatibility: 1`,
    `m_PathFlags: 7`, a populated `m_Container` (path → PPtr) and
    `m_PreloadTable`. This is what the class-142 gate already asserts, derived
-   from the game's own bundles (research-provenance.md, "Class-142 finding").
+   from the game's own bundles (research/research-provenance.md, "Class-142 finding").
 4. **Prior art exists at every layer.** See the table below.
 
 ## Prior art
@@ -167,7 +167,7 @@ that 7DTD loads it or that the asset is right.
 
 The gap between the two is three pieces of engine code that only the game runs,
 all decompiled from V 3.1.0 b14 (see
-[research-provenance.md](research-provenance.md)):
+[research-provenance.md](../research/research-provenance.md)):
 
 | Step | What it does | What a runtime load skips |
 |---|---|---|
@@ -218,7 +218,7 @@ synthesized bundle through `DataLoader.LoadAsset<T>`, by stem, and returned a
 FSB5 bank — `channels=1 frequency=44100 samples=20727`. A fourth request for a
 stem the bundle does not contain returned `null`, so the passes are not a
 loader answering everything. The evidence and the exact log lines are in
-[blockers.md](blockers.md) entry 6; the run is repeatable with
+[blockers.md](../status/blockers.md) entry 6; the run is repeatable with
 `scripts/playtest-acceptance.sh`.
 
 A reviewer then looked and listened in that client and reported the texture as
@@ -242,4 +242,4 @@ rather than a gate that held.
   rebuild), FMOD FSBank API (official builder) — fetched 2026-08-23.
 - Game-shipped bundle facts (platform 19, flags `0x243`, type trees on,
   class-142 contents): this repository's own measurements, recorded in
-  [research-provenance.md](research-provenance.md).
+  [research-provenance.md](../research/research-provenance.md).

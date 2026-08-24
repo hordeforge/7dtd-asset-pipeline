@@ -65,7 +65,7 @@ def reject_disabled_modules(log: Path) -> None:
         raise PipelineError(
             "a particle system mixes MinMaxCurve modes; the client logs this on every frame:\n"
             + "\n".join(sorted(set(curves))[:5])
-            + "\nExpress a stationary axis as GeneratedAsset.ZeroCurve(), never as 0f (docs/vfx.md)."
+            + "\nExpress a stationary axis as GeneratedAsset.ZeroCurve(), never as 0f (docs/authoring/vfx.md)."
         )
 
 
@@ -267,7 +267,7 @@ def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:
     same author cannot cross-examine each other; `SYNTHESIZED_CAVEATS` says so
     in the words every caller prints.
 
-    See `bundle_writer.py` for the format and `docs/offline-bundle-builder.md`
+    See `bundle_writer.py` for the format and `docs/bundles/offline-bundle-builder.md`
     for why a modlet bundle is the tractable case.
     """
     version = expected_unity_version(config)

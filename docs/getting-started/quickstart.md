@@ -100,7 +100,7 @@ MyMod/
 ```
 
 It refuses to overwrite any of those if they already exist. Every path is
-configurable — see [Configuration](configuration.md).
+configurable — see [Configuration](../configuration.md).
 
 ## 4. Unity editor (30-60 minutes, several GB)
 
@@ -114,7 +114,7 @@ shamway init /path/to/MyMod --bundle-source none
 shamway init /path/to/MyMod --bundle-source external --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 ```
 
-Both skip this section entirely; [no-unity.md](no-unity.md) is the full page,
+Both skip this section entirely; [no-unity.md](../bundles/no-unity.md) is the full page,
 including what `shamway stage` gates and what it cannot. The rest of this
 section is the default case: this machine builds the bundle.
 
@@ -189,7 +189,7 @@ Reference it from XML using the mod's `ModInfo.xml` name:
 
 `validate` proves the mod name, bundle path, manifest membership, exact case,
 and stem uniqueness — for a `Model`, an item `Meshfile`, and a `sounds.xml`
-`ClipName` alike. See [Game integration](game-integration.md) for the URI form
+`ClipName` alike. See [Game integration](../game-integration.md) for the URI form
 and server behaviour.
 
 Two deployable asset classes are **not** bundle members and have their own
@@ -224,7 +224,7 @@ mod-state problem —
 it reports what exists, whether the bundle matches the game, what the manifest
 lists, which XML references exist, and whether the mod is valid. `init` also
 wrote `tools/shamway/AGENTS.md` into your mod so an agent working there has
-the rules. See [Consumer interfaces](consumer-api.md).
+the rules. See [Consumer interfaces](../consumer-api.md).
 
 ## 8. Acceptance
 
@@ -244,9 +244,9 @@ start over a running client, starts one through Steam, and fails unless the
 log this launch wrote shows the mod, its atlas, and its localization loaded
 with no bundle, name, or particle error; `log` classifies the newest log
 again. A listening run is never `--mute`. That proves the asset *loads*. Then
-look at it, or listen to it, and say that you did. [Validation](validation.md)
+look at it, or listen to it, and say that you did. [Validation](../validation.md)
 lists exactly what offline parsing cannot prove; [Release
-checklist](release-checklist.md) is the full list.
+checklist](../runbooks/release-checklist.md) is the full list.
 
 ## Creating the assets themselves
 
@@ -267,13 +267,13 @@ shamway render-icon myModThing
 
 Read these before authoring:
 
-- [Art direction](art-direction.md) — the house style and the prompt patterns
+- [Art direction](../authoring/art-direction.md) — the house style and the prompt patterns
   that produce an asset which looks native rather than merely clean;
-- [Sound](audio.md) — synthesis, `sounds.xml`, and why a loaded clip can be
+- [Sound](../authoring/audio.md) — synthesis, `sounds.xml`, and why a loaded clip can be
   silent;
-- [Visual effects](vfx.md) — budgets, LOD tiers, and two silent material
+- [Visual effects](../authoring/vfx.md) — budgets, LOD tiers, and two silent material
   failures;
-- [Agent workflows](agent-workflows.md) — the lane each asset type follows.
+- [Agent workflows](../authoring/agent-workflows.md) — the lane each asset type follows.
 
 ## When something fails
 
@@ -290,6 +290,6 @@ shamway check-log .shamway/build/bundle/unity-build.log
 shamway refs
 ```
 
-[Troubleshooting](troubleshooting.md) maps each failure message to its root
+[Troubleshooting](../runbooks/troubleshooting.md) maps each failure message to its root
 cause. Start there rather than changing compression, graphics APIs, or
 exporter shape at random.

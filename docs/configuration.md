@@ -33,7 +33,7 @@ directory = ""
 | `mod_root` | Deployable 7DTD modlet root containing `ModInfo.xml`. |
 | `mod_name` | Exact `ModInfo.xml` `<Name value>` and `@modfolder(...)` id. |
 | `bundle_name` | Lowercase staged file name ending in `.unity3d`. Must be empty when `bundle_source = "none"`. |
-| `bundle_source` | Where the bundle comes from: `"unity"` (a local editor builds it), `"synthesized"` (this tool writes it directly, no editor), `"external"` (an editor elsewhere builds it and `shamway stage` gates it here), or `"none"` (the mod ships no bundle). Default `"unity"`. See [no-unity.md](no-unity.md). |
+| `bundle_source` | Where the bundle comes from: `"unity"` (a local editor builds it), `"synthesized"` (this tool writes it directly, no editor), `"external"` (an editor elsewhere builds it and `shamway stage` gates it here), or `"none"` (the mod ships no bundle). Default `"unity"`. See [no-unity.md](bundles/no-unity.md). |
 | `unity_project` | Non-deployed Unity project owned by the mod. |
 | `source_root` | The folder whose files become bundle members. With `bundle_source = "unity"` it is a Unity `AssetDatabase` path *inside the project*; with `"synthesized"` there is no project, so it is read against the mod root (scaffolded as `assets-src/bundle`). |
 | `build_dir` | Ignored raw output and Unity log directory. |

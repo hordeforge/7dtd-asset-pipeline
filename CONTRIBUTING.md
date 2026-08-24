@@ -28,7 +28,7 @@ generator, a fresh client). Never describe the first as the third.
 ## Portability
 
 The CLI claims to run on Linux, macOS, and Windows
-([docs/quickstart.md](docs/quickstart.md)); CI exercises Linux only. The rest
+([docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)); CI exercises Linux only. The rest
 of that claim rests on construction, not evidence: no Unix-only module at
 import time (`PortabilityTests` in tests/test_client.py simulates Windows'
 missing `fcntl`), explicit endianness in every binary format, pathlib instead

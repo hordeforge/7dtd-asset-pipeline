@@ -1,7 +1,7 @@
 """Render a bundle prefab into an atlas icon, through the editor.
 
 This is the second of the two icon lanes (the first is generated or drawn art;
-see docs/art-direction.md). It exists because an icon that *is* the item cannot
+see docs/authoring/art-direction.md). It exists because an icon that *is* the item cannot
 drift from the item: regenerating the mesh regenerates the icon.
 
 Three mistakes are designed out here rather than documented:

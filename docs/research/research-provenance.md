@@ -320,7 +320,7 @@ before extraction: it passed on the vanilla client and Linux-server bundles
 case mismatch, duplicate stem, missing bundle, wrong mod name, and a missing
 `@modfolder(…)`. Rebuilds were measured byte-identical by SHA-256 before and
 after `ForceRebuildAssetBundle`, which is the evidence behind the
-determinism advice in [bundle-generation.md](bundle-generation.md).
+determinism advice in [bundle-generation.md](../bundles/bundle-generation.md).
 
 ## Live verification of the class-142 finding
 

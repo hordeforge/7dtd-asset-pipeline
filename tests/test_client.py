@@ -548,7 +548,7 @@ class LockTests(unittest.TestCase):
 
 
 class PortabilityTests(unittest.TestCase):
-    """The CLI claims to be portable (docs/quickstart.md: Linux, macOS, Windows).
+    """The CLI claims to be portable (docs/getting-started/quickstart.md: Linux, macOS, Windows).
 
     `fcntl` exists only on Unix, so it must never sit at module scope of
     anything the console script imports: on Windows one top-level import turns

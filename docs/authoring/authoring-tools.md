@@ -182,7 +182,7 @@ shamway capabilities --json
 ### ilspycmd and monodis — the named sources
 
 Every 7DTD-specific rule in this repository cites a decompiled method, and a
-new one must too (see [AGENTS.md](../AGENTS.md)). `ilspycmd` (ILSpy's CLI, a
+new one must too (see [AGENTS.md](../../AGENTS.md)). `ilspycmd` (ILSpy's CLI, a
 .NET global tool) is the primary: `ilspycmd -t ModManager
 "$SEVEN_DAYS_TO_DIE_DIR/7DaysToDie_Data/Managed/Assembly-CSharp.dll"` prints
 one type. Mono's `monodis` (and `ikdasm`) is the second opinion on a method

@@ -6,7 +6,7 @@ optional reader is installed — with UnityPy, which parses Unity's format
 without any of this repository's code. The runtime half of the evidence (a real
 editor loading the result) is `shamway verify-bundle`; it needs Unity and so
 cannot live in this suite. What it proved is recorded in
-docs/research-provenance.md and docs/blockers.md.
+docs/research/research-provenance.md and docs/status/blockers.md.
 """
 
 from __future__ import annotations

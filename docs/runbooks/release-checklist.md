@@ -73,7 +73,7 @@ failed review* — kept distinct from "stand-in" and "accepted".
 
 - [ ] Verify game files in Steam, then `shamway doctor`: does the shipped bundle's revision still match?
 - [ ] `shamway build --probe` with the (possibly new) game-matched editor.
-- [ ] Re-decompile every engine fact in [research-provenance.md](research-provenance.md) and record the pass.
+- [ ] Re-decompile every engine fact in [research-provenance.md](../research/research-provenance.md) and record the pass.
 - [ ] `shamway validate`, `check-icons`, `check-sound`; then a fresh client.
 - [ ] Re-verify the asset inventory against `Config/` and the installed game, not against prose — the source project found its stand-in table stale on two rows.
 

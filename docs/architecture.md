@@ -78,7 +78,7 @@ output, and every synthesize says so. The trust model answers it by inverting
 the relationship: where an editor *does* exist it becomes a verifier
 (`verify-bundle`) rather than a builder, and where it does not, a fresh client
 is the acceptance rather than the confirmation. See
-  [offline-bundle-builder.md](offline-bundle-builder.md).
+  [offline-bundle-builder.md](bundles/offline-bundle-builder.md).
 
 `build` and
 `stage` are the same pipeline with one step removed: the gates live in Python
@@ -99,8 +99,8 @@ refuse them before anything starts.
 The writer's boundary is deliberate too: `bundle_writer.py` covers textures,
 clips and text files, and stops at meshes, prefabs, materials and shaders,
 because a shader in a bundle is compiled platform bytecode only Unity's shader
-compiler produces. [offline-bundle-builder.md](offline-bundle-builder.md)
-records that research and what is not attempted; [no-unity.md](no-unity.md)
+compiler produces. [offline-bundle-builder.md](bundles/offline-bundle-builder.md)
+records that research and what is not attempted; [no-unity.md](bundles/no-unity.md)
 states what a synthesized bundle owes instead.
 
 ## Why a tracked manifest

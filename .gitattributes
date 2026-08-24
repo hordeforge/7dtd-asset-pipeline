@@ -1,5 +1,5 @@
 # Line-ending policy for a repository whose CLI claims portability
-# (docs/quickstart.md: Linux, macOS, Windows). The shell scripts run under
+# (docs/getting-started/quickstart.md: Linux, macOS, Windows). The shell scripts run under
 # bash both here (`make check`, `scripts/bootstrap`) and from an installed
 # package (`shamway script`, which executes the packaged copies), so a CRLF
 # checkout would break every one of them -- and any sdist or wheel built from

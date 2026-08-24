@@ -3,7 +3,7 @@
 This repository is one of thirteen in the [hordeforge](https://github.com/hordeforge)
 organization. Until this page existed it named only one of the other twelve
 (`7dtd-engine-research`, cited three times in
-[research-provenance.md](research-provenance.md)), so an agent working here had
+[research-provenance.md](research/research-provenance.md)), so an agent working here had
 no way to discover the rest — including the one that owns a runtime lock this
 repository's own `client` commands have to respect.
 

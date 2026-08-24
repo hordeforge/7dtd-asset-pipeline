@@ -163,7 +163,7 @@ here. Two other shapes are supported and change what `init` writes:
   project, but the editor lives on another machine; `shamway stage` gates and
   stages what it built.
 
-See [no-unity.md](no-unity.md).
+See [no-unity.md](bundles/no-unity.md).
 
 ## Adopting a mod that already has a Unity project
 
@@ -197,7 +197,7 @@ Then three changes in the mod:
    file is pipeline-owned; a fork of it does not get the gates.
 2. **Mark the mod's generators** with `[ShamwayPreBuild]` so they still run
    before the bundle is collected — see
-   [bundle-generation.md](bundle-generation.md). Without this the build
+   [bundle-generation.md](bundles/bundle-generation.md). Without this the build
    succeeds and ships whatever the generators produced last time.
 3. **Retire the mod's build/validate scripts** in favour of `shamway build`,
    `shamway validate`, `shamway check-icons`, and `shamway check-sound`, and

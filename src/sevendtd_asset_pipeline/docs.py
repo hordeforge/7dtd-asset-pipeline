@@ -23,51 +23,62 @@ from pathlib import Path
 from .errors import PipelineError
 
 # Topic -> filename, with a one-line summary for the listing. Ordered the way a
-# reader meets them rather than alphabetically.
+# reader meets them rather than alphabetically. Filenames are relative to the
+# docs root and carry their subdirectory; the categories themselves are
+# described in docs/README.md.
 TOPICS: dict[str, tuple[str, str]] = {
     "mod-repo-layout": ("mod-repo-layout.md", "what lives in the mod repo and what lives here"),
     "sibling-repos": (
         "sibling-repos.md",
         "the other HordeForge repositories, and the client lock this one shares",
     ),
-    "quickstart": ("quickstart.md", "bare machine to a validated bundle"),
-    "setup": ("setup.md", "Python, game path, Unity, licensing, Windows module"),
+    "quickstart": ("getting-started/quickstart.md", "bare machine to a validated bundle"),
+    "setup": (
+        "getting-started/setup.md",
+        "Python, game path, Unity, licensing, Windows module",
+    ),
     "no-unity": (
-        "no-unity.md",
+        "bundles/no-unity.md",
         "the four answers to where the bundle comes from, three of them editorless",
     ),
     "offline-bundle-builder": (
-        "offline-bundle-builder.md",
+        "bundles/offline-bundle-builder.md",
         "the editorless writer: format research, what shipped, and the shader wall",
     ),
     "consumer-api": ("consumer-api.md", "schema, call, serve, and the Python facade"),
     "game-integration": ("game-integration.md", "XML URIs, icons, audio, inheritance, packaging"),
     "art-direction": (
-        "art-direction.md",
+        "authoring/art-direction.md",
         "the house style, prompt patterns, and the two icon lanes",
     ),
-    "audio": ("audio.md", "sound synthesis, sounds.xml, and why a loaded clip can be silent"),
-    "vfx": ("vfx.md", "particle budgets, LOD tiers, and two silent material failures"),
+    "audio": (
+        "authoring/audio.md",
+        "sound synthesis, sounds.xml, and why a loaded clip can be silent",
+    ),
+    "vfx": ("authoring/vfx.md", "particle budgets, LOD tiers, and two silent material failures"),
     "agent-workflows": (
-        "agent-workflows.md",
+        "authoring/agent-workflows.md",
         "the lane each asset type follows, and the evidence packet",
     ),
     "authoring-tools": (
-        "authoring-tools.md",
+        "authoring/authoring-tools.md",
         "the researched OSS tools and which gate each belongs to",
     ),
-    "bundle-generation": ("bundle-generation.md", "the complete build path"),
+    "bundle-generation": ("bundles/bundle-generation.md", "the complete build path"),
     "validation": ("validation.md", "each gate and its proof boundary"),
     "improvements": (
-        "improvements.md",
+        "status/improvements.md",
         "known gaps, what closes them, and the OSS tools that belong to each",
     ),
-    "troubleshooting": ("troubleshooting.md", "failure messages and their root causes"),
+    "troubleshooting": ("runbooks/troubleshooting.md", "failure messages and their root causes"),
     "configuration": ("configuration.md", "every .shamway.toml key"),
     "architecture": ("architecture.md", "design, boundaries, and the trust model"),
-    "blockers": ("blockers.md", "what still needs a human, a licence, or a client"),
-    "research-provenance": ("research-provenance.md", "where each 7DTD-specific rule came from"),
-    "release-checklist": ("release-checklist.md", "artifact and live acceptance"),
+    "blockers": ("status/blockers.md", "what still needs a human, a licence, or a client"),
+    "research-provenance": (
+        "research/research-provenance.md",
+        "where each 7DTD-specific rule came from",
+    ),
+    "release-checklist": ("runbooks/release-checklist.md", "artifact and live acceptance"),
 }
 
 

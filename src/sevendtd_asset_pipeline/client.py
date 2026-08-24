@@ -701,7 +701,25 @@ class Marker:
     """A negative marker that is reported but does not fail the run: it may be vanilla's."""
 
 
-def markers_for(mod_name: str | None) -> tuple[Marker, ...]:
+def ships_localization(mods_dir: Path | None, mod_name: str | None) -> bool:
+    """Whether the deployed mod actually carries a `Config/Localization.csv`.
+
+    The `localization_loaded` marker exists to catch a localization file in the
+    *wrong place*. A mod that ships none cannot produce the line, so requiring
+    it turns a correct mod into a FAIL - which it did for this repository's own
+    `examples/SelfTestMod` on 2026-08-24, alongside a `mod_loaded` that was a
+    timing race. Two false failures in one verdict is how a gate stops being
+    read.
+
+    Unknown mod or unknown directory answers False: an unprovable requirement
+    is not a requirement.
+    """
+    if mods_dir is None or not mod_name:
+        return False
+    return (Path(mods_dir) / mod_name / "Config" / "Localization.csv").is_file()
+
+
+def markers_for(mod_name: str | None, expect_localization: bool = True) -> tuple[Marker, ...]:
     name = re.escape(mod_name) if mod_name else r"[^\s]+"
     return (
         Marker(
@@ -711,7 +729,8 @@ def markers_for(mod_name: str | None) -> tuple[Marker, ...]:
             "localization_loaded",
             rf"\[MODS\] Loading localization from mod: {name}",
             "Config/Localization.csv was found; absent means the file is in the wrong place",
-            True,
+            # Required only when the mod ships the file: see `ships_localization`.
+            expect_localization,
         ),
         Marker(
             "atlas_packed",
@@ -812,7 +831,12 @@ PROBLEM_LIMIT = 50
 WARNING_LIMIT = 20
 
 
-def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogReport:
+def scan_log_text(
+    text: str,
+    mod_name: str | None,
+    log_path: str = "-",
+    expect_localization: bool = True,
+) -> LogReport:
     """Classify a client log by the markers this pipeline knows about.
 
     With a `mod_name`, every positive marker becomes required and any it did
@@ -828,7 +852,7 @@ def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogRe
     found: dict[str, str] = {}
     problems: list[str] = []
     warnings: list[str] = []
-    markers = markers_for(mod_name)
+    markers = markers_for(mod_name, expect_localization)
     compiled = [(marker, re.compile(marker.pattern)) for marker in markers]
     # A client log runs to hundreds of thousands of lines and almost all of
     # them match nothing, so each line first meets one combined alternation —
@@ -872,12 +896,48 @@ def scan_log_text(text: str, mod_name: str | None, log_path: str = "-") -> LogRe
     )
 
 
-def scan_log(path: Path, mod_name: str | None) -> LogReport:
+def scan_log(path: Path, mod_name: str | None, expect_localization: bool = True) -> LogReport:
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
         raise PipelineError(f"cannot read client log {path}: {exc}") from exc
-    return scan_log_text(text, mod_name, str(path))
+    return scan_log_text(text, mod_name, str(path), expect_localization)
+
+
+# How long the positive markers may take to appear *after* the log exists. The
+# log file is created before the engine has loaded a single mod: measured on a
+# Proton host, the file appeared at 20:24:09 and `[MODS] Loaded Mod:` was
+# written at 20:24:12. Scanning the instant the file appears therefore reports
+# `mod_loaded MISSING` for a mod that loads perfectly three seconds later.
+#
+# That is worse than no verdict. A false FAIL sends the next session looking
+# for a deployment bug that is not there, which is exactly what it did on
+# 2026-08-24.
+MARKERS_SETTLE_WITHIN_SEC = 120.0
+
+
+def scan_log_settled(
+    path: Path,
+    mod_name: str | None,
+    expect_localization: bool = True,
+    timeout: float = MARKERS_SETTLE_WITHIN_SEC,
+    poll: float = 1.0,
+    sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], float] = time.monotonic,
+) -> LogReport:
+    """Scan repeatedly until the log stops gaining positive markers.
+
+    Returns as soon as the report is clean, so a healthy client costs one scan
+    plus however long the engine took. A log that never completes still gets a
+    verdict at `timeout`, and it is the *last* scan's verdict rather than the
+    first - so what it reports missing was genuinely never written.
+    """
+    deadline = now() + timeout
+    report = scan_log(path, mod_name, expect_localization)
+    while report.missing_positive and now() < deadline:
+        sleep(poll)
+        report = scan_log(path, mod_name, expect_localization)
+    return report
 
 
 # How long a client may take to write its first log line before the absence is
@@ -979,6 +1039,13 @@ def fresh_client_run(
     if shutil.which(steam_bin) is None:
         raise PipelineError(f"{steam_bin!r} is not on PATH; set --steam-bin to the Steam launcher")
     logs = log_dir or client_log_dir(game_dir)
+    # Whether the deployed mod ships a Localization.csv decides whether its
+    # absence from the log is a failure or the correct answer. An unknown mods
+    # directory answers "do not require it" rather than raising: this is a
+    # refinement of a verdict, never a reason to fail a launch.
+    mods: Path | None = None
+    with contextlib.suppress(PipelineError, OSError):
+        mods = user_mods_dir(game_dir)
     session = os.environ.get(LOCK_SESSION_ENV) or new_session_id()
     with held_lock(session):
         started_at = time.time()
@@ -1026,7 +1093,19 @@ def fresh_client_run(
                 # is no stream whose state WirePlumber could save.
                 stop_client(running_client_pids())
     return AcceptanceRun(
-        log=scan_log(newest, mod_name),
+        # An untimed launch hands the client to a person the moment the log
+        # exists, which is before the engine has loaded any mod; a timed run has
+        # already slept past that. Both settle rather than snap-judge.
+        log=scan_log_settled(
+            newest,
+            mod_name,
+            ships_localization(mods, mod_name),
+            # A timed run has already slept past the whole client lifetime, so
+            # its log is complete and settling would only add latency. An
+            # untimed launch returns the moment the log exists, which is before
+            # any mod has loaded.
+            timeout=0.0 if run_seconds else MARKERS_SETTLE_WITHIN_SEC,
+        ),
         launched=command,
         run_seconds=run_seconds,
         muted=bool(muted_indexes),
@@ -1215,7 +1294,11 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
         return completed.returncode
     if args.command == "log":
         path = args.path or latest_client_log(args.log_dir or client_log_dir(game_dir))
-        report = scan_log(path, args.mod_name)
+        report = scan_log(
+            path,
+            args.mod_name,
+            ships_localization(user_mods_dir(game_dir), args.mod_name),
+        )
         if args.json:
             print(json.dumps(report.as_dict(), indent=2))
         else:

@@ -879,3 +879,87 @@ class FreshClientRunTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SettledScanTests(unittest.TestCase):
+    """A log that exists is not a log that has finished loading mods.
+
+    Measured on a Proton host on 2026-08-24: the client log file appeared at
+    20:24:09 and `[MODS]     Loaded Mod: ShamwaySelfTest (1.0.0)` was written
+    at 20:24:12. `client launch` scanned the instant the file appeared and
+    reported `mod_loaded MISSING` for a mod that had loaded perfectly, which is
+    worse than reporting nothing: it sends the reader looking for a deployment
+    bug that does not exist.
+    """
+
+    def test_a_marker_written_after_the_first_scan_is_still_found(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "output_log.txt"
+            path.write_text("2026-08-24T20:24:09 0.1 INF Awake\n", encoding="utf-8")
+            appended = {"done": False}
+
+            def sleep(_seconds: float) -> None:
+                if not appended["done"]:
+                    with path.open("a", encoding="utf-8") as handle:
+                        for marker in client.markers_for("ShamwaySelfTest"):
+                            if marker.positive:
+                                handle.write(_line_for(marker.pattern))
+                    appended["done"] = True
+
+            report = client.scan_log_settled(
+                path, "ShamwaySelfTest", timeout=10.0, poll=0.0, sleep=sleep
+            )
+            self.assertEqual(report.missing_positive, ())
+
+    def test_a_log_that_never_completes_still_gets_a_verdict(self) -> None:
+        ticks = iter([0.0, 1.0, 2.0, 99.0])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "output_log.txt"
+            path.write_text("nothing interesting\n", encoding="utf-8")
+            report = client.scan_log_settled(
+                path,
+                "ShamwaySelfTest",
+                timeout=5.0,
+                poll=0.0,
+                sleep=lambda _s: None,
+                now=lambda: next(ticks),
+            )
+            self.assertIn("mod_loaded", report.missing_positive)
+
+
+def _line_for(pattern: str) -> str:
+    """A log line that satisfies one marker pattern."""
+    return pattern.replace("\\[", "[").replace("\\]", "]").replace("[^\\s]+", "x") + "\n"
+
+
+class LocalizationRequirementTests(unittest.TestCase):
+    """A mod that ships no `Localization.csv` cannot log that it loaded one.
+
+    The marker exists to catch a localization file in the **wrong place**, so
+    requiring it from a mod that has none turns a correct mod into a FAIL. That
+    happened to this repository's own `examples/SelfTestMod` on 2026-08-24, in
+    the same verdict as a `mod_loaded` timing race - two false failures at once,
+    which is how a gate stops being read.
+    """
+
+    def test_a_mod_without_the_file_does_not_require_the_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            mods = Path(directory)
+            (mods / "Mod").mkdir()
+            self.assertFalse(client.ships_localization(mods, "Mod"))
+            keys = {m.key for m in client.markers_for("Mod", False) if m.positive}
+            self.assertNotIn("localization_loaded", keys)
+
+    def test_a_mod_that_ships_it_still_requires_the_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            mods = Path(directory)
+            config = mods / "Mod" / "Config"
+            config.mkdir(parents=True)
+            (config / "Localization.csv").write_text("Key,English\n", encoding="utf-8")
+            self.assertTrue(client.ships_localization(mods, "Mod"))
+            keys = {m.key for m in client.markers_for("Mod", True) if m.positive}
+            self.assertIn("localization_loaded", keys)
+
+    def test_an_unknown_mods_directory_does_not_invent_a_requirement(self) -> None:
+        self.assertFalse(client.ships_localization(None, "Mod"))
+        self.assertFalse(client.ships_localization(Path("/nonexistent"), None))

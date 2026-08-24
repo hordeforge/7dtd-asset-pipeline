@@ -20,10 +20,12 @@ from .assets_src import create as create_assets_src
 from .config import (
     BUNDLE_SOURCES,
     CONFIG_NAME,
+    UNITY_SOURCE_ROOT,
     VALID_BUNDLE,
     render_config,
     resolve_bundle_source,
 )
+from .config import SYNTHESIZED_SOURCE_ROOT as _SYNTHESIZED_SOURCE_ROOT
 from .consumer_docs import render_agent_guide
 from .errors import PipelineError
 from .references import read_mod_name
@@ -97,7 +99,9 @@ EDITOR_FOLDER = "Assets/SevenDaysToDieAssetPipeline/Editor"
 # Where a mod that has no Unity project keeps the files its bundle is made of.
 # It sits beside the other editable sources rather than in the deployable part
 # of the modlet, because the sources themselves never ship.
-SYNTHESIZED_SOURCE_ROOT = "assets-src/bundle"
+# Re-exported: several call sites here name it, and it is the configuration
+# layer's fact, not the scaffold's.
+SYNTHESIZED_SOURCE_ROOT = _SYNTHESIZED_SOURCE_ROOT
 
 
 def initialize(
@@ -195,7 +199,7 @@ def initialize(
             bundle_name,
             unity_version,
             unity_project=relative_project,
-            source_root=source_root or "Assets/ModAssets/Bundle",
+            source_root=source_root,
             manifest_dir=manifest_dir or "tools/shamway/manifests",
             bundle_source=bundle_source,
         ),
@@ -209,7 +213,7 @@ def initialize(
         created_scripts = _install_editor_scripts(template, project)
     else:
         shutil.copytree(str(template), project)
-        bundle_source_dir = project / "Assets" / "ModAssets" / "Bundle"
+        bundle_source_dir = project / UNITY_SOURCE_ROOT
         bundle_source_dir.mkdir(parents=True, exist_ok=True)
         (bundle_source_dir / ".gitkeep").write_text(
             "# Put source assets and their Unity .meta files below this directory.\n",

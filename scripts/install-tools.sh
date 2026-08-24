@@ -15,7 +15,19 @@ WITH_AUTHORING=0
 WITH_UNITY_PREREQS=0
 WITH_RESEARCH=0
 WITH_DESKTOP_CAPTURE=0
+WITH_VKD3D_SOURCE=0
 CHECK_ONLY=0
+# Pinned rather than tracking master: this is what the shader lane was measured
+# against, and a compiler that changes under a build changes the bytes it emits.
+VKD3D_SOURCE_VERSION="${VKD3D_SOURCE_VERSION:-1.19}"
+VKD3D_SOURCE_PREFIX="${VKD3D_SOURCE_PREFIX:-/opt/vkd3d}"
+# The release tarball, not a git clone: a clone needs Wine's `widl` to generate
+# vkd3d_d3dx9shader.h and friends, while the tarball ships them pre-generated
+# along with `configure`. Measured - a clone build fails at
+# `libs/vkd3d-shader/hlsl.h:25: vkd3d_d3dx9shader.h: No such file or directory`,
+# and the tarball builds with a C toolchain and Khronos headers alone.
+VKD3D_PINNED_VERSION="1.19"
+VKD3D_PINNED_SHA256="034613605baab8ba84674f8d272cf22b5e86bc6bc03fc5728ef9bce07308baa6"
 
 usage() {
 	cat <<'HELP'
@@ -34,6 +46,10 @@ OPTIONS
                          cite (.NET 8 SDK + ilspycmd, Mono's monodis)
   --with-desktop-capture Also install a screenshot tool, so the human visual
                          sign-off leaves a citable frame (grim, maim)
+  --with-vkd3d-source    Build vkd3d-compiler from source into /opt/vkd3d when
+                         this host has no packaged one that reads HLSL. Needed
+                         on Debian and Ubuntu, which package vkd3d 1.2; a no-op
+                         where the distribution already ships 1.3 or newer
   --check                Report what is present or missing and install nothing
   -h, --help             Show this help
 
@@ -44,7 +60,10 @@ BASE TOOLS
   shellcheck         Lints this repository's scripts in 'make check'
   pactl              Mutes and unmutes a test client (shamway client mute)
   vkd3d-compiler     HLSL to DXBC: the shader a synthesized prefab's material
-                     needs. Without it a mesh is packed as a bare Mesh and
+                     needs. Requires vkd3d >= 1.3, which is when vkd3d-shader
+                     learned to read HLSL. Debian and Ubuntu package 1.2, so
+                     this script does not install theirs -- see NOTES below.
+                     Without a usable one a mesh is packed as a bare Mesh and
                      'shamway build' prints a note saying so
 
 WITH --with-authoring
@@ -78,6 +97,37 @@ WITH --with-research
   monodis            Mono's IL disassembler, the second opinion on a method
                      body (and mcs, for compiling a throwaway check)
 
+NOTES
+  vkd3d differs by distribution, and only the version matters
+    The shader lane needs vkd3d >= 1.3, which is when vkd3d-shader learned to
+    read HLSL. Where the distribution packages one that new, this script
+    installs it with no flag:
+
+      Arch      vkd3d             1.19   works
+      Fedora    vkd3d-compiler    1.17   works
+      openSUSE  vkd3d             Factory, probed rather than assumed
+      Debian    vkd3d-compiler    1.2    too old
+      Ubuntu    vkd3d-compiler    1.2    too old
+
+    Debian's and Ubuntu's are deliberately NOT installed: a binary on PATH that
+    cannot compile the shader is worse than none, because it looks like the lane
+    is available. On those two, build one:
+
+      scripts/install-tools.sh --with-vkd3d-source
+
+    That downloads WineHQ's release tarball for the pinned version, verifies its
+    SHA-256 against a digest recorded in this script, builds vkd3d-compiler,
+    installs it under /opt/vkd3d, and tells you the one line to add to PATH.
+    The tarball rather than a git clone on purpose: a clone needs Wine's widl to
+    generate headers, and the tarball ships them. Override the location with
+    VKD3D_SOURCE_PREFIX; overriding VKD3D_SOURCE_VERSION also needs
+    VKD3D_SOURCE_SHA256, because this script does not install a download it
+    cannot verify. It is a no-op on a host that already has a usable compiler,
+    so it is safe to pass on any distribution.
+
+    Without a usable compiler nothing breaks: a mesh is packed as a bare Mesh
+    and 'shamway build' prints a note saying which it wrote.
+
 SUPPORTED PACKAGE MANAGERS
   pacman, apt-get, dnf, zypper. On anything else the script refuses to guess
   package names; install what --check lists by hand.
@@ -92,6 +142,7 @@ while (($#)); do
 		--with-unity-prereqs) WITH_UNITY_PREREQS=1; shift ;;
 		--with-research) WITH_RESEARCH=1; shift ;;
 		--with-desktop-capture) WITH_DESKTOP_CAPTURE=1; shift ;;
+		--with-vkd3d-source) WITH_VKD3D_SOURCE=1; shift ;;
 		--check) CHECK_ONLY=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) echo "ERROR: unknown option $1" >&2; usage >&2; exit 1 ;;
@@ -101,6 +152,16 @@ done
 has_python_311() {
 	command -v python3 >/dev/null 2>&1 &&
 		python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))'
+}
+
+# Presence is not capability: vkd3d-shader grew HLSL support in 1.3, and Debian
+# and Ubuntu both still package 1.2. Ask the binary what it reads rather than
+# comparing versions — it is the same question the writer will ask, and a host
+# whose answer is "no hlsl" would otherwise be told everything is fine and then
+# fail in the middle of a build.
+has_vkd3d_hlsl() {
+	command -v vkd3d-compiler >/dev/null 2>&1 &&
+		vkd3d-compiler --print-source-types 2>/dev/null | grep -q hlsl
 }
 
 has_libxml2_so2() {
@@ -152,8 +213,8 @@ run_check() {
 	report make "consumer Makefile targets" have make
 	report shellcheck "script linting in make check" have shellcheck
 	report pactl "client mute/unmute (shamway client)" have pactl
-	report vkd3d-compiler "HLSL to DXBC (synthesized shaders and materials)" \
-		have vkd3d-compiler
+	report vkd3d-compiler "HLSL to DXBC (synthesized shaders and materials); needs vkd3d >= 1.3" \
+		has_vkd3d_hlsl
 	if ((WITH_AUTHORING)); then
 		report blender "mesh authoring" have blender
 		report openscad "parametric geometry" have openscad
@@ -208,8 +269,9 @@ collect_pacman() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(shellcheck)
 	have pactl || PACKAGES+=(libpulse)
-	# Arch ships /usr/bin/vkd3d-compiler in `vkd3d` (verified with pacman -Qo).
-	have vkd3d-compiler || PACKAGES+=(vkd3d)
+	# Arch ships /usr/bin/vkd3d-compiler in `vkd3d` (verified with pacman -Qo),
+	# currently 1.19, which reads HLSL.
+	has_vkd3d_hlsl || PACKAGES+=(vkd3d)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -241,9 +303,14 @@ collect_apt() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(shellcheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
-	# `vkd3d-compiler`, not `vkd3d-dev`: Debian bookworm/trixie/sid ship the
-	# binary in the package of the same name, and vkd3d-dev is only headers.
-	have vkd3d-compiler || PACKAGES+=(vkd3d-compiler)
+	# Deliberately not installed here. Debian and Ubuntu package vkd3d 1.2
+	# (measured: Ubuntu noble ships vkd3d-compiler 1.2-15build1), which
+	# predates the HLSL support this writer needs, so `apt install
+	# vkd3d-compiler` puts a binary on PATH that cannot do the job. `--check`
+	# reports it as MISS with the reason, and the shader lane degrades with a
+	# printed note rather than failing. --with-vkd3d-source builds a usable
+	# one; see the NOTES section of --help.
+	:
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -275,9 +342,9 @@ collect_dnf() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(ShellCheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
-	# Fedora names the binary's package after the binary (vkd3d-compiler-1.17
-	# in Rawhide); the plain `vkd3d` package is the runtime library.
-	have vkd3d-compiler || PACKAGES+=(vkd3d-compiler)
+	# Fedora names the binary's package after the binary, and ships 1.17 in
+	# Rawhide, which is new enough to read HLSL.
+	has_vkd3d_hlsl || PACKAGES+=(vkd3d-compiler)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -309,10 +376,10 @@ collect_zypper() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(ShellCheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
-	# openSUSE Factory carries `vkd3d`. If this host ends up without the
-	# binary anyway, --check says MISS and the build degrades with a note
-	# rather than failing.
-	have vkd3d-compiler || PACKAGES+=(vkd3d)
+	# openSUSE Factory carries `vkd3d`. If this host ends up without a binary
+	# that reads HLSL anyway, --check says MISS with the reason and the build
+	# degrades with a printed note rather than failing.
+	has_vkd3d_hlsl || PACKAGES+=(vkd3d)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -396,6 +463,91 @@ install_uv() {
 		echo "OK: installed $destination/uv (ensure it is on PATH)"
 	else
 		echo "note: uv archive did not contain the expected binary; skipped"
+	fi
+}
+
+# Every distribution reaches a usable shader lane by one of two routes: its own
+# package where that is >= 1.3, and this build where it is not. Kept in the same
+# script so "how do I get the shader lane" has one answer everywhere.
+build_vkd3d_from_source() {
+	local version="$VKD3D_SOURCE_VERSION" prefix="$VKD3D_SOURCE_PREFIX"
+	local workspace url archive expected actual
+	if has_vkd3d_hlsl; then
+		echo "OK: vkd3d-compiler already reads HLSL ($(command -v vkd3d-compiler)); nothing to build"
+		return
+	fi
+	# WineHQ publishes a GPG .sign beside each tarball but no checksum file, so
+	# the digest is pinned here. An overridden version has no pin, and this
+	# script does not install unverified downloads - the same rule
+	# install-unity-editor.sh follows.
+	expected="${VKD3D_SOURCE_SHA256:-}"
+	if [[ -z "$expected" ]]; then
+		if [[ "$version" != "$VKD3D_PINNED_VERSION" ]]; then
+			echo "ERROR: no checksum known for vkd3d $version." >&2
+			echo "       Pass VKD3D_SOURCE_SHA256=<sha256 of vkd3d-$version.tar.xz>," >&2
+			echo "       or leave VKD3D_SOURCE_VERSION at $VKD3D_PINNED_VERSION." >&2
+			return 1
+		fi
+		expected="$VKD3D_PINNED_SHA256"
+	fi
+	case "$(uname -s)" in
+		Linux) ;;
+		*)
+			echo "ERROR: this source build is scripted for Linux only." >&2
+			echo "       Build vkd3d $version from https://gitlab.winehq.org/wine/vkd3d" >&2
+			return 1
+			;;
+	esac
+	local build_deps=()
+	if command -v pacman >/dev/null 2>&1; then
+		build_deps=(base-devel flex bison vulkan-headers spirv-headers)
+		$SUDO pacman -S --needed --noconfirm "${build_deps[@]}"
+	elif command -v apt-get >/dev/null 2>&1; then
+		build_deps=(build-essential pkg-config flex bison libvulkan-dev spirv-headers xz-utils curl)
+		$SUDO apt-get update
+		$SUDO apt-get install -y "${build_deps[@]}"
+	elif command -v dnf >/dev/null 2>&1; then
+		build_deps=(gcc make pkgconf flex bison vulkan-headers spirv-headers xz curl)
+		$SUDO dnf install -y "${build_deps[@]}"
+	elif command -v zypper >/dev/null 2>&1; then
+		build_deps=(gcc make pkg-config flex bison vulkan-headers spirv-headers xz curl)
+		$SUDO zypper --non-interactive install "${build_deps[@]}"
+	else
+		echo "ERROR: cannot install build dependencies on this package manager." >&2
+		echo "       Install a C toolchain, flex, bison, and the Vulkan and SPIRV" >&2
+		echo "       headers, then build vkd3d $version from" >&2
+		echo "       https://gitlab.winehq.org/wine/vkd3d" >&2
+		return 1
+	fi
+	workspace="$(mktemp -d)"
+	# Removed on every exit, including a failed configure: a half-built tree
+	# under /tmp is the kind of thing a later run silently reuses.
+	trap 'rm -rf "$workspace"' RETURN
+	url="https://dl.winehq.org/vkd3d/source/vkd3d-$version.tar.xz"
+	archive="$workspace/vkd3d-$version.tar.xz"
+	echo "Downloading $url"
+	curl -fsSL --retry 3 -o "$archive" "$url"
+	actual="$(sha256sum "$archive" | cut -d' ' -f1)"
+	if [[ "$actual" != "$expected" ]]; then
+		echo "ERROR: checksum mismatch for vkd3d-$version.tar.xz" >&2
+		echo "       expected $expected" >&2
+		echo "       actual   $actual" >&2
+		return 1
+	fi
+	echo "OK: checksum verified"
+	tar xJf "$archive" -C "$workspace"
+	(
+		cd "$workspace/vkd3d-$version"
+		./configure --prefix="$prefix" --disable-tests --disable-demos
+		make -j"$(nproc 2>/dev/null || echo 2)"
+		$SUDO make install
+	)
+	if [[ -x "$prefix/bin/vkd3d-compiler" ]]; then
+		echo "OK: built vkd3d $version at $prefix/bin/vkd3d-compiler"
+		echo "    Add it to PATH:  export PATH=\"$prefix/bin:\$PATH\""
+	else
+		echo "ERROR: the build finished but $prefix/bin/vkd3d-compiler is not there" >&2
+		return 1
 	fi
 }
 
@@ -596,6 +748,9 @@ if ((WITH_AUTHORING)); then
 fi
 if ((WITH_RESEARCH)); then
 	install_ilspycmd
+fi
+if ((WITH_VKD3D_SOURCE)); then
+	build_vkd3d_from_source
 fi
 
 echo

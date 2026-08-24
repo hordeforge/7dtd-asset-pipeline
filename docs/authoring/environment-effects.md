@@ -20,6 +20,14 @@ shamway build
 
 Everything below is detail.
 
+**What needs an editor here, and what does not.** The engine controls below are
+C# in the mod's own DLL and need nothing from a bundle, so the effect itself
+works on `bundle_source = "none"` and on the default synthesized path alike.
+The cards above are textures, which the editorless writer packs. Only the
+*particle system* that carries them is Unity-only, the same as
+[vfx.md](vfx.md) — so a mod adds `bundle_source = "unity"` for the character
+layer, never for the weather.
+
 ## A particle prefab is not weather
 
 This is the mistake worth naming first, because it is the one that gets built.

@@ -267,8 +267,8 @@ shamway generate sound blast assets-src/audio/blast.wav --seed 7
 shamway generate cutout key assets-src/icons/src.png \
     UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
 shamway generate texture-maps assets-src/textures/paint.png \
-    --out-dir tools/shamway/UnityProject/Assets/ModAssets/Bundle/Textures \
-    --stem myModPaint
+    --out-dir assets-src/textures/derived --stem myModPaint \
+    --also assets-src/bundle
 shamway generate mesh assets-src/meshes/crate.glb --shape box --size 1 0.6 0.8
 ```
 
@@ -341,10 +341,14 @@ it. The dividing line does not move just because the code was written in a mod.
 ## Multiple mods on one machine
 
 Install the pipeline once; scaffold it into each mod. Each mod carries its own
-`.shamway.toml`, its own Unity project, its own bundle, and its own
-`assets-src/`. The command resolves the configuration upward from the working
-directory, so `cd`-ing into a mod is all the context switching there is.
+`.shamway.toml`, its own bundle, its own `assets-src/`, and — only if it opted
+into an editor — its own Unity project. The command resolves the configuration
+upward from the working directory, so `cd`-ing into a mod is all the context
+switching there is.
 
-The shared, expensive things — the Unity editor install, the game install, the
-host tooling — are machine-level, configured by `UNITY_EDITOR` and
-`SEVEN_DAYS_TO_DIE_DIR`, and never written into any mod's committed files.
+The shared things are machine-level, configured by `SEVEN_DAYS_TO_DIE_DIR` and
+`UNITY_EDITOR`, and never written into any mod's committed files: the game
+install, the host tooling, and — for the mods that use one — the Unity editor
+install. `SHAMWAY_BUNDLE_SOURCE` belongs to the same layer: it says where *this*
+machine gets a bundle from, so one committed configuration works on a build host
+with an editor and on a laptop without one.

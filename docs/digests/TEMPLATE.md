@@ -12,7 +12,8 @@ version is a wiki page.
 
 Their approach, in their terms before ours. Enough mechanism that a reader can
 tell whether it would survive this project's constraints — offline operation,
-no writes into a game install, Unity optional, an adopting mod that checks out
+no writes into a game install, Unity opt-in (`bundle_source = "synthesized"`
+is the default and starts no editor), an adopting mod that checks out
 nothing.
 
 ## What applies here

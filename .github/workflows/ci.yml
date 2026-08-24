@@ -92,26 +92,143 @@ jobs:
       - run: make check test
 
   scaffold:
-    # Prove the consumer path end to end: a bare modlet becomes a scaffolded
-    # one whose status is machine-readable. Needs no Unity and no game install.
+    # Prove the consumer path end to end on a runner that has never had a Unity
+    # editor: a bare modlet is scaffolded, an asset is authored into it, a real
+    # bundle is written, and every XML reference to it validates. This job is
+    # the gate on the claim that Unity is opt-in — if the default path ever
+    # needs an editor again, nothing else here would notice.
+    #
+    # It gates the shader lane in both states, because the runner makes the
+    # awkward one free: Ubuntu packages vkd3d-compiler 1.2, which predates the
+    # HLSL support this writer needs (added in vkd3d 1.3), so the packaged
+    # binary exercises the degraded path and a source build exercises the whole
+    # one.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      # Pinned so a vkd3d release cannot change what this job proves. Matches
+      # the version the writer was developed against.
+      VKD3D_VERSION: "1.19"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
-      # Core only, no dev tools: this job drives the CLI, it does not lint.
-      - run: uv sync --locked --no-dev
+      # The optional extras carry trimesh (reads the mesh) and Pillow (writes
+      # the texture). Still no editor, no game install, and no network at run
+      # time.
+      - run: uv sync --locked --no-dev --all-extras
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-      - run: |
-          mkdir -p /tmp/MyMod
+
+      - name: Scaffold a modlet with no flags, and prove the default is editorless
+        run: |
+          mkdir -p /tmp/MyMod/Config
           printf '<xml><Name value="MyMod" /></xml>\n' > /tmp/MyMod/ModInfo.xml
           shamway init /tmp/MyMod --unity-version 2022.3.62f2
           test -f /tmp/MyMod/tools/shamway/AGENTS.md
+          test -d /tmp/MyMod/assets-src/bundle
+          # No editor was requested, so none of its scaffolding may appear.
+          test ! -e /tmp/MyMod/tools/shamway/UnityProject
+          grep -q 'bundle_source = "synthesized"' /tmp/MyMod/.shamway.toml
           cd /tmp/MyMod && shamway status --json || true
           cd /tmp/MyMod && shamway refs
           cd /tmp/MyMod && shamway call capabilities > /dev/null
+
+      - name: Author the sources the writer reads
+        run: |
+          cd /tmp/MyMod
+          # trimesh and Pillow write the two sources directly. `shamway generate
+          # mesh` would be the authoring command, but it shells out to Blender,
+          # which this runner has no reason to install: what is under test is
+          # the writer reading an interchange file, not how the file was made.
+          python -c "import trimesh; trimesh.creation.box(extents=(0.4, 0.4, 0.4)).export('assets-src/bundle/myModThing.glb')"
+          python -c "from PIL import Image; Image.new('RGBA', (64, 64), (120, 60, 40, 255)).save('assets-src/bundle/myModThing_albedo.png')"
+          printf '%s\n' \
+            '<configs><append xpath="/blocks"><block name="myModBlock">' \
+            '<property name="Model" value="#@modfolder(MyMod):Resources/mymod.unity3d?myModThing.prefab" />' \
+            '</block></append></configs>' > Config/blocks.xml
+
+      # ---- the shader lane, short: Ubuntu's own vkd3d-compiler is too old ----
+      - name: Install the packaged (too old) vkd3d-compiler
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends vkd3d-compiler
+      - name: A too-old vkd3d must degrade loudly, never fail half-way
+        env:
+          UNITY_EDITOR: ""
+        run: |
+          cd /tmp/MyMod
+          vkd3d-compiler --version || true
+          # Written to a file, not piped: `cmd | python - <<'EOF'` gives the
+          # interpreter two stdins and it executes the JSON as the program.
+          shamway capabilities --json > /tmp/caps-old.json
+          python - <<'CHECK'
+          import json
+          lane = [c for c in json.load(open("/tmp/caps-old.json")) if c["name"] == "vkd3d-compiler"][0]
+          assert lane["path"], "the packaged binary should be on PATH for this step"
+          assert not lane["available"], "vkd3d 1.2 cannot read HLSL and must not report available"
+          assert lane["unusable_reason"], "an unusable tool must say why"
+          print("OK: present but unusable, reported as:", lane["unusable_reason"])
+          CHECK
+          # The build must still succeed, packing less and saying so.
+          shamway build | tee /tmp/degraded.log
+          grep -q "cannot be used" /tmp/degraded.log
+          shamway validate
+          shamway inspect --deep --json Resources/mymod.unity3d > /tmp/degraded.json
+          python - <<'CHECK'
+          import json
+          types = set(json.load(open("/tmp/degraded.json"))["type_counts"])
+          assert "Mesh" in types and "Texture2D" in types, sorted(types)
+          assert not {"GameObject", "Material", "Shader"} & types, (
+              f"the prefab lane must be absent without a usable compiler, got {sorted(types)}"
+          )
+          print("OK: degraded to a bare Mesh, with the caveat printed:", sorted(types))
+          CHECK
+
+      # ---- the shader lane, whole: a vkd3d new enough to read HLSL ----
+      - name: Cache the vkd3d build
+        id: vkd3d-cache
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: /opt/vkd3d
+          key: vkd3d-${{ env.VKD3D_VERSION }}-${{ runner.os }}
+      # Deliberately the documented route, not a copy of it: this is the exact
+      # command Debian and Ubuntu users are told to run, so CI gates the recipe
+      # rather than something that merely resembles it.
+      - name: Build vkd3d-compiler from source, the way the docs say to
+        if: steps.vkd3d-cache.outputs.cache-hit != 'true'
+        env:
+          VKD3D_SOURCE_VERSION: ${{ env.VKD3D_VERSION }}
+          VKD3D_SOURCE_PREFIX: /opt/vkd3d
+        run: scripts/install-tools.sh --with-vkd3d-source
+      - name: The whole lane must produce every class the game resolves
+        env:
+          UNITY_EDITOR: ""
+        run: |
+          echo "/opt/vkd3d/bin" >> "$GITHUB_PATH"
+          export PATH="/opt/vkd3d/bin:$PATH"
+          export LD_LIBRARY_PATH="/opt/vkd3d/lib:${LD_LIBRARY_PATH:-}"
+          vkd3d-compiler --version
+          cd /tmp/MyMod
+          shamway capabilities --json > /tmp/caps-new.json
+          python - <<'CHECK'
+          import json
+          lane = [c for c in json.load(open("/tmp/caps-new.json")) if c["name"] == "vkd3d-compiler"][0]
+          assert lane["available"], f"expected a usable vkd3d, got {lane['unusable_reason']}"
+          print("OK: usable shader lane at", lane["path"])
+          CHECK
+          shamway build
+          shamway validate
+          shamway inspect --deep --json Resources/mymod.unity3d > /tmp/deep.json
+          python - <<'CHECK'
+          import json
+          types = json.load(open("/tmp/deep.json"))["type_counts"]
+          required = {
+              "AssetBundle", "GameObject", "Transform", "MeshFilter",
+              "MeshRenderer", "Mesh", "Material", "Shader", "Texture2D",
+          }
+          missing = sorted(required - set(types))
+          assert not missing, f"editorless bundle is missing {missing}; got {sorted(types)}"
+          print("OK: every class the game resolves, written with no editor:", sorted(types))
+          CHECK
 
   coverage-badge:
     # Publishes the line-coverage badge to the badges branch, which

@@ -513,6 +513,66 @@ Two things the runtime did **not** establish, and no offline gate can:
 - **it is not 7DTD.** A Unity editor is not the game. Acceptance still ends at
   `shamway acceptance-provider`, a fresh client, and a person looking.
 
+### The shader lane's host dependency has a minimum version, and two distributions miss it
+
+**Measured 2026-08-24**, on a GitHub `ubuntu-latest` runner and on the Arch
+authoring host, with the tool itself:
+
+```bash
+vkd3d-compiler --print-source-types
+```
+
+| Host | vkd3d | Reads HLSL |
+|---|---|---|
+| Arch (`pacman -Qo /usr/bin/vkd3d-compiler` → `vkd3d 1.19-1.1`) | 1.19 | yes |
+| `ubuntu-latest` runner, `apt install vkd3d-compiler` | 1.2 | **no** |
+
+HLSL source support entered vkd3d-shader in **1.3** (WineHQ release
+announcement, March 2022:
+<https://www.winehq.org/pipermail/wine-announce/2022-March/000549.html> — "the
+`hlsl` source type specifies High Level Shader Language source code"). Debian
+and Ubuntu both still package 1.2: `vkd3d-compiler 1.2-15build1` in Ubuntu
+noble and `1.2-15+b2` in Debian sid (packages.ubuntu.com, packages.debian.org,
+read 2026-08-24). Fedora Rawhide packages `vkd3d-compiler 1.17`.
+
+What that cost before it was measured: `capabilities.py` probed with
+`shutil.which` alone, so the packaged 1.2 reported **available**, `pack_directory`
+took the prefab branch, and the build died half-way through with the tool's own
+message:
+
+```text
+ERROR: vkd3d-compiler failed for profile vs_4_0: Invalid source type 'hlsl' specified.
+```
+
+The registry now asks the binary what it reads rather than whether it exists,
+which is the same question the writer asks two steps later. A host with 1.2
+reports the capability unusable **with the reason**, `doctor` says so instead of
+telling it to install what it already has, and the mesh lane degrades to a bare
+`Mesh` with a printed caveat — the behaviour that was always intended for an
+absent tool, now reached by a present-but-incapable one too.
+
+CI gates both states: `.github/workflows/ci.yml` installs the packaged 1.2,
+asserts the degradation, then builds vkd3d 1.19 from source and asserts the
+whole prefab chain.
+
+**The source build takes the release tarball, not a git clone**, and that is a
+measurement too. A clone fails on this host and on a runner alike:
+
+```text
+widl is required to generate include/vkd3d_dxgibase.h
+libs/vkd3d-shader/hlsl.h:25:10: fatal error: vkd3d_d3dx9shader.h: No such file or directory
+```
+
+`widl` is Wine's IDL compiler, so a clone build drags in Wine to generate
+headers. `dl.winehq.org/vkd3d/source/vkd3d-1.19.tar.xz` ships those headers and
+a pre-generated `configure`; built on 2026-08-24 against Khronos SPIRV-Headers
+and Vulkan-Headers with nothing else, it produced
+`vkd3d shader compiler version 1.19` listing `hlsl` among its source types.
+WineHQ publishes a GPG `.sign` beside each tarball but no checksum file, so
+`install-tools.sh` pins the SHA-256 it verifies
+(`034613605baab8ba84674f8d272cf22b5e86bc6bc03fc5728ef9bce07308baa6`) and
+refuses a version override that arrives without one.
+
 ## Class-table prefix window, measured for the offline reader
 
 Measured 2026-08-24 against the installed game's own bundles (V3.1.0 b14) with

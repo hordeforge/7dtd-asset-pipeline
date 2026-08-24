@@ -59,6 +59,17 @@ every item or block that sets no `CustomIcon`, because that is the engine's
 default sprite lookup. A key this mod does not provide is reported, never
 failed: referencing a vanilla key is normal.
 
+### The absence of an editor is itself gated
+
+Every claim on this page about what runs without Unity is checked on each push.
+CI's `scaffold` job runs on a hosted Linux runner with no editor and no game
+install: it scaffolds a modlet with no flags, refuses a Unity project appearing,
+authors a mesh and a texture, builds, validates, and asserts the resulting
+bundle carries `AssetBundle`, `GameObject`, `Transform`, `MeshFilter`,
+`MeshRenderer`, `Mesh`, `Material`, `Shader` and `Texture2D`. Removing
+`vkd3d-compiler` fails it, which is what makes it a gate rather than a
+demonstration. See [CONTRIBUTING.md](../CONTRIBUTING.md).
+
 ### When this tool wrote the bundle itself — the default
 
 Every gate in the table above that is not marked *(editor only)* still runs

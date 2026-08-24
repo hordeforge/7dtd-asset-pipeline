@@ -773,6 +773,62 @@ class UnityOptionalTests(unittest.TestCase):
         initialize(self.root, None, "example.unity3d", "2022.3.62f2", adopt_project=project)
         self.assertEqual("unity", load_config(self.root / CONFIG_NAME).bundle_source)
 
+    def test_render_config_defaults_source_root_per_bundle_source(self) -> None:
+        """A shared literal default rendered a path that resolves nowhere.
+
+        `source_root` is project-relative for "unity" and mod-relative for
+        "synthesized", so one default could only be right for one of them —
+        and `render_config` was defaulting to the Unity one for both. Only
+        `initialize` substituted the right value, so every other caller wrote a
+        configuration pointing at <mod>/Assets/ModAssets/Bundle.
+        """
+        from sevendtd_asset_pipeline.config import render_config
+
+        synthesized = render_config("M", "m.unity3d", "2022.3.62f2", bundle_source="synthesized")
+        self.assertIn('source_root = "assets-src/bundle"', synthesized)
+        editor = render_config("M", "m.unity3d", "2022.3.62f2", bundle_source="unity")
+        self.assertIn('source_root = "Assets/ModAssets/Bundle"', editor)
+        explicit = render_config(
+            "M", "m.unity3d", "2022.3.62f2", source_root="mine/here", bundle_source="synthesized"
+        )
+        self.assertIn('source_root = "mine/here"', explicit)
+
+    def test_a_project_relative_source_root_without_a_project_is_refused(self) -> None:
+        """Switching a mod off the editor lane must not silently misread source_root.
+
+        `source_root` is project-relative for "unity" and mod-relative for
+        everything else, so a configuration flipped without moving it resolves
+        to <mod>/Assets/ModAssets/Bundle. The build error there said "create
+        that folder", which is the wrong fix: the key has to change.
+        """
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="unity")
+        config_file = self.root / CONFIG_NAME
+        config_file.write_text(
+            config_file.read_text().replace(
+                'bundle_source = "unity"', 'bundle_source = "synthesized"'
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(PipelineError, "inside a Unity project"):
+            load_config(config_file)
+
+    def test_a_mod_root_assets_folder_that_exists_is_left_alone(self) -> None:
+        """The check is about a path that resolves nowhere, not about its shape.
+
+        A mod may legitimately keep its sources in `<mod>/Assets/...`; refusing
+        that would break a layout nobody asked about.
+        """
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="unity")
+        config_file = self.root / CONFIG_NAME
+        config_file.write_text(
+            config_file.read_text().replace(
+                'bundle_source = "unity"', 'bundle_source = "synthesized"'
+            ),
+            encoding="utf-8",
+        )
+        (self.root / "Assets" / "ModAssets" / "Bundle").mkdir(parents=True)
+        self.assertEqual("synthesized", load_config(config_file).bundle_source)
+
     def test_a_stated_source_always_wins_over_both_defaults(self) -> None:
         initialize(self.root, None, None, "", bundle_source="none")
         self.assertEqual("none", load_config(self.root / CONFIG_NAME).bundle_source)

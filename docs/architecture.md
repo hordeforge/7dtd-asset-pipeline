@@ -4,7 +4,8 @@
 
 - Work from any standalone 7DTD modlet without repository-relative
   dependencies.
-- Keep editable source and Unity project state owned by that mod.
+- Keep editable source — and, where a mod opted into an editor, its Unity
+  project state — owned by that mod.
 - Make the dangerous silent failures deterministic build-time failures.
 - Require no Python dependency merely to inspect or validate a bundle.
 - Require no Unity editor at all, ever, by default: the writer here produces
@@ -37,7 +38,8 @@
 | `assets_src.py` | the editable-source tree and the provenance contract written into the mod |
 | `client.py` | fresh-client acceptance: the client's per-user paths, allow-listed deployment, Steam launch, OS-layer mute, and log classification |
 | `scripts/compile-editor-scripts.sh` | compiles the vendored editor C# against a real editor's assemblies, without starting one |
-| `scripts/install-*.sh` | host packages and the checksum-verified game-matched editor |
+| `scripts/install-tools.sh` | host packages, including `vkd3d-compiler` for the writer's shader lane |
+| `scripts/install-unity-editor.sh` | *(opt-in)* the checksum-verified game-matched editor |
 | `generators/` (in the package) | reproducible sound, audio, cutout, icon, texture, and mesh generation, as `shamway generate` |
 | consumer `AGENTS.md` | the agent contract, written into the mod by `init` |
 | UnityFS reader | signature, revision, block decompression, serialized type table |
@@ -50,6 +52,14 @@
 The CLI trusts neither an editor zero exit nor a matching bundle header by
 itself. Staging occurs only after log and artifact gates. It never parses or
 executes scripts from the game install and never writes there.
+
+Where this tool wrote the artifact itself — the default — one side of that
+sentence has no independent half: a checker and an artifact with the same
+author cannot cross-examine each other. `build.synthesized_caveats()` says so
+in the words every caller prints, rather than letting a self-graded gate read
+like an independent one, and it adds a line when a lane degraded for want of a
+host tool. What restores an independent reading is `verify-bundle` (a real
+runtime) and, always, a fresh client.
 
 `client.py` is the one component that touches a running game, and its
 boundary is deliberate: it launches through Steam (`steam -applaunch`) rather

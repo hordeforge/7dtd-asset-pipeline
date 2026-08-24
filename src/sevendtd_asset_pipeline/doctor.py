@@ -275,12 +275,27 @@ def _capability_checks() -> list[Check]:
     """Capability rows for humans; agents should call `capabilities()` instead."""
     checks: list[Check] = []
     for capability in capabilities():
-        detail = (
-            (capability.path or "installed")
-            if capability.available
-            else f"optional: {capability.purpose} -> {capability.install}"
-        )
-        checks.append(Check("OK" if capability.available else "INFO", capability.name, detail))
+        if capability.available:
+            checks.append(Check("OK", capability.name, capability.path or "installed"))
+        elif capability.unusable_reason:
+            # Present but not usable. "Install it" would be the wrong advice —
+            # it *is* installed — so this row says what was measured and what
+            # the tool it gates does instead.
+            checks.append(
+                Check(
+                    "WARN",
+                    capability.name,
+                    f"{capability.path} cannot be used: {capability.unusable_reason}",
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "INFO",
+                    capability.name,
+                    f"optional: {capability.purpose} -> {capability.install}",
+                )
+            )
     return checks
 
 

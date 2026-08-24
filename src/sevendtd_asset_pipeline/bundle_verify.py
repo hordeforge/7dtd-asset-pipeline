@@ -27,6 +27,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from .errors import PipelineError
+from .unity_process import run_unity
 
 VERIFIER_SCRIPT = "BundleVerifier.cs"
 EDITOR_FOLDER = "Assets/SevenDaysToDieAssetPipeline/Editor"
@@ -154,7 +155,7 @@ def verify_with_editor(
         "-quit",
     ]
     try:
-        result = subprocess.run(command, check=False, timeout=timeout)
+        result = run_unity(command, timeout=timeout)
     except subprocess.TimeoutExpired as exc:
         # TimeoutExpired is not a TimeoutError, so without this it escapes
         # cli.main's handler as a raw traceback. run() has killed the editor.

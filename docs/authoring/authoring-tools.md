@@ -301,18 +301,46 @@ shamway capabilities --json
 ### vkd3d-compiler — the shader a prefab's material needs
 
 **Wired**, and the writer's only host dependency. It is WineHQ's
-`vkd3d-shader`, MIT-licensed and packaged as `vkd3d` on Arch and `vkd3d-dev` on
-Debian, `vkd3d-compiler` on Fedora; `scripts/install-tools.sh` installs it in
-the base set, with no flag. It compiles the
+`vkd3d-shader`, MIT-licensed. It compiles the
 one unlit textured pass this writer ships from HLSL to `dxbc-tpf` — the shader
 model 4 `DXBC` a d3d11 sub-program carries — which `shader_blob.py` then wraps
 in Unity's sub-program blob container.
+
+**It needs vkd3d 1.3 or newer**, which is when vkd3d-shader learned to read
+HLSL. That matters because two major distributions still package 1.2:
+
+| Distribution | Package | Version | Reads HLSL |
+|---|---|---|---|
+| Arch | `vkd3d` | 1.19 | yes |
+| Fedora | `vkd3d-compiler` | 1.17 | yes |
+| Debian / Ubuntu | `vkd3d-compiler` | **1.2** | **no** |
+
+`scripts/install-tools.sh` installs it in the base set on the distributions
+where the packaged one works, and deliberately does **not** install Debian's or
+Ubuntu's, because a binary on PATH that cannot compile the shader is worse than
+none: it looks like the lane is available. One flag covers the rest, on any
+distribution:
+
+```bash
+shamway script install-tools --with-vkd3d-source
+```
+
+It fetches the pinned vkd3d tag, builds `vkd3d-compiler`, installs it under
+`/opt/vkd3d`, and prints the line to add to `PATH`. On a host that already has
+a usable compiler it does nothing and says so, so it is safe to pass anywhere —
+`VKD3D_SOURCE_VERSION` and `VKD3D_SOURCE_PREFIX` override the pin and the
+location. CI runs this exact command, so the recipe is gated rather than
+merely written down.
+
+Ask the registry which state this host is in — it probes the binary's own
+`--print-source-types` rather than comparing versions, and reports a
+present-but-too-old one with the reason:
 
 ```bash
 shamway capabilities --missing
 ```
 
-Its absence does not fail a build: a mesh is packed as a bare `Mesh` instead of
+Neither an absent nor a too-old compiler fails a build: a mesh is packed as a bare `Mesh` instead of
 a prefab, and `shamway build` prints a note saying which it wrote. That is the
 one lane here where a missing capability degrades rather than refusing, because
 a mod that packed yesterday should keep packing — and it is why the note exists,

@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 from .bundle_writer import pack_directory, write_artifact
-from .capabilities import has_capability
+from .capabilities import capabilities
 from .config import PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
@@ -272,18 +272,34 @@ SYNTHESIZED_CAVEATS = (
 # The prefab lane degrades rather than failing when no shader compiler is
 # installed, and a degraded lane that says nothing is indistinguishable from a
 # complete one — the same reason `stage` prints a `not run:` line per gate.
-NO_SHADER_COMPILER_CAVEAT = (
-    "vkd3d-compiler is not installed, so any mesh was packed as a bare Mesh rather than "
-    "as the prefab with its material and shader that Meshfile and block Model load: "
-    "'shamway capabilities --missing' prints the install line"
+_DEGRADED_MESH_LANE = (
+    "so any mesh was packed as a bare Mesh rather than as the prefab with its material "
+    "and shader that Meshfile and block Model load"
 )
 
 
 def synthesized_caveats() -> tuple[str, ...]:
-    """What this host's synthesize is worth, including any lane that degraded."""
-    if has_capability("vkd3d-compiler"):
+    """What this host's synthesize is worth, including any lane that degraded.
+
+    The shader lane can be short in two different ways, and saying "not
+    installed" for both is wrong half the time: Debian and Ubuntu package a
+    `vkd3d-compiler` that is present and cannot read HLSL, and telling that
+    host to install what it already has is the least useful sentence available.
+    """
+    shader_lane = next((item for item in capabilities() if item.name == "vkd3d-compiler"), None)
+    if shader_lane is None or shader_lane.available:
         return SYNTHESIZED_CAVEATS
-    return (*SYNTHESIZED_CAVEATS, NO_SHADER_COMPILER_CAVEAT)
+    if shader_lane.unusable_reason:
+        degraded = (
+            f"the vkd3d-compiler at {shader_lane.path} cannot be used — "
+            f"{shader_lane.unusable_reason} — {_DEGRADED_MESH_LANE}"
+        )
+    else:
+        degraded = (
+            f"vkd3d-compiler is not installed, {_DEGRADED_MESH_LANE}: "
+            "'shamway capabilities --missing' prints the install line"
+        )
+    return (*SYNTHESIZED_CAVEATS, degraded)
 
 
 def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:

@@ -14,7 +14,9 @@ install through `pacman`, `apt-get`, `dnf`, or `zypper`. Only Python is
 required for the CLI itself. The base set also carries `vkd3d-compiler`, which
 compiles the shader a synthesized prefab's material needs — the writer's one
 host dependency, and it degrades to a bare `Mesh` with a printed note rather
-than failing. `--with-unity-prereqs` covers the **optional** editor
+than failing. It has a **minimum version, 1.3**, and Debian and Ubuntu package
+1.2; `--with-vkd3d-source` builds a usable one on any distribution and does
+nothing where the packaged one already works. `--with-unity-prereqs` covers the **optional** editor
 installer's needs, `--with-authoring` the optional art tooling in
 [Authoring tools](../authoring/authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
 and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy) —

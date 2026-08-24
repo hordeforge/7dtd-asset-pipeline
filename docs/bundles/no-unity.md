@@ -21,11 +21,14 @@ editor and no game.
 
 **That is measured, not asserted.** CI's `scaffold` job runs on a hosted Linux
 runner with no editor and no game install: it scaffolds a modlet with no flags,
-fails if a Unity project appears, authors a mesh and a texture, runs `build` and
-`validate`, and asserts the bundle carries `AssetBundle`, `GameObject`,
-`Transform`, `MeshFilter`, `MeshRenderer`, `Mesh`, `Material`, `Shader` and
-`Texture2D`. Take `vkd3d-compiler` away and it fails. A change that puts an
-editor back on the default path stops CI rather than reaching this page.
+fails if a Unity project appears, authors a mesh and a texture, and runs `build`
+and `validate`. It then gates the shader lane in *both* states — with the
+distribution's own vkd3d 1.2 it must degrade to a bare `Mesh` and print the
+caveat, and with a vkd3d 1.19 built from source it must produce `AssetBundle`,
+`GameObject`, `Transform`, `MeshFilter`, `MeshRenderer`, `Mesh`, `Material`,
+`Shader` and `Texture2D`. A change that puts an editor back on the default
+path, or that turns a degraded lane silent, stops CI rather than reaching this
+page.
 
 So the real question is never "can I use shamway without Unity". It is **where
 the `.unity3d` comes from**, or whether the mod needs one at all. That has four
@@ -590,14 +593,21 @@ the same intent from the mesh file, in headless Blender, and says in its own
 output that what it produced is a clay render.
 
 The default path has exactly one host dependency of its own, and only for the
-prefab lane: `vkd3d-compiler`, which compiles the shader. It is in
-`scripts/install-tools.sh`, and its absence degrades rather than failing — a
-mesh is packed as a bare `Mesh`, and `build` prints a note saying so rather
-than letting a quieter bundle pass for a whole one:
+prefab lane: `vkd3d-compiler` **1.3 or newer**, which compiles the shader.
+Version matters — Debian and Ubuntu package 1.2, which is on PATH and cannot
+read HLSL — so the registry probes what the binary supports rather than whether
+it exists, and reports a too-old one with the reason:
 
 ```bash
 shamway capabilities --missing
 ```
+
+Neither an absent nor a too-old compiler fails the build. The mesh is packed as
+a bare `Mesh` and `build` prints a note saying which it wrote, rather than
+letting a quieter bundle pass for a whole one. `scripts/install-tools.sh` installs
+a usable one where the distribution has one, and
+`scripts/install-tools.sh --with-vkd3d-source` builds one where it does not —
+a no-op on a host that is already fine, so it is safe to run anywhere.
 
 The last two matter most: **acceptance never needed the editor**. A bundle
 built anywhere, staged here, still ends where every asset in this pipeline

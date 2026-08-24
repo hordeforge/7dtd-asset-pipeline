@@ -93,9 +93,15 @@ with no editor between them and it.
 The shader is compiled, not borrowed: `vkd3d-compiler` emits the shader-model-4
 `DXBC` that a d3d11 sub-program carries, and the writer wraps it in the blob
 container decoded out of the game's own bundle. That is the one lane with a
-host dependency — without `vkd3d-compiler` a mesh is packed as a bare `Mesh`
-and `shamway build` prints a note saying so. Install it with
-`scripts/install-tools.sh`.
+host dependency — without a usable one a mesh is packed as a bare `Mesh` and
+`shamway build` prints a note saying so. It needs **vkd3d 1.3 or newer**:
+`scripts/install-tools.sh` installs the distribution's package where that is new
+enough (Arch 1.19, Fedora 1.17) and builds one where it is not (Debian and
+Ubuntu package 1.2):
+
+```bash
+scripts/install-tools.sh --with-vkd3d-source
+```
 
 What is **not** built yet is lit and transparent shading, keyword variants, and
 graphics APIs beyond d3d11 and OpenGLCore — an unlit opaque pass is what ships,
@@ -369,8 +375,12 @@ that has never had an editor installed. One optional host package unlocks the
 prefab lane; `scripts/install-tools.sh` installs it, and `shamway capabilities
 --missing` prints the line for your distribution:
 
-- `vkd3d-compiler` (WineHQ, OSS) — compiles the shader a prefab's material
-  needs. Without it a mesh is packed as a bare `Mesh` and `build` says so.
+- `vkd3d-compiler` **1.3 or newer** (WineHQ, OSS) — compiles the shader a
+  prefab's material needs. Debian and Ubuntu package 1.2, which cannot read
+  HLSL; `shamway capabilities` probes what the binary actually supports rather
+  than whether it exists, and `install-tools.sh --with-vkd3d-source` builds one
+  on any distribution. Without a usable one a mesh is packed as a bare `Mesh`
+  and `build` says which it wrote.
 
 **Opt in** to a Unity editor only for `bundle_source = "unity"`, or to use
 `verify-bundle` and `render-icon`, and then only on the machine that runs them

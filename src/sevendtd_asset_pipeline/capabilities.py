@@ -17,6 +17,7 @@ import importlib.util
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -39,6 +40,16 @@ class Capability:
     available: bool
     path: str | None = None
     version: str | None = None
+    unusable_reason: str | None = None
+    """Why a tool that *is* on PATH still cannot do the job.
+
+    Presence is not capability. A distribution can package a version of a tool
+    that predates the feature this pipeline needs, and probing only with
+    `which` reports it available, lets a build start, and fails in the middle
+    with the tool's own error — the exact silent-until-late failure this
+    project exists to move earlier. When this is set, `available` is `False`
+    and this says what was measured.
+    """
 
     def as_dict(self) -> dict[str, object]:
         data = asdict(self)
@@ -54,6 +65,13 @@ class _Spec:
     unlocks: tuple[str, ...]
     purpose: str
     install: str
+    usable: Callable[[str], str | None] | None = None
+    """An extra check for a command that is present but may be too old.
+
+    Takes the resolved path, returns `None` when the tool can do the job or a
+    one-line reason when it cannot. Only run when the executable was found, so
+    it costs at most one subprocess on a host that has the tool at all.
+    """
 
 
 SOURCE_URL = "git+https://github.com/hordeforge/7dtd-asset-pipeline"
@@ -81,6 +99,37 @@ def extra_install(extra: str) -> str:
     if installed_as_uv_tool():
         return f"uv tool install --force '7dtd-asset-pipeline[{extra}] @ {SOURCE_URL}'"
     return f"uv pip install '7dtd-asset-pipeline[{extra}] @ {SOURCE_URL}'"
+
+
+# vkd3d-shader grew HLSL source support in 1.3 (WineHQ, March 2022). Debian and
+# Ubuntu both still package 1.2 — measured: Ubuntu noble ships
+# vkd3d-compiler 1.2-15build1, and a GitHub runner with it installed answered
+# `vkd3d-compiler failed for profile vs_4_0: Invalid source type 'hlsl'`
+# half-way through a build. Asking the binary which source types it supports
+# beats comparing a version string: it is the same question the writer asks.
+VKD3D_HLSL_HINT = (
+    "it is older than vkd3d 1.3 and cannot read HLSL source, which is what this "
+    "writer compiles (Debian and Ubuntu package 1.2). Install a newer vkd3d, or "
+    "build vkd3d-shader from https://gitlab.winehq.org/wine/vkd3d"
+)
+
+
+def _vkd3d_reads_hlsl(path: str) -> str | None:
+    """Whether this `vkd3d-compiler` can take HLSL in, not merely whether it exists."""
+    try:
+        listed = subprocess.run(
+            [path, "--print-source-types"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "it could not be run to ask which source types it supports"
+    # A build old enough not to know the flag fails it, which is the answer.
+    if listed.returncode != 0 or "hlsl" not in listed.stdout:
+        return VKD3D_HLSL_HINT
+    return None
 
 
 REGISTRY: tuple[_Spec, ...] = (
@@ -114,6 +163,7 @@ REGISTRY: tuple[_Spec, ...] = (
         name="vkd3d-compiler",
         kind="command",
         probe="vkd3d-compiler",
+        usable=_vkd3d_reads_hlsl,
         unlocks=(
             "shamway pack (prefabs and materials)",
             'shamway build with bundle_source = "synthesized" (prefabs and materials)',
@@ -297,15 +347,20 @@ def _resolve(spec: _Spec, probe_versions: bool) -> Capability:
     # one it is matters to the report, so `path` names it.
     candidates = [spec.probe] if spec.kind == "command" else spec.probe.split()
     path = next((found for name in candidates if (found := shutil.which(name))), None)
+    reason = spec.usable(path) if (path and spec.usable) else None
     return Capability(
         name=spec.name,
         kind=spec.kind,
         unlocks=spec.unlocks,
         purpose=spec.purpose,
         install=spec.install,
-        available=path is not None,
+        # A present-but-incapable tool is *not* available: every caller gating
+        # on this must take the same branch it takes for an absent one, or the
+        # build starts and dies half-way through instead of degrading.
+        available=path is not None and reason is None,
         path=path,
         version=_command_version(path) if (path and probe_versions) else None,
+        unusable_reason=reason,
     )
 
 
@@ -338,6 +393,15 @@ def require_capability(name: str) -> None:
     spec = next((item for item in REGISTRY if item.name == name), None)
     if spec is None:
         raise PipelineError(f"unknown capability {name!r}")
+    # A tool that is present but too old needs a different sentence from one
+    # that is absent: "install it" is useless advice when it is installed.
+    found = next((item for item in capabilities() if item.name == name), None)
+    if found is not None and found.unusable_reason:
+        raise PipelineError(
+            f"{', '.join(spec.unlocks)} needs the optional capability {spec.name!r} "
+            f"({spec.purpose}), and the one on PATH cannot be used: "
+            f"{found.unusable_reason}"
+        )
     raise PipelineError(
         f"{', '.join(spec.unlocks)} needs the optional capability {spec.name!r} "
         f"({spec.purpose}). Install it with: {spec.install}"

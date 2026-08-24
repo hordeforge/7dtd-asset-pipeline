@@ -43,11 +43,20 @@ the game resolves —
 AssetBundle GameObject Transform MeshFilter MeshRenderer Mesh Material Shader Texture2D
 ```
 
-That last assertion is the one that matters, and it is not decorative: with
-`vkd3d-compiler` removed it fails with
-`editorless bundle is missing ['GameObject', 'Material', 'MeshFilter',
-'MeshRenderer', 'Shader', 'Transform']`. A change that quietly puts an editor
-back on the default path, or that degrades the prefab lane, stops CI rather
+That last assertion is the one that matters, and it is not decorative: with no
+usable `vkd3d-compiler` it fails with `editorless bundle is missing
+['GameObject', 'Material', 'MeshFilter', 'MeshRenderer', 'Shader',
+'Transform']`.
+
+The job gates the *other* state too, and gets it for free: Ubuntu packages
+vkd3d 1.2, which predates the HLSL support this writer needs, so the runner's
+own package exercises the degraded lane. That half asserts the capability
+registry reports it unusable **with a reason**, the build still succeeds, the
+caveat is printed, and the bundle contains a bare `Mesh` and no prefab. Then a
+vkd3d 1.19 built from source (cached) proves the whole chain.
+
+A change that quietly puts an editor back on the default path, that degrades
+the prefab lane, or that lets a degraded lane go unmentioned, stops CI rather
 than reaching a page nobody re-reads.
 
 Do not weaken that job to make a change pass. It is the only place in this

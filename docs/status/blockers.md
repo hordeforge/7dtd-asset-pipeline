@@ -147,6 +147,40 @@ shamway validate
 log and `SEVEN_DAYS_TO_DIE_DIR` were present), `validate` passes, and the
 bundle then loads in a fresh client per entry 3.
 
+### 6. No synthesized mesh, and no mesh-rendered icon, has faced a player
+
+**Not blocked:** construction. A real Unity 2022.3.62f2 runtime read two
+synthesized `Mesh` objects back at their authored vertex counts and bounds
+through `shamway verify-bundle` (see the verified entry below), and
+`shamway check-icons` accepts what `shamway generate mesh-icon` writes —
+measured at `160x160 rgba 53% opaque` on a generated crate.
+
+**Blocks:** the claim that either is *right*. Neither has been in front of a
+person. The mesh has never been resolved by 7DTD's own `DataLoader` in a live
+client, so the stem lookup and `@modfolder` rewriting are unproven for class
+43 specifically; and a mesh whose winding or up-axis is wrong loads perfectly
+and looks wrong, which is the one failure mode the writer's conversions exist
+to prevent and the one no offline gate can see. The icon has never been looked
+at in an inventory grid next to vanilla art, where a clay render either reads
+as an item or reads as a grey blob.
+
+**You run,** in a mod whose `assets-src/bundle/` holds a mesh, with XML that
+loads it:
+
+```bash
+shamway generate mesh-icon assets-src/bundle/myModThing.glb UIAtlases/ItemIconAtlas/myModThing.png
+shamway check-icons
+shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
+shamway client deploy .
+shamway client launch --mod-name MyMod
+```
+
+**Confirms it worked:** the harness reports the `LoadAsset<Mesh>` case passing
+with a non-zero vertex count, and a person says two things the suite cannot —
+that the geometry is **not mirrored and not lying on its face**, and that the
+icon is legible at 160 px beside the game's own. File that judgement with
+`shamway client capture --observable "..."`.
+
 ## Verified, for contrast
 
 These were open and are now closed, so the list above stays meaningful:

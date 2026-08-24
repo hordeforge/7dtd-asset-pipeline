@@ -431,6 +431,62 @@ class PrefabTests(unittest.TestCase):
             build_bundle(objects, REVISION, "collide.unity3d")
 
 
+@unittest.skipUnless(
+    has_capability("fsb5"), "the independent bank reader needs the 'fsb5' capability"
+)
+class FsbRoundTripTests(unittest.TestCase):
+    """The FSB5 bank, read back by a decoder this project did not write.
+
+    `_fsb5_pcm16` hand-builds the bank byte by byte, so grading it with our own
+    parser would grade nothing. python-fsb5 is the same kind of check
+    `texture2ddecoder` gives the block compressor. FMOD inside a real Unity
+    runtime is the other half, and it is in research-provenance.md.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_an_independent_reader_recovers_the_exact_samples(self) -> None:
+        import io
+        import wave as wave_module
+
+        import fsb5
+
+        source = write_wav(self.root / "blast.wav")
+        with wave_module.open(str(source), "rb") as handle:
+            expected = handle.readframes(handle.getnframes())
+            channels = handle.getnchannels()
+            rate = handle.getframerate()
+            frames = handle.getnframes()
+
+        bank = audio_clip("myModBlast", source).resource
+        parsed = fsb5.FSB5(bank)
+        self.assertEqual(1, parsed.header.numSamples)
+        self.assertEqual(2, parsed.header.mode, "the bank should declare PCM16")
+
+        sample = parsed.samples[0]
+        self.assertEqual(rate, sample.frequency, "the frequency index decoded wrong")
+        self.assertEqual(channels, sample.channels)
+        self.assertEqual(frames, sample.samples, "the sample count decoded wrong")
+
+        with wave_module.open(io.BytesIO(parsed.rebuild_sample(sample)), "rb") as handle:
+            recovered = handle.readframes(handle.getnframes())
+        self.assertEqual(expected, recovered, "PCM did not survive the bank round trip")
+
+    def test_a_stereo_clip_declares_two_channels_to_the_reader(self) -> None:
+        # The channel bit is one bit of a packed 64-bit header; getting it
+        # wrong halves or doubles the playback rate rather than erroring.
+        import fsb5
+
+        source = write_wav(self.root / "stereo.wav", channels=2)
+        parsed = fsb5.FSB5(audio_clip("myModStereo", source).resource)
+        self.assertEqual(2, parsed.samples[0].channels)
+
+
 class ManifestTests(unittest.TestCase):
     """The manifest text needs no writer, so it is checked without UnityPy."""
 

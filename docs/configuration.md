@@ -17,6 +17,7 @@ manifest_dir = "tools/shamway/manifests"
 resources_dir = "Resources"
 config_dir = "Config"
 target = "StandaloneWindows64"
+compress_textures = false
 code_references = []
 
 [unity]
@@ -41,6 +42,7 @@ directory = ""
 | `resources_dir` | Modlet destination for the deployed bundle. |
 | `config_dir` | Root recursively scanned for XML bundle references. |
 | `target` | Unity `BuildTarget`; use `StandaloneWindows64` for normal 7DTD clients. |
+| `compress_textures` | Whether the editorless writer block-compresses textures: `DXT1` when an image is fully opaque, `DXT5` when it has alpha, 8x and 4x smaller than RGBA32. Off by default because it is **lossy** — this pipeline does not quietly change what an author signed off on. Both sides of every texture must then be a multiple of four, and the build refuses rather than padding. Ignored by the `unity` and `external` backends, where Unity's own importer decides. |
 | `code_references` | Bundle stems the mod's own C# loads (`DataLoader.LoadAsset`, a particle Lights prefab, a scripted clip). No XML names them, so `validate` sees them only when listed; each is checked for membership, uniqueness, and exact case like an XML reference. Stem only, no extension. |
 | `unity.editor` | Optional machine path; `UNITY_EDITOR` overrides it. |
 | `unity.version` | The revision recorded at scaffold time. With a Unity project it is a human-readable record only — `ProjectSettings/ProjectVersion.txt` and the installed game's bundles are authoritative. With `bundle_source = "synthesized"` there is no project file, so the editorless writer falls back to this value when no game directory is configured, and `doctor` warns that it did. |

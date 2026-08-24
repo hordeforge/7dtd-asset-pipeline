@@ -116,8 +116,6 @@ def deep_inspect(path: Path) -> DeepReport:
         container = dict(environment.container)
     except OSError as exc:
         raise PipelineError(f"cannot read bundle {path}: {exc}") from exc
-    except PipelineError:
-        raise
     except Exception as exc:
         raise PipelineError(f"UnityPy could not read {path}: {exc}") from exc
 

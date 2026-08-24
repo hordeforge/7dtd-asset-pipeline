@@ -82,15 +82,39 @@ which wants a material, which wants a shader an editor has to compile.
 
 - Official export API: <https://trimesh.org/trimesh.exchange.export.html>
 
-### gltfpack — mesh optimization before import
+### gltfpack — simplification, and a quantization trap
 
-`gltfpack` (from meshoptimizer) quantizes positions, normals and UVs and
-reorders indices for vertex-cache locality, shrinking a glTF by large factors
-with a documented quality knob (`-cc`, `-vpq`, `-vtn`). Run it between export
-and validation when bundle size matters; keep the unoptimized glTF as the
-editable source.
+**Wired** as `shamway generate mesh-optimize`, with one important correction
+to the obvious reading of its feature list.
+
+```bash
+shamway generate mesh-optimize thing.glb thing-lod1.glb --simplify 0.25
+shamway check-mesh thing-lod1.glb
+```
+
+gltfpack does three things: simplifies, reorders indices for vertex-cache
+locality, and quantizes vertex attributes. **Quantization does not shrink a
+shamway bundle.** It makes the *glTF* smaller by storing positions as 16-bit,
+but `bundle_writer.mesh` re-encodes every vertex into Unity's own stream as
+float32 regardless, so a quantized input yields the same-sized `Mesh`.
+Measured: a 7888-byte GLB packs to 4048 bytes on disk and changes the bundle
+not at all. `mesh-optimize` therefore passes `-noq` by default — keeping the
+precision the writer would have kept anyway — and `--keep-quantization` is
+there for anyone shipping the glTF itself.
+
+Simplification *does* transfer, because fewer triangles is fewer vertices in
+the stream, and it is how a mod derives LOD variants from one authored mesh.
+Measured on a 5120-triangle icosphere: `--simplify 0.25` gives 1280 triangles
+for 0.31% extent drift.
+
+That drift number is the gate. Simplification is lossy in **shape**, and a
+collapsed mesh still loads, still passes `check-mesh`, and is simply the wrong
+object — so the command compares extents before and after and refuses
+anything past `--max-drift` (2% by default), deleting the output. At
+`--simplify 0.02` the same sphere drifts 1.54% and is refused at a 0.5% limit.
 
 - Official repository: <https://github.com/zeux/meshoptimizer>
+- Install: `npm install -g gltfpack`
 
 ### AssetRipper — full vanilla reference extraction
 
@@ -123,12 +147,27 @@ export.
 - Official repository: <https://github.com/RodZill4/material-maker>
 - Official releases: <https://github.com/RodZill4/material-maker/releases>
 
-### ImageMagick — deterministic raster transforms
+### ImageMagick — vector and layered source art
 
-Use `magick` for crop/trim, resize, alpha/key processing, channel packing,
-format conversion, montages, and quantitative comparisons. Prefer a new output
-path over `mogrify`, which overwrites inputs. Record the complete command in
-source documentation or a script.
+**Wired**, for the formats Pillow cannot read. Drop a `.svg`, `.psd`, `.exr`,
+`.webp` or `.avif` into `assets-src/bundle/` and the writer rasterizes it to a
+PNG in a temporary file, then makes the `Texture2D` from that — the original is
+never touched. Vector source art is the case that matters: an icon authored
+once as SVG re-renders cleanly at any cell size instead of being resampled.
+
+```bash
+shamway pack assets-src/bundle build/mymod.unity3d --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+```
+
+An SVG renders at its own pixel size × `density / 96` (SVG's user unit is
+1/96 inch), so the 384 default is 4x. Transparency is preserved explicitly —
+without `-background none` ImageMagick fills it white, which reaches the atlas
+as an opaque card behind every icon, and that is a test.
+
+Beyond the wired path, reach for `magick` in a mod's own scripts for crop/trim,
+channel packing, montages, and quantitative comparison (`magick compare
+-metric RMSE`). Prefer a new output path over `mogrify`, which overwrites
+inputs.
 
 - Official CLI guide: <https://imagemagick.org/command-line-processing/>
 - Tool behavior: <https://imagemagick.org/command-line-tools/>
@@ -143,34 +182,79 @@ derivative in a single script.
 - Pillow documentation: <https://pillow.readthedocs.io/en/stable/>
 - ImageDraw: <https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html>
 
-### Compressonator and bc7enc — texture size planning
+### Block compression — built in for BC1/BC3, external for BC7
 
-Block compression (DXT1/DXT5, BC7) is what Unity's importer applies and what
-the editorless writer does not: synthesized textures ship as raw RGBA32.
-Compressonator (GPUOpen, CLI) and bc7enc produce the compressed blocks and,
-before any writer support exists, answer the planning question — how much a
-texture set would shrink by moving it to the editor path.
+The editorless writer compresses textures itself, with no extra tool:
+`compress_textures = true` in `.shamway.toml`, or
+`shamway pack --compress-textures`, encodes BC1 (`DXT1`, 8x smaller) when the
+image is fully opaque and BC3 (`DXT5`, 4x) when it is not. Off by default,
+because it is lossy.
 
-- Compressonator: <https://github.com/GPUOpen-Tools/compressonator>
-- bc7enc: <https://github.com/richgel999/bc7_enc_rdo>
+```bash
+shamway pack assets-src/bundle build/mymod.unity3d --compress-textures --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+```
 
-### python-fsb5 — FSB5 decoding for reference
+Both sides must be a multiple of four; a block format cannot express anything
+else, and the writer refuses rather than padding, since padding moves every
+atlas cell built on the old size.
 
-The game stores every clip as an FSB5 bank inside `.resource` streams;
-python-fsb5 decodes those to WAV so a sound designer can hear exactly what a
-vanilla clip contains, at its true rate and channel count. Read-only,
-reference use.
+**BC7 is the one worth an external tool.** It has eight block modes and a
+partition table, so a mediocre Python encoder would be worse than the good BC1
+one already here. These are the current CLIs, none of them packaged by Arch,
+Debian or Fedora — each means building from source, so reach for one when a
+mod's texture budget actually demands it:
+
+- [bc7enc_rdo](https://github.com/richgel999/bc7_enc_rdo) — BC1–7 with
+  rate-distortion optimization, a further 10–50% off after LZ;
+- [Compressonator](https://github.com/GPUOpen-Tools/compressonator) — GPUOpen,
+  CLI and library, widest format coverage;
+- [ISPCTextureCompressor](https://github.com/GameTechDev/ISPCTextureCompressor)
+  — Intel's SIMD encoders, the quality/speed reference other tools embed;
+- [ctt](https://github.com/cwfitzgerald/ctt) — one front end over bc7e, ISPC,
+  AMD and astcenc, if you want to compare them.
+
+Judge the result with a **composited** PSNR, never a raw one: a transparent
+pixel's colour is renderer noise, and grading it makes a good encoder look
+broken (`shamway docs improvements`, gap 4).
+
+### python-fsb5 — FSB5 decoding, for reference and for proof
+
+**Wired**, and for two jobs. The game stores every clip as an FSB5 bank inside
+a `.resource` stream, so decoding one lets a sound designer hear exactly what
+a vanilla clip contains at its true rate and channel count:
+
+```bash
+shamway generate audio from-bank vanilla.resource reference/
+```
+
+The second job is why it is a dependency rather than a suggestion. This
+pipeline **hand-writes** those banks — `_fsb5_pcm16` packs the header bit by
+bit — and a bank read back only by the code that wrote it has not been read
+back at all. The suite decodes our own output with python-fsb5 and asserts the
+PCM returns byte-identical, the same independent-reader rule the block
+compressor follows with `texture2ddecoder`.
 
 - Official repository: <https://github.com/HearthSim/python-fsb5>
 
 ## Audio
 
-### FFmpeg
+### FFmpeg — compressed source audio
 
-FFmpeg provides scriptable resampling, channel layout, normalization,
-filtering, fades, mixing, convolution, and format conversion. Keep lossless
-editable sources and make bundle-ready derivatives from a checked-in command
-or script.
+**Wired**, for the containers the standard library cannot open. An `.ogg`,
+`.mp3`, `.flac`, `.aiff`, `.m4a`, `.opus` or `.wma` in `assets-src/bundle/` is
+decoded to 16-bit PCM in a temporary file and becomes an `AudioClip` from
+there; the lossy original stays exactly as authored. A `.wav` skips FFmpeg
+entirely, so the lane still works on a host without it.
+
+Note the asymmetry: FFmpeg is used to get audio **in**, never to get it out.
+The bundle always carries PCM, because `AudioClip` Vorbis encoding needs
+FMOD's own seek tables ([improvements](../status/improvements.md) 4).
+
+Beyond that, FFmpeg provides scriptable resampling, channel layout,
+normalization, filtering, fades, mixing and convolution for a mod's own
+scripts — though `shamway generate audio convert` already does resample,
+downmix and normalize with no third-party package. Keep lossless editable
+sources and make bundle-ready derivatives from a checked-in command or script.
 
 - Official documentation: <https://ffmpeg.org/documentation.html>
 - Audio filters: <https://ffmpeg.org/ffmpeg-filters.html#Audio-Filters>
@@ -277,6 +361,33 @@ choice does not waive this pipeline's module-log, class-142, version, naming,
 or live-client gates.
 
 - Official repository: <https://github.com/OCB7D2D/UnityAssetExporter>
+
+## What is actually wired, and what is not
+
+A tool named on this page with nothing calling it reads like an unfinished
+integration. This table says which is which, so nobody has to guess — and so
+"integrate the OSS tools" has one place to check. Ask the live version with
+`shamway capabilities --json`.
+
+| Tool | State |
+|---|---|
+| **UnityPy** | **wired** — type trees for every class the editorless writer emits, `inspect --deep` |
+| **trimesh** | **wired** — `check-mesh`, and reads glTF/OBJ/STL/PLY into a bundle `Mesh` |
+| **Blender** | **wired** — `generate mesh` (GLB) and `generate mesh-icon` (headless Cycles render) |
+| **Pillow** | **wired** — cutouts, atlas cells, contact sheets, the texture lane |
+| **NumPy** | **wired** — `generate texture-maps`, and the BC1/BC3 block compressor |
+| **Khronos glTF Validator** | **wired** — `check-mesh --strict`; degrades to a `skipped:` line when absent |
+| **screenshot backends** | **wired** — `client capture` picks one per session type |
+| **xvfb** | **wired** — `render-icon` on a headless host |
+| **OpenSCAD** | **input only** — its STL drops straight into `assets-src/bundle/`; no command shells out to it |
+| **ImageMagick** | **wired** — rasterizes `.svg`, `.psd`, `.exr`, `.webp`, `.avif` into the texture lane, which Pillow cannot |
+| **FFmpeg** | **wired** — decodes `.ogg`, `.mp3`, `.flac`, `.aiff`, `.m4a`, `.opus`, `.wma` into the audio lane, which the stdlib cannot |
+| **bc7enc / Compressonator / ISPC / ctt** | **not wired** — BC7 only; none is packaged on Arch, Debian or Fedora, so each means a source build. BC1/BC3 are built in |
+| **gltfpack** | **wired** — `generate mesh-optimize`, for simplification. Its quantization is a *false win here* and is turned off by default |
+| **Material Maker** | **not wired** — GUI-first; its CLI export is a mod-side authoring choice |
+| **AssetRipper / AssetStudio / UABE** | **reference only, by design** — read the game to learn from it, never to copy out of it |
+| **python-fsb5** | **wired** — `generate audio from-bank`, and the independent reader that grades the hand-written FSB5 banks |
+| **vkd3d-compiler / glslang** | **not wired yet** — proven to emit the DXBC/SPIR-V a Unity shader carries; blocked on one undecoded descriptor ([improvements](../status/improvements.md) 4b) |
 
 ## Recommended agent-ready stack
 

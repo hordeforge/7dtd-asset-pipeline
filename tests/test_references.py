@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import filesystem_is_case_insensitive
+
 from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.references import (
     discover_references,
@@ -12,8 +14,6 @@ from sevendtd_asset_pipeline.references import (
     read_mod_name,
     resolve_case_insensitive,
 )
-
-from fixtures import filesystem_is_case_insensitive
 
 
 class ReferenceTests(unittest.TestCase):

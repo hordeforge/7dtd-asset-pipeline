@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import textwrap
 from dataclasses import dataclass, field
 from typing import TypedDict
@@ -443,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
         "--stem", default="myModThing", help="asset stem, used in the follow-up commands"
     )
     parser.add_argument("--json", action="store_true", help="machine-readable result")
-    args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
+    args = parser.parse_args(argv)
 
     if args.list or not args.kind:
         if args.json:

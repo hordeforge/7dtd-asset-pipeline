@@ -73,6 +73,15 @@ class PipelineConfig:
     """
     unity_editor: Path | None
     game_dir: Path | None
+    compress_textures: bool = False
+    """Whether the editorless writer block-compresses textures.
+
+    Off by default because it is lossy, and this pipeline does not quietly
+    change what an author signed off on. On, a fully opaque texture becomes
+    `DXT1` (8x smaller) and one with alpha `DXT5` (4x), which is what Unity's
+    own importer would have done; `build` prints the visible PSNR of each so
+    the trade is a number rather than a shrug.
+    """
     code_references: tuple[str, ...] = ()
     """Bundle stems the mod's own C# loads, which no XML names.
 
@@ -248,6 +257,7 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         unity_version=str(unity.get("version") or "") or None,
         unity_editor=_optional_path(base, unity.get("editor"), "UNITY_EDITOR"),
         game_dir=_optional_path(base, game.get("directory"), "SEVEN_DAYS_TO_DIE_DIR"),
+        compress_textures=bool(data.get("compress_textures", False)),
         code_references=tuple(item.strip() for item in code_references),
     )
     for field, owned_path in (
@@ -320,6 +330,11 @@ manifest_dir = {_toml_string(manifest_dir)}
 resources_dir = "Resources"
 config_dir = "Config"
 target = "StandaloneWindows64"
+
+# Block-compress textures to DXT1 (opaque, 8x smaller) or DXT5 (alpha, 4x).
+# Off because it is lossy: turn it on deliberately, then look at the result.
+# Every texture's sides must then be a multiple of four.
+compress_textures = false
 
 # Bundle stems the mod's C# loads directly. No XML names them, so `validate`
 # only sees them if they are listed here. Stem only, exact case, no extension.

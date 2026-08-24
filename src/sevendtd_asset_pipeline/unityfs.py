@@ -152,10 +152,17 @@ def _class_ids(serialized: bytes) -> tuple[int, ...]:
 
 HEADER_WINDOW = 4096
 # The class table sits at the start of the serialized file, so decompressing a
-# bounded prefix answers the gate. Shipped game bundles hold serialized files of
-# hundreds of megabytes and pure-Python LZ4 is slow, so the full node is only
-# decompressed if the prefix turns out to be too small.
-TYPE_TABLE_PREFIX = 32 * 1024 * 1024
+# small prefix answers the gate, and every window below is tried before the
+# whole node is read. Shipped game bundles hold serialized files of hundreds of
+# megabytes and pure-Python LZ4 costs seconds per tens of megabytes, and this
+# reader runs on every doctor/status/validate call against those bundles:
+# measured on the game's own Entities/trees bundle (650 MB archive, 111 MB
+# serialized node), the type table ends 125 KiB into the node while a fixed
+# 32 MiB window decompressed 257 blocks to reach it (research-provenance.md,
+# "Class-table prefix window"). The initial window covers tables many times
+# larger than that one; growth quadruples twice before the full node is read.
+TYPE_TABLE_PREFIX = 1024 * 1024
+TYPE_TABLE_MAX = 32 * 1024 * 1024
 
 
 def _read_at(handle: BinaryIO, offset: int, length: int, label: str) -> bytes:
@@ -240,13 +247,23 @@ def inspect_bundle(path: Path) -> BundleInfo:
                     raise PipelineError("UnityFS payload does not contain the first directory node")
                 return bytes(payload[node_offset : min(len(payload), needed)])
 
-            prefix_limit = min(needed, node_offset + TYPE_TABLE_PREFIX)
-            try:
-                class_ids = _class_ids(read_payload(prefix_limit))
-            except PipelineError:
-                if prefix_limit >= needed:
-                    raise
-                class_ids = _class_ids(read_payload(needed))
+            # The gate reads the smallest window that holds the class table:
+            # a table inside the first window answers immediately, a larger
+            # one pays only the ladder up to its own size, and a truncated or
+            # corrupt file still fails with the same bounded error once the
+            # whole node has been tried. A failure at one window is also how
+            # "the table continues past this window" is detected, so the
+            # ladder re-parses from the start of the payload each rung.
+            window = TYPE_TABLE_PREFIX
+            while True:
+                prefix_limit = min(needed, node_offset + window)
+                try:
+                    class_ids = _class_ids(read_payload(prefix_limit))
+                    break
+                except PipelineError:
+                    if prefix_limit >= needed:
+                        raise
+                    window = needed if window >= TYPE_TABLE_MAX else min(window * 4, TYPE_TABLE_MAX)
     except OSError as exc:
         raise PipelineError(f"cannot read bundle {path}: {exc}") from exc
     return BundleInfo(path, unity_version, archive_format, class_ids)

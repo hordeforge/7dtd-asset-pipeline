@@ -18,5 +18,7 @@ work around.
 ## Inventory
 
 <!-- inventory:prd:start -->
-(none written yet)
+- [0001 — Contextual model audio review](0001-contextual-model-audio-review.md) —
+  an explicit, provider-neutral model audition with intended-use context and
+  structured advisory criticism
 <!-- inventory:prd:end -->

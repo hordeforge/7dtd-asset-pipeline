@@ -17,6 +17,8 @@ import zlib
 from pathlib import Path
 from typing import Any
 
+from fixtures import filesystem_is_case_insensitive
+
 import sevendtd_asset_pipeline
 from sevendtd_asset_pipeline import Pipeline, PipelineError
 from sevendtd_asset_pipeline.assets_src import LANES, render_readme
@@ -27,8 +29,6 @@ from sevendtd_asset_pipeline.icon_check import (
     read_png_header,
 )
 from sevendtd_asset_pipeline.sound_check import check_sound
-
-from fixtures import filesystem_is_case_insensitive
 
 
 def write_png(
@@ -360,6 +360,16 @@ class GeneratorTests(unittest.TestCase):
     imaging or mesh packages installed.
     """
 
+    def test_bomb_whistle_is_reproducible_and_descends(self) -> None:
+        import random
+
+        from sevendtd_asset_pipeline.generators.sound import bomb_whistle
+
+        first = bomb_whistle(1.0, random.Random(7), 1100.0, 360.0)
+        second = bomb_whistle(1.0, random.Random(7), 1100.0, 360.0)
+        self.assertEqual(first, second)
+        self.assertEqual(44_100, len(first))
+
     def test_every_registered_generator_imports(self) -> None:
         from sevendtd_asset_pipeline.generators import GENERATORS, load
 
@@ -422,6 +432,73 @@ class GeneratorTests(unittest.TestCase):
             with Image.open(root / "cell.png") as written:
                 self.assertEqual((16, 16), written.size)
             self.assertEqual([], list(root.glob("*.tmp")), "the staged file must not survive")
+
+    def test_the_contact_sheet_shows_the_icon_on_both_grounds(self) -> None:
+        """One ground hides one of the two ways an icon fails.
+
+        A dark-edged subject vanishes into an inventory slot; a cutout that
+        kept a white halo only shows it against light. The sheet used to be
+        dark alone, so half of that was unreviewable.
+        """
+        if not has_capability("pillow"):
+            self.skipTest("the sheet is drawn with Pillow")
+        import tempfile
+
+        from PIL import Image
+
+        from sevendtd_asset_pipeline.generators.icon import contact_sheet
+
+        with tempfile.TemporaryDirectory() as directory:
+            sheet_path = Path(directory) / "sheet.png"
+            icon = Image.new("RGBA", (16, 16), (255, 0, 0, 255))
+            contact_sheet(icon, sheet_path)
+            with Image.open(sheet_path) as sheet:
+                pixels = sheet.convert("RGB")
+                # Top-left of each row is bare background: one dark, one light.
+                top = pixels.getpixel((2, 2))
+                bottom = pixels.getpixel((2, pixels.height - 3))
+            self.assertLess(sum(top), 200, f"the first row is not a dark ground: {top}")
+            self.assertGreater(sum(bottom), 500, f"the second row is not a light ground: {bottom}")
+
+    def test_mesh_optimize_simplifies_and_refuses_a_shape_that_moved(self) -> None:
+        """gltfpack's simplifier is lossy in shape, and a collapsed mesh loads.
+
+        Skipped where gltfpack is absent, which includes CI. Measured on this
+        host: a 5120-triangle icosphere at `--simplify 0.25` becomes 1280
+        triangles with 0.31% extent drift, and at 0.02 it drifts 1.54% and is
+        refused with the output deleted.
+        """
+        import shutil as shutil_module
+        import tempfile
+
+        if not shutil_module.which("gltfpack"):
+            self.skipTest("gltfpack is not installed")
+        if not has_capability("trimesh"):
+            self.skipTest("measuring the result needs trimesh")
+        import logging
+
+        import trimesh
+
+        from sevendtd_asset_pipeline.generators.mesh_optimize import main
+
+        logging.getLogger("trimesh").addHandler(logging.NullHandler())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "dense.glb"
+            trimesh.creation.icosphere(subdivisions=4, radius=0.5).export(str(source))
+
+            kept = root / "lod.glb"
+            self.assertEqual(0, main([str(source), str(kept), "--simplify", "0.25"]))
+            self.assertTrue(kept.is_file())
+            reduced = trimesh.load(str(kept), force="mesh")
+            self.assertLess(len(reduced.faces), 2000, "the simplifier did not engage")
+
+            crushed = root / "crushed.glb"
+            self.assertEqual(
+                1,
+                main([str(source), str(crushed), "--simplify", "0.02", "--max-drift", "0.005"]),
+            )
+            self.assertFalse(crushed.exists(), "a mesh over the drift limit was still written")
 
     def test_the_mesh_icon_refuses_a_bad_target_before_starting_blender(self) -> None:
         import tempfile
@@ -594,6 +671,55 @@ class GeneratorTests(unittest.TestCase):
                     run("sound", ["tick", str(target), "--seed", "5"])
             self.assertEqual(first.read_bytes(), second.read_bytes())
             self.assertTrue(check_sound(first).ok, check_sound(first).problems)
+
+    def test_nuclear_blast_is_reproducible_gated_and_sustained(self) -> None:
+        """The nuclear voice must not collapse back into a short generic crack."""
+        import contextlib
+        import io
+        import wave
+
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            first, second = root / "a.wav", root / "b.wav"
+            for target in (first, second):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    run("sound", ["nuclear-blast", str(target), "--seed", "5"])
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            report = check_sound(first)
+            self.assertTrue(report.ok, report.problems)
+            with wave.open(str(first), "rb") as handle:
+                self.assertGreaterEqual(handle.getnframes() / handle.getframerate(), 15.9)
+
+    def test_regular_blast_has_clean_layered_impact(self) -> None:
+        """A conventional blast needs more than one processed crack."""
+        import inspect
+
+        from sevendtd_asset_pipeline.generators.sound import blast
+
+        source = inspect.getsource(blast)
+        self.assertNotIn("tanh", source)
+        self.assertIn("compress(mixed)", source)
+        self.assertIn("fracture_returns", source)
+        self.assertIn("thunder_band", source)
+
+    def test_nuclear_blast_does_not_overdrive_its_waveform(self) -> None:
+        """Target-game listening rejected nonlinear saturation as unclean crackling."""
+        import inspect
+
+        from sevendtd_asset_pipeline.generators.sound import nuclear_blast
+
+        self.assertNotIn("tanh", inspect.getsource(nuclear_blast))
+        self.assertIn("compress(mixed)", inspect.getsource(nuclear_blast))
+        self.assertIn("boom_hz", inspect.getsource(nuclear_blast))
+        self.assertIn("1.40, boom", inspect.getsource(nuclear_blast))
+        self.assertNotIn("deep_impact", inspect.getsource(nuclear_blast))
+        self.assertIn("pressure_crack", inspect.getsource(nuclear_blast))
+        self.assertIn("0.72, shatter", inspect.getsource(nuclear_blast))
+        self.assertIn("shatter_reflections", inspect.getsource(nuclear_blast))
+        self.assertIn("1.18, thunder", inspect.getsource(nuclear_blast))
+        self.assertIn("(0.34, 0.68, 0.16)", inspect.getsource(nuclear_blast))
 
     def test_the_sounds_xml_entry_omits_noise_unless_asked(self) -> None:
         """<Noise> on a sound layered over a vanilla event calls the horde twice."""

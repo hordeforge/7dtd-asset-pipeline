@@ -124,6 +124,18 @@ REGISTRY: tuple[_Spec, ...] = (
         install="shamway script install-tools --with-authoring",
     ),
     _Spec(
+        name="fsb5",
+        kind="module",
+        probe="fsb5",
+        unlocks=(
+            "shamway generate audio from-bank",
+            "the writer's own FSB5 round-trip check",
+        ),
+        purpose="decode an FSB5 bank back to PCM — the independent reader for the "
+        "banks this project hand-writes, and for hearing a vanilla clip",
+        install=extra_install("audio"),
+    ),
+    _Spec(
         name="gltf_validator",
         kind="command",
         probe="gltf_validator",
@@ -135,16 +147,28 @@ REGISTRY: tuple[_Spec, ...] = (
         name="blender",
         kind="command",
         probe="blender",
-        unlocks=("shamway generate mesh",),
+        unlocks=("shamway generate mesh", "shamway generate mesh-icon"),
         purpose="authored mesh lane: organic, rigged, and sculpted geometry, exported "
-        "as glTF straight into an editorless bundle",
+        "as glTF straight into an editorless bundle, and the editorless icon render",
         install="shamway script install-tools --with-authoring",
+    ),
+    _Spec(
+        name="gltfpack",
+        kind="command",
+        probe="gltfpack",
+        unlocks=("shamway generate mesh-optimize",),
+        purpose="simplify a mesh and reorder it for vertex-cache locality; it cuts "
+        "triangles, which reaches the bundle, not bytes on disk, which does not",
+        install="npm install -g gltfpack",
     ),
     _Spec(
         name="openscad",
         kind="command",
         probe="openscad",
-        unlocks=("a mod's own OpenSCAD generators",),
+        unlocks=(
+            "shamway pack (.stl meshes it exports)",
+            "a mod's own OpenSCAD generators",
+        ),
         purpose="parametric hard-surface geometry; its STL output is a bundle input, "
         "so OpenSCAD reaches a .unity3d with no editor",
         install="shamway script install-tools --with-authoring",
@@ -168,16 +192,24 @@ REGISTRY: tuple[_Spec, ...] = (
         name="numpy",
         kind="module",
         probe="numpy",
-        unlocks=("shamway generate texture-maps",),
-        purpose="seeded numeric texture synthesis",
+        unlocks=(
+            "shamway generate texture-maps",
+            "compress_textures (DXT1/DXT5 block compression)",
+        ),
+        purpose="seeded numeric texture synthesis, and the block compressor that "
+        "shrinks a synthesized texture 4-8x",
         install=extra_install("authoring"),
     ),
     _Spec(
         name="magick",
         kind="command",
         probe="magick",
-        unlocks=("a mod's own image generators",),
-        purpose="deterministic raster transforms and contact sheets",
+        unlocks=(
+            "shamway pack (.svg/.psd/.exr/.webp/.avif textures)",
+            "a mod's own image generators",
+        ),
+        purpose="rasterize the source formats Pillow cannot read — vector art above "
+        "all — plus deterministic raster transforms for a mod's own scripts",
         install="shamway script install-tools --with-authoring",
     ),
     _Spec(
@@ -202,8 +234,12 @@ REGISTRY: tuple[_Spec, ...] = (
         name="ffmpeg",
         kind="command",
         probe="ffmpeg",
-        unlocks=("a mod's own audio scripts",),
-        purpose="audio conversion, normalization, and filtering",
+        unlocks=(
+            "shamway pack (.ogg/.mp3/.flac/.aiff/.m4a/.opus/.wma clips)",
+            "a mod's own audio scripts",
+        ),
+        purpose="decode the compressed containers the standard library cannot open, "
+        "plus conversion, normalization and filtering for a mod's own scripts",
         install="shamway script install-tools --with-authoring",
     ),
 )

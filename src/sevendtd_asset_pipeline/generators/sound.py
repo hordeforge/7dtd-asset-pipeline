@@ -10,8 +10,10 @@ byte-for-byte.
 
     shamway generate sound blast   art/audio/blast-near.wav --seed 7
     shamway generate sound blast   art/audio/blast-far.wav  --seed 7 --distant
+    shamway generate sound nuclear-blast art/audio/nuclear-near.wav --seed 7
     shamway generate sound tick    art/audio/fuse-tick.wav
     shamway generate sound whoosh  art/audio/throw.wav --seconds 1.4
+    shamway generate sound bomb-whistle art/audio/fall.wav --seconds 4
     shamway generate sound hum     art/audio/generator-loop.wav --loop
     shamway generate sound beep    art/audio/ui-confirm.wav --hz 880 --beeps 2
     shamway generate sound sounds-xml myModBlast --distant myModBlastDistant
@@ -126,6 +128,27 @@ def normalize(samples: list[float], peak_db: float = -1.0) -> list[float]:
     return [value / peak * target for value in samples]
 
 
+def compress(samples: list[float], threshold: float = 0.18, ratio: float = 3.0) -> list[float]:
+    """Reduce peak-to-body range without waveshaping the waveform."""
+    release = math.exp(-1.0 / (RATE * 0.06))
+    envelope_value = 0.0
+    gain_value = 1.0
+    output = []
+    for sample in samples:
+        level = abs(sample)
+        coefficient = 0.0 if level > envelope_value else release
+        envelope_value = coefficient * envelope_value + (1.0 - coefficient) * level
+        if envelope_value <= threshold:
+            target_gain = 1.0
+        else:
+            compressed_level = threshold + (envelope_value - threshold) / ratio
+            target_gain = compressed_level / envelope_value
+        gain_coefficient = 0.0 if target_gain < gain_value else release
+        gain_value = gain_coefficient * gain_value + (1.0 - gain_coefficient) * target_gain
+        output.append(sample * gain_value)
+    return output
+
+
 def mix(*layers: tuple[float, list[float]]) -> list[float]:
     """Sum weighted layers, tolerating different lengths."""
     length = max(len(samples) for _, samples in layers)
@@ -207,13 +230,12 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
         ]
         return normalize(remove_dc(fade_tail(mix((1.0, rumble), (0.35, thud)), 2.5)), -2.0)
 
-    crack = [
-        value * shape for value, shape in zip(white, envelope(times, 0.002, 0.02), strict=True)
-    ]
-    rip = [
-        value * shape
-        for value, shape in zip(lowpass(white, 1800.0), envelope(times, 0.01, 0.18), strict=True)
-    ]
+    shock_noise = lowpass(white, 4200.0)
+    shock = []
+    for time, grit in zip(times, shock_noise, strict=True):
+        positive = math.exp(-time / 0.035)
+        negative = 0.55 * math.exp(-(time - 0.05) / 0.065) if time >= 0.05 else 0.0
+        shock.append((positive - negative) * 0.72 + grit * math.exp(-time / 0.09) * 0.28)
 
     # Pressure wave: an exponential sweep from 70 Hz to 22 Hz over three
     # seconds. Below about 25 Hz it is felt more than heard, which is the point.
@@ -241,19 +263,148 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
             rumble, envelope(times, 0.12, duration * 0.33, power=0.9), times, strict=True
         )
     ]
-    band = lowpass(highpass(white, 900.0), 5000.0)
-    gate = lowpass([1.0 if generator.random() < 0.08 else 0.0 for _ in times], 60.0)
-    debris = [
-        value * shape * open_amount * 4.0 * 0.18
-        for value, shape, open_amount in zip(band, envelope(times, 0.3, 1.6), gate, strict=True)
+    body_band = lowpass(highpass(white, 45.0), 850.0, passes=2)
+    body = [
+        value * min(time / 0.02, 1.0) * math.exp(-time / 1.5)
+        for value, time in zip(body_band, times, strict=True)
     ]
-    return normalize(
-        remove_dc(
-            fade_tail(
-                mix((1.0, crack), (0.55, rip), (0.9, sweep), (0.95, rumble), (1.0, debris)), 1.5
+    reflected = [0.0] * len(times)
+    offset = int(0.28 * RATE)
+    for index in range(offset, len(times)):
+        age = (index - offset) / RATE
+        reflected[index] = body_band[index - offset] * math.exp(-age / 0.22)
+
+    fracture_band = lowpass(highpass(white, 700.0), 6800.0, passes=2)
+    fracture = [
+        value
+        * min(time / 0.003, 1.0)
+        * math.exp(-time / 0.28)
+        * (0.76 + 0.24 * math.sin(2.0 * math.pi * (37.0 * time + 8.0 * time * time)))
+        for value, time in zip(fracture_band, times, strict=True)
+    ]
+    fracture_returns = [0.0] * len(times)
+    for delay, gain in ((0.16, 0.42), (0.39, 0.24)):
+        delay_samples = int(delay * RATE)
+        for index in range(delay_samples, len(times)):
+            fracture_returns[index] += fracture[index - delay_samples] * gain
+
+    thunder_band = lowpass(highpass(white, 38.0), 460.0, passes=2)
+    thunder = []
+    for value, time in zip(thunder_band, times, strict=True):
+        age = max(time - 0.12, 0.0)
+        shape = 0.0 if time < 0.12 else min(age / 0.08, 1.0) * math.exp(-age / 1.45)
+        thunder.append(value * shape * (0.78 + 0.22 * math.sin(2.0 * math.pi * 2.1 * age)))
+
+    mixed = mix(
+        (0.82, shock),
+        (0.86, sweep),
+        (0.78, body),
+        (0.38, reflected),
+        (0.72, fracture),
+        (0.48, fracture_returns),
+        (0.88, thunder),
+        (0.72, rumble),
+    )
+    return normalize(remove_dc(fade_tail(compress(mixed), 1.5)))
+
+
+def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
+    """A near nuclear detonation, not a peak-boosted generic impact.
+
+    A broad pressure wall is followed by separated terrain returns and a dense
+    low-mid coda. Infrasonic identity is shifted into the audible low band so
+    the result survives ordinary speakers and a game's positional mixer.
+    """
+    times = seconds(duration)
+    white = noise(len(times), generator)
+
+    pressure_noise = lowpass(highpass(white, 120.0), 5200.0)
+    shock = []
+    boom = []
+    boom_phase = 0.0
+    pressure_crack = []
+    for time, grit in zip(times, pressure_noise, strict=True):
+        positive = math.exp(-time / 0.075)
+        negative_time = max(time - 0.085, 0.0)
+        negative = 0.72 * math.exp(-negative_time / 0.12) if time >= 0.085 else 0.0
+        shock.append((positive - negative) * 0.65)
+
+        # The boom is its own long pressure wave. Its second harmonic keeps the
+        # descending low fundamental audible on ordinary speakers and through
+        # positional game mixers. The short crack sits above it; it must never
+        # consume the headroom and reduce the whole detonation to a dry thump.
+        progress = min(time / 2.4, 1.0)
+        boom_hz = 108.0 * ((44.0 / 108.0) ** progress)
+        boom_phase += 2.0 * math.pi * boom_hz / RATE
+        boom_shape = min(time / 0.055, 1.0) * math.exp(-time / 1.35)
+        boom.append(boom_shape * (math.sin(boom_phase) + 0.34 * math.sin(2.0 * boom_phase + 0.25)))
+        pressure_crack.append(grit * min(time / 0.0015, 1.0) * math.exp(-time / 0.055))
+
+    shatter_band = lowpass(highpass(white, 650.0), 7800.0, passes=2)
+    shatter = [
+        value
+        * min(time / 0.004, 1.0)
+        * math.exp(-time / 0.42)
+        * (0.72 + 0.28 * math.sin(2.0 * math.pi * (31.0 * time + 7.0 * time * time)))
+        for value, time in zip(shatter_band, times, strict=True)
+    ]
+    shatter_reflections = [0.0] * len(times)
+    for delay, gain in ((0.17, 0.48), (0.36, 0.34), (0.61, 0.22)):
+        offset = int(delay * RATE)
+        for index in range(offset, len(times)):
+            shatter_reflections[index] += shatter[index - offset] * gain
+
+    thunder_band = lowpass(highpass(white, 32.0), 520.0, passes=2)
+    thunder = []
+    for value, time in zip(thunder_band, times, strict=True):
+        age = max(time - 0.16, 0.0)
+        shape = 0.0 if time < 0.16 else min(age / 0.11, 1.0) * math.exp(-age / 2.6)
+        roll = 0.72 + 0.28 * math.sin(2.0 * math.pi * (1.7 * age + 0.16 * age * age))
+        thunder.append(value * shape * roll)
+
+    body = []
+    phase_a = phase_b = phase_c = 0.0
+    for time in times:
+        phase_a += 2 * math.pi * (92.0 - 48.0 * min(time / 3.8, 1.0)) / RATE
+        phase_b += 2 * math.pi * (61.0 - 24.0 * min(time / 5.0, 1.0)) / RATE
+        phase_c += 2 * math.pi * 113.0 / RATE
+        shape = math.exp(-time / 3.2) * min(time / 0.025, 1.0)
+        body.append(
+            shape
+            * (
+                0.78 * math.sin(phase_a)
+                + 0.52 * math.sin(phase_b + 0.4)
+                + 0.18 * math.sin(phase_c + 1.1)
             )
         )
+
+    return_noise = lowpass(white, 900.0)
+    returns = [0.0] * len(times)
+    for delay, gain, decay in ((0.34, 0.68, 0.16), (0.82, 0.58, 0.24), (1.47, 0.38, 0.34)):
+        offset = int(delay * RATE)
+        for index in range(offset, len(times)):
+            age = (index - offset) / RATE
+            returns[index] += return_noise[index - offset] * math.exp(-age / decay) * gain
+
+    low_coda = lowpass(white, 240.0, passes=3)
+    mid_coda = lowpass(highpass(white, 180.0), 1600.0, passes=2)
+    coda = [
+        (1.15 * low + 0.42 * mid) * min(time / 0.18, 1.0) * math.exp(-time / (duration * 0.31))
+        for low, mid, time in zip(low_coda, mid_coda, times, strict=True)
+    ]
+
+    mixed = mix(
+        (0.22, shock),
+        (1.40, boom),
+        (0.12, pressure_crack),
+        (0.72, shatter),
+        (0.58, shatter_reflections),
+        (1.18, thunder),
+        (1.25, body),
+        (0.85, returns),
+        (1.0, coda),
     )
+    return normalize(remove_dc(fade_tail(compress(mixed), 2.0)), -0.2)
 
 
 def tick(generator: random.Random) -> list[float]:
@@ -312,6 +463,35 @@ def whoosh(duration: float, generator: random.Random) -> list[float]:
         )
     ]
     return normalize(remove_dc(fade_tail(shaped, min(0.15, duration * 0.2))), -3.0)
+
+
+def bomb_whistle(
+    duration: float, generator: random.Random, start_hz: float, end_hz: float
+) -> list[float]:
+    """A descending aerodynamic whistle for a bomb falling past the listener.
+
+    Integrating the changing frequency keeps phase continuous; multiplying a
+    sine by a changing frequency would create the wrong instantaneous pitch.
+    A restrained turbulent layer keeps the result from reading as a clean
+    electronic test tone.
+    """
+    times = seconds(duration)
+    white = noise(len(times), generator)
+    air = lowpass(highpass(white, 180.0), 3400.0)
+    phase = 0.0
+    output: list[float] = []
+    for index, time in enumerate(times):
+        position = min(time / duration, 1.0)
+        # Ease the descent so it reads as a continuous fall rather than a siren.
+        frequency = start_hz + (end_hz - start_hz) * (position**1.15)
+        phase += 2.0 * math.pi * frequency / RATE
+        flutter = 0.88 + 0.08 * math.sin(2.0 * math.pi * 3.2 * time)
+        tone = math.sin(phase) + 0.24 * math.sin(2.0 * phase + 0.35)
+        output.append(tone * flutter + 0.16 * air[index])
+    attack = min(int(0.04 * RATE), len(output))
+    for index in range(attack):
+        output[index] *= index / max(attack, 1)
+    return normalize(remove_dc(fade_tail(output, min(0.18, duration * 0.12))), -4.0)
 
 
 def hum(duration: float, generator: random.Random, base_hz: float, loop: bool) -> list[float]:
@@ -496,12 +676,22 @@ def main(argv: list[str] | None = None) -> int:
         "--distant", action="store_true", help="the same event heard kilometres away"
     )
 
+    nuclear_parser = voice(
+        "nuclear-blast", "near nuclear detonation: pressure wall, heavy returns, long coda"
+    )
+    nuclear_parser.add_argument("--seconds", type=float, default=16.0)
+
     tick_parser = voice("tick", "one dry mechanical click (an item's SoundTick)")
     tick_parser.add_argument("--repeats", type=int, default=1, help="clicks in the clip")
     tick_parser.add_argument("--interval", type=float, default=1.0, help="seconds between clicks")
 
     whoosh_parser = voice("whoosh", "a thrown or passing object")
     whoosh_parser.add_argument("--seconds", type=float, default=1.2)
+
+    whistle_parser = voice("bomb-whistle", "a bomb falling with gradually descending pitch")
+    whistle_parser.add_argument("--seconds", type=float, default=4.0)
+    whistle_parser.add_argument("--start-hz", type=float, default=1100.0)
+    whistle_parser.add_argument("--end-hz", type=float, default=360.0)
 
     hum_parser = voice("hum", "electrical hum for machinery or ambience")
     hum_parser.add_argument("--seconds", type=float, default=3.0)
@@ -548,6 +738,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "blast":
         duration = args.seconds or (15.0 if args.distant else 11.0)
         samples = blast(duration, generator, args.distant)
+    elif args.command == "nuclear-blast":
+        if args.seconds < 8.0:
+            raise SystemExit("ERROR: a nuclear-blast needs at least 8 seconds for its coda")
+        samples = nuclear_blast(args.seconds, generator)
     elif args.command == "tick":
         one = tick(generator)
         if args.repeats > 1:
@@ -561,6 +755,12 @@ def main(argv: list[str] | None = None) -> int:
             samples = one
     elif args.command == "whoosh":
         samples = whoosh(args.seconds, generator)
+    elif args.command == "bomb-whistle":
+        if args.seconds <= 0 or args.start_hz <= 0 or args.end_hz <= 0:
+            raise SystemExit("ERROR: duration and whistle frequencies must be positive")
+        if args.end_hz >= args.start_hz:
+            raise SystemExit("ERROR: --end-hz must be lower than --start-hz")
+        samples = bomb_whistle(args.seconds, generator, args.start_hz, args.end_hz)
     elif args.command == "hum":
         samples = hum(args.seconds, generator, args.hz, args.loop)
     elif args.command == "beep":

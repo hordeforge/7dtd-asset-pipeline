@@ -658,6 +658,24 @@ pixels in the right rows, and the AudioClip `channels=1 frequency=44100
 samples=4410`. That is the engine's own loader and its own class definitions,
 not this repository's parser — but it is not 7DTD, and it is not acceptance.
 
+## Class-table prefix window, measured for the offline reader
+
+Measured 2026-08-24 against the installed game's own bundles (V3.1.0 b14) with
+a scratch dissector over this repository's `unityfs.py`, plus `cProfile` on the
+same call. The shipped `Data/Bundles/Standalone/Entities/trees` bundle is a
+650 MB archive whose single directory node is a 111.6 MB serialized file; its
+type table holds **23 types and ends 127,888 bytes into that node**. The
+reader's fixed decompression window was then 32 MiB, so every
+`doctor`/`status`/`validate` call that reads the game revision decompressed 257
+LZ4HC blocks to reach a table that ends inside block 2: **1323 ms per
+`inspect_bundle` call** (4.07 s of it `_lz4_decompress` under the profiler).
+
+The window now starts at 1 MiB and grows ×4 up to the same 32 MiB cap before a
+full-node read, which answers this bundle in **40.7 ms** with byte-identical
+class IDs (`2022.3.62f2`, 23 classes). The growth ladder is pinned by tests:
+a fixture whose table runs ~1.4 MiB parses on the second rung, and a table
+truncated past the first window still fails with the bounded error.
+
 ## Official and community references
 
 - Unity `BuildPipeline.BuildAssetBundles`:
@@ -714,6 +732,107 @@ and wrote a bundle whose serialized class table was `[33, 1, 21, 48, 4, 23]` —
 no class 142. The pipeline rejected it on the log gate, and the previously
 staged bundle was left byte-identical. Restoring the manifest produced a
 class-142 bundle that passed every gate.
+
+## Nuclear-blast voice provenance (2026-08-24)
+
+The dedicated `nuclear-blast` voice was added after a target-game human listen
+rejected the generic `blast` result as both too faint and not recognisable as a
+nuclear detonation. Its structural choices are grounded in two kinds of
+evidence rather than in a renamed oscillator:
+
+- Lawrence Livermore National Laboratory's restored and declassified US
+  atmospheric-test film archive documents the relevant event class and the
+  large, evolving atmospheric/terrain presentation:
+  <https://www.llnl.gov/article/43956/llnl-releases-newly-declassified-test-videos>.
+- Arrowsmith and Bowman, *Explosion yield estimation from pressure wave
+  template matching*, JASA 141 (2017), uses full measured pressure waveforms
+  rather than reducing an explosion to a peak value; the article is US
+  Government work and available as PMC5459613:
+  <https://pmc.ncbi.nlm.nih.gov/articles/PMC5459613/>. That supports treating
+  the pressure front and following waveform/coda as the identity, rather than
+  assuming peak normalization can turn a generic impact into a nuclear event.
+
+The generated clip deliberately transposes infrasonic identity into audible
+low frequencies for consumer speakers. It is therefore a designed game asset,
+not a scientific reconstruction. `check-sound` proves its file properties;
+only a human listen through the target game's mixer can accept its character.
+
+The same reviewer identified the pre-existing generic `blast` voice as a known
+defect: it did not read as a bomb or blast and sounded like crackling. Its near
+variant therefore replaces sparse high-band debris and a millisecond-scale
+crack with a wider pressure hit, dense audible body, reflected report, and
+rolling tail. This remains human-verdict provenance, not a scientific claim;
+the test suite locks reproducibility, duration, and file gates, while each
+consumer still owes listening in its target mixer.
+
+A follow-up target-game listen of the first `nuclear-blast` version found its
+event character substantially better, but heard artificial overdrive and
+unclean crackling at the loud end despite zero digitally clipped samples. The
+generator deliberately applied `tanh` to the shock, tonal body, and final mix;
+that nonlinear saturation was therefore removed rather than hidden by a lower
+peak. The consumer separately requested slightly more level, which belongs to
+source placement or mixer gain rather than reintroducing waveform distortion.
+
+The fully linear follow-up was also human-rejected: despite a 2 m virtual
+source it sounded like a weak poof, and measured source RMS fell from `0.17668`
+to `0.09476`. The third design adds peak-envelope dynamics compression before
+normalization. This changes level through smooth gain control, not sample
+waveshaping, so body and coda can rise without restoring the overdriven
+harmonics the first follow-up removed.
+
+The compressed follow-up remained a human-rejected poof because it lacked an
+explosion-impact onset. Inspection showed the designed pressure pulse was
+largely one-sided and low-frequency before the mandatory 12 Hz high-pass. The
+next design added an explicitly audible impact layer—a 165→42 Hz boom sweep
+and one dense band-limited pressure crack—while retaining the clean compressed
+body/coda and excluding the old sparse debris crackling. Target-game listening
+then rejected that version as a dry thump with no perceived lows or boom: the
+short crack masked a low sweep that did not sustain enough energy through the
+game mixer. The follow-up makes the boom an independent 2.4-second 108→44 Hz
+pressure wave, adds a second harmonic for small-speaker audibility, extends its
+decay to 1.15 seconds, and substantially lowers the crack in the mix.
+
+Target-game listening judged that follow-up somewhat better, specifically
+validating the sustained low layer, but found it lacked the mid/high shattering
+character needed for the blast front. The next revision retains the low design
+unchanged and adds a dense 650–7,800 Hz tearing-noise burst with a 0.42-second
+decay and continuous fast amplitude variation. It is deliberately a coherent
+pressure-front texture rather than the earlier sparse debris crackling.
+
+Target-game listening again found the direction better, but the initial thump
+remained slightly too prominent relative to the shatter and thunder character.
+The follow-up slows the boom attack from 12 to 35 ms and reduces the shock,
+boom, and short-crack mix gains. It spends the recovered headroom on three
+overlapping delayed copies of the dense shatter front and a separately filtered
+32–520 Hz rolling thunder bed with a 160 ms onset and 2.6-second decay.
+
+The target-game repeat judged that design “way better,” validating its layered
+structure, but still heard too much short low-mid thump and too little deep
+impact. The next revision moves the primary sweep down from 108→44 Hz to
+92→38 Hz, slows its attack, reduces its second harmonic and mix gain, and
+further lowers the shock/crack. A separately phased 62→44 Hz plus 43→34 Hz
+pressure layer rises over 65 ms and decays over 1.75 seconds, supplying the
+missing depth without another abrupt transient.
+
+Target-game listening rejected that deeper-pressure revision: it still had too
+much knock and weakened the previously successful perception of thunder. The
+next revision removes the added deep-pressure oscillators, restores the
+108→44 Hz PR #43 boom and its shatter/thunder layers, then limits its change to
+softening and lowering the initial shock, boom harmonic, and short crack.
+
+Listening then clarified that the small remaining excess was not the initial
+knock but the delayed low/mid thump. The final current-pass adjustment changes
+only the first terrain return, at 0.34 seconds, from gain `0.78` to `0.68`.
+The accepted opening, shatter, and rolling-thunder structure is unchanged;
+further subjective revision is deferred to a later review.
+
+The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
+`ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
+`Origin.position` internally. A caller must pass one absolute world coordinate;
+pre-rebasing it applies the floating origin twice. A source-project listening
+run also rejected a 40 m virtual source as too faint through the stock explosion
+prefab, which is why the authoring guide now says to validate a much closer
+virtual source instead of presenting 40 m as a safe default.
 
 ## Module resolution is not module declaration
 

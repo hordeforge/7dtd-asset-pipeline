@@ -110,6 +110,12 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="also write the membership manifest here (default: OUTPUT.manifest)",
     )
+    pack.add_argument(
+        "--compress-textures",
+        action="store_true",
+        help="block-compress textures to DXT1/DXT5 (8x/4x smaller, lossy); "
+        "both sides must be a multiple of 4",
+    )
 
     verify = commands.add_parser(
         "verify-bundle",
@@ -447,7 +453,9 @@ def run(args: argparse.Namespace) -> int:
                 "pack needs --game-dir or --unity-version: a bundle carries the revision "
                 "it claims to be for, and the installed game is what has to load it"
             )
-        bundle, manifest_text = pack_directory(args.source, args.output.name, version)
+        bundle, manifest_text = pack_directory(
+            args.source, args.output.name, version, compress_textures=args.compress_textures
+        )
         # Atomic writes: a pack interrupted midway must not leave a truncated
         # .unity3d at the path a later deploy would ship.
         write_artifact(args.output, bundle)
@@ -535,8 +543,12 @@ def run(args: argparse.Namespace) -> int:
                 if not item.available:
                     print(f"     install: {item.install}")
         return 0
-    if args.command == "unity-release" and args.version:
-        data = fetch_release(args.version, args.platform).as_dict()
+    if args.command == "unity-release":
+        # An explicit --version answers without a modlet; resolving from the
+        # project needs load_config, so it happens here, before the shared
+        # load below would demand one.
+        version = args.version or project_unity_version(load_config(args.config).unity_project)
+        data = fetch_release(version, args.platform).as_dict()
         if args.json:
             print(json.dumps(data, indent=2, sort_keys=True))
         else:
@@ -610,13 +622,6 @@ def run(args: argparse.Namespace) -> int:
             print(
                 f"OK: bundle and {validation.reference_count} reference(s) validated (XML and code_references)"
             )
-        return 0
-    if args.command == "unity-release":
-        data = fetch_release(project_unity_version(config.unity_project), args.platform).as_dict()
-        if args.json:
-            print(json.dumps(data, indent=2, sort_keys=True))
-        else:
-            _print_pairs(data)
         return 0
     if args.command == "status":
         status_report = collect_status(config)

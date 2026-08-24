@@ -142,7 +142,8 @@ here without waiting on anyone.
 | `bundle_source = "synthesized"`, gates, staging | `build.synthesize_bundle` | built; prints what its gates are worth |
 | `shamway pack`, `shamway verify-bundle` | `cli.py`, `bundle_verify.py` | built |
 | `Mesh` (one submesh, position + normal + UV0, from any file trimesh reads) | `bundle_writer.mesh` | built 2026-08-24; a real 2022.3.62f2 runtime read both a UV-mapped and a UV-less mesh back at the authored vertex counts and bounds |
-| prefab, material, shader | `bundle_writer.shader`, `bundle_writer.material`, `bundle_writer.prefab_objects`, `shader_blob.py` | built 2026-08-24; a real 2022.3.62f2 runtime reports `Shader.isSupported = true` and the material naming its texture. See below — the wall was never a wall |
+| prefab: `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer`, and `Ref` for cross-object PPtrs | `bundle_writer.mesh_prefab`, `bundle_writer.prefab_objects` | built 2026-08-24; a real 2022.3.62f2 runtime resolved the graph, and the source folder now wires one per mesh file with its material |
+| material, shader | `bundle_writer.material`, `bundle_writer.shader`, `shader_blob.py` | built 2026-08-24; a real 2022.3.62f2 runtime reports `Shader.isSupported = true` and the material naming its texture. See below — the wall was never a wall |
 
 The mesh lane was the half of this row that the format allowed, and the
 prediction above held: the layout is fully documented, `check-mesh` already

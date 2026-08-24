@@ -1,10 +1,10 @@
 """Write a Unity asset bundle without Unity.
 
 `unityfs.py` reads the container; this writes one. It is the other half of the
-same format, and it exists so that a mod whose assets are textures, text and
-sound can produce `Resources/<name>.unity3d` on a machine with no editor —
-CI, a headless agent host, a laptop that will never install several gigabytes
-of Unity.
+same format, and it exists so that a mod whose assets are textures, text,
+sound and meshes can produce `Resources/<name>.unity3d` on a machine with no
+editor — CI, a headless agent host, a laptop that will never install several
+gigabytes of Unity.
 
 What it emits is the structure Unity itself emits, established by dissecting
 the bundles the installed game ships (`docs/research/research-provenance.md`):
@@ -24,10 +24,14 @@ bundle becomes a silent load failure. The same library then serializes each
 object by walking that tree, so the field order, array shape and alignment
 rules are the ones a reader of Unity's format already agrees on.
 
-The proof boundary is narrow and stated in `docs/bundles/no-unity.md`: this writes
-containers and objects for a bounded set of classes. It does not replace
-Unity's importers, its shader compiler, or its prefab serialization, and an
-offline parse of what it wrote proves construction, never acceptance.
+The proof boundary is narrow and stated in `docs/bundles/no-unity.md`: this
+writes containers and objects for a bounded set of classes — `Texture2D`,
+`AudioClip`, `TextAsset`, `Mesh`, and the `GameObject`/`Transform`/
+`MeshFilter`/`MeshRenderer` group that makes a prefab. It stops at `Material`
+and `Shader`, because a shader in a bundle is compiled platform bytecode; that
+is a gap with a known route rather than a wall (`docs/status/improvements.md`
+4b), not a claim that it cannot be done. An offline parse of what it wrote
+proves construction, never acceptance.
 """
 
 from __future__ import annotations
@@ -37,11 +41,11 @@ import os
 import struct
 import tempfile
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 
-from . import shader_blob
+from . import block_compress, shader_blob, transcode
 from .capabilities import require_capability
 from .errors import PipelineError
 
@@ -270,10 +274,7 @@ def _serialize(
     objects: list[BundleObject], unity_version: str, target: int, cab: str
 ) -> _Serialized:
     """Build the SerializedFile metadata and data sections."""
-    class_ids: list[int] = []
-    for obj in objects:
-        if obj.class_id not in class_ids:
-            class_ids.append(obj.class_id)
+    class_ids = list(dict.fromkeys(obj.class_id for obj in objects))
 
     common = _common_strings()
     trees = {class_id: _node(class_id, unity_version) for class_id in class_ids}
@@ -431,15 +432,7 @@ def build_bundle(
     # own bundles do, and so every container entry can name a later id.
     path_ids = {(obj.key or obj.name): index for index, obj in enumerate(objects, start=2)}
     objects = [
-        BundleObject(
-            class_id=obj.class_id,
-            name=obj.name,
-            fields=cast("dict[str, Any]", _resolve_refs(obj.fields, path_ids, obj.name)),
-            key=obj.key,
-            in_container=obj.in_container,
-            resource=obj.resource,
-            resource_field=obj.resource_field,
-        )
+        replace(obj, fields=cast("dict[str, Any]", _resolve_refs(obj.fields, path_ids, obj.name)))
         for obj in objects
     ]
     container = [
@@ -530,8 +523,10 @@ def text_asset(name: str, text: str) -> BundleObject:
     return BundleObject(TEXT_ASSET, name, {"m_Name": name, "m_Script": text})
 
 
-def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
-    """A Texture2D from a PNG, uncompressed RGBA32 with its pixels inline.
+def texture_2d(
+    name: str, png: Path, readable: bool = False, compress: bool = False
+) -> BundleObject:
+    """A Texture2D from a PNG, with its pixels inline.
 
     Unity streams texture pixels into a side file and generates mip maps; both
     are optimisations, and neither is required for the runtime to accept the
@@ -541,6 +536,13 @@ def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
     `readable` keeps a CPU copy of the pixels, which is Unity's own default of
     off: it doubles the texture's memory and only a mod that reads pixels from
     script needs it.
+
+    `compress` block-compresses to `DXT1` when the image is fully opaque and
+    `DXT5` when it is not — 8x and 4x smaller than RGBA32, and what Unity's
+    own importer would have done. It is **off by default and lossy**: this
+    project does not silently change what an author signed off on, and the
+    quality achieved is reported by the caller rather than assumed. Both sides
+    must be a multiple of four, which a block format cannot avoid.
     """
     require_capability("pillow")
     from PIL import Image
@@ -551,11 +553,20 @@ def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
             width, height = image.size
             # Unity's first row is the bottom one; a texture written top-down
             # loads fine and renders upside down, which no gate would catch.
-            pixels = image.transpose(Image.FLIP_TOP_BOTTOM).tobytes()
+            flipped = image.transpose(Image.FLIP_TOP_BOTTOM)
+            pixels = flipped.tobytes()
     except (OSError, ValueError, Image.DecompressionBombError) as exc:
         # DecompressionBombError subclasses Exception directly, and some decode
         # paths raise ValueError, so OSError alone let both escape as tracebacks.
         raise PipelineError(f"cannot read texture {png}: {exc}") from exc
+
+    texture_format = TEXTURE_RGBA32
+    if compress:
+        require_capability("numpy")
+        import numpy
+
+        raw = numpy.frombuffer(pixels, dtype="uint8").reshape(height, width, 4)
+        pixels, texture_format = block_compress.compress(raw, alpha=bool((raw[..., 3] < 255).any()))
 
     return BundleObject(
         TEXTURE_2D,
@@ -569,7 +580,7 @@ def texture_2d(name: str, png: Path, readable: bool = False) -> BundleObject:
             "m_Height": height,
             "m_CompleteImageSize": len(pixels),
             "m_MipsStripped": 0,
-            "m_TextureFormat": TEXTURE_RGBA32,
+            "m_TextureFormat": texture_format,
             "m_MipCount": 1,
             "m_IsReadable": readable,
             "m_IsPreProcessed": False,
@@ -1168,8 +1179,8 @@ def _fsb5_pcm16(pcm: bytes, channels: int, rate: int) -> bytes:
         supported = ", ".join(str(value) for value in sorted(FSB5_FREQUENCIES))
         raise PipelineError(
             f"{rate} Hz cannot be written without a frequency chunk; FMOD's table "
-            f"holds {supported}. Resample first: "
-            "ffmpeg -i in.wav -ar 44100 out.wav"
+            f"holds {supported}. Resample first, with no extra tool:\n"
+            "  shamway generate audio convert in.wav out.wav --rate 44100"
         )
     if channels not in (1, 2):
         raise PipelineError(f"{channels}-channel audio needs a channel chunk; write mono or stereo")
@@ -1204,8 +1215,8 @@ def audio_clip(name: str, wav: Path) -> BundleObject:
         raise PipelineError(f"cannot read clip {wav}: {exc}") from exc
     if width != 2:
         raise PipelineError(
-            f"{wav.name} is {width * 8}-bit; write 16-bit PCM "
-            "(ffmpeg -i in.wav -c:a pcm_s16le out.wav)"
+            f"{wav.name} is {width * 8}-bit; write 16-bit PCM with no extra tool:\n"
+            f"  shamway generate audio convert {wav.name} out.wav"
         )
     samples = len(frames) // (2 * channels)
     return BundleObject(
@@ -1250,6 +1261,17 @@ ASSET_KINDS: dict[str, str] = {
     ".obj": "Mesh",
     ".stl": "Mesh",
     ".ply": "Mesh",
+    # Read through Pillow, which handles these without help.
+    ".jpg": "Texture2D",
+    ".jpeg": "Texture2D",
+    ".tga": "Texture2D",
+    ".bmp": "Texture2D",
+    # Converted first: FFmpeg decodes the audio, ImageMagick rasterizes the
+    # vector and layered formats. Both are optional, and a source in one of
+    # these is refused by name with the install line when its tool is absent —
+    # never skipped, and never silently downgraded.
+    **{suffix: "AudioClip" for suffix in transcode.AUDIO_SUFFIXES},
+    **{suffix: "Texture2D" for suffix in transcode.IMAGE_SUFFIXES},
 }
 MESH_SUFFIXES = tuple(suffix for suffix, kind in ASSET_KINDS.items() if kind == "Mesh")
 IGNORED_NAMES = {".gitkeep", ".gitignore"}
@@ -1262,7 +1284,7 @@ def collect_sources(source_dir: Path) -> list[Path]:
         raise PipelineError(
             f"no bundle source directory at {source_dir}. It is the folder whose "
             "contents become the bundle; create it and put the mod's textures, "
-            "clips and text files in it."
+            "clips, meshes and text files in it."
         )
     found: list[Path] = []
     unknown: list[str] = []
@@ -1285,14 +1307,21 @@ def collect_sources(source_dir: Path) -> list[Path]:
     return found
 
 
-def object_for(path: Path) -> BundleObject:
-    """Turn one source file into the object its extension names."""
+def object_for(path: Path, compress_textures: bool = False) -> BundleObject:
+    """Turn one source file into the object its extension names.
+
+    A source the standard library cannot read is converted to one it can,
+    through FFmpeg or ImageMagick, into a temporary file that never replaces
+    the author's original.
+    """
     stem = path.stem
     suffix = path.suffix.lower()
-    if suffix == ".png":
-        return texture_2d(stem, path)
-    if suffix == ".wav":
-        return audio_clip(stem, path)
+    if ASSET_KINDS.get(suffix) == "Texture2D":
+        with transcode.as_png(path) as rasterized:
+            return texture_2d(stem, rasterized, compress=compress_textures)
+    if ASSET_KINDS.get(suffix) == "AudioClip":
+        with transcode.as_wav(path) as decoded:
+            return audio_clip(stem, decoded)
     if suffix in MESH_SUFFIXES:
         return mesh(stem, path)
     try:
@@ -1365,7 +1394,11 @@ def write_artifact(path: Path, payload: bytes | str) -> None:
 
 
 def pack_directory(
-    source_dir: Path, bundle_name: str, unity_version: str, target: int = STANDALONE_WINDOWS64
+    source_dir: Path,
+    bundle_name: str,
+    unity_version: str,
+    target: int = STANDALONE_WINDOWS64,
+    compress_textures: bool = False,
 ) -> tuple[bytes, str]:
     """Build a bundle from a directory of source files, with no editor.
 
@@ -1375,7 +1408,7 @@ def pack_directory(
     sources = collect_sources(source_dir)
     meshes = [path for path in sources if path.suffix.lower() in MESH_SUFFIXES]
     texture_stems = {path.stem for path in sources if path.suffix.lower() == ".png"}
-    objects = [object_for(path) for path in sources if path not in meshes]
+    objects = [object_for(path, compress_textures) for path in sources if path not in meshes]
     for path in meshes:
         objects.extend(prefab_objects(path, texture_stems))
     if meshes:

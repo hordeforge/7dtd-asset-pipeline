@@ -54,24 +54,46 @@ value alone — worth doing together with a `ModInfo.xml` schema check
 
 ## 4. The synthesized lanes are uncompressed
 
-The editorless writer stores textures as raw RGBA32 and clips as PCM16 in
-FSB5. Both are correct — the runtime verified both — and both cost size:
-RGBA32 is roughly 4–8x a block-compressed format, PCM16 roughly 10x Vorbis at
-music rates. A mod shipping many icons or long clips through the synth path
-pays for that in download size, not correctness.
+**Textures: closed 2026-08-24.** `block_compress.py` encodes BC1 (`DXT1`, 8x)
+and BC3 (`DXT5`, 4x) in NumPy with no new dependency, and `texture_2d`
+takes it through `compress_textures` in `.shamway.toml` or
+`shamway pack --compress-textures`. It is **off by default** because it is
+lossy and this pipeline does not quietly change what an author signed off on.
 
-**Close it with:** encoders, each independently gated —
+Two traps are designed out rather than documented, and both are in the tests:
 
-- textures: DXT1/DXT5 (and later BC7) via [`bc7enc_rdo`](https://github.com/richgel999/bc7_enc_rdo)
-  or [Compressonator](https://github.com/GPUOpen-Tools/compressonator); the
-  writer already has the object layout, only the pixel block changes;
-- audio: FSB5+Vorbis needs a Vorbis encoder plus FMOD's seek-table quirks —
-  [Fmod5Sharp](https://github.com/SamboyCoding/Fmod5Sharp) rebuilds banks and
-  is prior art; harder than textures, still bounded.
+- a flat block quantizes to `c0 == c1`, which flips the decoder into
+  three-colour mode where index 3 is *transparent black* — holes in an opaque
+  texture. Every index in such a block is forced to 0;
+- **grading by raw RGB PSNR reports a failure that is not there.** A rendered
+  icon's fully transparent pixels carry renderer noise (measured on real
+  `generate mesh-icon` output: min 0, max 255, σ 27.7), and BC1's shared
+  endpoints spend precision on it. That icon scored 16.9 dB raw and **39.9 dB
+  composited**. `visible_psnr` composites first, so the number means what a
+  viewer sees.
 
-Until then the advice stands: big or quality-critical audio goes through the
-`unity`/`external` path where Unity's importer encodes Vorbis, and the synth
-path carries short clips and utility sounds.
+Evidence: our blocks decode **byte-identically** in `texture2ddecoder`, the
+independent library UnityPy uses on real game textures, and a real Unity
+2022.3.62f2 runtime loaded one as `160x160 DXT5`.
+
+Still open, as an upgrade rather than a gap: **BC7**. It has eight block modes
+and a partition table, and a mediocre BC7 encoder is worse than a good BC1 one
+at the same size, so it is not attempted in Python.
+[`bc7enc_rdo`](https://github.com/richgel999/bc7_enc_rdo) (BC1–7 with
+rate-distortion optimization, 10–50% further shrink),
+[Compressonator](https://github.com/GPUOpen-Tools/compressonator),
+[ISPCTextureCompressor](https://github.com/GameTechDev/ISPCTextureCompressor)
+and [`ctt`](https://github.com/cwfitzgerald/ctt) are the CLIs for it. None is
+packaged on Arch, Debian or Fedora, so wiring one means asking a user to build
+from source — worth doing when a mod's texture budget actually demands BC7,
+not before.
+
+**Audio: still open.** FSB5+Vorbis needs a Vorbis encoder plus FMOD's
+seek-table quirks — [Fmod5Sharp](https://github.com/SamboyCoding/Fmod5Sharp)
+rebuilds banks and is prior art; harder than textures, still bounded. Until
+then: big or quality-critical audio goes through the `unity`/`external` path
+where Unity's importer encodes Vorbis, and the synth path carries short clips
+and utility sounds.
 
 ## 4b. The editorless writer's shader scope
 

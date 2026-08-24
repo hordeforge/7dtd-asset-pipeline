@@ -154,8 +154,14 @@ here. Two other shapes are supported and change what `init` writes:
 
 - `--bundle-source synthesized` — the bundle is written by shamway itself. No
   Unity project is created; `source_root` points at `assets-src/bundle/` in the
-  mod, and every `.png`, `.wav` and `.txt`/`.json`/`.csv` there becomes one
-  asset. Meshes, prefabs and materials cannot be synthesized.
+  mod, and every file there becomes one asset: images (`.png`, `.jpg`, `.tga`,
+  `.bmp`, plus `.svg`/`.psd`/`.exr`/`.webp`/`.avif` through ImageMagick), clips
+  (`.wav`, plus `.ogg`/`.mp3`/`.flac`/`.aiff`/`.m4a`/`.opus`/`.wma` through
+  FFmpeg), meshes (`.glb`, `.gltf`, `.obj`, `.stl`, `.ply`), and text
+  (`.txt`/`.json`/`.csv`). **Materials and shaders** still need an editor —
+  see [no-unity.md](bundles/no-unity.md), and
+  [improvements.md](status/improvements.md) 4b for the route that would close
+  it.
 - `--bundle-source none` — the mod ships no bundle at all (XML, loose
   `UIAtlases/` PNGs, a DLL). No Unity project is created, `Makefile.assets`
   has no build targets, and no editor is needed for any part of the mod.

@@ -61,7 +61,16 @@ class DeepInspectResourceTests(unittest.TestCase):
             self.assertEqual(["mymodnote"], [entry.asset_stem for entry in report.entries])
         finally:
             gc.enable()
-        self.assertEqual(before, open_descriptor_count())
+        after = open_descriptor_count()
+        assert after is not None  # `before` already proved /proc/self/fd exists
+        # Not `assertEqual`: the count is process-wide, so a descriptor another
+        # test left reachable can be released *during* this one and the total
+        # drops. CI caught exactly that — 10 before, 7 after — and a decrease
+        # is not the failure this test is named for. Accumulation is, and 50
+        # iterations make even a one-per-call leak show as +50.
+        self.assertLessEqual(
+            after, before, f"deep_inspect accumulated {after - before} descriptors"
+        )
 
     def test_a_missing_bundle_is_a_pipeline_error_not_a_raw_os_error(self) -> None:
         # deep_inspect is diagnostic: every failure it reports must be

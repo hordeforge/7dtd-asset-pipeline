@@ -120,11 +120,15 @@ say. Two ways out, and the choice is a real design decision:
   `maxDistance`, and name it in the sound group. `GeneratedAsset.AudioSourcePrefab(...)`
   builds one with 3D spatial blend and logarithmic rolloff.
 - **Play the sound near the listener, in the direction of the event, and apply
-  the attenuation yourself.** The source project chose this: the hook plays the
-  blast 40 m from the listener toward the detonation and scales the volume by
-  real distance. The direction stays honest, vanilla mixer routing and the
-  player's volume options still apply, and no second prefab has to be
-  maintained. It needs a C# hook, which the first option does not.
+  the attenuation yourself.** Keep the virtual source close enough that the
+  prefab does not impose a second, accidental attenuation curve; 40 m was
+  human-rejected as far too faint in the source project, while 8 m preserves
+  useful direction. Scale volume by real event distance. Pass the absolute
+  world coordinate to `Audio.Manager.Play`: the installed V3.1 method subtracts
+  `Origin.position` internally, so pre-rebasing it places the source wrongly.
+  The direction stays honest, vanilla mixer routing and player volume options
+  still apply, and no second prefab has to be maintained. It needs a C# hook,
+  which the first option does not.
 
 **2. `DistantFadeStart` defaults to −1, meaning never.** `Audio.Manager.Play`
 switches to a node's `DistantClip` only past `DistantFadeStart` metres, and
@@ -193,6 +197,100 @@ shamway generate sound blast assets-src/audio/blast-near.wav --seed 7
 shamway generate sound blast assets-src/audio/blast-far.wav  --seed 7 --distant
 ```
 
+Peak-normalizing `blast` does not turn its short generic-impact silhouette into
+a nuclear detonation. For a near nuclear layer, use the dedicated voice:
+
+```bash
+shamway generate sound nuclear-blast assets-src/audio/nuclear-near.wav --seed 7
+```
+
+It uses a broad pressure wall instead of a millisecond crack, moves
+the pressure body into the 35–115 Hz band that ordinary speakers reproduce,
+adds separated terrain returns, and sustains a dense low-mid coda. It is a
+game-audio rendering, not a calibrated scientific pressure trace; human
+listening in the target mixer remains the acceptance gate.
+
+Do not nonlinear-saturate the nuclear voice to manufacture loudness. A fresh
+target-game listen found that the first saturated version had better overall
+character but sounded artificially overdriven, unclean, and crackling at the
+loud end. The voice now stays linear through its shock, tonal body, returns,
+and final mix before DC removal and peak normalization. Obtain additional
+in-game level through mixer/source placement, not by crushing the waveform.
+
+Fully removing saturation then failed in the opposite direction: source RMS
+fell from `0.17668` to `0.09476`, and a target-game reviewer heard a weak poof
+even with the virtual source moved closer. The voice now uses peak-envelope
+compression before normalization. Smooth gain reduction frees headroom so
+normalization lifts body and coda; no individual sample is waveshaped or hard
+clipped.
+
+The compressed version was still human-rejected as a slightly improved poof:
+it lacked an explosion-impact onset. The original pressure pulse was largely
+one-sided and low-frequency, so the required 12 Hz high-pass removed much of
+its audible identity. The first impact retune was also rejected in the target
+game: its short 165→42 Hz sweep was masked by the pressure crack and read as a
+dry thump with no lows or boom. `nuclear-blast` therefore gives the boom its
+own 2.4-second 108→44 Hz pressure wave with an audible second harmonic and a
+1.15-second decay. A much quieter dense 120–5,200 Hz pressure crack sits above
+that sustained low layer instead of consuming its headroom. This remains
+separate from the body/coda and deliberately does not restore sparse debris
+crackling.
+
+Target-game listening confirmed that this sustained-boom design improved the
+low end, but rejected it as incomplete because it lacked the mid/high
+“shatter” that makes a huge pressure front feel violent. The follow-up
+preserves the low layer and adds a dense 650–7,800 Hz tearing burst with a
+0.42-second decay. Its fast, continuously varying amplitude gives the front a
+shattering texture without reverting to isolated debris crackles, nonlinear
+overdrive, or clipping.
+
+That version improved the target-game result again, but listening still found
+the initial thump slightly too prominent compared with the rest of the event.
+The next balance slows the boom attack from 12 to 35 ms, reduces the shock,
+boom, and short crack gains, and redistributes their headroom into three
+overlapping shatter reflections plus a 32–520 Hz rolling thunder bed beginning
+160 ms after the front. The thunder decays over 2.6 seconds, so the event
+unfolds instead of collapsing into one dominant hit.
+
+That balance was a strong target-game near-pass: the layered shatter and
+thunder finally read as one large event, but the short low-mid thump remained
+slightly too forward while deeper impact was missing. The next revision shifts
+the descending boom from 108→44 Hz to 92→38 Hz, slows its attack to 55 ms,
+reduces its second harmonic and gain, and further lowers the shock and crack.
+It adds an independent 62→44 Hz plus 43→34 Hz bass-pressure layer with a 65 ms
+attack and 1.75-second decay. This adds deep impact without creating another
+short knock.
+
+The deep-pressure addition was rejected in the target game: the knock remained
+too prominent, while the preceding version's rolling thunder was clearer. The
+follow-up removes that added layer and restores the proven 108→44 Hz boom plus
+unchanged shatter/thunder structure. It changes only the knock balance: a
+55 ms attack, reduced boom harmonic, and lower shock, boom, and short-crack
+gains.
+
+The remaining target-game note was very small and specifically concerned the
+delayed thump, not the initial impact. The first low/mid terrain return at
+0.34 seconds is therefore reduced from `0.78` to `0.68`; the opening impact,
+shatter reflections, rolling thunder, and later returns stay unchanged. This
+is the stopping point for the current pass, with another listening review
+allowed later.
+
+The near `blast` voice itself no longer treats sparse high-band debris as a
+main layer. A target-game reviewer rejected that output as “just crackling,”
+not a bomb or blast. Its replacement uses a wider bipolar pressure hit, a
+dense 45–850 Hz body, one reflected report, soft saturation, and the rolling
+rumble. `nuclear-blast` remains distinct through its broader pressure wall,
+multiple heavy returns, and longer coda.
+
+The later nuclear-blast listening passes exposed a reusable weakness in that
+regular `blast` revision: a large conventional explosion also needs its hit
+balanced against a dense fracture front and rolling low returns. The near
+regular voice now removes its two `tanh` stages, uses clean peak-envelope
+compression, adds a coherent 700–6,800 Hz fracture burst with two reflections,
+and adds a shorter 38–460 Hz thunder bed. These layers are deliberately shorter
+and less massive than `nuclear-blast`; the generic voice must not become a
+nuclear detonation.
+
 If the mod plays the distant clip from code, delay it by `distance / 343`
 seconds. A nuclear blast heard instantly two kilometres away reads as a bug
 even to a player who could not say why.
@@ -216,8 +314,9 @@ on V 3.1.0 b14:
   position, string group, int entityId = -1, bool, float volumeScale)` keeps
   the game's own AudioSource prefab, mixer routing, and the player's volume
   options; nothing a mod writes should construct an `AudioSource`. Positions
-  are world coordinates minus `Origin.position` (7DTD re-bases its floating
-  origin), as the stock code does. When the clip is delayed, recompute the
+  are absolute world coordinates; the installed V3.1 manager subtracts
+  `Origin.position` internally. Pre-rebasing applies the floating origin twice.
+  When the clip is delayed, recompute the
   direction at arrival, not at firing: the player moves during a six-second
   flight.
 - **Local, non-positional cues.** `Audio.Manager.PlayInsidePlayerHead(group)`
@@ -236,9 +335,11 @@ request:
 
 | Voice | What it is | Typical use |
 |---|---|---|
-| `blast` | crack + sub-bass sweep + rolling rumble + debris, or the distant swell | explosions, large impacts |
+| `blast` | pressure hit + audible low-mid body + reflected report + rolling rumble, or the distant swell | bombs, explosions, large impacts |
+| `nuclear-blast` | broad pressure wall + audible low-frequency body + separated terrain returns + long dense coda | a near nuclear detonation that must not read as a generic firework |
 | `tick` | one dry escapement click, under 90 ms | an item's `SoundTick` countdown |
 | `whoosh` | filtered noise sweeping up and back down | a thrown object, a passing shell |
+| `bomb-whistle` | phase-continuous aerodynamic tone descending gradually over turbulent air | a bomb falling toward impact |
 | `hum` | mains fundamental with harmonics and grit, optionally seamless | machinery, ambience |
 | `beep` | short electronic cue, repeatable | UI, warnings |
 | `sounds-xml` | prints the `Config/sounds.xml` entry | wiring |

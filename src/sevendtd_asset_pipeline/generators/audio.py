@@ -22,6 +22,7 @@ import array
 import math
 import os
 import random
+import struct
 import sys
 import tempfile
 import wave
@@ -127,6 +128,55 @@ def normalize(samples: array.array[int], peak: float) -> array.array[int]:
     return array.array[int]("h", (max(-PCM_PEAK, min(PCM_PEAK, int(v * scale))) for v in samples))
 
 
+def decode_bank(bank: Path, out_dir: Path) -> int:
+    """Decode every sample in an FSB5 bank to a WAV beside it.
+
+    Two uses, and the second is why it is here rather than in a mod's own
+    script. The obvious one is reference listening: the game stores every clip
+    as an FSB5 bank inside a `.resource` stream, and hearing a vanilla clip at
+    its true rate and channel count settles arguments about level and length.
+
+    The other is that this pipeline *hand-writes* those banks. An encoder read
+    back only by the code that wrote it has not been read back, and this is a
+    decoder written by someone else — the same reason the block compressor is
+    graded with `texture2ddecoder`.
+    """
+    try:
+        import fsb5
+    except ImportError:
+        print(
+            "ERROR: reading an FSB5 bank needs the 'fsb5' capability.\n"
+            "       Install it, then retry:  shamway capabilities --json",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        parsed = fsb5.FSB5(bank.read_bytes())
+    except (OSError, ValueError, IndexError, struct.error) as exc:
+        print(f"ERROR: cannot read {bank}: {exc}", file=sys.stderr)
+        return 1
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"bank:    {bank}")
+    print(f"mode:    {parsed.header.mode}  samples: {parsed.header.numSamples}")
+    for index, sample in enumerate(parsed.samples):
+        stem = sample.name or f"sample{index:03d}"
+        target = out_dir / f"{stem}.wav"
+        try:
+            target.write_bytes(parsed.rebuild_sample(sample))
+        except Exception as exc:  # noqa: BLE001 - the library raises many types
+            # A bank this tool did not write may be Vorbis, which needs the
+            # optional decoder. Name the sample rather than aborting the rest.
+            print(f"  {stem}: cannot decode ({exc})", file=sys.stderr)
+            continue
+        print(
+            f"  {target.name}: {sample.frequency} Hz, {sample.channels} ch, "
+            f"{sample.samples} samples"
+        )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -144,6 +194,12 @@ def main(argv: list[str] | None = None) -> int:
         "--peak", type=float, default=0.89, help="normalize to this peak (0 disables)"
     )
 
+    bank = commands.add_parser(
+        "from-bank", help="decode an FSB5 bank to WAV, for reference listening"
+    )
+    bank.add_argument("bank", type=Path, help="an .fsb / .resource stream, or one this tool wrote")
+    bank.add_argument("out_dir", type=Path, help="directory to write one WAV per sample into")
+
     tone = commands.add_parser("tone", help="synthesize a seeded tone/noise placeholder")
     tone.add_argument("output", type=Path)
     tone.add_argument("--seconds", type=float, default=1.0)
@@ -158,6 +214,9 @@ def main(argv: list[str] | None = None) -> int:
         samples, channels, rate = read_wav(args.clip)
         describe(args.clip, samples, channels, rate)
         return 0
+
+    if args.command == "from-bank":
+        return decode_bank(args.bank, args.out_dir)
 
     if args.command == "convert":
         samples, channels, rate = read_wav(args.source)

@@ -39,7 +39,7 @@ class GeneratorInfo(TypedDict):
 GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "sound": (
         "sound",
-        "create clips: designed voices (blast, tick, whoosh, hum, beep) and the sounds.xml entry",
+        "create clips: designed voices (blast, nuclear-blast, tick, whoosh, bomb-whistle, hum, beep) and sounds.xml",
         (),
     ),
     "audio": (
@@ -71,6 +71,11 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
         "mesh",
         "author a parameterized mesh through headless Blender and export GLB",
         ("blender",),
+    ),
+    "mesh-optimize": (
+        "mesh_optimize",
+        "simplify and reorder a mesh with gltfpack, gated on how far the shape moved",
+        ("gltfpack", "trimesh"),
     ),
     "mesh-icon": (
         "mesh_icon",

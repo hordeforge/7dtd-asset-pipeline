@@ -217,6 +217,8 @@ cube-cross atlas UVs, so a single albedo arrived as six fragments and then, once
 that was fixed, a quarter turn out of true.
 
 **Still the open blocker: the d3d11 sub-program, and nothing else.** A human placed the block in a running client: invisible
+**Live client, 2026-08-24: the d3d11 sub-program is the open blocker, and
+nothing else is.** A human placed the block in a running client: invisible
 under the default d3d11-through-DXVK, and **visible, textured and solid** when
 the same client is relaunched with `-force-glcore`. One variable between the
 two runs.

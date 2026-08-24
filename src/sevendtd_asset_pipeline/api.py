@@ -40,6 +40,12 @@ from .bundle_verify import VerifyReport, verify_with_editor
 from .bundle_writer import pack_directory
 from .capabilities import Capability, capabilities, require_capability
 from .client import AcceptanceRun, LogReport
+from .colour import (
+    DEFAULT_COLOUR_TOLERANCE,
+    DEFAULT_TILE_RATIO,
+    TextureReport,
+    check_texture,
+)
 from .config import PipelineConfig, load_config
 from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, run_doctor
@@ -214,6 +220,17 @@ class Pipeline:
     ) -> MeshReport:
         """Check an authored mesh before Unity import. Needs trimesh."""
         return check_mesh(Path(mesh), max_extent, strict)
+
+    def check_texture(
+        self,
+        texture: Path | str,
+        matches: tuple[float, float, float] | None = None,
+        tolerance: float = DEFAULT_COLOUR_TOLERANCE,
+        tileable: bool = False,
+        max_tile_ratio: float = DEFAULT_TILE_RATIO,
+    ) -> TextureReport:
+        """Check a generated texture's colour space and tiling. Needs numpy and Pillow."""
+        return check_texture(Path(texture), matches, tolerance, tileable, max_tile_ratio)
 
     def check_sound(
         self, clip: Path | str, max_seconds: float = 30.0, require_mono: bool = True
@@ -452,6 +469,7 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "check_mesh": lambda self, p: self.check_mesh(**_mesh_params(p)),
     "check_log": lambda self, p: _check_log_result(Path(p["log"])),
     "check_sound": lambda self, p: self.check_sound(**_sound_params(p)),
+    "check_texture": lambda self, p: self.check_texture(**_texture_params(p)),
     "check_icons": lambda self, p: self.check_icons(p["atlas_root"], p["cell"]),
     "render_icon": lambda self, p: self.render_icon(
         p["prefab"],
@@ -521,6 +539,17 @@ def _mesh_params(params: dict[str, Any]) -> dict[str, Any]:
         "mesh": Path(params["mesh"]),
         "max_extent": params["max_extent"],
         "strict": params["strict"],
+    }
+
+
+def _texture_params(params: dict[str, Any]) -> dict[str, Any]:
+    matches = params.get("matches")
+    return {
+        "texture": Path(params["texture"]),
+        "matches": tuple(float(c) for c in matches) if matches else None,
+        "tolerance": params["tolerance"],
+        "tileable": params["tileable"],
+        "max_tile_ratio": params["max_tile_ratio"],
     }
 
 
@@ -605,6 +634,7 @@ _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "check_mesh": lambda p: check_mesh(**_mesh_params(p)),
     "check_log": lambda p: _check_log_result(Path(p["log"])),
     "check_sound": lambda p: check_sound(**_sound_params(p)),
+    "check_texture": lambda p: check_texture(**_texture_params(p)),
     "unity_release": lambda p: fetch_release(
         p["version"] if p.get("version") else _needs_version(), p["platform"]
     ),

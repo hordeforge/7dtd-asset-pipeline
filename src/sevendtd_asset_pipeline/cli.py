@@ -21,6 +21,7 @@ from .bundle_verify import verify_with_editor
 from .bundle_writer import pack_directory, write_artifact
 from .capabilities import capabilities
 from .client import main as client_main
+from .colour import DEFAULT_COLOUR_TOLERANCE, DEFAULT_TILE_RATIO, check_texture
 from .config import BUNDLE_SOURCES, load_config, resolve_bundle_source
 from .deep_inspect import deep_inspect
 from .docs import read as read_doc
@@ -179,6 +180,30 @@ def _parser() -> argparse.ArgumentParser:
     )
     mesh.add_argument("--strict", action="store_true", help="treat glTF warnings as failures")
     mesh.add_argument("--json", action="store_true")
+
+    texture = commands.add_parser(
+        "check-texture",
+        help="check a generated texture's colour space and tiling",
+    )
+    texture.add_argument("texture", type=Path)
+    texture.add_argument(
+        "--matches",
+        metavar="R,G,B",
+        help="the material.color triple this texture replaces, as written in the asset "
+        "builder (e.g. 0.46,0.39,0.15). Compared in sRGB, because that is the space a "
+        "material colour is already in",
+    )
+    texture.add_argument(
+        "--tolerance",
+        type=float,
+        default=DEFAULT_COLOUR_TOLERANCE,
+        help="largest allowed per-channel drift from --matches",
+    )
+    texture.add_argument(
+        "--tileable", action="store_true", help="assert the image still wraps at its edges"
+    )
+    texture.add_argument("--max-tile-ratio", type=float, default=DEFAULT_TILE_RATIO)
+    texture.add_argument("--json", action="store_true")
 
     sound = commands.add_parser(
         "check-sound", help="measure a WAV clip and reject unshippable formats"
@@ -427,6 +452,44 @@ def run(args: argparse.Namespace) -> int:
                 print(f"problem: {problem}")
             print("OK" if mesh.ok else "FAILED")
         return 0 if mesh.ok else 1
+    if args.command == "check-texture":
+        wanted: tuple[float, float, float] | None = None
+        if args.matches:
+            parts = [p for p in args.matches.replace(" ", "").split(",") if p]
+            if len(parts) != 3:
+                raise PipelineError(
+                    f"--matches needs three comma-separated channels, got {args.matches!r}"
+                )
+            try:
+                red, green, blue = (float(p) for p in parts)
+            except ValueError as exc:
+                raise PipelineError(f"--matches is not numeric: {args.matches!r}") from exc
+            wanted = (red, green, blue)
+        texture_report = check_texture(
+            args.texture, wanted, args.tolerance, args.tileable, args.max_tile_ratio
+        )
+        if args.json:
+            print(json.dumps(texture_report.as_dict(), indent=2, sort_keys=True))
+        else:
+            data = texture_report.as_dict()
+            for key in (
+                "path",
+                "size",
+                "mean_bytes",
+                "mean_srgb",
+                "mean_linear",
+                "expected_srgb",
+                "colour_drift",
+                "tile_ratio",
+            ):
+                if data[key] is not None:
+                    print(f"{key}: {data[key]}")
+            for note in texture_report.notes:
+                print(f"note: {note}")
+            for problem in texture_report.problems:
+                print(f"problem: {problem}")
+            print("OK" if texture_report.ok else "FAILED")
+        return 0 if texture_report.ok else 1
     if args.command == "check-sound":
         sound = check_sound(args.clip, args.max_seconds, args.require_mono)
         if args.json:

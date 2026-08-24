@@ -11,6 +11,7 @@ shamway validate
 shamway check-icons
 shamway check-sound assets-src/audio/clip.wav
 shamway check-mesh assets-src/meshes/thing.glb
+shamway check-texture Textures/albedo.png --matches 0.46,0.39,0.15 --tileable
 ```
 
 One more applies only to a mod whose bundle an editor built, because the log it
@@ -25,6 +26,15 @@ shamway check-log .shamway/build/bundle/unity-build.log
 non-zero when any is `FAIL`, so a single broken check never hides the rest of
 the report. Every other command exits non-zero with one `ERROR: ...` line on
 stderr. Prefer exit codes over parsing prose.
+
+`check-texture` is for a texture a generator produced rather than an artist
+painted. It answers two questions nothing else can: whether the mean still
+matches the `material.color` the texture replaces — compared in sRGB, because
+that is the space a material colour is already in — and whether a tiling
+texture still tiles. Both failures are silent and both look like something
+else; see "Replacing a flat colour with a generated texture" in
+[art-direction.md](authoring/art-direction.md) for why the colour one in
+particular tends to get "fixed" in the wrong direction.
 
 ## Offline gates
 

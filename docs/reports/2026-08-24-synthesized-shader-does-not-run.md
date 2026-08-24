@@ -6,6 +6,10 @@
   client, has collision, and draws nothing. No error, no magenta, no missing
   asset. Every offline gate passed and the in-client acceptance suite passed
   `5/5`.
+- **Read the CORRECTION section first.** A conclusion published in #66/#67 -
+  that no shader this writer serializes can render - was retracted the same day.
+  The container is cleared; the fault is in the shader content this writer
+  builds.
 - **Cause of the shader failure: two bugs in the GLCore code record**, both
   found and both fixed.
   1. The fragment half of `UNLIT_GLSL` used `layout(location = 0)` under
@@ -109,7 +113,95 @@ direction.
 `m_KeywordIndices` names the subset it is compiled for, with `[]` being the
 base variant.
 
-## Confirmed: the fault is the Shader object this writer serializes
+## CORRECTION — the section below is wrong, and here is the measurement that breaks it
+
+**Retracted on 2026-08-24, the same day it was published in #66 and #67.** The
+claim was that a `Shader` loaded from a bundle this writer produces never
+renders whatever its content. It is false.
+
+The claim rested on one transplant: stock
+`Legacy Shaders/Transparent/Cutout/VertexLit`, written into this writer's
+bundle, loading correctly and drawing nothing. What that transplant never
+checked is whether **that particular shader** draws on a bare cube at all. It is
+an alpha-tested cutout shader with its own `_Cutoff` and property
+expectations, and this writer's material does not carry them - so its zero has
+an explanation that has nothing to do with serialization.
+
+Redone with a shader **measured rendering in this same harness** -
+`Game/EntityTintMaskSSS`, the shader behind `Azalea_TintSSS`, which covered
+43.2% of the frame when loaded from the game's own bundle - transplanted into
+this writer's bundle instead:
+
+```text
+VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=4 renderQueue=2450 properties=17 device=OpenGLCore
+VERIFY-DRAWN-MATERIAL: built-in cube wearing 'shamwaySelfTestProp_mat' covered=38.8%
+VERIFY-DRAWNOW:        direct SetPass+DrawMeshNow covered=25.0%
+VERIFY-DRAWN-CONTROL:  built-in cube covered=38.8% zoomed-out=2.4%
+```
+
+**It draws.** Four passes, render queue 2450, seventeen properties - the real
+transplanted shader, not a substituted error shader, which reports
+`isSupported=False` and was seen doing exactly that earlier today.
+
+That `38.8%` matches the control is expected here rather than suspicious: it is
+the same cube at the same zoom, so any opaque shader covers the same fraction.
+The independent number is `DRAWNOW`'s 25.0%, which no error shader produced in
+any run.
+
+### What this actually establishes
+
+| | draws? |
+|---|---|
+| our bundle + our material + **stock** shader (`EntityTintMaskSSS`) | **yes**, 38.8% |
+| our bundle + our material + **our** shader | no, 0.0% |
+| our material + a built-in shader (`Unlit/Color`) | yes, 38.8% |
+
+So the **container is cleared**: this writer's UnityFS bundle, its
+SerializedFile, its class-142 wiring and its `Shader` serialization all carry a
+stock shader that then renders. The fault is back where the earlier sections put
+it - in **the `Shader` object this writer constructs**, that is, in its content.
+
+Two supporting facts, both measured while chasing the wrong conclusion, and
+both still true and still useful:
+
+- the embedded **class-48 type tree is identical** to the game bundle's, node
+  for node, 2324 nodes each;
+- a transplanted stock shader serializes to **byte-identical** object data -
+  the only difference is the name string that was deliberately renamed
+  (`0x0d` "Shamway/…" against `0x2b` "Legacy S…"), which accounts for the whole
+  28-byte length delta.
+
+Those two are why the container was suspected, and they are exactly why it can
+now be cleared rather than merely doubted.
+
+### One real deviation found on the way, measured, and *not* the cause
+
+This writer wrote an **empty `m_PreloadTable`**, with every container entry at
+`preloadIndex=0, preloadSize=0`. The game's bundle has 5144 preload entries, and
+its material declares `preloadIndex=2865 preloadSize=7`. `m_PreloadTable` is
+what the runtime loads *alongside* an asset, so an empty one looked like a
+precise explanation for a shader that resolves by `PPtr` and never gets its
+sub-programs.
+
+**It was implemented and measured: still `0.0%`.** The change was reverted
+rather than kept for looking right, and the deviation is recorded here so the
+next session neither re-discovers it as a lead nor assumes it is harmless in the
+live client, which has not been tested.
+
+### The mistake, named
+
+This is the same failure this repository's `AGENTS.md` warns about, committed by
+the session that had just quoted it: a **negative observation over-generalized**.
+"This one stock shader did not draw" became "no shader this writer serializes
+can draw", and it was written into a report and two merged pull requests
+before the obvious control - use a shader already known to draw - had been run.
+
+The cost was two pull requests of wrong framing. The fix is the same as it was
+for the shader claim in August: a negative result names the *specific* route
+measured, and a transplant is only evidence if the transplanted thing is known
+to work at the destination's baseline.
+
+## Superseded: the fault is the Shader object this writer serializes
 
 This supersedes the sections below it. They are kept because their eliminations
 still hold, but the target has moved off the shader *source* entirely.

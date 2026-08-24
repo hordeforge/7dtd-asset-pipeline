@@ -100,6 +100,19 @@ if shape == "box":
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.uv.reset()
     bpy.ops.object.mode_set(mode="OBJECT")
+    # `uv.reset()` gives each face the whole square but a quarter turn out of
+    # true: measured on the exported box, `u` ran with world *up* and `v` with
+    # world *left*, so a texture authored the right way up arrives on its side.
+    # Seen in a live client with the orientation-card albedo: every face showed
+    # the whole card, and every card's arrow pointed sideways.
+    #
+    # (u, v) -> (1 - v, u) puts `u` on world +X and `v` on world +Y. Checked
+    # against all four corners of the front face: right-bottom (0,0) -> (1,0),
+    # right-top (1,0) -> (1,1), left-top (1,1) -> (0,1), left-bottom
+    # (0,1) -> (0,0).
+    for loop_uv in obj.data.uv_layers.active.data:
+        u, v = loop_uv.uv
+        loop_uv.uv = (1.0 - v, u)
 
 bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_selection=False)
 dims = obj.dimensions

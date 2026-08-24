@@ -636,6 +636,14 @@ rolling tail. This remains human-verdict provenance, not a scientific claim;
 the test suite locks reproducibility, duration, and file gates, while each
 consumer still owes listening in its target mixer.
 
+A follow-up target-game listen of the first `nuclear-blast` version found its
+event character substantially better, but heard artificial overdrive and
+unclean crackling at the loud end despite zero digitally clipped samples. The
+generator deliberately applied `tanh` to the shock, tonal body, and final mix;
+that nonlinear saturation was therefore removed rather than hidden by a lower
+peak. The consumer separately requested slightly more level, which belongs to
+source placement or mixer gain rather than reintroducing waveform distortion.
+
 The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
 `ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
 `Origin.position` internally. A caller must pass one absolute world coordinate;

@@ -14,6 +14,9 @@ classes whose runtime behaviour makes a correct build silent or invisible.
   can be inaudible.
 - [vfx.md](vfx.md) — particle budgets, LOD tiers, and the two silent material
   failures.
+- [environment-effects.md](environment-effects.md) — weather, fog, and light:
+  why a zone effect that ships only particles reads as a glitch, and the
+  engine controls that make it weather.
 - [authoring-tools.md](authoring-tools.md) — the optional open-source tools and
   which gate each one belongs to.
 

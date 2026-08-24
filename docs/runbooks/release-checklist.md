@@ -15,6 +15,9 @@
 - [ ] `Localization.csv` is inside `Config/`, and every item/block has a key there.
 - [ ] Materials carry a `Material` suffix; no stamp-gated generator was edited without its stamp.
 
+- [ ] Any environment effect restores the weather, fog, and light sentinels it
+      captured — checked by leaving the effect and by leaving the world.
+
 ## Build and offline gates
 
 - [ ] `shamway doctor` has no relevant warnings.

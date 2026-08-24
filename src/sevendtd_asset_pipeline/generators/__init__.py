@@ -52,6 +52,11 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
         "cut a generated image out of its flat key background, or a grayscale mask into a card",
         ("pillow",),
     ),
+    "particle-card": (
+        "particle_card",
+        "draw a rain/ash streak or a broad haze puff procedurally, no model needed",
+        ("pillow",),
+    ),
     "icon": (
         "icon",
         "derive an atlas cell from an already-transparent source, with a contact sheet",

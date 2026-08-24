@@ -417,6 +417,106 @@ class GeneratorTests(unittest.TestCase):
         from sevendtd_asset_pipeline.generators.mesh_icon import main
 
         self.assertEqual(1, main(["/nonexistent/thing.glb", "/tmp/out.png"]))
+    @unittest.skipUnless(has_capability("pillow"), "the cutout lane needs Pillow")
+    def test_cutout_alpha_keeps_an_alpha_that_is_not_the_luma(self) -> None:
+        """The trap this mode exists for: a mask whose alpha is not its brightness.
+
+        Generated "opacity mask" sources arrive with alpha already baked in and
+        unequal to luma (one measured source peaked at alpha 251 against luma
+        135). Deriving alpha from brightness there caps the card near half
+        opacity, and nothing downstream can tell.
+        """
+        from PIL import Image
+
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            source = root / "mask.png"
+            image = Image.new("RGBA", (8, 8), (0, 0, 0, 0))
+            for x in range(2, 6):
+                for y in range(2, 6):
+                    # Dim grey, fully opaque: luma 60, alpha 250.
+                    image.putpixel((x, y), (60, 60, 60, 250))
+            image.save(source)
+
+            kept = root / "kept.png"
+            self.assertEqual(0, run("cutout", ["alpha", str(source), str(kept)]))
+            with Image.open(kept) as result:
+                self.assertEqual(250, result.getchannel("A").getextrema()[1])
+                self.assertEqual((255, 255), result.convert("RGB").getextrema()[0])
+
+            derived = root / "derived.png"
+            run("cutout", ["luma", str(source), str(derived), "--black-point", "0"])
+            with Image.open(derived) as result:
+                self.assertLess(
+                    result.getchannel("A").getextrema()[1],
+                    128,
+                    "luma mode is the wrong tool here; that is the point of alpha mode",
+                )
+
+    @unittest.skipUnless(has_capability("pillow"), "the cutout lane needs Pillow")
+    def test_cutout_alpha_refuses_a_source_with_no_alpha_and_names_luma(self) -> None:
+        from PIL import Image
+
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            source = root / "grey.png"
+            Image.new("RGB", (8, 8), (128, 128, 128)).save(source)
+            with self.assertRaises(SystemExit) as raised:
+                run("cutout", ["alpha", str(source), str(root / "out.png")])
+            self.assertIn("ERROR:", str(raised.exception))
+            self.assertIn("luma", str(raised.exception))
+
+    @unittest.skipUnless(has_capability("pillow"), "the particle-card lane needs Pillow")
+    def test_the_particle_cards_are_white_with_the_shape_in_alpha(self) -> None:
+        """A card a material tints: RGB white, everything else in the alpha channel.
+
+        A card that carries its colour in RGB cannot be re-tinted, so one green
+        rain card is all a mod ever gets — and the first effect that needs ash
+        or snow re-authors the texture instead of the material.
+        """
+        from PIL import Image
+
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            for shape, size in (("streak", 32), ("haze", 64)):
+                with self.subTest(shape):
+                    out = root / f"{shape}.png"
+                    self.assertEqual(0, run("particle-card", [shape, str(out), "--size", str(size)]))
+                    image = Image.open(out)
+                    self.assertEqual((size, size), image.size)
+                    self.assertEqual((255, 255), image.convert("RGB").getextrema()[0])
+                    low, high = image.getchannel("A").getextrema()
+                    self.assertEqual(0, low, "the card fills its whole square; nothing to fade into")
+                    self.assertGreater(high, 32, "the shape is too faint to see")
+
+    @unittest.skipUnless(has_capability("pillow"), "the particle-card lane needs Pillow")
+    def test_a_particle_card_is_reproducible(self) -> None:
+        """Same arguments, same bytes: a regenerated card is not a diff."""
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            first, second = root / "a.png", root / "b.png"
+            for out in (first, second):
+                run("particle-card", ["haze", str(out), "--size", "32", "--seed", "7"])
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+
+    @unittest.skipUnless(has_capability("pillow"), "the particle-card lane needs Pillow")
+    def test_a_card_that_would_draw_nothing_is_one_error_line(self) -> None:
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            out = Path(name) / "nope.png"
+            with self.assertRaises(SystemExit) as raised:
+                run("particle-card", ["streak", str(out), "--width", "2"])
+            self.assertIn("ERROR:", str(raised.exception))
+            self.assertFalse(out.exists())
 
     def test_an_unknown_generator_lists_the_known_ones(self) -> None:
         from sevendtd_asset_pipeline.generators import run

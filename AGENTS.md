@@ -319,9 +319,13 @@ generated and drawn 2D assets — read it before writing any generation prompt.
 [docs/authoring/audio.md](docs/authoring/audio.md) and [docs/authoring/vfx.md](docs/authoring/vfx.md) own the sound and
 particle lanes, including the runtime behaviours that make a correctly built
 asset silent or invisible.
+[docs/authoring/environment-effects.md](docs/authoring/environment-effects.md) owns weather, fog and
+light — the effect no bundle can carry, where every offline gate proves
+nothing and a particle-only "environment" is the standard failure.
 
 `shamway generate` ships working generators for the
-sound, audio-conversion, cutout, icon, texture, mesh, and mesh-icon lanes, and the
+sound, audio-conversion, cutout, particle-card, icon, texture, mesh, and
+mesh-icon lanes, and the
 scaffolded Unity project ships `GeneratedAsset.cs` for asset-as-code prefabs,
 materials, imports, particles, and audio, plus `IconRenderer.cs`. Extend those
 rather than starting a new pattern.

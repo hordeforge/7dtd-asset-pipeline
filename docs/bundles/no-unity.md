@@ -3,7 +3,9 @@
 ## Where Unity actually enters
 
 Of everything this pipeline does, only two operations *can* start a Unity
-editor: `build` — and only when the mod asks for it — and `render-icon`. Every other command — `status`, `doctor`, `refs`,
+editor: `build` — and only when the mod asks for it — and `render-icon`, which
+has an editorless counterpart in `shamway generate mesh-icon`. Every other
+command — `status`, `doctor`, `refs`,
 `validate`, `inspect` (including `--deep`), `check-mesh`, `check-sound`,
 `check-icons`, `generate`, `prompt`, `docs`, `stage`, and the whole `client`
 family — is Python reading files, and always ran on a machine with no editor
@@ -74,7 +76,9 @@ What the gates do in this mode:
 - `check-icons`, `generate icon`, `generate cutout` and the whole art-direction
   lane work unchanged. `render-icon` is the one icon command that needs an
   editor, because it photographs a bundle prefab; a bundle-free mod draws or
-  generates its icons instead.
+  generates its icons instead, and a mod with a mesh file can photograph that
+  with `shamway generate mesh-icon`, which is headless Blender rather than
+  Unity.
 
 ### Adding a bundle later
 
@@ -397,12 +401,18 @@ shamway refs
 shamway inspect Resources/mymod.unity3d
 shamway check-icons
 shamway check-sound assets-src/audio/blast.wav
-shamway check-mesh assets-src/meshes/thing.glb
+shamway check-mesh assets-src/bundle/myModThing.glb
 shamway generate --list
+shamway generate mesh-icon assets-src/bundle/myModThing.glb UIAtlases/ItemIconAtlas/myModThing.png
 shamway prompt item-icon --subject "a squat charcoal welded-steel control box"
 shamway client deploy .
 shamway client launch --mod-name MyMod
 ```
+
+`render-icon` is the only one with no editorless form, and only because it
+photographs a bundle prefab with its materials. `generate mesh-icon` covers
+the same intent from the mesh file, in headless Blender, and says in its own
+output that what it produced is a clay render.
 
 The last two matter most: **acceptance never needed the editor**. A bundle
 built anywhere, staged here, still ends where every asset in this pipeline

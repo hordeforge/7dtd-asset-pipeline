@@ -285,7 +285,7 @@ or live-client gates.
 | hard-surface mesh | OpenSCAD or Blender Python | `shamway check-mesh` (trimesh + glTF Validator) | `shamway build` straight from the exported file, or a Unity import; then in-game view |
 | organic/rigged mesh | Blender | glTF Validator + render turntable | Unity import (rigging and animation are not in the editorless lane) + in-game view |
 | PBR maps | Material Maker or seeded Python | channel/range checks + montage | `.mat` keywords/import + in-game light sweep |
-| item icon | `shamway generate cutout`, `shamway render-icon`, Pillow/ImageMagick | `shamway check-icons` + downscaled montage | client atlas lookup + human readability |
+| item icon | `shamway generate cutout`, `shamway render-icon` (editor) or `shamway generate mesh-icon` (Blender), Pillow/ImageMagick | `shamway check-icons` + downscaled montage | client atlas lookup + human readability |
 | particle card | Pillow/NumPy/Blender | alpha-edge montage | particle material state + live VFX |
 | sound | `shamway generate sound`, FFmpeg | `shamway check-sound` | sound group lookup + listening at range |
 | detail normal | `shamway generate texture-maps detail` | tiling seam check on a cylinder | in-game light sweep on the flat-colour part |

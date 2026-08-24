@@ -243,7 +243,8 @@ Machine-readable output for agents and CI:
 | `shamway check-mesh --json` | authored-mesh extents and glTF conformance |
 | `shamway check-sound --json` | clip format, level, clipping, DC offset |
 | `shamway check-icons --json` | atlas cells and every `CustomIcon` key |
-| `shamway render-icon STEM` | render a prefab into its atlas cell (needs a display) |
+| `shamway render-icon STEM` | render a bundle prefab into its atlas cell, materials and all (needs an editor and a display) |
+| `shamway generate mesh-icon MESH PNG` | the same cell from a mesh file through headless Blender: no editor, no display, and a clay render rather than the in-game look |
 | `shamway generate --list` | the packaged asset generators, callable from any mod |
 | `shamway prompt --list` | the house-style image prompts, rendered with the lane that consumes them |
 | `shamway docs [TOPIC]` | this repository's documentation, served from the package |
@@ -320,7 +321,7 @@ particle lanes, including the runtime behaviours that make a correctly built
 asset silent or invisible.
 
 `shamway generate` ships working generators for the
-sound, audio-conversion, cutout, icon, texture, and mesh lanes, and the
+sound, audio-conversion, cutout, icon, texture, mesh, and mesh-icon lanes, and the
 scaffolded Unity project ships `GeneratedAsset.cs` for asset-as-code prefabs,
 materials, imports, particles, and audio, plus `IconRenderer.cs`. Extend those
 rather than starting a new pattern.

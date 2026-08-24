@@ -387,6 +387,37 @@ repository's own generator.
 shamway call check_sound --params '{"clip": "clip.wav"}'
 ```
 
+## Advisory model review
+
+`check-sound` proves a clip is mechanically healthy; it cannot say whether a
+falling whistle actually reads as falling. `shamway review-audio` auditions
+the clip's actual bytes against its intended use: record what the clip is for
+in an intent file committed beside the source, and the command submits bytes
+plus intent to a configured audio-capable model, returning structured
+criticism into a hash-addressed evidence document:
+
+```bash
+shamway review-audio assets-src/audio/falling.wav \
+    --intent assets-src/audio/falling.review.json --allow-network --json
+```
+
+The rules that make it trustworthy, from
+[PRD 0001](../prds/0001-contextual-model-audio-review.md) (served as
+`shamway docs model-audio-review`):
+
+- **Consent first.** It uploads an authored asset to a third party, so it
+  refuses before touching credentials unless `--allow-network` is passed
+  (`allow_network=true` for `call`/`serve`). Credentials come only from
+  provider configuration or environment variables, never command arguments.
+- **No inference.** An intent without `purpose` is refused locally; context
+  is never guessed from a filename.
+- **Advisory only.** Scores are diagnostic, never pass/fail. A model verdict
+  cannot satisfy the human listen under Acceptance below, and where the two
+  disagree, both are worth recording.
+- **Evidence, not memory.** Each run writes provider, model, rubric version,
+  hashes of everything submitted and the redacted result. A later review
+  never overwrites an earlier one.
+
 ## Which XML properties name a sound group
 
 `validate` proves the clip; nothing offline proves the *group name* a

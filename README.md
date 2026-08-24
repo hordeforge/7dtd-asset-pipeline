@@ -237,6 +237,21 @@ shamway client capture held-nuke --wait 5 --observable "held upright like a gren
 shamway client capture --list
 ```
 
+Between the mechanical half and the person sits one advisory check.
+`shamway review-audio` auditions an authored clip's actual bytes against its
+recorded intended-use context with a configured audio model, and returns
+structured criticism with a hash-addressed evidence document. It uploads an
+authored asset to a third party, so it refuses without explicit consent, and
+its verdict is evidence for the human listen — never a substitute for one:
+
+```bash
+shamway review-audio assets-src/audio/blast.wav \
+    --intent assets-src/audio/blast.review.json --allow-network --json
+```
+
+The contract is [PRD 0001](docs/prds/0001-contextual-model-audio-review.md),
+served as `shamway docs model-audio-review`.
+
 ## Driving it from code or an agent
 
 Do not hardcode the command surface. It is published, and each operation

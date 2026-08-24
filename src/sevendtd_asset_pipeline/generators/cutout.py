@@ -43,6 +43,7 @@ import argparse
 import math
 import sys
 from pathlib import Path
+from typing import Any
 
 from .. import atomic
 from ..capabilities import extra_install
@@ -109,6 +110,12 @@ def distance(pixel: tuple[int, int, int], key: tuple[int, int, int]) -> float:
     return math.sqrt(squared)
 
 
+# The two pixel passes below run twice each: once over arrays when numpy is
+# installed, once per pixel when it is not. Both forms carry the same
+# arithmetic expression for expression, so a host with numpy and one without
+# cut the same source to the same bytes.
+
+
 def key_out(
     image: Image.Image,
     key: tuple[int, int, int],
@@ -117,13 +124,69 @@ def key_out(
     despill: bool,
 ) -> tuple[Image.Image, float]:
     """Replace the key colour with alpha, keeping the soft transition band."""
+    try:
+        import numpy
+    except ImportError:
+        return _key_out_pixels(image, key, transparent, opaque, despill)
+    return _key_out_array(numpy, image, key, transparent, opaque, despill)
+
+
+def _key_out_array(
+    numpy: Any,
+    image: Image.Image,
+    key: tuple[int, int, int],
+    transparent: float,
+    opaque: float,
+    despill: bool,
+) -> tuple[Image.Image, float]:
+    """The whole frame in a handful of array passes instead of a loop per pixel.
+
+    A generated concept image is a million pixels or more, and the per-pixel
+    version pays seconds of interpreter time for what these arrays do in tens
+    of milliseconds.
+    """
+    rgba = numpy.asarray(image.convert("RGBA"), dtype="float64")
+    rgb, alpha = rgba[..., :3], rgba[..., 3]
+    # Thresholds are given as percentages of the 0..441 RGB distance range, so
+    # the same numbers work whatever the key colour is.
+    near = transparent / 100.0 * 441.67
+    far = opaque / 100.0 * 441.67
+    if far <= near:
+        raise SystemExit("ERROR: --opaque-threshold must be above --transparent-threshold")
+    key_rgb = numpy.asarray(key, dtype="float64")
+    separation = numpy.sqrt(((rgb - key_rgb) ** 2).sum(axis=-1))
+    keyed_out = separation <= near
+    coverage = numpy.clip((separation - near) / (far - near), 0.0, 1.0)
+    if despill:
+        # In the transition band the pixel is part subject, part key. Pull it
+        # away from the key so the edge does not keep its tint.
+        band = (~keyed_out) & (coverage < 1.0)
+        pulled = rgb - ((1.0 - coverage)[..., None] * (key_rgb - 128.0)) * 0.6
+        despilled = numpy.clip(numpy.round(pulled), 0.0, 255.0)
+        rgb_out = numpy.where(band[..., None], despilled, rgb)
+    else:
+        rgb_out = rgb
+    out_alpha = numpy.round(alpha * coverage)
+    output = numpy.empty((*rgb.shape[:2], 4), dtype="uint8")
+    output[..., :3] = rgb_out.astype("uint8")
+    output[..., 3] = out_alpha.astype("uint8")
+    covered = int((out_alpha > 8).sum())
+    return Image.fromarray(output, "RGBA"), covered / float(alpha.size)
+
+
+def _key_out_pixels(
+    image: Image.Image,
+    key: tuple[int, int, int],
+    transparent: float,
+    opaque: float,
+    despill: bool,
+) -> tuple[Image.Image, float]:
+    """The numpy-free path, one pixel at a time."""
     rgba = image.convert("RGBA")
     width, height = rgba.size
     source = rgba.load()
     output = Image.new("RGBA", (width, height))
     target = output.load()
-    # Thresholds are given as percentages of the 0..441 RGB distance range, so
-    # the same numbers work whatever the key colour is.
     near = transparent / 100.0 * 441.67
     far = opaque / 100.0 * 441.67
     if far <= near:
@@ -155,6 +218,36 @@ def luma_to_alpha(
     image: Image.Image, black_point: float, white_rgb: bool
 ) -> tuple[Image.Image, float]:
     """Turn a grayscale-on-black mask into a white RGBA particle card."""
+    try:
+        import numpy
+    except ImportError:
+        return _luma_to_alpha_pixels(image, black_point, white_rgb)
+    return _luma_to_alpha_array(numpy, image, black_point, white_rgb)
+
+
+def _luma_to_alpha_array(
+    numpy: Any, image: Image.Image, black_point: float, white_rgb: bool
+) -> tuple[Image.Image, float]:
+    """The array form of `_luma_to_alpha_pixels`; see `_key_out_array`."""
+    grey = numpy.asarray(image.convert("L"), dtype="float64")
+    floor = black_point / 100.0 * 255.0
+    span = max(255.0 - floor, 1.0)
+    out_alpha = numpy.round(numpy.maximum(grey - floor, 0.0) / span * 255.0)
+    height, width = grey.shape
+    output = numpy.empty((height, width, 4), dtype="uint8")
+    if white_rgb:
+        output[..., :3] = 255
+    else:
+        output[..., :3] = numpy.asarray(image.convert("RGB"), dtype="uint8")
+    output[..., 3] = out_alpha.astype("uint8")
+    covered = int((out_alpha > 8).sum())
+    return Image.fromarray(output, "RGBA"), covered / float(grey.size)
+
+
+def _luma_to_alpha_pixels(
+    image: Image.Image, black_point: float, white_rgb: bool
+) -> tuple[Image.Image, float]:
+    """The numpy-free path, one pixel at a time."""
     grey = image.convert("L")
     width, height = grey.size
     source = grey.load()

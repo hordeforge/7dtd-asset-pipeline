@@ -1,6 +1,8 @@
 # ADR 0001 — Synthesize bundles without an editor
 
-Status: **Accepted** (2026). The page below is the original design record,
+## Status
+
+**Accepted** (2026). The page below is the original design record,
 written as research *before* the writer existed and kept as written — including
 the one prediction that did not survive measurement.
 

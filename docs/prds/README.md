@@ -19,8 +19,8 @@ work around.
 
 <!-- inventory:prd:start -->
 - [0001 — Contextual model audio review](0001-contextual-model-audio-review.md) —
-  an explicit, provider-neutral model audition with intended-use context and
-  structured advisory criticism
+  implemented 2026-08-25: an explicit, provider-neutral model audition with
+  intended-use context and structured advisory criticism
 - [0002 — Video-based asset review](0002-video-based-asset-review.md) —
   the same advisory model audition applied to a `7dtd-playtest`-staged clip,
   with the reviewed candidate's generation parameters carried in the evidence

@@ -364,6 +364,7 @@ Machine-readable output for agents and CI:
 | `shamway inspect --deep --json` | every serialized object and per-prefab components |
 | `shamway check-mesh --json` | authored-mesh extents and glTF conformance |
 | `shamway check-sound --json` | clip format, level, clipping, DC offset |
+| `shamway review-audio` | advisory semantic review of a clip by a configured audio model; uploads the asset, so it refuses without `--allow-network`, and never replaces the human listen |
 | `shamway check-icons --json` | atlas cells and every `CustomIcon` key |
 | `shamway render-icon STEM` | render a bundle prefab into its atlas cell, materials and all (needs an editor and a display) |
 | `shamway generate mesh-icon MESH PNG` | the same cell from a mesh file through headless Blender: no editor, no display, and a clay render rather than the in-game look |

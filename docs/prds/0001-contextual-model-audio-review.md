@@ -2,10 +2,24 @@
 
 ## Status
 
-Draft. This specifies an unbuilt `shamway review-audio` command, a
-`review_audio` operation in `operations.OPERATIONS` and `api._DISPATCH`, and
-an optional audio-model capability in `capabilities.REGISTRY`. No current
-command sends audio to a model or makes a semantic judgement about a clip.
+Implemented (2026-08-25). The command, operation, capability and provider
+package this page specified all shipped:
+`shamway review-audio` (`cli.py`), `review_audio` in
+`operations.OPERATIONS` and `api._DISPATCH` (networked, writes evidence),
+the `model-audio-review` capability in `capabilities.REGISTRY`, and
+`src/sevendtd_asset_pipeline/providers/` with Gemini as the first adapter
+behind one resolve point — which answers the first open question below.
+The design in this page is the contract the implementation follows; where
+this page and the code could disagree, `tests/test_audio_review.py` holds them
+together (intent and result validation, consent before credentials are
+read, exact bytes at the provider boundary, evidence hashing and
+no-overwrite, redaction).
+
+Still owed, and why the boxes under Acceptance criteria stay unchecked:
+the live-provider run is strictly opt-in
+(`SHAMWAY_NETWORK_TESTS=gemini` + `GEMINI_API_KEY`) and has not been
+recorded here, and no fresh-client human listen has yet compared a model
+critique against an experienced sound.
 
 ## Problem
 

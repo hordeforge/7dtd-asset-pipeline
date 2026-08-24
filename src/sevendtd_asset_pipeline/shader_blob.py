@@ -502,7 +502,9 @@ def compress_smolv(spirv: bytes) -> bytes:
         reason = {1: "not SPIR-V", 2: "malformed SPIR-V", 3: "out of memory"}.get(code, str(code))
         raise PipelineError(f"zmolv could not encode the SPIR-V module: {reason}")
     try:
-        encoded = bytes(bytearray(out_ptr[i] for i in range(out_len.value)))
+        # string_at reads the encoder's buffer in one C-level copy; indexing
+        # out_ptr per byte is a Python round trip per byte of module.
+        encoded = ctypes.string_at(out_ptr, out_len.value)
     finally:
         library.zmolv_free(out_ptr, out_len)
     if struct.unpack_from("<I", encoded, 0)[0] != SMOLV_MAGIC:

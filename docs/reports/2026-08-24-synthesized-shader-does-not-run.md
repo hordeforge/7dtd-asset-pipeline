@@ -110,11 +110,30 @@ written by `shader_blob.py`.
    The change was reverted rather than kept on the grounds of being
    "more correct": it is unverified either way, and the one hard thing in this
    writer is the last place to carry an unverified edit.
-2. The remaining suspects, none yet tested: the `$Globals`/uniform-block
-   question is closed, so what is left is the GLSL dialect itself (stock
-   carries an `HLSLCC_ENABLE_UNIFORM_BUFFERS` preamble and `UNITY_LOCATION`
-   /`UNITY_BINDING` macros this writer omits), the pass's `m_State`, and the
-   sub-program index wiring in `PlatformBlob`.
+2. **The GLSL is not the fault — bisected.** A stock shader's GLCore source
+   (`Nature/SpeedTree Billboard`, 8251 chars) was substituted into this
+   writer's container and rebuilt. The runtime answered exactly as before:
+
+   ```text
+   Failed to load GpuProgram from binary shader data in 'Shamway/Unlit'.
+   VERIFY-SHADER: 'Shamway/Unlit' isSupported=False ... device=OpenGLCore
+   VERIFY-DRAWN-CONTROL: built-in cube covered=38.8% zoomed-out=2.4%
+   ```
+
+   Known-good source in this container still fails, so the missing
+   `HLSLCC_ENABLE_UNIFORM_BUFFERS` preamble and `UNITY_LOCATION`/`UNITY_BINDING`
+   macros are not it, and neither is anything else about `UNLIT_GLSL`. This is
+   the same bisect shape that cracked the d3d11 blob: stock contents inside a
+   synthesized container isolate the container.
+
+   What is left is the **wiring around the source**: the record indices a
+   `PlatformBlob` publishes (`vertex_blob_index`, `vertex_parameter_index` and
+   their fragment counterparts), `stageCounts`, the pass's `m_ProgramMask` and
+   `m_State`, and whether GLCore wants one shared record rather than the two
+   identical type-6 records this writer emits.
+
+   Note that `passes` is not a clue: it reads 1 headless and 3 with a device
+   because an unsupported shader reports the substituted error shader's passes.
 3. Re-check whether the bind-channel block, recorded as the fix for this exact
    `Failed to load GpuProgram` message, ever helped. It was validated against a
    headless `isSupported`, which cannot fail, so its evidence is as weak as the

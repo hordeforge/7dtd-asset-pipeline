@@ -164,19 +164,64 @@ written by `shader_blob.py`.
    ours  Shamway/Unlit               keywordNames=0  keywordFlags=0  subshaders=1
    ```
 
-   A single keyword is evidently not enough, but the gap is real and the error
-   names keyword state, so the next thing to compare is the *whole* keyword
-   plumbing against a stock shader: `m_KeywordFlags` values, the per-sub-program
-   `m_KeywordIndices`, and the keyword count carried inside the code record
-   itself (stock's GLCore record declares `1 × "DIRECTIONAL"`, this writer's
-   declares zero). Those three have to agree with each other, and only one of
-   them has been touched.
+   **Tested, and keywords are not the cause either.** All three surfaces were
+   made to agree at once — the code record declaring `1 × "DIRECTIONAL"` the
+   way stock's does, every sub-program's `m_KeywordIndices` pointing at it, and
+   the Shader's `m_KeywordNames`/`m_KeywordFlags` naming it. Unchanged:
+   `Incompatible keyword states`, `Failed to load GpuProgram`,
+   `isSupported=False`.
 
-4. Re-check whether the bind-channel block, recorded as the fix for this exact
+   **So the error message is misleading, and that is worth knowing.**
+   `Incompatible keyword states` appears with an empty keyword table, with a
+   one-keyword table, and with fully consistent plumbing. It is far more likely
+   a downstream symptom of the sub-program failing to load than a description
+   of the cause. Anyone reading it fresh will spend a session on keywords; this
+   entry exists so they do not.
+
+4. **A positive control exists, and it clears the container.** A *stock*
+   `Shader` object — `Legacy Shaders/Transparent/Cutout/VertexLit`, taken whole
+   out of the game and written by **this writer**, through
+   `bundle_writer.build_bundle`, into a bundle whose only object it is —
+   loads on a real device:
+
+   ```text
+   VERIFY-SHADER: 'Legacy Shaders/Transparent/Cutout/VertexLit'
+                  isSupported=True passes=3 renderQueue=2450 device=OpenGLCore
+   ```
+
+   No `Incompatible keyword states`, no `Failed to load GpuProgram`. So the
+   UnityFS container, the SerializedFile, the type-tree serialization of class
+   48 and the class-142 wiring are **all fine**. The fault is entirely in the
+   *content* `bundle_writer.shader()` and `shader_blob.py` produce.
+
+   This is the first known-good end this investigation has had. Everything
+   before it was a negative against an unknown.
+
+5. **Two more eliminations**, both single-variable against the known-bad:
+
+   | Tried | Result |
+   |---|---|
+   | the four undecoded header words in the code record — checked across **334** stock GLCore records, all zero, same as this writer | not it |
+   | the pass's `m_State.m_Name`, which stock sets to `FORWARD` and this writer sets to the *shader* name | no change |
+
+   The pass name is worth fixing anyway on the grounds of being wrong, but it
+   is not the cause.
+
+6. **What is left**: the remaining difference between a stock `Shader` object
+   and this one, bisected *from the working end*. Note that swapping the blob
+   fields and the parsed form between stock and ours is **not** a valid
+   experiment — a sub-program's `m_BlobIndex` addresses records inside its own
+   blob, so the two halves are coupled and each arm fails for wiring reasons
+   whatever else is true. It was tried, both arms failed, and both results are
+   worthless. The valid shape is to start from the stock object and mutate it
+   toward this one a field at a time, keeping the indices consistent at every
+   step.
+
+7. Re-check whether the bind-channel block, recorded as the fix for this exact
    `Failed to load GpuProgram` message, ever helped. It was validated against a
    headless `isSupported`, which cannot fail, so its evidence is as weak as the
    claim it supported.
-5. Only then the d3d11 path, which needs a Windows or Proton-hosted editor to
+8. Only then the d3d11 path, which needs a Windows or Proton-hosted editor to
    measure offline at all — or the live client, which is now a slow loop rather
    than the only one.
 

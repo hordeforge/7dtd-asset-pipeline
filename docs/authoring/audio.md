@@ -239,6 +239,7 @@ request:
 | `blast` | crack + sub-bass sweep + rolling rumble + debris, or the distant swell | explosions, large impacts |
 | `tick` | one dry escapement click, under 90 ms | an item's `SoundTick` countdown |
 | `whoosh` | filtered noise sweeping up and back down | a thrown object, a passing shell |
+| `bomb-whistle` | phase-continuous aerodynamic tone descending gradually over turbulent air | a bomb falling toward impact |
 | `hum` | mains fundamental with harmonics and grit, optionally seamless | machinery, ambience |
 | `beep` | short electronic cue, repeatable | UI, warnings |
 | `sounds-xml` | prints the `Config/sounds.xml` entry | wiring |

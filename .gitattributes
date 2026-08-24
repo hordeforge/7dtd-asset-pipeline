@@ -10,6 +10,9 @@
 *.sh text eol=lf
 scripts/bootstrap text eol=lf
 Makefile text eol=lf
+# The scaffolded modlet makefile: GNU make rejects CRLF recipes, and the
+# scaffold writes it LF-only on every host, so a checkout must not re-break it.
+Makefile.assets text eol=lf
 *.py text eol=lf
 *.cs text eol=lf
 *.md text eol=lf

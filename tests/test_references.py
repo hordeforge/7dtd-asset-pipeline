@@ -13,6 +13,8 @@ from sevendtd_asset_pipeline.references import (
     resolve_case_insensitive,
 )
 
+from fixtures import filesystem_is_case_insensitive
+
 
 class ReferenceTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -104,14 +106,28 @@ class ReferenceTests(unittest.TestCase):
         resource.mkdir()
         bundle = resource / "MyBundle.Unity3D"
         bundle.write_bytes(b"x")
-        self.assertEqual(bundle, resolve_case_insensitive(self.root, "resources/mybundle.unity3d"))
+        # resolve_case_insensitive resolves the root before walking, so on a
+        # host where the temp directory is reached through a symlink (macOS's
+        # /var -> /private/var) the answer is spelled through the real path.
+        self.assertEqual(
+            bundle.resolve(), resolve_case_insensitive(self.root, "resources/mybundle.unity3d")
+        )
 
     def test_resolution_rejects_parent_traversal(self) -> None:
         with self.assertRaisesRegex(PipelineError, "escapes"):
             resolve_case_insensitive(self.root, "../secret")
 
     def test_a_directory_with_two_casings_of_one_name_is_rejected(self) -> None:
-        """7DTD's stem-only lookup cannot pick between two casings; neither do we."""
+        """7DTD's stem-only lookup cannot pick between two casings; neither do we.
+
+        The gate compares directory entries, and a case-insensitive volume
+        (macOS's default APFS, Windows's NTFS) cannot hold two casings of one
+        name at all: the second write replaces the first, so the scenario this
+        gate exists for does not exist there. The listing-level logic is still
+        covered by the string tests over manifests and references.
+        """
+        if filesystem_is_case_insensitive(self.root):
+            self.skipTest("this filesystem folds name case; two casings cannot coexist")
         resource = self.root / "Resources"
         resource.mkdir()
         (resource / "MyBundle.unity3d").write_bytes(b"x")

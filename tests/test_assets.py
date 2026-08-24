@@ -28,6 +28,8 @@ from sevendtd_asset_pipeline.icon_check import (
 )
 from sevendtd_asset_pipeline.sound_check import check_sound
 
+from fixtures import filesystem_is_case_insensitive
+
 
 def write_png(
     path: Path, width: int, height: int, colour_type: int = 6, cut_out: bool = True
@@ -153,7 +155,15 @@ class IconTests(unittest.TestCase):
         self.assertIn("not square", report.problems[0])
 
     def test_two_shipped_cells_differing_only_in_case_are_a_collision(self) -> None:
-        """The atlas key is the filename stem; two casings means one wins silently."""
+        """The atlas key is the filename stem; two casings means one wins silently.
+
+        Skipped on a case-insensitive volume (macOS's default APFS, Windows's
+        NTFS): the second write replaces the first, so two casings of one cell
+        cannot coexist and the gate has nothing to catch. The gate's own
+        comparison is over directory listings, exercised on every other host.
+        """
+        if filesystem_is_case_insensitive(self.root):
+            self.skipTest("this filesystem folds name case; two casings cannot coexist")
         write_png(self.atlas / "myModThing.png", 160, 160)
         write_png(self.atlas / "mymodthing.png", 160, 160)
         report = check_icons(self.root, self._config("<configs/>"))

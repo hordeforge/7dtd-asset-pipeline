@@ -1,6 +1,23 @@
 from __future__ import annotations
 
 import struct
+from pathlib import Path
+
+
+def filesystem_is_case_insensitive(directory: Path) -> bool:
+    """Probe whether `directory` sits on a case-insensitive filesystem.
+
+    macOS's default APFS and Windows's NTFS fold name case; most Linux
+    filesystems do not. The probe writes one lowercase name and asks for its
+    uppercase spelling, which is a capability question about the volume, not
+    about the operating system.
+    """
+    probe = directory / "shamway_case_probe"
+    probe.write_bytes(b"")
+    try:
+        return probe.with_name("SHAMWAY_CASE_PROBE").exists()
+    finally:
+        probe.unlink(missing_ok=True)
 
 
 def serialized_file(

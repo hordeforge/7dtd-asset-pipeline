@@ -182,9 +182,9 @@ def _synthesized_checks(config: PipelineConfig) -> list[Check]:
     whether `shamway build` can write a bundle here.
     """
     checks: list[Check] = []
-    if config.game_dir:
-        pass  # the game row below reports the revision it will use
-    elif config.unity_version:
+    # With a game directory configured, the game row below reports the revision
+    # it will use, so only its absence needs an answer here.
+    if not config.game_dir and config.unity_version:
         checks.append(
             Check(
                 "WARN",
@@ -193,7 +193,7 @@ def _synthesized_checks(config: PipelineConfig) -> list[Check]:
                 "SEVEN_DAYS_TO_DIE_DIR so the installed game answers instead",
             )
         )
-    else:
+    elif not config.game_dir:
         checks.append(
             Check(
                 "FAIL",

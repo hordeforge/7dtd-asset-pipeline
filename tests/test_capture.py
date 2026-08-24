@@ -40,12 +40,13 @@ class SessionTests(unittest.TestCase):
         offered = {b.name for b in available_backends({"XDG_SESSION_TYPE": "wayland"})}
         self.assertEqual(offered & x11_only, set())
 
-    def test_every_backend_builds_an_argv_ending_in_its_output(self) -> None:
+    def test_every_backend_invokes_the_tool_its_name_probes(self) -> None:
+        """`available_backends` probes `shutil.which(backend.name)`, so the
+        fixed argv must run that same binary, not a delegate under another name."""
         for backend in BACKENDS:
             with self.subTest(backend=backend.name):
-                argv = backend.command(Path("/tmp/shot.png"))  # noqa: S108 - literal argv data
-                self.assertEqual(argv[0], backend.name)
-                self.assertEqual(argv[-1], "/tmp/shot.png")  # noqa: S108 - literal argv data
+                self.assertTrue(backend.argv)
+                self.assertEqual(backend.argv[0], backend.name)
 
     def test_the_capability_probes_the_same_tools(self) -> None:
         spec = next(item for item in REGISTRY if item.name == "desktop-capture")

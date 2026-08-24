@@ -525,6 +525,48 @@ class OperationSurfaceTests(unittest.TestCase):
         self.assertEqual("fake", report["provider"])
         self.assertTrue(report["advisory_only"])
 
+    def test_cli_text_output_survives_an_unjudgeable_score(self) -> None:
+        """The fake provider scores nothing, so the human-readable lane hits nulls.
+
+        A regression once formatted the 'unjudgeable' placeholder with a number
+        format spec and crashed after a paid submission had already completed;
+        this pins the whole non-JSON path, disclosure through advisory note.
+        """
+        stdout = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clip = write_clip(root / "falling.wav")
+            intent = root / "falling.review.json"
+            intent.write_text(json.dumps(VALID_INTENT), encoding="utf-8")
+            with (
+                mock.patch(
+                    "sevendtd_asset_pipeline.capabilities._availability",
+                    return_value={"model-audio-review": True},
+                ),
+                mock.patch(
+                    "sevendtd_asset_pipeline.cli.resolve_provider",
+                    return_value=FakeProvider(),
+                ),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = main(
+                    [
+                        "review-audio",
+                        str(clip),
+                        "--intent",
+                        str(intent),
+                        "--provider",
+                        "fake",
+                        "--allow-network",
+                    ]
+                )
+        self.assertEqual(0, code)
+        lines = stdout.getvalue().splitlines()
+        self.assertIn("score: semantic_fit = unjudgeable", lines)
+        self.assertTrue(any(line.startswith("summary: ") for line in lines))
+        self.assertTrue(any(line.startswith("warning: ") for line in lines))
+        self.assertTrue(any(line.startswith("note: Advisory only") for line in lines))
+
 
 class NetworkOptInTests(unittest.TestCase):
     """Real-provider checks cost money and leave the host: strictly opt-in.

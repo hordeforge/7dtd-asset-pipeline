@@ -609,7 +609,8 @@ def run(args: argparse.Namespace) -> int:
             for change in verdict["recommended_changes"]:
                 print(f"change: {change}")
             for key, value in sorted(verdict["rubric_scores"].items()):
-                print(f"score: {key} = {'unjudgeable' if value is None else value:g}")
+                score = "unjudgeable" if value is None else f"{value:g}"
+                print(f"score: {key} = {score}")
             print(f"confidence: {verdict['confidence']:g}")
             for limitation in verdict["limitations"]:
                 print(f"limitation: {limitation}")

@@ -172,7 +172,15 @@ one that made it invisible — every field of the pass's render state carried
 `name: ""` where Unity writes the sentinel `<noninit>`. An empty name is a
 *property lookup* that fails and yields 0, which set `colMask` to 0: the pass
 wrote no colour channels. `verify-bundle --draw` now reports
-`covered=38.8% zoomed-out=2.4%` for that prop. Full account:
+`covered=38.8% zoomed-out=2.4%` for that prop **on OpenGLCore, in an editor**.
+
+**Still failing in the live client, 2026-08-24.** A human placed the block in a
+running client and it draws nothing there. `verify-bundle` on a Linux host
+creates OpenGLCore; the client runs d3d11 through DXVK. The render-state fix is
+platform-independent and is present in the deployed bundle, so what remains is
+specific to the d3d11 sub-program - or to the difference between an editor and
+the game. **This is the open blocker**, and it is the reason no synthesized
+prop can be called finished. Full account:
 [reports/2026-08-24-synthesized-shader-does-not-run.md](../reports/2026-08-24-synthesized-shader-does-not-run.md).
 
 **Blocks:** the claim that any of it is *right*. **Nothing synthesized past a

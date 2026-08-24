@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
-# Photograph the frame a `CaseDef.Staged` case holds, without a person watching.
+# Collect the in-game frames a staged acceptance case photographs.
 #
 # The acceptance suite answers "did the game read it". It cannot answer "does it
 # look right", and every case in it passes on a prop that renders magenta or
-# nothing at all. A staged case exists to close that: it puts the scene on
-# screen, holds it, and announces itself in the client log. This waits for that
-# announcement and takes the picture.
+# nothing at all. A staged case closes that: it puts the scene on screen, holds
+# it, and - since hordeforge/7dtd-playtest#48 - photographs *its own
+# framebuffer* through Unity, supersized, writing the path to the client log.
 #
-# Run it beside `playtest-acceptance.sh`, not instead of it, and only while
-# this host's playtest lock is yours - `playtest-acceptance.sh` takes that lock,
-# and it is what stops another session's client being the one on screen:
+# This waits for those lines and copies the files somewhere the mod keeps them.
 #
-#     python3 ../7dtd-playtest/scripts/playtest_lock.py wait --timeout 600
+# It does not take the picture. It used to, with a desktop screen grab, and that
+# was unsound: a desktop capture photographs whatever is in front of it, so on a
+# host running more than one client it repeatedly captured *another session's*
+# game and produced frames that looked like evidence. The game takes its own
+# picture now, and this only fetches it.
+#
+# Run it beside `playtest-acceptance.sh`, while this host's playtest lock is
+# yours - `playtest-acceptance.sh` takes that lock:
+#
 #     scripts/playtest-capture.sh --case look_myProp --label vulkan &
 #     scripts/playtest-acceptance.sh --mod-root .
 #
@@ -84,10 +90,26 @@ while true; do
             [[ "$case_id" == "$CASE" ]] || continue
             case " $seen " in *" $case_id "*) continue ;; esac
             seen="$seen $case_id"
-            shamway client capture "${LABEL}-${case_id}" \
-                --out "$OUT_DIR" \
-                --observable "staged frame for ${case_id}: is the prop drawn, and drawn correctly" ||
-                echo "playtest-capture.sh: capture failed for $case_id" >&2
+            # The game wrote it; find it and keep it beside the mod.
+            shot="$(grep -oE "\[7dtd-playtest\] shot ${case_id} x[0-9]+ -> .*" "$log" |
+                tail -1 | sed 's/.*-> //')"
+            if [[ -z "$shot" ]]; then
+                echo "playtest-capture.sh: $case_id staged but logged no shot path" >&2
+                continue
+            fi
+            # Unity writes at end of frame, so the path is logged before the
+            # file exists. Wait briefly rather than reporting a missing frame.
+            for _ in $(seq 1 20); do
+                [[ -s "$shot" ]] && break
+                sleep 0.5
+            done
+            if [[ ! -s "$shot" ]]; then
+                echo "playtest-capture.sh: $shot never appeared" >&2
+                continue
+            fi
+            mkdir -p "$OUT_DIR"
+            cp -f "$shot" "$OUT_DIR/${LABEL}-${case_id}.png"
+            echo "playtest-capture.sh: kept $OUT_DIR/${LABEL}-${case_id}.png"
         done < <(grep -oE "${MARKER}[^ ]* [a-zA-Z0-9_/.-]+" "$log" 2>/dev/null | awk '{print $2}' || true)
         if grep -q "\[7dtd-playtest\] DONE" "$log" 2>/dev/null; then
             exit 0

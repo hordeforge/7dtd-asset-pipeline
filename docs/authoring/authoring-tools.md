@@ -123,19 +123,27 @@ export.
 - Official repository: <https://github.com/RodZill4/material-maker>
 - Official releases: <https://github.com/RodZill4/material-maker/releases>
 
-### ImageMagick — deterministic raster transforms
+### ImageMagick — vector and layered source art
 
-**The pipeline itself does not need it.** Cutouts, atlas cells, contact sheets
-and texture maps are Pillow, which is already a dependency, so `magick` is
-registered for *a mod's own* scripts rather than wired into a command — worth
-saying plainly, because a tool listed here with nothing calling it reads like
-a missing integration.
+**Wired**, for the formats Pillow cannot read. Drop a `.svg`, `.psd`, `.exr`,
+`.webp` or `.avif` into `assets-src/bundle/` and the writer rasterizes it to a
+PNG in a temporary file, then makes the `Texture2D` from that — the original is
+never touched. Vector source art is the case that matters: an icon authored
+once as SVG re-renders cleanly at any cell size instead of being resampled.
 
-Reach for it when a mod needs something the generators do not do: crop/trim,
-alpha/key processing, channel packing, format conversion, montages of many
-assets at once, and quantitative image comparison (`magick compare -metric
-RMSE`). Prefer a new output path over `mogrify`, which overwrites inputs.
-Record the complete command in source documentation or a script.
+```bash
+shamway pack assets-src/bundle build/mymod.unity3d --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+```
+
+An SVG renders at its own pixel size × `density / 96` (SVG's user unit is
+1/96 inch), so the 384 default is 4x. Transparency is preserved explicitly —
+without `-background none` ImageMagick fills it white, which reaches the atlas
+as an opaque card behind every icon, and that is a test.
+
+Beyond the wired path, reach for `magick` in a mod's own scripts for crop/trim,
+channel packing, montages, and quantitative comparison (`magick compare
+-metric RMSE`). Prefer a new output path over `mogrify`, which overwrites
+inputs.
 
 - Official CLI guide: <https://imagemagick.org/command-line-processing/>
 - Tool behavior: <https://imagemagick.org/command-line-tools/>
@@ -196,12 +204,23 @@ reference use.
 
 ## Audio
 
-### FFmpeg
+### FFmpeg — compressed source audio
 
-FFmpeg provides scriptable resampling, channel layout, normalization,
-filtering, fades, mixing, convolution, and format conversion. Keep lossless
-editable sources and make bundle-ready derivatives from a checked-in command
-or script.
+**Wired**, for the containers the standard library cannot open. An `.ogg`,
+`.mp3`, `.flac`, `.aiff`, `.m4a`, `.opus` or `.wma` in `assets-src/bundle/` is
+decoded to 16-bit PCM in a temporary file and becomes an `AudioClip` from
+there; the lossy original stays exactly as authored. A `.wav` skips FFmpeg
+entirely, so the lane still works on a host without it.
+
+Note the asymmetry: FFmpeg is used to get audio **in**, never to get it out.
+The bundle always carries PCM, because `AudioClip` Vorbis encoding needs
+FMOD's own seek tables ([improvements](../status/improvements.md) 4).
+
+Beyond that, FFmpeg provides scriptable resampling, channel layout,
+normalization, filtering, fades, mixing and convolution for a mod's own
+scripts — though `shamway generate audio convert` already does resample,
+downmix and normalize with no third-party package. Keep lossless editable
+sources and make bundle-ready derivatives from a checked-in command or script.
 
 - Official documentation: <https://ffmpeg.org/documentation.html>
 - Audio filters: <https://ffmpeg.org/ffmpeg-filters.html#Audio-Filters>
@@ -327,8 +346,8 @@ integration. This table says which is which, so nobody has to guess — and so
 | **screenshot backends** | **wired** — `client capture` picks one per session type |
 | **xvfb** | **wired** — `render-icon` on a headless host |
 | **OpenSCAD** | **input only** — its STL drops straight into `assets-src/bundle/`; no command shells out to it |
-| **ImageMagick** | **for a mod's own scripts** — Pillow already covers what the pipeline needs |
-| **FFmpeg** | **for a mod's own scripts** — `generate audio convert` does resample/downmix/normalize with the standard library |
+| **ImageMagick** | **wired** — rasterizes `.svg`, `.psd`, `.exr`, `.webp`, `.avif` into the texture lane, which Pillow cannot |
+| **FFmpeg** | **wired** — decodes `.ogg`, `.mp3`, `.flac`, `.aiff`, `.m4a`, `.opus`, `.wma` into the audio lane, which the stdlib cannot |
 | **bc7enc / Compressonator / ISPC / ctt** | **not wired** — BC7 only; none is packaged on Arch, Debian or Fedora, so each means a source build. BC1/BC3 are built in |
 | **gltfpack** | **not wired** — mesh quantization; useful when a mod's bundle is mesh-heavy, and nothing needs it before then |
 | **Material Maker** | **not wired** — GUI-first; its CLI export is a mod-side authoring choice |

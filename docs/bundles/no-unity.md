@@ -113,10 +113,23 @@ asset, named by its file stem — the name 7DTD's URIs ask for:
 
 | Source file | Becomes | Loaded as |
 |---|---|---|
-| `myModPanel.png` | `Texture2D`, RGBA32, uncompressed | `LoadAsset<Texture2D>` |
+| `myModPanel.png`, `.jpg`, `.tga`, `.bmp` | `Texture2D`, RGBA32 (or DXT1/DXT5) | `LoadAsset<Texture2D>` |
 | `myModBlast.wav` | `AudioClip`, 16-bit PCM in an FSB5 bank | `sounds.xml`, `LoadAsset<AudioClip>` |
 | `myModData.json`, `.txt`, `.csv` | `TextAsset` | `LoadAsset<TextAsset>` |
 | `myModThing.glb`, `.gltf`, `.obj`, `.stl`, `.ply` | `Mesh`, one submesh | `LoadAsset<Mesh>` |
+| `myModBeep.ogg`, `.mp3`, `.flac`, `.aiff`, `.m4a`, `.opus`, `.wma` | `AudioClip`, decoded by **FFmpeg** first | `sounds.xml`, `LoadAsset<AudioClip>` |
+| `myModGlyph.svg`, `.psd`, `.exr`, `.webp`, `.avif` | `Texture2D`, rasterized by **ImageMagick** first | `LoadAsset<Texture2D>` |
+
+The last two rows are why the source folder takes what an author actually has
+on disk rather than only what the standard library reads. Both converters are
+optional: a `.wav` and a `.png` need nothing installed, and a source whose
+converter is missing is **refused by name with the install line**, never
+skipped and never silently downgraded. Conversion always goes to a temporary
+file, so the lossy original a person signed off on is never overwritten.
+
+An SVG rasterizes at its own pixel size × `density / 96` — 4x at the default
+384 — because SVG's user unit is 1/96 inch. Author the size you want, or
+scale it in the icon lane afterwards.
 
 ### The mesh lane, and what it is not
 

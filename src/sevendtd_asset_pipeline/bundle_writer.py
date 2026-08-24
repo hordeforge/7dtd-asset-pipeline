@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from . import block_compress
+from . import block_compress, transcode
 from .capabilities import require_capability
 from .errors import PipelineError
 
@@ -974,6 +974,17 @@ ASSET_KINDS: dict[str, str] = {
     ".obj": "Mesh",
     ".stl": "Mesh",
     ".ply": "Mesh",
+    # Read through Pillow, which handles these without help.
+    ".jpg": "Texture2D",
+    ".jpeg": "Texture2D",
+    ".tga": "Texture2D",
+    ".bmp": "Texture2D",
+    # Converted first: FFmpeg decodes the audio, ImageMagick rasterizes the
+    # vector and layered formats. Both are optional, and a source in one of
+    # these is refused by name with the install line when its tool is absent —
+    # never skipped, and never silently downgraded.
+    **{suffix: "AudioClip" for suffix in transcode.AUDIO_SUFFIXES},
+    **{suffix: "Texture2D" for suffix in transcode.IMAGE_SUFFIXES},
 }
 MESH_SUFFIXES = tuple(suffix for suffix, kind in ASSET_KINDS.items() if kind == "Mesh")
 IGNORED_NAMES = {".gitkeep", ".gitignore"}
@@ -1010,13 +1021,20 @@ def collect_sources(source_dir: Path) -> list[Path]:
 
 
 def object_for(path: Path, compress_textures: bool = False) -> BundleObject:
-    """Turn one source file into the object its extension names."""
+    """Turn one source file into the object its extension names.
+
+    A source the standard library cannot read is converted to one it can,
+    through FFmpeg or ImageMagick, into a temporary file that never replaces
+    the author's original.
+    """
     stem = path.stem
     suffix = path.suffix.lower()
-    if suffix == ".png":
-        return texture_2d(stem, path, compress=compress_textures)
-    if suffix == ".wav":
-        return audio_clip(stem, path)
+    if ASSET_KINDS.get(suffix) == "Texture2D":
+        with transcode.as_png(path) as rasterized:
+            return texture_2d(stem, rasterized, compress=compress_textures)
+    if ASSET_KINDS.get(suffix) == "AudioClip":
+        with transcode.as_wav(path) as decoded:
+            return audio_clip(stem, decoded)
     if suffix in MESH_SUFFIXES:
         return mesh(stem, path)
     try:

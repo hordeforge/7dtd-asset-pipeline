@@ -644,6 +644,13 @@ that nonlinear saturation was therefore removed rather than hidden by a lower
 peak. The consumer separately requested slightly more level, which belongs to
 source placement or mixer gain rather than reintroducing waveform distortion.
 
+The fully linear follow-up was also human-rejected: despite a 2 m virtual
+source it sounded like a weak poof, and measured source RMS fell from `0.17668`
+to `0.09476`. The third design adds peak-envelope dynamics compression before
+normalization. This changes level through smooth gain control, not sample
+waveshaping, so body and coda can rise without restoring the overdriven
+harmonics the first follow-up removed.
+
 The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
 `ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts
 `Origin.position` internally. A caller must pass one absolute world coordinate;

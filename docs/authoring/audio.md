@@ -217,6 +217,13 @@ loud end. The voice now stays linear through its shock, tonal body, returns,
 and final mix before DC removal and peak normalization. Obtain additional
 in-game level through mixer/source placement, not by crushing the waveform.
 
+Fully removing saturation then failed in the opposite direction: source RMS
+fell from `0.17668` to `0.09476`, and a target-game reviewer heard a weak poof
+even with the virtual source moved closer. The voice now uses peak-envelope
+compression before normalization. Smooth gain reduction frees headroom so
+normalization lifts body and coda; no individual sample is waveshaped or hard
+clipped.
+
 The near `blast` voice itself no longer treats sparse high-band debris as a
 main layer. A target-game reviewer rejected that output as “just crackling,”
 not a bomb or blast. Its replacement uses a wider bipolar pressure hit, a

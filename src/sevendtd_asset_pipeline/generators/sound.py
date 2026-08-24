@@ -128,6 +128,27 @@ def normalize(samples: list[float], peak_db: float = -1.0) -> list[float]:
     return [value / peak * target for value in samples]
 
 
+def compress(samples: list[float], threshold: float = 0.18, ratio: float = 3.0) -> list[float]:
+    """Reduce peak-to-body range without waveshaping the waveform."""
+    release = math.exp(-1.0 / (RATE * 0.06))
+    envelope_value = 0.0
+    gain_value = 1.0
+    output = []
+    for sample in samples:
+        level = abs(sample)
+        coefficient = 0.0 if level > envelope_value else release
+        envelope_value = coefficient * envelope_value + (1.0 - coefficient) * level
+        if envelope_value <= threshold:
+            target_gain = 1.0
+        else:
+            compressed_level = threshold + (envelope_value - threshold) / ratio
+            target_gain = compressed_level / envelope_value
+        gain_coefficient = 0.0 if target_gain < gain_value else release
+        gain_value = gain_coefficient * gain_value + (1.0 - gain_coefficient) * target_gain
+        output.append(sample * gain_value)
+    return output
+
+
 def mix(*layers: tuple[float, list[float]]) -> list[float]:
     """Sum weighted layers, tolerating different lengths."""
     length = max(len(samples) for _, samples in layers)
@@ -321,7 +342,7 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
     ]
 
     mixed = mix((1.6, shock), (1.25, body), (0.85, returns), (1.0, coda))
-    return normalize(remove_dc(fade_tail(mixed, 2.0)), -0.2)
+    return normalize(remove_dc(fade_tail(compress(mixed), 2.0)), -0.2)
 
 
 def tick(generator: random.Random) -> list[float]:

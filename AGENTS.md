@@ -316,7 +316,7 @@ Machine-readable output for agents and CI:
 | `shamway refs` | one `source: uri` line per discovered XML reference |
 | `shamway status --json` | whole-mod state; never raises for a mod-state problem |
 | `shamway stage BUNDLE` | gate and stage a bundle an editor elsewhere built; lists the gates its evidence could not support |
-| `shamway pack SRC OUT` | synthesize a bundle from textures, clips, text files and meshes, with no editor |
+| `shamway pack SRC OUT` | synthesize a bundle from textures, clips, text files and meshes — each mesh becoming a prefab with a material and an unlit shader — with no editor |
 | `shamway verify-bundle` | load a bundle in a real Unity runtime; needs an editor, proves construction only |
 | `shamway acceptance-provider` | generate the 7dtd-playtest scenario provider that loads every bundle member through the game's own `DataLoader`, in a live client |
 | `shamway capabilities --json` | optional capabilities, what they unlock, install commands |

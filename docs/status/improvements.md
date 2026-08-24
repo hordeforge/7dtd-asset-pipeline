@@ -73,65 +73,52 @@ Until then the advice stands: big or quality-critical audio goes through the
 `unity`/`external` path where Unity's importer encodes Vorbis, and the synth
 path carries short clips and utility sounds.
 
-## 4b. The editorless writer stops at shaders, materials and prefabs
+## 4b. The editorless writer's shader scope
 
-This entry exists because the documentation used to say this was impossible.
-It is not; it was never checked. See
-[research-provenance.md](../research/research-provenance.md), "A material's
-shader", and the AGENTS.md rule that came out of it.
+This entry exists because the documentation used to say a shader was
+impossible offline. It was never checked, and it was wrong. It has now been
+built: see [research-provenance.md](../research/research-provenance.md) and
+the AGENTS.md rule that came out of it.
 
-What is actually closed: **borrowing** a shader. The shipped player carries
-six shaders and all are internal, and the game's own bundles embed theirs
-`m_Shader.m_FileID: 0`, same-file. A mod bundle must therefore carry its own.
-
-What is open, with the pieces already on the shelf:
+**Done, 2026-08-24.** One unlit textured pass, authored with no editor:
 
 | Piece | Status |
 |---|---|
-| `Shader`/`Material`/`GameObject`/`Transform`/`MeshFilter`/`MeshRenderer` type trees at this revision | available, same UnityPy TPK source the writer already uses for `Mesh` |
-| HLSL → SM4/SM5 **DXBC** (what d3d11 sub-programs carry) | [`vkd3d-compiler`](https://gitlab.winehq.org/wine/vkd3d) — WineHQ, MIT, `dxbc-tpf` target |
-| GLSL/HLSL → **SPIR-V** (Vulkan sub-programs) | `glslangValidator`, and [Slang](https://github.com/shader-slang/slang) or [DXC](https://github.com/microsoft/DirectXShaderCompiler) as alternatives |
-| Sub-program blob container | **decoded** from `Entities/trees`: LZ4 per platform, `u32 count` + 12-byte `(offset, length, segment)` records, code blobs an 8-`u32` header then `DXBC`. Cross-checked against AssetStudio and UnityPy, which both parse it |
-| Prior art for the format | [AssetStudio `ShaderConverter.cs`](https://github.com/Perfare/AssetStudio/blob/master/AssetStudioUtility/ShaderConverter.cs), [UnityPy `ShaderConverter.py`](https://github.com/K0lb3/UnityPy/blob/master/UnityPy/export/ShaderConverter.py) — read-side implementations, which is a specification for the write side |
-| Cross-object `PPtr` wiring inside one synthesized file | **built** 2026-08-24: `bundle_writer.Ref(key)` resolved by `build_bundle`, with a dangling reference refused by name rather than written as a null PPtr |
-| `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer` prefab | **built** 2026-08-24 as `bundle_writer.mesh_prefab`; a real 2022.3.62f2 runtime loaded one and resolved its graph (`components=3 mesh=shamwayProbeMesh materials=0`). Not wired into the source-directory lane, because a renderer with no material draws nothing |
+| `PPtr` wiring inside one synthesized file | **built** — `bundle_writer.Ref(key)`, dangling references refused by name |
+| `GameObject`/`Transform`/`MeshFilter`/`MeshRenderer` prefab | **built** — `bundle_writer.mesh_prefab` |
+| Sub-program blob container | **decoded upstream** — `hordeforge/7dtd-engine-research`, [`docs/shader-subprogram-blob.md`](https://github.com/hordeforge/7dtd-engine-research/blob/main/docs/shader-subprogram-blob.md), gated by its `tools/shader_blob_dump.py` |
+| the 38-byte program-data header | **decoded** — header version, then the SRV, constant-buffer and sampler counts, over 7366 sub-programs |
+| the parameter blob | **decoded** — 3403 stock records re-emitted byte for byte |
+| the bind-channel block | **decoded** — and it was the one thing standing between a structurally valid shader and a loadable one |
+| HLSL → SM4 `DXBC` | **built** — `vkd3d-compiler`, `dxbc-tpf` |
+| `Shader` (class 48) | **built** — `bundle_writer.shader`, `shader_blob.py` |
+| `Material` (class 21) | **built** — `bundle_writer.material` |
+| prefabs in the source-directory lane | **built** — `bundle_writer.prefab_objects`; a mesh file becomes prefab + mesh + material, sharing one shader |
+| runtime evidence | a real 2022.3.62f2 editor reports `Shader.isSupported = true` and the material naming its texture |
 
-**Close it with**, in this order, because each step is verifiable on its own:
+**What is deliberately not built.** The pass is unlit, textured, opaque and
+variant-free. Lit, shadowed, transparent, cut-out, normal-mapped, instanced
+and multi-pass shaders need keyword variants and constant buffers this writer
+does not declare; a mod that needs one wants `unity` or `external`. "Shaders
+work" would be a wider claim than the evidence supports.
 
-1. ~~`PPtr` support in `build_bundle`~~ — **done**, `Ref(key)`;
-2. ~~a `GameObject` + `Transform` + `MeshFilter` + `MeshRenderer` prefab over an
-   already-working `Mesh`, with an empty material slot~~ — **done**, loadable
-   in a real runtime, invisible, and honest about it;
-3. the smallest possible shader: one unlit textured pass, HLSL compiled by
-   `vkd3d-compiler`, wrapped in the container above. `shamway verify-bundle`
-   is the gate — a real runtime reports `Shader.isSupported`, which is the
-   first mechanical answer to "did this work". **In progress**: the HLSL
-   compiles to real DXBC and the container is decoded, but a 38-byte
-   per-sub-program descriptor between the code array and the `DXBC` magic is
-   not decoded yet, and two samples cannot decode it honestly. Dump the same
-   region across shaders with different input signatures and texture counts;
-   that is what shows which bytes track what;
-4. only then a `Material` that binds it, and only then a claim about rendering
-   — which, as everywhere else here, ends at a person looking at a client.
+**Still genuinely unknown** (unknown, not impossible):
 
-Steps 3 and 4 are what remain. Nothing before them is speculative any more.
+1. **whether 7DTD's own rendering path accepts this pass.** A Unity editor
+   loading it is not the game drawing it. This is the next measurement, and
+   `shamway acceptance-provider` plus a client launch is how it is taken;
+2. **what it looks like.** Nobody has watched this shader draw. An unlit pass
+   ignores scene lighting by construction, and the mesh lane's UV handling is
+   unexercised — the test cube has no UVs, so its texture samples one texel.
+   A stretched, mirrored or upside-down texture passes every gate here;
+3. header byte 4 of the program-data header (UAV-related), and the meaning of
+   the three empty `m_PlayerSubPrograms` groups. Neither blocks this lane;
+   both are recorded upstream as not decoded.
 
-**What is genuinely unknown** (unknown, not impossible), in the order it
-blocks work:
-
-1. the **38-byte per-sub-program descriptor** between the code array and the
-   `DXBC` magic — `02 00 04 00` on a vertex program, `02 01 01 01` on a
-   fragment one, then 34 zeros. Two samples cannot decode it; more can;
-2. what `m_CommonParameters` a hand-compiled shader must declare for the
-   engine to bind its constant buffers;
-3. whether 7DTD's rendering path accepts a minimally-authored pass, and which
-   keyword variants it demands.
-
-Each is a measurement against the game's own bundles, not a barrier. Two
-things that *were* on this list are now off it: the code-blob header decoded
-as eight `u32`s, and `m_PlayerSubPrograms` always declares four groups with
-only index 3 populated (ten samples). Both tables are in
-[research-provenance.md](../research/research-provenance.md).
+Two closed borrowing routes stay closed and were not re-tested: the shipped
+player carries six shaders and all are internal, and the game's own bundles
+embed theirs `m_Shader.m_FileID: 0`, same-file. Authoring made borrowing
+unnecessary rather than disproving it.
 
 Until it is built, a mod with a prefab or a material uses `bundle_source =
 "unity"` or `"external"`, and the documentation says **unbuilt**, never

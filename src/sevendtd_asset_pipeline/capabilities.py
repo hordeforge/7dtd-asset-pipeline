@@ -111,6 +111,19 @@ REGISTRY: tuple[_Spec, ...] = (
         install=extra_install("mesh"),
     ),
     _Spec(
+        name="vkd3d-compiler",
+        kind="command",
+        probe="vkd3d-compiler",
+        unlocks=(
+            'shamway pack (prefabs and materials)',
+            'shamway build with bundle_source = "synthesized" (prefabs and materials)',
+        ),
+        purpose="compile the unlit shader's HLSL to the DXBC shader model 4 bytecode a "
+        "d3d11 sub-program carries, so a synthesized bundle can ship a material and a "
+        "visible prefab with no editor",
+        install="shamway script install-tools --with-authoring",
+    ),
+    _Spec(
         name="gltf_validator",
         kind="command",
         probe="gltf_validator",

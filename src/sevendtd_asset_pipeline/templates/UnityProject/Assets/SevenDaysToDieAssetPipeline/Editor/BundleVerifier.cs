@@ -75,6 +75,48 @@ namespace SevenDaysToDie.AssetPipeline
                               texture.format + " readable=" + texture.isReadable);
                 }
 
+                Shader shader = asset as Shader;
+                if (shader != null)
+                {
+                    // isSupported is the engine's own verdict on a compiled
+                    // shader: it is false when the runtime cannot find a
+                    // sub-program it can use on this GPU and API, which is
+                    // exactly how a hand-wrapped bytecode blob fails. A
+                    // shader that loads is not a shader that runs.
+                    Debug.Log("VERIFY-SHADER: '" + shader.name +
+                              "' isSupported=" + shader.isSupported +
+                              " passes=" + shader.passCount +
+                              " renderQueue=" + shader.renderQueue +
+                              " properties=" + shader.GetPropertyCount());
+                    if (!shader.isSupported)
+                    {
+                        Debug.LogError("VERIFY-FAIL: " + name +
+                                       " loaded but the runtime reports it unsupported");
+                    }
+                }
+
+                Material material = asset as Material;
+                if (material != null)
+                {
+                    // A material whose shader failed to resolve silently
+                    // becomes Unity's magenta error shader, which loads
+                    // perfectly and renders wrong. Name it, so the report
+                    // shows which shader the material actually bound.
+                    string shaderName = material.shader != null ? material.shader.name : "<none>";
+                    Texture mainTexture = material.HasProperty("_MainTex")
+                        ? material.GetTexture("_MainTex") : null;
+                    Debug.Log("VERIFY-MATERIAL: '" + material.name +
+                              "' shader='" + shaderName +
+                              "' shaderSupported=" + (material.shader != null && material.shader.isSupported) +
+                              " _MainTex=" + (mainTexture != null ? mainTexture.name : "<unbound>") +
+                              " renderQueue=" + material.renderQueue);
+                    if (material.shader == null || shaderName == "Hidden/InternalErrorShader")
+                    {
+                        Debug.LogError("VERIFY-FAIL: " + name +
+                                       " fell back to the internal error shader");
+                    }
+                }
+
                 GameObject prefab = asset as GameObject;
                 if (prefab != null)
                 {

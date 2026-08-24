@@ -430,6 +430,135 @@ compiler can make one was never checked before it was written down.
 
 ### Shader object and sub-program blob layout
 
+**This format is documented upstream, not here.** The container - the
+per-platform LZ4 blobs, the 12-byte `(offset, length, segment)` record table,
+the code-blob record, the 38-byte DX11 program-data header, the parameter blob
+and the bind-channel block - belongs to the engine, not to this pipeline, and
+lives in `hordeforge/7dtd-engine-research`:
+
+- [`docs/shader-subprogram-blob.md`](https://github.com/hordeforge/7dtd-engine-research/blob/main/docs/shader-subprogram-blob.md)
+- reproduce it with that repository's `tools/shader_blob_dump.py`, which
+  re-derives every claim and exits non-zero on disagreement.
+
+It was written there over 2026-08-24 in three parts, each measured against the
+stock V3.1.0 b14 install and each gated by that tool:
+
+| Part | What it settles | Sample |
+|---|---|---|
+| the code blob and its 38-byte header | header bytes 1 to 3 are the SRV, constant-buffer and sampler counts, derived by walking the DXBC token stream | 7366 d3d11 sub-programs |
+| the parameter blob | the binding table Unity keeps instead of the stripped `RDEF` chunk | 3403 records, re-emitted byte for byte |
+| the bind-channel block | the `ParserBindChannels` block closing every record, and its mesh-channel mapping | 7366 sub-programs |
+
+What this repository keeps is only what a **writer** needs on top of that page,
+and the evidence that its output is accepted.
+
+**The 38 bytes this project could not decode are decoded.** The earlier entry
+here recorded them as "a per-sub-program descriptor this project has not
+decoded", on two samples. Widening to 7366 and correlating against each
+program's own bytecode resolved them, and the note is superseded rather than
+merely appended to: nothing in the container is undecoded now except header
+byte 4 (UAV-related, zero unless the program declares a UAV) and the meaning
+of the three empty `m_PlayerSubPrograms` groups.
+
+### Unity's built-in constant buffers, as a writer must declare them
+
+Measured from the same 3403 parameter blobs. These offsets are the engine's;
+a writer that gets one wrong renders the mesh in the wrong place rather than
+failing, so none of them is invented:
+
+| Buffer | Size | Members (offset) |
+|---|---|---|
+| `UnityPerDraw` | 176 | `unity_ObjectToWorld` 0, `unity_WorldToObject` 64, `unity_LODFade` 128, `unity_WorldTransformParams` 144 |
+| `UnityPerFrame` | 368 | `glstate_lightmodel_ambient` 0, `glstate_matrix_projection` 80, `unity_MatrixV` 144, `unity_MatrixInvV` 208, `unity_MatrixVP` 272 |
+
+`stageCounts` is a per-platform constant across all ten stock `trees` shaders,
+independent of tier count: **2** for d3d11 (vertex and fragment are separate
+programs) and **1** for OpenGLCore and Vulkan (one source carries both stages
+behind `#ifdef VERTEX` / `#ifdef FRAGMENT`).
+
+### What the runtime said about a synthesized shader
+
+`shamway verify-bundle` on a real Unity **2022.3.62f2** editor, the
+game-matched revision, against a bundle this writer produced:
+
+```text
+VERIFY-SHADER: 'Shamway/Unlit' isSupported=True passes=1 renderQueue=2000 properties=1
+VERIFY-MATERIAL: 'prop_mat' shader='Shamway/Unlit' shaderSupported=True _MainTex=prop_albedo
+VERIFY-PREFAB: components=3 mesh=prop_mesh materials=1 children=0
+```
+
+`Shader.isSupported` is the engine's own verdict on a compiled shader, and it
+is the check that found the one structural error in this work. Before the
+bind-channel block was written, the same shader produced:
+
+```text
+Failed to load GpuProgram from binary shader data in 'Shamway/Unlit'.
+VERIFY-SHADER: 'Shamway/Unlit' isSupported=False
+```
+
+Three variations moved nothing (a second platform, corrected `stageCounts`, a
+real temp-register count). What isolated it was a **bisect**: stock blob
+contents inside a synthesized container loaded, which cleared the container,
+the record table, the parameter blobs and the `Shader` object, and left the
+record wrapper - which a byte diff then showed 32 bytes short. That is the
+whole value of an editor here: an offline gate this repository wrote would
+have called the broken shader fine, because it was structurally valid by every
+rule this repository knew.
+
+Two things the runtime did **not** establish, and no offline gate can:
+
+- **it is a load, not a look.** Nobody has yet seen this shader draw. The test
+  cube carries no UVs, so its texture samples one texel; a stretched or
+  upside-down texture passes every check above.
+- **it is not 7DTD.** A Unity editor is not the game. Acceptance still ends at
+  `shamway acceptance-provider`, a fresh client, and a person looking.
+
+Runtime confirmation, same day: a real Unity 2022.3.62f2 runtime loaded a
+synthesized prefab through `shamway verify-bundle` and resolved its graph —
+`components=3 mesh=shamwayProbeMesh materials=0 children=0`. The renderer
+found the synthesized `Mesh` through the `MeshFilter`; `materials=0` is the
+honest state of the lane, and an empty renderer draws nothing.
+
+### A material's shader: what is measured closed, and what is not
+
+**Correction, 2026-08-24.** An earlier version of this section concluded that
+"compiled shader bytecode is what an offline writer cannot produce" and the
+pages that cited it said a shader was impossible offline, full stop. **That was
+wrong**, and it is the reason AGENTS.md now carries "Never declare an
+impossibility you did not test". What had actually been measured was that a
+shader cannot be *borrowed*; nothing had been checked about *authoring* one.
+The two findings below stand. The conclusion drawn from them did not.
+
+Borrowing, measured with UnityPy against the installed game — both routes
+closed:
+
+- the shipped player's `7DaysToDie_Data/Resources/unity default resources`
+  carries **six** shaders, all internal: `Hidden/InternalErrorShader`,
+  `Hidden/InternalClear`, `Hidden/Internal-Colored`, `Hidden/Internal-Loading`,
+  `GUI/Text Shader`, `Hidden/FrameDebuggerRenderTargetDisplay`. Nothing a prop
+  could use;
+- the game's own `trees` bundle **embeds its shaders**: 10 `Shader` objects
+  inside the archive, and every `Material` in it points at one with
+  `m_Shader.m_FileID: 0` — same file. So a mod bundle must carry its own;
+- the one external that bundle declares is `Resources/unity_builtin_extra`,
+  so the engine does resolve external references at runtime. Recorded as a
+  route, not a plan: the player has no such file on disk.
+
+Authoring, checked on the same host the false claim was written on:
+
+```bash
+which vkd3d-compiler glslangValidator
+```
+
+Both were **already installed**. `vkd3d-compiler` (WineHQ's vkd3d-shader, MIT,
+`/usr/bin/vkd3d-compiler`, package `vkd3d` 1.19) compiles HLSL to `dxbc-tpf` —
+shader-model 4/5 **DXBC**, which is exactly what Unity's d3d11 sub-programs
+carry. `glslangValidator` emits the SPIR-V the Vulkan sub-programs carry. So
+the bytecode half has an open-source producer, and the claim that only Unity's
+compiler can make one was never checked before it was written down.
+
+### Shader object and sub-program blob layout
+
 Measured 2026-08-24 with UnityPy and a scratch decoder over
 `Data/Bundles/Standalone/Entities/trees`, using its smallest shader,
 `Legacy Shaders/Transparent/Cutout/VertexLit` (28198 compressed blob bytes).

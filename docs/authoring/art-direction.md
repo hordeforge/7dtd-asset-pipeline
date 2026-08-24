@@ -443,7 +443,10 @@ shamway generate cutout key assets-src/icons/thing.png \
 `--trim` crops to the subject before scaling, so the item fills the cell rather
 than floating in whatever margin the generator left; `--pad 0.9` then puts a
 deliberate margin back. `shamway generate icon` does the same job from an
-already-transparent source and can emit a legibility contact sheet.
+already-transparent source and can emit a legibility contact sheet —
+`--contact-sheet sheet.png` writes 1x, 2x and 4x on a dark row and a light
+one, because a dark-edged subject and a white-haloed cutout each disappear on
+only one of the two.
 
 Then reconcile every icon against every `CustomIcon` key in the mod's XML:
 

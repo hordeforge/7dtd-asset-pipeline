@@ -92,16 +92,28 @@ def build_icon(
 
 
 def contact_sheet(icon: Image.Image, path: Path) -> None:
-    """Native size beside 2x and 4x, so small-size legibility is reviewable."""
+    """Native size beside 2x and 4x, on a dark row and a light one.
+
+    Two backgrounds, not one, because the two ways an icon fails are opposite
+    and each is invisible on the other ground: a dark-edged subject disappears
+    into a dark inventory slot, and a cutout that kept a white halo only shows
+    it against light. `docs/authoring/agent-workflows.md` asks for both, and
+    this used to render dark alone.
+    """
     scales = (1, 2, 4)
-    width = sum(icon.width * scale for scale in scales) + 16 * (len(scales) + 1)
-    height = icon.height * max(scales) + 32
-    sheet = Image.new("RGBA", (width, height), (32, 32, 32, 255))
-    x = 16
-    for scale in scales:
-        scaled = icon.resize((icon.width * scale, icon.height * scale), Image.NEAREST)
-        sheet.paste(scaled, (x, 16), scaled)
-        x += scaled.width + 16
+    grounds = ((32, 32, 32, 255), (222, 222, 222, 255))
+    margin = 16
+    row_height = icon.height * max(scales) + margin * 2
+    width = sum(icon.width * scale for scale in scales) + margin * (len(scales) + 1)
+    sheet = Image.new("RGBA", (width, row_height * len(grounds)), (0, 0, 0, 255))
+    for row, ground in enumerate(grounds):
+        band = Image.new("RGBA", (width, row_height), ground)
+        x = margin
+        for scale in scales:
+            scaled = icon.resize((icon.width * scale, icon.height * scale), Image.NEAREST)
+            band.paste(scaled, (x, margin), scaled)
+            x += scaled.width + margin
+        sheet.paste(band, (0, row * row_height))
     save_atomically(sheet, path)
 
 

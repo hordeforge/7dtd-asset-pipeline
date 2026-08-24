@@ -892,8 +892,8 @@ def _fsb5_pcm16(pcm: bytes, channels: int, rate: int) -> bytes:
         supported = ", ".join(str(value) for value in sorted(FSB5_FREQUENCIES))
         raise PipelineError(
             f"{rate} Hz cannot be written without a frequency chunk; FMOD's table "
-            f"holds {supported}. Resample first: "
-            "ffmpeg -i in.wav -ar 44100 out.wav"
+            f"holds {supported}. Resample first, with no extra tool:\n"
+            "  shamway generate audio convert in.wav out.wav --rate 44100"
         )
     if channels not in (1, 2):
         raise PipelineError(f"{channels}-channel audio needs a channel chunk; write mono or stereo")
@@ -928,8 +928,8 @@ def audio_clip(name: str, wav: Path) -> BundleObject:
         raise PipelineError(f"cannot read clip {wav}: {exc}") from exc
     if width != 2:
         raise PipelineError(
-            f"{wav.name} is {width * 8}-bit; write 16-bit PCM "
-            "(ffmpeg -i in.wav -c:a pcm_s16le out.wav)"
+            f"{wav.name} is {width * 8}-bit; write 16-bit PCM with no extra tool:\n"
+            f"  shamway generate audio convert {wav.name} out.wav"
         )
     samples = len(frames) // (2 * channels)
     return BundleObject(

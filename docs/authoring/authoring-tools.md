@@ -125,10 +125,17 @@ export.
 
 ### ImageMagick — deterministic raster transforms
 
-Use `magick` for crop/trim, resize, alpha/key processing, channel packing,
-format conversion, montages, and quantitative comparisons. Prefer a new output
-path over `mogrify`, which overwrites inputs. Record the complete command in
-source documentation or a script.
+**The pipeline itself does not need it.** Cutouts, atlas cells, contact sheets
+and texture maps are Pillow, which is already a dependency, so `magick` is
+registered for *a mod's own* scripts rather than wired into a command — worth
+saying plainly, because a tool listed here with nothing calling it reads like
+a missing integration.
+
+Reach for it when a mod needs something the generators do not do: crop/trim,
+alpha/key processing, channel packing, format conversion, montages of many
+assets at once, and quantitative image comparison (`magick compare -metric
+RMSE`). Prefer a new output path over `mogrify`, which overwrites inputs.
+Record the complete command in source documentation or a script.
 
 - Official CLI guide: <https://imagemagick.org/command-line-processing/>
 - Tool behavior: <https://imagemagick.org/command-line-tools/>

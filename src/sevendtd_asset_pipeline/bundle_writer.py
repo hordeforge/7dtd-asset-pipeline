@@ -26,12 +26,12 @@ rules are the ones a reader of Unity's format already agrees on.
 
 The proof boundary is narrow and stated in `docs/bundles/no-unity.md`: this
 writes containers and objects for a bounded set of classes — `Texture2D`,
-`AudioClip`, `TextAsset`, `Mesh`, and the `GameObject`/`Transform`/
-`MeshFilter`/`MeshRenderer` group that makes a prefab. It stops at `Material`
-and `Shader`, because a shader in a bundle is compiled platform bytecode; that
-is a gap with a known route rather than a wall (`docs/status/improvements.md`
-4b), not a claim that it cannot be done. An offline parse of what it wrote
-proves construction, never acceptance.
+`AudioClip`, `TextAsset`, `Mesh`, `Material`, `Shader`, and the
+`GameObject`/`Transform`/`MeshFilter`/`MeshRenderer` group that makes a prefab.
+The shader lane is the one part with a host dependency: `vkd3d-compiler`
+compiles the pass's HLSL to the DXBC a d3d11 sub-program carries, and without
+it a mesh source degrades to a bare `Mesh` instead of a prefab. An offline
+parse of what it wrote proves construction, never acceptance.
 """
 
 from __future__ import annotations

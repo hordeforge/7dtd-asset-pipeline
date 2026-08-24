@@ -336,7 +336,8 @@ def _parser() -> argparse.ArgumentParser:
 
     script_parser = commands.add_parser(
         "script",
-        help="run a packaged host script: install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance",
+        help="run a packaged host script: install-tools, install-unity-editor, "
+        "compile-editor-scripts, playtest-acceptance, playtest-synthesized, playtest-capture",
     )
     script_parser.add_argument(
         "arguments", nargs=argparse.REMAINDER, help="`shamway script --list` names them"

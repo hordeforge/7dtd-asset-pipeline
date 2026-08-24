@@ -22,7 +22,7 @@ shamway check-log .shamway/build/bundle/unity-build.log
 ```
 
 `inspect --json` and `doctor --json` are suitable for CI and agent workflows.
-`doctor` gives every check its own `OK`/`WARN`/`FAIL` verdict and exits
+`doctor` gives every check its own `OK`/`WARN`/`INFO`/`FAIL` verdict and exits
 non-zero when any is `FAIL`, so a single broken check never hides the rest of
 the report. Every other command exits non-zero with one `ERROR: ...` line on
 stderr. Prefer exit codes over parsing prose.

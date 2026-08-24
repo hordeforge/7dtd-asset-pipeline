@@ -120,11 +120,14 @@ MyMod/
 ├── Makefile.assets                     # make -f Makefile.assets assets
 ├── assets-src/                         # editable sources + provenance; never ships
 │   ├── bundle/                         # every file here becomes a bundle asset
-│   └── README.md                       # what each lane holds, what a row must record
+│   ├── README.md                       # what each lane holds, what a row must record
+│   └── icons/ textures/ meshes/ audio/ vfx/
 └── tools/shamway/
-    ├── AGENTS.md                       # the agent contract, in your repo
-    └── manifests/                      # tracked build membership
+    └── AGENTS.md                       # the agent contract, in your repo
 ```
+
+The first `build` or `stage` creates `tools/shamway/manifests/`, where the
+tracked build-membership manifest is committed.
 
 `--bundle-source unity` adds one more directory,
 `tools/shamway/UnityProject/`, and `source_root` then points inside it instead
@@ -199,8 +202,17 @@ collected into the structure so one broken thing does not hide the rest.
 ```json
 {
   "mod_name": "MyMod",
+  "mod_root": "/path/to/MyMod",
+  "bundle_source": "synthesized",
+  "bundle_name": "mymod.unity3d",
   "bundle_path": "/path/to/MyMod/Resources/mymod.unity3d",
   "bundle_present": true,
+  "manifest_path": "/path/to/MyMod/tools/shamway/manifests/mymod.unity3d.manifest",
+  "manifest_present": true,
+  "unity_project": "/path/to/MyMod/tools/shamway/UnityProject",
+  "source_root": "assets-src/bundle",
+  "game_dir": "/path/to/7 Days To Die",
+  "unity_editor": null,
   "bundle_unity_version": "2022.3.62f2",
   "bundle_has_assetbundle_object": true,
   "game_unity_version": "2022.3.62f2",
@@ -215,9 +227,12 @@ collected into the structure so one broken thing does not hide the rest.
   ],
   "valid": true,
   "problems": [],
-  "capabilities": {"UnityPy": true, "trimesh": false, "gltf_validator": false,
-                   "blender": false, "openscad": false, "pillow": false, "numpy": false,
-                   "magick": false, "xvfb": false, "desktop-capture": false}
+  "capabilities": {"UnityPy": true, "trimesh": false, "vkd3d-compiler": false,
+                   "libzmolv": false, "glslangValidator": false, "fsb5": false,
+                   "gltf_validator": false, "blender": false, "gltfpack": false,
+                   "openscad": false, "pillow": false, "numpy": false,
+                   "magick": false, "xvfb": false, "desktop-capture": false,
+                   "ffmpeg": false, "model-audio-review": false}
 }
 ```
 
@@ -311,7 +326,8 @@ never cut out of its background, or whose case does not match its key.
 These two are argv-passthrough commands rather than JSON operations, and they
 exist so a consuming mod needs nothing from this repository's filesystem:
 
-- `shamway generate --list` — sound, audio, cutout, icon, texture-maps, mesh
+- `shamway generate --list` — sound, audio, cutout, particle-card, icon,
+  texture-maps, mesh, mesh-optimize, mesh-icon
 - `shamway generate sound --help` — each generator's own options
 - `shamway docs` — the topics
 - `shamway docs art-direction` — one page, in full
@@ -410,7 +426,10 @@ pipeline.call("inspect_deep")  # same dispatch as `call` and `serve`
 | `.inspect_deep(bundle=None)` | `DeepReport` (needs UnityPy) |
 | `.validate(bundle=None)` | `ValidationReport` |
 | `.check_mesh(path, max_extent, strict)` | `MeshReport` (needs trimesh) |
+| `.check_texture(path, matches=None, tolerance=…, tileable=False, max_tile_ratio=…)` | `TextureReport` (needs numpy and Pillow) |
 | `.check_sound(path, max_seconds, require_mono)` | `SoundReport` |
+| `.review_audio(clip, …)` | the review dict; refuses without `allow_network=True` |
+| `.acceptance_provider(harness_dll=None, install=False, mods_dir=None)` | the generated provider description (installs under the client lock when `install`) |
 | `.check_icons(atlas_root, cell)` | `IconReport` |
 | `.render_icon(prefab, output=None, size=160, …)` | `RenderResult` (needs Unity + Pillow) |
 | `.check_log(path)` | raises if the log shows stripped modules |

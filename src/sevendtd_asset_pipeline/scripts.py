@@ -1,10 +1,10 @@
 """The host scripts, reachable from an installed `shamway` without a checkout.
 
 `install-tools.sh`, `install-unity-editor.sh`, `compile-editor-scripts.sh`,
-`playtest-acceptance.sh` and `playtest-synthesized.sh` are host-setup and
-acceptance steps a mod needs once per machine. A mod is told never to keep
-a path into a checkout of this repository, so the scripts ship inside the
-package (staged by setup.py, the way docs/ is) and run as
+`playtest-acceptance.sh`, `playtest-synthesized.sh` and `playtest-capture.sh`
+are host-setup and acceptance steps a mod needs once per machine. A mod is
+told never to keep a path into a checkout of this repository, so the scripts
+ship inside the package (staged by setup.py, the way docs/ is) and run as
 
     shamway script install-tools --with-authoring
     shamway script install-unity-editor --project tools/shamway/UnityProject

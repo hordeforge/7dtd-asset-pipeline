@@ -27,7 +27,7 @@ verified, or accepted.
 | 3 | An **editor-built** bundle surviving a fresh client | a real mod, an editor, and a person who looks at the asset |
 | 4 | `render-icon` and six `GeneratedAsset` helpers *executing* | an editor plus a display (or `xvfb-run -a`) |
 | 5 | The `external` round trip: build there, stage here | a second machine |
-| 6 | A synthesized **prop** *drawn on a screen* — the engine loads it (proven 2026-08-24); nobody has seen it | a person's eyes |
+| 6 | A synthesized **prop** *drawn on a screen* — the engine loads it (proven 2026-08-24) and one orientation-card prop has been signed off by eye on OpenGL Core and Direct3D 11; every other asset's look is still owed | a person's eyes |
 
 ### Order to work them
 
@@ -36,10 +36,12 @@ Do them in this order, for reasons that are about cost rather than importance:
 1. **6, then 4.** Both need one client session on this host, and 6 needs no
    editor at all. Its mechanical half closed on 2026-08-24 — 7DTD's own
    `DataLoader` resolves the synthesized prefab, mesh, material and texture on
-   a fresh world — so what is left is the half no suite can supply: **a person
-   looking at the prop**. `ShamwayPropProof` is built for it, with asymmetric
-   extents and an R-and-arrow texture so mirrored and upside-down both show.
-   Run 4 in the same sitting: the display is already there.
+   a fresh world — and the first look happened the same day: the
+   orientation-card prop signed off by eye in a live client. What is left is
+   that half again for every asset whose content changes: **a person looking**.
+   `ShamwayPropProof` is built for it, with asymmetric extents and an
+   R-and-arrow texture so mirrored and upside-down both show. Run 4 in the same
+   sitting: the display is already there.
 2. **3.** Same session again if an editor-built mod is to hand. It is a large
    claim still open, though a smaller one than it was: `bundle_source =
    "unity"` is now the opt-in rather than the default, so fewer mods depend on

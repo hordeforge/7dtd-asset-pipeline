@@ -549,8 +549,8 @@ and this run is meant to prove what *this* build does. `--reuse-save` opts out
 for a quick loop, and a report that used it has to say so.
 
 To prove the **writer** rather than a particular mod, there is a self test that
-brings its own modlet — generated in a temporary directory, built with no
-editor, run through a live client, and asserted by value:
+brings its own modlet — `examples/SelfTestMod`, committed in this repository
+and built in place, then run through a live client and asserted by value:
 
 ```bash
 shamway script playtest-synthesized

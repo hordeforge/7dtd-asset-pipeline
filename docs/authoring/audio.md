@@ -227,10 +227,14 @@ clipped.
 The compressed version was still human-rejected as a slightly improved poof:
 it lacked an explosion-impact onset. The original pressure pulse was largely
 one-sided and low-frequency, so the required 12 Hz high-pass removed much of
-its audible identity. `nuclear-blast` now starts with one coherent impact: a
-165→42 Hz boom sweep plus a single dense 120–5,200 Hz pressure crack. This is
-separate from the sustained body/coda and deliberately does not restore sparse
-debris crackling.
+its audible identity. The first impact retune was also rejected in the target
+game: its short 165→42 Hz sweep was masked by the pressure crack and read as a
+dry thump with no lows or boom. `nuclear-blast` therefore gives the boom its
+own 2.4-second 108→44 Hz pressure wave with an audible second harmonic and a
+1.15-second decay. A much quieter dense 120–5,200 Hz pressure crack sits above
+that sustained low layer instead of consuming its headroom. This remains
+separate from the body/coda and deliberately does not restore sparse debris
+crackling.
 
 The near `blast` voice itself no longer treats sparse high-band debris as a
 main layer. A target-game reviewer rejected that output as “just crackling,”

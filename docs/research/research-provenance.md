@@ -654,9 +654,14 @@ harmonics the first follow-up removed.
 The compressed follow-up remained a human-rejected poof because it lacked an
 explosion-impact onset. Inspection showed the designed pressure pulse was
 largely one-sided and low-frequency before the mandatory 12 Hz high-pass. The
-next design adds an explicitly audible impact layer—a 165→42 Hz boom sweep and
-one dense band-limited pressure crack—while retaining the clean compressed
-body/coda and excluding the old sparse debris crackling.
+next design added an explicitly audible impact layer—a 165→42 Hz boom sweep
+and one dense band-limited pressure crack—while retaining the clean compressed
+body/coda and excluding the old sparse debris crackling. Target-game listening
+then rejected that version as a dry thump with no perceived lows or boom: the
+short crack masked a low sweep that did not sustain enough energy through the
+game mixer. The follow-up makes the boom an independent 2.4-second 108→44 Hz
+pressure wave, adds a second harmonic for small-speaker audibility, extends its
+decay to 1.15 seconds, and substantially lowers the crack in the mix.
 
 The same investigation decompiled installed V3.1 `Assembly-CSharp.dll` with
 `ilspycmd -t Audio.Manager`. `Audio.Manager.Play(Vector3, ...)` subtracts

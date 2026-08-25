@@ -301,36 +301,24 @@ def validate_result(data: dict[str, Any], origin: str = "gateway response") -> d
                 problems.append(f"issue #{index + 1} needs a non-empty description")
                 continue
             issue: dict[str, Any] = {"description": description.strip()}
-            seconds = entry.get("at_seconds")
+            seconds = _moment(entry.get("at_seconds"), non_negative=False)
+            if "at_seconds" in entry and seconds is None:
+                problems.append(
+                    f"issue #{index + 1} at_seconds must be [start, end] numbers "
+                    "with start <= end, or a single second"
+                )
+                continue
             if seconds is not None:
-                valid_seconds = (
-                    isinstance(seconds, list)
-                    and len(seconds) == 2
-                    and all(isinstance(bound, (int, float)) for bound in seconds)
-                    and seconds[0] <= seconds[1]
+                issue["at_seconds"] = seconds
+            frame = _moment(entry.get("at_frame"), non_negative=True)
+            if "at_frame" in entry and frame is None:
+                problems.append(
+                    f"issue #{index + 1} at_frame must be [start, end] non-negative "
+                    "numbers with start <= end, or a single frame index"
                 )
-                if not valid_seconds:
-                    problems.append(
-                        f"issue #{index + 1} at_seconds must be [start, end] numbers "
-                        "with start <= end"
-                    )
-                    continue
-                issue["at_seconds"] = [float(seconds[0]), float(seconds[1])]
-            frame = entry.get("at_frame")
+                continue
             if frame is not None:
-                valid_frame = (
-                    isinstance(frame, list)
-                    and len(frame) == 2
-                    and all(isinstance(bound, (int, float)) and bound >= 0 for bound in frame)
-                    and frame[0] <= frame[1]
-                )
-                if not valid_frame:
-                    problems.append(
-                        f"issue #{index + 1} at_frame must be [start, end] non-negative "
-                        "numbers with start <= end"
-                    )
-                    continue
-                issue["at_frame"] = [float(frame[0]), float(frame[1])]
+                issue["at_frame"] = frame
             issues.append(issue)
 
     # deadeye owns the rubric (see the gateway envelope); this backstop checks
@@ -374,6 +362,28 @@ def validate_result(data: dict[str, Any], origin: str = "gateway response") -> d
 
 
 # -- redaction and hashing ----------------------------------------------------
+
+
+def _moment(value: Any, *, non_negative: bool) -> list[float] | None:
+    """Normalize an issue moment: `[start, end]` or a single value -> `[n, n]`.
+
+    Mirrors the deadeye gateway's canonical validator: models point at a
+    moment with either shape, and a single frame index or second is the
+    natural way to name one frame.
+    """
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if non_negative and value < 0:
+            return None
+        return [float(value), float(value)]
+    if (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(isinstance(bound, (int, float)) and not isinstance(bound, bool) for bound in value)
+        and (not non_negative or value[0] >= 0)
+        and value[0] <= value[1]
+    ):
+        return [float(value[0]), float(value[1])]
+    return None
 
 
 def redact(value: Any, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> Any:

@@ -244,13 +244,13 @@ class ResultTests(unittest.TestCase):
         self.assertEqual([2.0, 2.0], result["issues"][0]["at_seconds"])
 
     def test_an_explicit_null_moment_is_allowed_like_an_absent_one(self) -> None:
-        data = dict(_gateway_envelope()["result"])  # type: ignore[arg-type]
+        data = dict(cast("dict[str, Any]", _gateway_envelope()["result"]))
         data["issues"] = [{"description": "whole-clip read", "at_frame": None, "at_seconds": None}]
         result = validate_result(data)
         self.assertEqual({"description": "whole-clip read"}, result["issues"][0])
 
     def test_the_singular_moment_aliases_normalize(self) -> None:
-        data = dict(_gateway_envelope()["result"])  # type: ignore[arg-type]
+        data = dict(cast("dict[str, Any]", _gateway_envelope()["result"]))
         data["issues"] = [{"description": "pops", "frame": 9}]
         result = validate_result(data)
         self.assertEqual([9.0, 9.0], result["issues"][0]["at_frame"])

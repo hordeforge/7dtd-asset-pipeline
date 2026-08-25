@@ -244,7 +244,7 @@ def load_config(path: Path | None = None) -> PipelineConfig:
     config_file = find_config(path)
     try:
         data = tomllib.loads(config_file.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise PipelineError(f"cannot read {config_file}: {exc}") from exc
 
     if data.get("schema_version") != 1:

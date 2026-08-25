@@ -234,6 +234,13 @@ class InjectionTests(unittest.TestCase):
             source = acceptance.render(self._plan_with_stem(tmp, stem))["ExampleModAcceptance.cs"]
         self.assertIn(acceptance._cs_body(stem), source)
 
+    def test_control_characters_without_a_named_escape_become_unicode_escapes(self) -> None:
+        """A control byte a C# literal cannot carry raw (a NUL from a mangled
+        filename, an ESC) must not reach the generated source unescaped."""
+        escaped = acceptance._cs_body("a\x00b\x1bc\x7fd")
+        self.assertEqual("a\\u0000b\\u001bc\\u007fd", escaped)
+        self.assertNotIn("\x00", escaped)
+
     def test_a_non_identifier_stem_yields_a_valid_local_variable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source = acceptance.render(self._plan_with_stem(tmp, "blast-loop"))[

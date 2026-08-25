@@ -64,6 +64,14 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse((self.root / CONFIG_NAME).exists(), "nothing may be written")
         self.assertFalse((self.root / "tools").exists())
 
+    def test_a_config_with_an_invalid_byte_is_an_error_not_a_traceback(self) -> None:
+        """One non-UTF-8 byte (an editor saving latin-1) fails as a gate, cleanly."""
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2")
+        config_path = self.root / CONFIG_NAME
+        config_path.write_bytes(config_path.read_bytes().replace(b"ExampleMod", b"Ex\xffmple"))
+        with self.assertRaisesRegex(PipelineError, "cannot read"):
+            load_config(config_path)
+
     def _load_with_machine_source_env(self, value: str) -> PipelineConfig:
         import os
         from unittest import mock

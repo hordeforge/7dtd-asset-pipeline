@@ -194,7 +194,7 @@ def _config_texts(config_dir: Path) -> list[tuple[Path, str]]:
     for xml_file in sorted(config_dir.rglob("*.xml")):
         try:
             texts.append((xml_file, xml_file.read_text(encoding="utf-8-sig")))
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             raise PipelineError(f"cannot read {xml_file}: {exc}") from exc
     return texts
 

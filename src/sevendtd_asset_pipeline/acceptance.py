@@ -124,15 +124,18 @@ def _cs_body(text: str) -> str:
     on another machine (`shamway stage` gates exactly such a pair), so they are
     untrusted here: unescaped, a `"` or a newline in a stem terminates the
     literal and the rest of the name compiles as C# inside a provider the live
-    client executes.
+    client executes. Control characters outside the named escapes (`\\u0000`,
+    `\\x1b`) have no literal form a compiler accepts raw, so they become
+    `\\\\uXXXX` too.
     """
-    return (
+    escaped = (
         text.replace("\\", "\\\\")
         .replace('"', '\\"')
         .replace("\n", "\\n")
         .replace("\r", "\\r")
         .replace("\t", "\\t")
     )
+    return re.sub(r"[\x00-\x1f\x7f]", lambda match: f"\\u{ord(match.group()):04x}", escaped)
 
 
 def _comment_text(text: str) -> str:

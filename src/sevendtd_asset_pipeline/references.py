@@ -65,7 +65,7 @@ def discover_references(config_dir: Path) -> list[AssetReference]:
     for xml_file in sorted(config_dir.rglob("*.xml")):
         try:
             text = xml_file.read_text(encoding="utf-8-sig")
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             raise PipelineError(f"cannot read {xml_file}: {exc}") from exc
         references.extend(
             parse_reference(xml_file, match.group(0)) for match in BUNDLE_URI.finditer(text)
@@ -76,7 +76,7 @@ def discover_references(config_dir: Path) -> list[AssetReference]:
 def manifest_assets(manifest: Path) -> list[str]:
     try:
         lines = manifest.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise PipelineError(f"cannot read manifest {manifest}: {exc}") from exc
     assets: list[str] = []
     in_assets = False

@@ -101,6 +101,26 @@ class ReferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "cannot read manifest"):
             manifest_assets(self.root / "absent.manifest")
 
+    def test_an_xml_with_an_invalid_byte_is_an_error_not_a_traceback(self) -> None:
+        """A Config XML carrying one non-UTF-8 byte fails as the single-line
+        error every command contracts, not as a UnicodeDecodeError traceback
+        through `main`."""
+        nested = self.root / "Config"
+        nested.mkdir()
+        (nested / "blocks.xml").write_bytes(
+            b'<config><property name="Albedo" value="caf\xe9.png"/></config>'
+        )
+        with self.assertRaisesRegex(PipelineError, "cannot read.*blocks.xml"):
+            discover_references(nested)
+
+    def test_a_manifest_with_an_invalid_byte_is_an_error_not_a_traceback(self) -> None:
+        """`shamway stage` gates manifests built on other machines; one saved
+        in a non-UTF-8 encoding must fail as a gate, not crash status."""
+        manifest = self.root / "bundle.manifest"
+        manifest.write_bytes(b"ManifestFileVersion: 0\nAssets:\n- Caf\xe9.prefab\n")
+        with self.assertRaisesRegex(PipelineError, "cannot read manifest"):
+            manifest_assets(manifest)
+
     def test_case_insensitive_resolution(self) -> None:
         resource = self.root / "Resources"
         resource.mkdir()

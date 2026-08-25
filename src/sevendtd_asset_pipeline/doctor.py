@@ -58,7 +58,7 @@ def _modules(project: Path) -> dict[str, str]:
     manifest = project / "Packages" / "manifest.json"
     try:
         data = json.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise PipelineError(f"cannot read {manifest}: {exc}") from exc
     dependencies = data.get("dependencies")
     if not isinstance(dependencies, dict):

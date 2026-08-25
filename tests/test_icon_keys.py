@@ -20,6 +20,7 @@ from sevendtd_asset_pipeline.icon_check import (
     discover_icon_references,
     discover_implicit_icon_names,
 )
+from sevendtd_asset_pipeline.errors import PipelineError
 
 
 class IconKeyTests(unittest.TestCase):
@@ -35,6 +36,13 @@ class IconKeyTests(unittest.TestCase):
 
     def _write(self, name: str, body: str) -> None:
         (self.config / name).write_text(body, encoding="utf-8")
+
+    def test_an_xml_with_an_invalid_byte_is_an_error_not_a_traceback(self) -> None:
+        """One non-UTF-8 byte in a Config XML fails as the single-line gate
+        error, not as a UnicodeDecodeError traceback."""
+        (self.config / "items.xml").write_bytes(b'<config name="caf\xe9" />')
+        with self.assertRaisesRegex(PipelineError, "cannot read.*items.xml"):
+            discover_icon_references(self.config)
 
     def test_display_entry_icon_is_an_explicit_reference(self) -> None:
         self._write(

@@ -37,10 +37,10 @@ Everything below is detail.
 
 `[acceptance] motion_kinds` maps an asset stem to one of three kinds:
 
-| Kind | Generated case | What the hold shows |
+| Kind | Generated case | What the case does |
 |---|---|---|
-| `turntable` | `CaseDef.StagedClip` | the staged prefab rotates one full turn, so the captured frames prove the silhouette from every side |
-| `walk-cycle` | `CaseDef.StagedClip` | the staged prefab holds; a real walk cycle is the game's own animation, which a generated provider cannot drive — the captured frames still show whatever the staged prefab does |
+| `turntable` | `CaseDef.StagedClip` | stages the prefab in front of the camera and rotates it one full turn, so the captured frames prove the silhouette from every side |
+| `walk-cycle` | `CaseDef.Live` + on-demand recording | equips the item on the player (`Helpers.TryEquipItem`) and records the player actually walking with stock autorun (`Helpers.StartWalk`), then stops walk and clip; a walk-cycle declared on a non-wearable asset fails the case rather than holding silently |
 | `fixed` | today's `Staged` look case, unchanged | a world-fixed thing has no motion worth capturing; declaring `fixed` opts out |
 
 A stem with no declaration generates exactly what it generated before this

@@ -342,14 +342,24 @@ class MotionKindTests(unittest.TestCase):
                 acceptance.render(acceptance.plan(declared)),
             )
 
-    def test_a_walk_cycle_kind_generates_a_clip_case_without_rotation(self) -> None:
+    def test_a_walk_cycle_kind_equips_walks_and_records_the_player(self) -> None:
+        """A walk cycle cannot be staged: the case equips the item on the
+        player, drives a real walk, and records it with the on-demand clip
+        recorder."""
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             config = _mod_with_motions(root, ["prop.glb"], {"prop": "walk-cycle"})
             source = acceptance.render(acceptance.plan(config))[
                 f"{acceptance.plan(config).assembly}.cs"
             ]
-            self.assertIn("CaseDef.StagedClip", source)
+            self.assertIn("CaseDef.Live", source)
+            self.assertIn("Helpers.TryEquipItem(player, \"prop\")", source)
+            self.assertIn('Helpers.BeginClip("motion_prop", 2, 4)', source)
+            self.assertIn("Helpers.StartWalk(1f)", source)
+            self.assertIn("Helpers.StopWalk()", source)
+            self.assertIn('Helpers.EndClip("motion_prop")', source)
+            # A walk is the game's own animation; nothing here stages or spins.
+            self.assertNotIn("CaseDef.StagedClip", source)
             self.assertNotIn("Rotate(0f, 360f", source)
 
     def test_a_kind_on_a_non_prefab_member_is_refused(self) -> None:

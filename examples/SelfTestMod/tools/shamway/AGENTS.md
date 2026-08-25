@@ -315,9 +315,10 @@ the wrong pitch, a mesh at ten times scale, an icon whose alpha is inverted.
 
 **Whether it works is yours to prove, because only this repository knows what
 "right" means here.** Write your own `IScenarioProvider` alongside the
-generated one — a separate mod, your own suite id, not an edit to the
-generated file, which is rewritten on every run — and assert the things your
-content promises:
+generated one — its own file and its own suite id, not an edit to the
+generated file, which is rewritten on every run (the suite id is what
+separates it; it does not need its own mod or assembly) — and assert the
+things your content promises:
 
 - the item spawns, is held, and its mesh sits in the hand at the right scale
   and orientation;
@@ -331,6 +332,16 @@ content promises:
 7dtd-playtest's README are what those cases are built from. Everything the
 generated provider proves is a precondition for yours: if `load_<stem>` fails,
 no behaviour case above it means anything.
+
+**This mod's own behaviour suite** is
+`tools/shamway/acceptance/ShamwaySelfTestBlockAcceptance.cs`, with two suite
+ids: `shamwayselftest_block_model` (the placed block's ModelEntity model
+renders) and `shamwayselftest_block_place` (the character places the block
+through the `PlaceAsBlock` item action). It uses the 7dtd-playtest
+`Helpers.Blocks` (`BlockEntityDataAt`, `ActivateBlockEntityModel`,
+`FindGroundedAir`, `AimBlockPlacement`, `CloseDebugConsole`) rather than
+hand-rolling the same mechanics. Run a suite with
+`shamway script playtest-acceptance --suite <id>`.
 
 And the last step is still a person. A suite that passes every case above
 proves the game read your bytes and ran your logic; it does not prove the art

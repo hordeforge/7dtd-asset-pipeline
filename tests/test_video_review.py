@@ -249,6 +249,12 @@ class ResultTests(unittest.TestCase):
         result = validate_result(data)
         self.assertEqual({"description": "whole-clip read"}, result["issues"][0])
 
+    def test_the_singular_moment_aliases_normalize(self) -> None:
+        data = dict(_gateway_envelope()["result"])  # type: ignore[arg-type]
+        data["issues"] = [{"description": "pops", "frame": 9}]
+        result = validate_result(data)
+        self.assertEqual([9.0, 9.0], result["issues"][0]["at_frame"])
+
     def test_a_null_score_is_allowed_but_a_non_number_is_not(self) -> None:
         data = _valid_result()
         data["rubric_scores"] = {"semantic_fit": None, "timing": True}

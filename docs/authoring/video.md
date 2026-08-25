@@ -185,6 +185,7 @@ result schema; then it prints the model's verdict for the human.
 Run it with the gateway configured (key in its `config.local.toml`):
 
 ```bash
+cd ~/code/hordeforge/7dtd-asset-pipeline
 export PATH="$HOME/code/hordeforge/7dtd-vision-review/.venv/bin:$PATH"
 export DEADEYE_CONFIG_DIR="$HOME/code/hordeforge/7dtd-vision-review"
 export SHAMWAY_NETWORK_TESTS=nvidia

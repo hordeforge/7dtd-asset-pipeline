@@ -151,11 +151,17 @@ def render_readme(mod_name: str, bundle_name: str, membership: str | None = None
         # A mod with no bundle still needs this tree: its icons and their
         # provenance are the whole authoring lane.
         text = text.replace(
-            "the deployable artifacts are the bundle\nat `Resources/{bundle_name}`, the PNGs under `UIAtlases/`, and nothing else.",
-            "the deployable artifacts are the PNGs\nunder `UIAtlases/`, the XML under `Config/`, and nothing else.",
+            "the deployable artifacts are the bundle\n"
+            "at `Resources/{bundle_name}`, the PNGs under `UIAtlases/`, and nothing else.",
+            "the deployable artifacts are the PNGs\n"
+            "under `UIAtlases/`, the XML under `Config/`, and nothing else.",
         ).replace(
-            "only a *selected* output\nreaches `{membership}/`, so an unfinished asset cannot ship merely by sitting\nin the wrong folder.",
-            "only a *selected* output\nreaches `UIAtlases/`, so an unfinished asset cannot ship merely by sitting\nin the wrong folder.",
+            "only a *selected* output\n"
+            "reaches `{membership}/`, so an unfinished asset cannot ship merely by sitting\n"
+            "in the wrong folder.",
+            "only a *selected* output\n"
+            "reaches `UIAtlases/`, so an unfinished asset cannot ship merely by sitting\n"
+            "in the wrong folder.",
         )
     # The generator examples run from inside this tree, so they need the path
     # from here, not from the mod root: `bundle/x.wav`, not `../assets-src/…`.

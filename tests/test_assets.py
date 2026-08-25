@@ -135,7 +135,8 @@ class IconTests(unittest.TestCase):
     def test_accepts_a_correct_cell_and_resolves_its_key(self) -> None:
         write_png(self.atlas / "myModThing.png", 160, 160)
         config = self._config(
-            '<configs><item name="a"><property name="CustomIcon" value="myModThing" /></item></configs>'
+            '<configs><item name="a">'
+            '<property name="CustomIcon" value="myModThing" /></item></configs>'
         )
         report = check_icons(self.root, config)
         self.assertTrue(report.ok, report.problems)
@@ -187,7 +188,8 @@ class IconTests(unittest.TestCase):
     def test_a_case_mismatch_between_key_and_filename_fails(self) -> None:
         write_png(self.atlas / "myModThing.png", 160, 160)
         config = self._config(
-            '<configs><item name="a"><property name="CustomIcon" value="mymodthing" /></item></configs>'
+            '<configs><item name="a">'
+            '<property name="CustomIcon" value="mymodthing" /></item></configs>'
         )
         report = check_icons(self.root, config)
         self.assertFalse(report.ok)
@@ -196,7 +198,8 @@ class IconTests(unittest.TestCase):
     def test_a_vanilla_key_is_reported_not_failed(self) -> None:
         write_png(self.atlas / "myModThing.png", 160, 160)
         config = self._config(
-            '<configs><item name="a"><property name="CustomIcon" value="thrownDynamite" /></item></configs>'
+            '<configs><item name="a">'
+            '<property name="CustomIcon" value="thrownDynamite" /></item></configs>'
         )
         report = check_icons(self.root, config)
         self.assertTrue(report.ok, report.problems)

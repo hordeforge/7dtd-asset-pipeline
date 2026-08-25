@@ -106,7 +106,8 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--probe", action="store_true", help="build a throwaway cube bundle only")
     pack = commands.add_parser(
         "pack",
-        help="write a .unity3d from a directory of textures, clips, text files and meshes, with no Unity",
+        help="write a .unity3d from a directory of textures, clips, text files and meshes,"
+        " with no Unity",
     )
     pack.add_argument("source", type=Path, help="directory whose contents become the bundle")
     pack.add_argument("output", type=Path, help="the .unity3d to write")
@@ -345,7 +346,8 @@ def _parser() -> argparse.ArgumentParser:
 
     client_parser = commands.add_parser(
         "client",
-        help="fresh-client acceptance: where, deploy, launch, log, capture, mute, unmute, disable-discord",
+        help="fresh-client acceptance: where, deploy, launch, log, capture, mute, unmute,"
+        " disable-discord",
         add_help=False,
     )
     client_parser.add_argument(
@@ -801,7 +803,8 @@ def run(args: argparse.Namespace) -> int:
             validation = validate_mod(config)
             print(*validation.messages, sep="\n")
             print(
-                f"OK: bundle and {validation.reference_count} reference(s) validated (XML and code_references)"
+                f"OK: bundle and {validation.reference_count} reference(s) validated"
+                " (XML and code_references)"
             )
         return 0
     if args.command == "status":
@@ -837,7 +840,8 @@ def run(args: argparse.Namespace) -> int:
                     "" if icon.alpha_coverage is None else f" {icon.alpha_coverage:.0%} opaque"
                 )
                 print(
-                    f"{icon.atlas}/{icon.stem}: {icon.width}x{icon.height} {icon.colour_type}{coverage}"
+                    f"{icon.atlas}/{icon.stem}: {icon.width}x{icon.height}"
+                    f" {icon.colour_type}{coverage}"
                 )
             print(f"resolved: {len(icons.resolved)}  external: {len(icons.external)}")
             for note in icons.notes:

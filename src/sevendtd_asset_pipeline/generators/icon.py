@@ -154,7 +154,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"opaque:  {100 * opaque / (icon.width * icon.height):.1f}% of the cell")
     if args.fill != 1.0 or args.saturation != 1.0:
         print(
-            f"variant: fill {args.fill}  saturation {args.saturation}   (record these with the source)"
+            f"variant: fill {args.fill}  saturation {args.saturation}"
+            "   (record these with the source)"
         )
     if args.contact_sheet:
         contact_sheet(icon, args.contact_sheet)

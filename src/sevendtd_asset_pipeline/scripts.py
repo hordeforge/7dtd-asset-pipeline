@@ -8,7 +8,8 @@ ship inside the package (staged by setup.py, the way docs/ is) and run as
 
     shamway script install-tools --with-authoring
     shamway script install-unity-editor --project tools/shamway/UnityProject
-    shamway script compile-editor-scripts --scripts tools/shamway/UnityProject/Assets/SevenDaysToDieAssetPipeline/Editor
+    shamway script compile-editor-scripts \
+        --scripts tools/shamway/UnityProject/Assets/SevenDaysToDieAssetPipeline/Editor
 
 `shamway script --list` names them; `shamway script NAME --path` prints the
 file so a person can read it before running it.
@@ -27,7 +28,8 @@ from .errors import PipelineError
 SCRIPTS: dict[str, tuple[str, str]] = {
     "install-tools": (
         "install-tools.sh",
-        "host packages: base, --with-authoring, --with-unity-prereqs, --with-desktop-capture, --with-research",
+        "host packages: base, --with-authoring, --with-unity-prereqs,"
+        " --with-desktop-capture, --with-research",
     ),
     "install-unity-editor": (
         "install-unity-editor.sh",

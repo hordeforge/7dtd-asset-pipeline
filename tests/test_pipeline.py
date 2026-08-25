@@ -280,7 +280,8 @@ class PipelineTests(unittest.TestCase):
     def test_disabled_module_warning_fails(self) -> None:
         log = self.root / "unity.log"
         log.write_text(
-            "'AssetBundle' is not supported because the module AssetBundle is disabled in the build.\n"
+            "'AssetBundle' is not supported because the module AssetBundle"
+            " is disabled in the build.\n"
         )
         with self.assertRaisesRegex(PipelineError, "stripped"):
             reject_disabled_modules(log)

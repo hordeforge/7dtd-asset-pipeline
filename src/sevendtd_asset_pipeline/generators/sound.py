@@ -571,15 +571,17 @@ def describe(path: Path, samples: list[float], rate: int, seed: int) -> None:
     print(f"next:     shamway check-sound {path}   # then listen to it")
 
 
-SOUNDS_XML = """<configs>
-	<append xpath="/Sounds">
-		<SoundDataNode name="{group}">
-			<AudioSource name="@:Sounds/Prefabs/AudioSource_{source}.prefab" />
-			<AudioClip ClipName="#@modfolder({mod}):Resources/{bundle}?{stem}.wav" />{distant}{noise}
-		</SoundDataNode>
-	</append>
-</configs>
-"""
+SOUNDS_XML = (
+    "<configs>\n"
+    '\t<append xpath="/Sounds">\n'
+    '\t\t<SoundDataNode name="{group}">\n'
+    '\t\t\t<AudioSource name="@:Sounds/Prefabs/AudioSource_{source}.prefab" />\n'
+    '\t\t\t<AudioClip ClipName="#@modfolder({mod}):Resources/{bundle}?{stem}.wav" />'
+    "{distant}{noise}\n"
+    "\t\t</SoundDataNode>\n"
+    "\t</append>\n"
+    "</configs>\n"
+)
 DISTANT_LINES = """
 			<DistantClip ClipName="#@modfolder({mod}):Resources/{bundle}?{stem}.wav" />
 			<DistantFadeStart value="{fade_start}" />
@@ -712,7 +714,8 @@ def main(argv: list[str] | None = None) -> int:
     xml.add_argument(
         "--source",
         default="Explosion",
-        help="vanilla AudioSource prefab suffix, e.g. Explosion, Impact, UseAction, UI_Item, Interact",
+        help="vanilla AudioSource prefab suffix,"
+        " e.g. Explosion, Impact, UseAction, UI_Item, Interact",
     )
     xml.add_argument(
         "--noise",

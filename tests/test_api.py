@@ -203,7 +203,8 @@ class EntryPointTests(unittest.TestCase):
             self.assertEqual(0, main(["--config", str(root / ".shamway.toml"), "refs"]))
         self.assertEqual(
             [
-                "Config/blocks.xml: #@modfolder(ExampleMod):Resources/example.unity3d?exampleThing.prefab"
+                "Config/blocks.xml:"
+                " #@modfolder(ExampleMod):Resources/example.unity3d?exampleThing.prefab"
             ],
             out.getvalue().splitlines(),
         )

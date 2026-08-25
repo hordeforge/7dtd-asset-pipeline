@@ -88,14 +88,8 @@ target-version = "py311"
 extend-exclude = ["examples/SelfTestMod/tools"]
 
 [tool.ruff.lint]
-# E501 stays unselected until every line is wrapped to the 100-column cap
-# (about 130 sites today, mostly help text). Selecting it before that wraps
-# nothing; it would only turn `make check` red. Finish the wrap, then move
-# "E4", "E7", "E9" to "E".
 select = [
-  "E4",   # pycodestyle errors (imports, indentation, statements)
-  "E7",   # pycodestyle errors (comparisons, bare except, lambdas)
-  "E9",   # pycodestyle errors (runtime syntax: undefined name, duplicate arg)
+  "E",    # pycodestyle errors: runtime syntax, imports, and the hard 100-col cap
   "W",    # pycodestyle warnings (trailing whitespace, missing newline)
   "F",    # pyflakes: unused imports, undefined names, f-string bugs
   "B",    # flake8-bugbear: mutable defaults, zip strictness, binding bugs
@@ -130,6 +124,13 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # The suite asserts with `assert`; bandit's S101 is for production paths.
 "tests/**" = ["S101"]
+# These three modules exist to embed another format verbatim: a markdown
+# README and command table, and a mod-side Makefile. A markdown table row and
+# a `.PHONY` declaration are atomic lines their target format cannot wrap, so
+# the 100-column cap is waived per file instead of deforming the templates.
+"src/sevendtd_asset_pipeline/assets_src.py" = ["E501"]
+"src/sevendtd_asset_pipeline/consumer_docs.py" = ["E501"]
+"src/sevendtd_asset_pipeline/scaffold.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"

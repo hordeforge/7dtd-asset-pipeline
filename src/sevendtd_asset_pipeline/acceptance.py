@@ -309,7 +309,8 @@ def _staged_case(prefab_stem: str) -> str:
                 var player = ctx == null ? null : ctx.Player;
                 if (player == null)
                 {{
-                    Report.Info("{name}: no local player, so there is no camera to stage in front of");
+                    Report.Info(
+                        "{name}: no local player, so there is no camera to stage in front of");
                     return false;
                 }}
                 // In front of the *camera*, not the player's feet. An

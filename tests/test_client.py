@@ -373,7 +373,9 @@ class ProcessAndAudioTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             reg = Path(temp) / "user.reg"
             reg.write_text(
-                '[Software\\The Fun Pimps]\n"DiscordDisabled_h123"=dword:00000000\n"Other"=dword:1\n'
+                "[Software\\The Fun Pimps]\n"
+                '"DiscordDisabled_h123"=dword:00000000\n'
+                '"Other"=dword:1\n'
             )
             self.assertTrue(client.disable_discord_integration(reg))
             self.assertIn('"DiscordDisabled_h123"=dword:00000001', reg.read_text())

@@ -104,7 +104,8 @@ def _check_reference(
         raise PipelineError(f"{relative_source}: bundle does not exist: {reference.bundle_path}")
     if bundle != owned:
         raise PipelineError(
-            f"{relative_source}: URI resolves to {bundle}, but this pipeline owns {config.bundle_output}"
+            f"{relative_source}: URI resolves to {bundle},"
+            f" but this pipeline owns {config.bundle_output}"
         )
     # The staged bundle was already gated at the top of validate_mod, and the
     # ownership check above proved every reference aims at that same file, so

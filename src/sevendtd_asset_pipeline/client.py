@@ -751,7 +751,8 @@ def markers_for(mod_name: str | None, expect_localization: bool = True) -> tuple
         ),
         Marker(
             "bundle_load_failed",
-            r"Loading AssetBundle .* failed|not compatible with this newer version of the Unity runtime",
+            r"Loading AssetBundle .* failed"
+            r"|not compatible with this newer version of the Unity runtime",
             "the bundle did not open: revision mismatch, missing class 142, or a wrong path",
             False,
         ),
@@ -767,7 +768,8 @@ def markers_for(mod_name: str | None, expect_localization: bool = True) -> tuple
             # patterns into one alternation, and Python rejects a global flag
             # that is not at the very start of an expression.
             r"(?i:duplicate mod|mod .* already loaded)",
-            "the mod exists in both the per-user Mods/ and the install Mods/; the second copy is ignored",
+            "the mod exists in both the per-user Mods/ and the install Mods/;"
+            " the second copy is ignored",
             False,
         ),
         Marker(
@@ -779,7 +781,8 @@ def markers_for(mod_name: str | None, expect_localization: bool = True) -> tuple
         Marker(
             "particle_curve_mode",
             r"curves must all be in the same mode",
-            "a particle module mixes MinMaxCurve modes; this logs on every frame the system updates",
+            "a particle module mixes MinMaxCurve modes;"
+            " this logs on every frame the system updates",
             False,
         ),
         Marker(
@@ -1148,7 +1151,8 @@ def where_info(game_dir: Path | None) -> dict[str, object]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="shamway client",
-        description="fresh-client acceptance: deploy, launch, mute, scan the client log, and capture what a person saw",
+        description="fresh-client acceptance: deploy, launch, mute, scan the client log,"
+        " and capture what a person saw",
     )
     parser.add_argument(
         "--game-dir", type=Path, default=None, help="defaults to SEVEN_DAYS_TO_DIE_DIR"
@@ -1231,7 +1235,8 @@ def main(argv: list[str] | None = None) -> int:
     shot.add_argument(
         "--allow-no-client",
         action="store_true",
-        help="capture even though no client is running; a frame of a menu proves nothing about an asset",
+        help="capture even though no client is running;"
+        " a frame of a menu proves nothing about an asset",
     )
     shot.add_argument("--json", action="store_true")
 

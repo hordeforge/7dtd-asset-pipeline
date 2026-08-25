@@ -314,7 +314,8 @@ def _run_albedo(args: argparse.Namespace) -> int:
     copied = promote(normal_path, args.also)
     print(f"albedo:     {args.albedo} ({width}x{height})")
     print(
-        f"normal:     {normal_path}  ({'DirectX' if args.flip_green else 'OpenGL'} green)  sha256 {sha256(normal_path)}"
+        f"normal:     {normal_path}  ({'DirectX' if args.flip_green else 'OpenGL'} green)"
+        f"  sha256 {sha256(normal_path)}"
     )
     if copied:
         print(f"also:       {copied}")
@@ -335,15 +336,18 @@ def _run_albedo(args: argparse.Namespace) -> int:
         smoothness = mask[..., 3] / 255.0
         occlusion = mask[..., 1] / 255.0
         print(
-            f"mask:       {mask_path}  (R metallic, G occlusion, A smoothness)  sha256 {sha256(mask_path)}"
+            f"mask:       {mask_path}  (R metallic, G occlusion, A smoothness)"
+            f"  sha256 {sha256(mask_path)}"
         )
         if copied:
             print(f"also:       {copied}")
         print(
-            f"metallic:   mean {metallic.mean():.4f}  range {metallic.min():.3f}..{metallic.max():.3f}"
+            f"metallic:   mean {metallic.mean():.4f}"
+            f"  range {metallic.min():.3f}..{metallic.max():.3f}"
         )
         print(
-            f"smoothness: mean {smoothness.mean():.4f}  range {smoothness.min():.3f}..{smoothness.max():.3f}"
+            f"smoothness: mean {smoothness.mean():.4f}"
+            f"  range {smoothness.min():.3f}..{smoothness.max():.3f}"
         )
         print(f"occlusion:  mean {occlusion.mean():.4f}  min {occlusion.min():.3f} (cavity only)")
     print("import:     normal as 'Normal map'; mask as linear (sRGBTexture = false);")
@@ -363,15 +367,18 @@ def _run_detail(args: argparse.Namespace) -> int:
     save_atomically(normal, normal_path, "RGB")
     copied = promote(normal_path, args.also)
     print(
-        f"detail:     {normal_path}  {args.size}x{args.size}  tileable  sha256 {sha256(normal_path)}"
+        f"detail:     {normal_path}  {args.size}x{args.size}  tileable"
+        f"  sha256 {sha256(normal_path)}"
     )
     print(
-        f"recipe:     seed {args.seed}  exponent {args.exponent}  anisotropy {args.anisotropy}  grit {args.grit}  slope {args.slope}"
+        f"recipe:     seed {args.seed}  exponent {args.exponent}  anisotropy {args.anisotropy}"
+        f"  grit {args.grit}  slope {args.slope}"
     )
     if copied:
         print(f"also:       {copied}")
     print(
-        "import:     as 'Normal map'; assign as _BumpMap with a tiling scale on a flat-colour material"
+        "import:     as 'Normal map'; assign as _BumpMap"
+        " with a tiling scale on a flat-colour material"
     )
     return 0
 

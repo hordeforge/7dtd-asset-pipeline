@@ -77,7 +77,8 @@ def reject_disabled_modules(log: Path) -> None:
         raise PipelineError(
             "a particle system mixes MinMaxCurve modes; the client logs this on every frame:\n"
             + "\n".join(sorted(set(curves))[:5])
-            + "\nExpress a stationary axis as GeneratedAsset.ZeroCurve(), never as 0f (docs/authoring/vfx.md)."
+            + "\nExpress a stationary axis as GeneratedAsset.ZeroCurve(), "
+            "never as 0f (docs/authoring/vfx.md)."
         )
 
 
@@ -128,9 +129,8 @@ def run_build(config: PipelineConfig, probe: bool = False) -> Path:
             f"Unity project is {project_version}; installed game uses {expected_version}. "
             "Upgrade the project and editor before building."
         )
-    windows_module = (
-        config.unity_editor.parent
-        / "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
+    windows_module = config.unity_editor.parent / (
+        "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
     )
     if config.target == "StandaloneWindows64" and not windows_module.is_file():
         raise PipelineError(f"Unity Windows Build Support (Mono) is missing: {windows_module}")
@@ -304,7 +304,8 @@ def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:
     same author cannot cross-examine each other; `SYNTHESIZED_CAVEATS` says so
     in the words every caller prints.
 
-    See `bundle_writer.py` for the format and `docs/adrs/0001-synthesize-bundles-without-an-editor.md`
+    See `bundle_writer.py` for the format and
+    `docs/adrs/0001-synthesize-bundles-without-an-editor.md`
     for why a modlet bundle is the tractable case.
     """
     version = expected_unity_version(config)

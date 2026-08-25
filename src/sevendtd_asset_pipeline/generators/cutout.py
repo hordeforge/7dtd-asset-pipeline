@@ -335,10 +335,12 @@ def main(argv: list[str] | None = None) -> int:
             "EXAMPLES\n"
             "  shamway generate cutout key art/nuke-v4-chromakey.png art/nuke-v4.png\n"
             "      remove an auto-detected flat background, keeping soft edges\n\n"
-            "  shamway generate cutout key art/icon-src.png UIAtlases/ItemIconAtlas/myModNuke.png \\\n"
+            "  shamway generate cutout key "
+            "art/icon-src.png UIAtlases/ItemIconAtlas/myModNuke.png \\\n"
             "      --size 160 --pad 0.9 --trim\n"
             "      cut out, trim to the subject, and centre it in a 160 px atlas cell\n\n"
-            "  shamway generate cutout luma art/smoke-mask.png art/smoke-card.png --black-point 15\n"
+            "  shamway generate cutout luma "
+            "art/smoke-mask.png art/smoke-card.png --black-point 15\n"
             "      grayscale puff mask to a white RGBA particle card\n"
         ),
     )

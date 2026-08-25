@@ -65,9 +65,9 @@ only two that write into this mod (`schema` marks them, `init`, and the two
 `client` writers with `writes: true`); `client deploy` writes into the client's
 per-user `Mods/` folder and `client capture` into `.local/acceptance/`, both
 outside the game install.
-Reach for them only when an asset actually changed. `render-icon` needs a graphics device — run it under `xvfb-run -a` on
-a headless host, because with `-nographics` Unity writes a blank image instead
-of failing.
+Reach for them only when an asset actually changed. `render-icon` needs a
+graphics device — run it under `xvfb-run -a` on a headless host, because with
+`-nographics` Unity writes a blank image instead of failing.
 
 ## Driving it programmatically
 

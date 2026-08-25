@@ -111,7 +111,8 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                 var player = ctx == null ? null : ctx.Player;
                 if (player == null)
                 {
-                    Report.Info("shamwaySelfTestProp: no local player, so there is no camera to stage in front of");
+                    Report.Info(
+                        "shamwaySelfTestProp: no local player, so there is no camera to stage in front of");
                     return false;
                 }
                 // In front of the *camera*, not the player's feet. An

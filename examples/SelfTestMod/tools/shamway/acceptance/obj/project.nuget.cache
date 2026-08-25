@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "SR1u75zQvxI=",
+  "dgSpecHash": "FnVDj5G8jpo=",
   "success": true,
-  "projectFilePath": "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
+  "projectFilePath": "/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
   "expectedPackageFiles": [
     "/home/yannick/.nuget/packages/microsoft.netframework.referenceassemblies/1.0.3/microsoft.netframework.referenceassemblies.1.0.3.nupkg.sha512",
     "/home/yannick/.nuget/packages/microsoft.netframework.referenceassemblies.net48/1.0.3/microsoft.netframework.referenceassemblies.net48.1.0.3.nupkg.sha512"

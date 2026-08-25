@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj": {}
+    "/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj": {}
   },
   "projects": {
-    "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj": {
+    "/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
+        "projectUniqueName": "/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
         "projectName": "ShamwaySelfTestAcceptance",
-        "projectPath": "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
+        "projectPath": "/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
         "packagesPath": "/home/yannick/.nuget/packages/",
-        "outputPath": "/tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/obj/",
+        "outputPath": "/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/yannick/.nuget/NuGet/NuGet.Config"

@@ -5,3 +5,10 @@
 /tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.AssemblyInfo.cs
 /tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.csproj.CoreCompileInputs.cache
 /tmp/7dtd-launchfix/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.dll
+/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/.shamway/build/acceptance/ShamwaySelfTestAcceptance/ShamwaySelfTestAcceptance.dll
+/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.csproj.AssemblyReference.cache
+/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.GeneratedMSBuildEditorConfig.editorconfig
+/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.AssemblyInfoInputs.cache
+/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.AssemblyInfo.cs
+/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.csproj.CoreCompileInputs.cache
+/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.dll

@@ -291,3 +291,77 @@ class RegistryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _mod_with_motions(root: Path, assets: list[str], motions: dict[str, str]) -> PipelineConfig:
+    """`_mod` plus an `[acceptance] motion_kinds` declaration."""
+    from sevendtd_asset_pipeline.config import load_config
+
+    _mod(root, assets)
+    config_path = root / ".shamway.toml"
+    body = config_path.read_text(encoding="utf-8")
+    declared = ", ".join(f'"{stem}" = "{kind}"' for stem, kind in motions.items())
+    config_path.write_text(
+        body + f"\n[acceptance]\nmotion_kinds = {{ {declared} }}\n", encoding="utf-8"
+    )
+    return load_config(config_path)
+
+
+class MotionKindTests(unittest.TestCase):
+    """The `[acceptance] motion_kinds` field and the cases it generates."""
+
+    def test_a_turntable_kind_generates_a_staged_clip_case(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mod_with_motions(root, ["prop.glb"], {"prop": "turntable"})
+            plan_ = acceptance.plan(config)
+            self.assertEqual((("prop", "turntable"),), plan_.motions)
+            source = acceptance.render(plan_)[f"{plan_.assembly}.cs"]
+            self.assertIn("CaseDef.StagedClip", source)
+            self.assertIn('"motion_prop"', source)
+            self.assertIn("staged.transform.Rotate(0f, 360f * Time.deltaTime / 12f, 0f)", source)
+            # The load case survives: a clip is motion evidence, not the load gate.
+            self.assertIn("load_prop", source)
+
+    def test_a_fixed_kind_generates_the_unchanged_look_case(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mod_with_motions(root, ["prop.glb"], {"prop": "fixed"})
+            plan_ = acceptance.plan(config)
+            source = acceptance.render(plan_)[f"{plan_.assembly}.cs"]
+            self.assertNotIn("CaseDef.StagedClip", source)
+            self.assertIn('CaseDef.Staged(label, "look_prop"', source)
+
+    def test_absent_motion_kinds_leave_generation_byte_identical(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plain = _mod(root, ["prop.glb"])
+            declared = _mod_with_motions(root, ["prop.glb"], {})
+            self.assertEqual(
+                acceptance.render(acceptance.plan(plain)),
+                acceptance.render(acceptance.plan(declared)),
+            )
+
+    def test_a_walk_cycle_kind_generates_a_clip_case_without_rotation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mod_with_motions(root, ["prop.glb"], {"prop": "walk-cycle"})
+            source = acceptance.render(acceptance.plan(config))[
+                f"{acceptance.plan(config).assembly}.cs"
+            ]
+            self.assertIn("CaseDef.StagedClip", source)
+            self.assertNotIn("Rotate(0f, 360f", source)
+
+    def test_a_kind_on_a_non_prefab_member_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mod_with_motions(root, ["prop.glb", "tile.png"], {"tile": "turntable"})
+            with self.assertRaisesRegex(PipelineError, "loads as Texture2D"):
+                acceptance.plan(config)
+
+    def test_a_kind_on_an_unknown_stem_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mod_with_motions(root, ["prop.glb"], {"nope": "turntable"})
+            with self.assertRaisesRegex(PipelineError, "not a bundle member"):
+                acceptance.plan(config)

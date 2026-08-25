@@ -276,6 +276,76 @@ _DEFINITIONS: tuple[Operation, ...] = (
         capabilities=("model-audio-review",),
     ),
     Operation(
+        name="review_video",
+        summary="Advisory semantic review: submit an adopted clip (frames and/or a "
+        "muxed video) plus its recorded intent to a configured vision model through "
+        "the deadeye gateway and return structured criticism tied to moments. The "
+        "clip must have been adopted by `shamway client capture --clip`, so the "
+        "review runs against a recorded, hash-addressed capture. Sends an authored "
+        "asset to a third party, so it refuses without allow_network; it is evidence "
+        "for the human look, never a substitute.",
+        parameters=_schema(
+            {
+                "stem": {
+                    "type": "string",
+                    "description": "the manifest stem of the asset the clip shows; "
+                    "its generation parameters or source hash ride in the evidence",
+                },
+                "clip": {
+                    **PATH_PARAM,
+                    "description": "an adopted clip directory under the capture root",
+                },
+                "intent": {
+                    **PATH_PARAM,
+                    "description": "intent JSON file, committed beside the source; "
+                    "requires purpose",
+                },
+                "intent_text": {
+                    "type": "string",
+                    "description": "inline intent JSON instead of --intent",
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "provider the deadeye gateway resolves "
+                    "(fake, gemini); default gemini",
+                    "default": "gemini",
+                },
+                "model": {"type": "string", "description": "default per provider"},
+                "output": {
+                    **PATH_PARAM,
+                    "description": "write the hash-addressed evidence document here; "
+                    "an existing one is never overwritten without force",
+                },
+                "allow_network": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "explicit consent to upload the clip to the provider",
+                },
+                "keep_raw_response": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "preserve the redacted raw provider response in evidence",
+                },
+                "force": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "overwrite an existing evidence document at --output",
+                },
+                "timeout_seconds": {"type": "number", "default": DEFAULT_TIMEOUT_SECONDS},
+            },
+            required=["stem", "clip"],
+        ),
+        returns="Review: advisory_only, clip, provider, model, "
+        "review{summary, strengths, issues[at_seconds|at_frame], recommended_changes, "
+        "rubric_scores, confidence, limitations}, usage, disclosure, sampling, asset, "
+        "evidence{path, sha256}, gateway",
+        cost=SECONDS,
+        writes=True,
+        needs_config=True,
+        needs_network=True,
+        capabilities=("model-video-review",),
+    ),
+    Operation(
         name="check_icons",
         summary="Check this mod's UIAtlases PNGs as atlas cells and reconcile them with every "
         "CustomIcon key under Config/. Icons are not bundle members, so 'validate' cannot "

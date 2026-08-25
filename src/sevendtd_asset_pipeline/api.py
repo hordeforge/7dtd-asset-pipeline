@@ -77,6 +77,9 @@ from .status import Status, collect_status
 from .unity_release import DEFAULT_PLATFORM, Release, fetch_release
 from .unityfs import BundleInfo, inspect_bundle
 from .validation import ValidationReport, validate_bundle, validate_mod
+from .video_review import DEFAULT_PROVIDER as VIDEO_DEFAULT_PROVIDER
+from .video_review import DEFAULT_TIMEOUT_SECONDS as VIDEO_DEFAULT_TIMEOUT_SECONDS
+from .video_review import run_review as run_video_review
 
 
 class Pipeline:
@@ -280,6 +283,44 @@ class Pipeline:
             intent_path=Path(intent) if intent is not None else None,
             intent_text=intent_text,
             model=model,
+            allow_network=allow_network,
+            timeout_seconds=timeout_seconds,
+            keep_raw_response=keep_raw_response,
+            output=Path(output) if output is not None else None,
+            force=force,
+        )
+
+    def review_video(
+        self,
+        stem: str,
+        clip: Path | str,
+        intent: Path | str | None = None,
+        intent_text: str | None = None,
+        provider: str = VIDEO_DEFAULT_PROVIDER,
+        model: str | None = None,
+        output: Path | str | None = None,
+        allow_network: bool = False,
+        keep_raw_response: bool = False,
+        force: bool = False,
+        timeout_seconds: float = VIDEO_DEFAULT_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """Advisory semantic review of an adopted clip by a configured vision model.
+
+        Submits the clip (adopted with `shamway client capture --clip`) plus
+        the recorded intent through the deadeye gateway and returns structured
+        criticism with an evidence document when `output` is given.
+        `allow_network` must be explicit: this uploads an authored asset to a
+        third party. The verdict is advisory evidence; it can never satisfy
+        the fresh-client human-look gate.
+        """
+        return run_video_review(
+            stem,
+            clip=Path(clip),
+            provider=provider,
+            intent_path=Path(intent) if intent is not None else None,
+            intent_text=intent_text,
+            model=model,
+            config=self.config,
             allow_network=allow_network,
             timeout_seconds=timeout_seconds,
             keep_raw_response=keep_raw_response,
@@ -523,6 +564,7 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "check_log": lambda self, p: _check_log_result(Path(p["log"])),
     "check_sound": lambda self, p: self.check_sound(**_sound_params(p)),
     "review_audio": lambda self, p: self.review_audio(**_review_params(p)),
+    "review_video": lambda self, p: self.review_video(**_review_video_params(p)),
     "check_texture": lambda self, p: self.check_texture(**_texture_params(p)),
     "check_icons": lambda self, p: self.check_icons(p["atlas_root"], p["cell"]),
     "render_icon": lambda self, p: self.render_icon(
@@ -593,6 +635,22 @@ def _mesh_params(params: dict[str, Any]) -> dict[str, Any]:
         "mesh": Path(params["mesh"]),
         "max_extent": params["max_extent"],
         "strict": params["strict"],
+    }
+
+
+def _review_video_params(params: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "stem": params["stem"],
+        "clip": Path(params["clip"]),
+        "intent": Path(params["intent"]) if params.get("intent") else None,
+        "intent_text": params.get("intent_text"),
+        "provider": params["provider"],
+        "model": params.get("model"),
+        "allow_network": params["allow_network"],
+        "timeout_seconds": params["timeout_seconds"],
+        "keep_raw_response": params["keep_raw_response"],
+        "output": Path(params["output"]) if params.get("output") else None,
+        "force": params["force"],
     }
 
 

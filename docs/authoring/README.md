@@ -12,6 +12,8 @@ classes whose runtime behaviour makes a correct build silent or invisible.
   before writing any generation prompt.
 - [audio.md](audio.md) — the sound lane, `sounds.xml`, and why a loaded clip
   can be inaudible.
+- [video.md](video.md) — staged motion clips: the motion-kind declaration,
+  `client capture --clip`, and the deadeye model-review lane.
 - [vfx.md](vfx.md) — particle budgets, LOD tiers, and the two silent material
   failures.
 - [skinned-gear.md](skinned-gear.md) — worn armor: why it is the one asset

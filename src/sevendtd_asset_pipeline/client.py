@@ -58,7 +58,15 @@ from importlib.util import find_spec
 from pathlib import Path
 
 from . import atomic
-from .capture import DEFAULT_ROOT, capture, read_manifest, record_existing
+from .capture import (
+    DEFAULT_ROOT,
+    Capture,
+    ClipCapture,
+    capture,
+    read_manifest,
+    record_existing,
+    record_existing_clip,
+)
 from .errors import PipelineError
 from .references import read_mod_name
 
@@ -1225,6 +1233,13 @@ def main(argv: list[str] | None = None) -> int:
     shot.add_argument(
         "--file", type=Path, default=None, help="record an image already taken instead of capturing"
     )
+    shot.add_argument(
+        "--clip",
+        type=Path,
+        default=None,
+        help="adopt an already-captured 7dtd-playtest clip directory (frames, muxed "
+        "video, client.log) instead of taking a screenshot; the same record, one level up",
+    )
     shot.add_argument("--list", action="store_true", help="print the manifest recorded so far")
     shot.add_argument(
         "--allow-no-client",
@@ -1362,7 +1377,10 @@ def _capture(args: argparse.Namespace) -> int:
             print(f"no captures recorded under {root}")
             return 0
         for record in entries:
-            print(f"{record.get('label', '?'):24} {record.get('file', '?')}")
+            subject = record.get("directory") or record.get("file") or "?"
+            files = record.get("files")
+            detail = f" ({len(files)} file(s))" if isinstance(files, list) else ""
+            print(f"{record.get('label', '?'):24} {subject}{detail}")
             print(f"{'':24} {record.get('observable') or '(no observable recorded)'}")
         print()
         print("A recorded frame is not a verdict. Only a person signs these off.")
@@ -1371,7 +1389,10 @@ def _capture(args: argparse.Namespace) -> int:
     if not args.label:
         raise PipelineError("capture needs a LABEL, or --list to print the manifest")
 
-    if args.file is not None:
+    entry: Capture | ClipCapture
+    if args.clip is not None:
+        entry = record_existing_clip(args.clip, args.label, args.observable, root)
+    elif args.file is not None:
         entry = record_existing(args.file, args.label, args.observable, root)
     else:
         if not args.allow_no_client and not running_client_pids():
@@ -1385,7 +1406,10 @@ def _capture(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(entry.as_dict(), indent=2, sort_keys=True))
         return 0
-    print(f"captured {Path(root) / entry.file} ({entry.bytes} bytes, via {entry.backend})")
+    subject = entry.directory if isinstance(entry, ClipCapture) else Path(root) / entry.file
+    print(f"captured {subject} (via {entry.backend})")
+    if isinstance(entry, ClipCapture):
+        print(f"clip files: {', '.join(item.name for item in entry.files)}")
     if entry.observable:
         print(f"look for: {entry.observable}")
     for note in entry.notes:

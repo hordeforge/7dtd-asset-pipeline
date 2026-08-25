@@ -298,6 +298,137 @@ def capture(
         staged.unlink(missing_ok=True)
 
 
+@dataclass
+class ClipFile:
+    """One file inside an adopted clip directory, hashed and addressed."""
+
+    name: str
+    sha256: str
+    bytes: int
+
+
+@dataclass
+class ClipCapture:
+    """One adopted clip directory, and what it was adopted to show.
+
+    The clip is the `7dtd-playtest` multi-frame capture shape: a directory of
+    `frame-XXXX.png` frames, optionally a muxed video and the capture's
+    `client.log`. Adoption records the whole directory under the label and
+    hashes every file in it, so a later `review-video` reads a stable,
+    hash-addressed input instead of re-deriving it from wherever the clip was
+    captured.
+    """
+
+    label: str
+    observable: str
+    directory: str
+    """The directory name under the evidence root."""
+    files: list[ClipFile] = field(default_factory=list)
+    backend: str = "adopted-clip"
+    captured_at: str = ""
+    verdict: str | None = None
+    """Always null when written. A sign-off is a person's, added by hand."""
+    notes: list[str] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+_CLIP_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm", ".mov")
+
+
+def record_existing_clip(
+    source_dir: Path | str,
+    label: str,
+    observable: str = "",
+    root: Path | str = DEFAULT_ROOT,
+) -> ClipCapture:
+    """Adopt an already-captured clip directory into the evidence tree.
+
+    The one-level-up form of `record_existing`: instead of one screenshot,
+    adopt the whole `7dtd-playtest` clip directory (frames, muxed video,
+    `client.log`) into `<root>/<safe-label>/`, hashed and labeled the same way
+    a single adopted screenshot already is. Re-adopting a label replaces its
+    earlier entry, exactly like a re-captured single frame. Nothing here
+    re-captures, muxes, or reviews anything — adoption only.
+    """
+    source = Path(source_dir)
+    if not label.strip():
+        raise PipelineError("a clip adoption needs a label; it is how the clip is cited later")
+    if not source.is_dir():
+        raise PipelineError(f"no such clip directory: {source}")
+    if not _looks_like_a_clip(source):
+        raise PipelineError(
+            f"{source} does not look like a clip: it holds neither frame images "
+            "(frame-*.png) nor a muxed video. Adopt a `7dtd-playtest` clip directory, "
+            "e.g. `.local/capture/<suite>-<stamp>/<case>/`."
+        )
+    directory = Path(root)
+    directory.mkdir(parents=True, exist_ok=True)
+    safe = _safe_stem(label.strip())
+    destination = directory / safe
+    in_place = source.resolve() == destination.resolve()
+    staged: Path | None = None
+    if not in_place:
+        staged = directory / f".{safe}.clip.tmp.{os.getpid()}.{secrets.token_hex(4)}"
+        try:
+            shutil.copytree(source, staged, dirs_exist_ok=False)
+        except (OSError, shutil.Error) as exc:
+            shutil.rmtree(staged, ignore_errors=True)
+            raise PipelineError(f"cannot copy clip {source} into evidence: {exc}") from exc
+
+    captured_at = time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ",
+        time.gmtime(max(source.stat().st_mtime, destination.stat().st_mtime if in_place else 0)),
+    )
+    try:
+        with _manifest_lock(directory):
+            if not in_place:
+                if destination.exists():
+                    if not destination.is_dir():
+                        raise PipelineError(
+                            f"{destination} exists and is not a directory; move it aside before "
+                            "adopting this clip"
+                        )
+                    shutil.rmtree(destination)
+                if staged is None:  # unreachable: staged is set whenever not in_place
+                    raise PipelineError("internal error: no staged copy for the adopted clip")
+                staged.replace(destination)
+            files = [
+                _clip_file(entry) for entry in sorted(destination.rglob("*")) if entry.is_file()
+            ]
+            entry = ClipCapture(
+                label=label.strip(),
+                observable=observable.strip(),
+                directory=safe,
+                files=files,
+                backend="adopted-clip",
+                captured_at=captured_at,
+                notes=(
+                    []
+                    if observable
+                    else ["no observable recorded; a clip without one proves nothing"]
+                ),
+            )
+            entries = [item for item in read_manifest(directory) if item.get("label") != label]
+            entries.append(entry.as_dict())
+            _write_manifest(directory, entries)
+    finally:
+        if staged is not None and staged.exists():
+            shutil.rmtree(staged, ignore_errors=True)
+    return entry
+
+
+def _looks_like_a_clip(directory: Path) -> bool:
+    return any(
+        entry.is_file() and entry.suffix.lower() in _CLIP_SUFFIXES for entry in directory.iterdir()
+    )
+
+
+def _clip_file(path: Path) -> ClipFile:
+    return ClipFile(name=path.name, sha256=_digest(path), bytes=path.stat().st_size)
+
+
 def record_existing(
     file: Path | str,
     label: str,

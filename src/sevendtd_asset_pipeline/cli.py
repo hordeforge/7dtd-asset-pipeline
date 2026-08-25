@@ -10,6 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from . import atomic, audio_review
+from . import video_review as video_review_mod
 from .api import Pipeline, call_json
 from .build import (
     expected_unity_version,
@@ -277,6 +278,59 @@ def _parser() -> argparse.ArgumentParser:
         help=f"seconds to wait for the provider (default {audio_review.DEFAULT_TIMEOUT_SECONDS:g})",
     )
     review.add_argument("--json", action="store_true")
+
+    video_review = commands.add_parser(
+        "review-video",
+        help="advisory semantic review of an adopted clip by a configured vision "
+        "model via the deadeye gateway (explicit network consent required)",
+    )
+    video_review.add_argument("stem", help="the manifest stem of the asset the clip shows")
+    video_review.add_argument(
+        "--clip",
+        type=Path,
+        required=True,
+        help="the adopted clip directory (see `shamway client capture --clip`)",
+    )
+    video_review.add_argument(
+        "--intent",
+        type=Path,
+        help="intent JSON file, committed beside the source; requires purpose "
+        "(see docs/authoring/video.md)",
+    )
+    video_review.add_argument("--intent-text", help="inline intent JSON instead of --intent")
+    video_review.add_argument(
+        "--provider",
+        default=video_review_mod.DEFAULT_PROVIDER,
+        help=f"vision-review provider (default {video_review_mod.DEFAULT_PROVIDER})",
+    )
+    video_review.add_argument("--model", help="provider model identifier; default per provider")
+    video_review.add_argument(
+        "--output",
+        type=Path,
+        help="write the hash-addressed evidence document here; never overwrites without --force",
+    )
+    video_review.add_argument(
+        "--allow-network",
+        action="store_true",
+        help="consent to uploading the clip to the provider; without it the command "
+        "refuses before touching anything",
+    )
+    video_review.add_argument(
+        "--keep-raw-response",
+        action="store_true",
+        help="preserve the redacted raw provider response in the evidence document",
+    )
+    video_review.add_argument(
+        "--force", action="store_true", help="overwrite an existing evidence document"
+    )
+    video_review.add_argument(
+        "--timeout",
+        type=float,
+        default=video_review_mod.DEFAULT_TIMEOUT_SECONDS,
+        help="seconds to wait for the gateway (default "
+        f"{video_review_mod.DEFAULT_TIMEOUT_SECONDS:g})",
+    )
+    video_review.add_argument("--json", action="store_true")
 
     icons = commands.add_parser(
         "check-icons", help="check UIAtlases PNGs and every CustomIcon key under Config/"
@@ -745,6 +799,45 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     config = load_config(args.config)
+    if args.command == "review-video":
+        report = video_review_mod.run_review(
+            args.stem,
+            clip=args.clip,
+            provider=args.provider,
+            intent_path=args.intent,
+            intent_text=args.intent_text,
+            model=args.model,
+            config=config,
+            allow_network=args.allow_network,
+            timeout_seconds=args.timeout,
+            keep_raw_response=args.keep_raw_response,
+            output=args.output,
+            force=args.force,
+            notify=print,
+        )
+        if args.json:
+            print(json.dumps(report, indent=2, sort_keys=True))
+        else:
+            verdict = report["review"]
+            print(f"summary: {verdict['summary']}")
+            for strength in verdict["strengths"]:
+                print(f"strength: {strength}")
+            for issue in verdict["issues"]:
+                moment = issue.get("at_seconds")
+                at = f" [{moment[0]:g}-{moment[1]:g} s]" if moment else ""
+                print(f"issue: {issue['description']}{at}")
+            for change in verdict["recommended_changes"]:
+                print(f"change: {change}")
+            for key, value in sorted(verdict["rubric_scores"].items()):
+                score = "unjudgeable" if value is None else f"{value:g}"
+                print(f"score: {key} = {score}")
+            print(f"confidence: {verdict['confidence']:g}")
+            for limitation in verdict["limitations"]:
+                print(f"limitation: {limitation}")
+            if report["evidence"]["path"]:
+                print(f"evidence: {report['evidence']['path']}")
+            print(f"note: {report['note']}")
+        return 0
     if args.command == "doctor":
         checks = run_doctor(config)
         if args.json:

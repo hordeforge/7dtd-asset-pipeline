@@ -157,6 +157,8 @@ class ProviderPlan:
     mod_name: str
     bundle_uri_path: str
     stems: tuple[tuple[str, str], ...]
+    motions: tuple[tuple[str, str], ...] = ()
+    """(stem, motion kind) pairs declared under `[acceptance] motion_kinds`."""
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -166,6 +168,7 @@ class ProviderPlan:
             "mod_name": self.mod_name,
             "bundle_uri_path": self.bundle_uri_path,
             "cases": [{"stem": stem, "kind": kind} for stem, kind in self.stems],
+            "motions": [{"stem": stem, "kind": kind} for stem, kind in self.motions],
         }
 
 
@@ -229,6 +232,33 @@ def plan(config: PipelineConfig) -> ProviderPlan:
     return _rendered_plan(config, mod_root, stems)
 
 
+def _motions(config: PipelineConfig, stems: list[tuple[str, str]]) -> tuple[tuple[str, str], ...]:
+    """The declared motion kinds, validated against the member stems.
+
+    A motion kind makes sense only on the mesh/prefab a player sees move; a
+    kind declared on a member that never stages (a texture, a sound) is
+    refused rather than silently ignored, so a typo in the stem cannot read as
+    a working motion case.
+    """
+    known = dict(stems)
+    declared: list[tuple[str, str]] = []
+    for stem, motion in sorted(config.acceptance_motion_kinds.items()):
+        member_kind = known.get(stem)
+        if member_kind is None:
+            raise PipelineError(
+                f"acceptance.motion_kinds names {stem!r}, which is not a bundle member; "
+                "a motion kind can only be declared on an asset the provider stages"
+            )
+        if member_kind != "GameObject":
+            raise PipelineError(
+                f"acceptance.motion_kinds names {stem!r}, which loads as {member_kind}, not "
+                "a prefab; a motion clip stages a mesh/prefab, so the kind belongs on the "
+                "GameObject member"
+            )
+        declared.append((stem, motion))
+    return tuple(declared)
+
+
 def _rendered_plan(
     config: PipelineConfig, mod_root: Path, stems: list[tuple[str, str]]
 ) -> ProviderPlan:
@@ -248,6 +278,7 @@ def _rendered_plan(
         mod_name=mod_name,
         bundle_uri_path=f"{resources}/{bundle_name}",
         stems=tuple(stems),
+        motions=_motions(config, stems),
     )
 
 
@@ -279,27 +310,17 @@ def _case(stem: str, kind: str) -> str:
 """
 
 
-def _staged_case(prefab_stem: str) -> str:
-    """A case that puts the prefab in front of the camera and holds it.
-
-    Every other case here answers *did it load*, and a bundle whose prop is
-    invisible passes all of them - which is how a shader that renders nothing
-    survived every gate this repository has. `CaseDef.Staged` holds the scene
-    and announces itself, so a screenshot loop can photograph the frame and a
-    person, or another graphics API, can be compared against it.
+def _stage_body(stem: str) -> str:
+    """The `stage:` lambda shared by the staged-look and staged-clip cases.
 
     The prefab is instantiated directly rather than placed as a block: the
     question is whether *this bundle's* renderer draws, and a block adds the
     game's own placement, rotation and collision on top of the thing under
     test.
     """
-    name = _cs_body(prefab_stem)
-    variable = _identifier(prefab_stem)
+    name = _cs_body(stem)
+    variable = _identifier(stem)
     return f"""
-        GameObject {variable}Staged = null;
-        queue.Add(CaseDef.Staged(label, "look_{name}", new[] {{ "capture", "bundle" }},
-            stage: ctx =>
-            {{
                 var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?{name}");
                 if (prefab == null)
                 {{
@@ -335,10 +356,65 @@ def _staged_case(prefab_stem: str) -> str:
                     + ", camera at " + camera.position
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;
+                return renderers.Length > 0;"""
+
+
+def _staged_case(prefab_stem: str) -> str:
+    """A case that puts the prefab in front of the camera and holds it.
+
+    Every other case here answers *did it load*, and a bundle whose prop is
+    invisible passes all of them - which is how a shader that renders nothing
+    survived every gate this repository has. `CaseDef.Staged` holds the scene
+    and announces itself, so a screenshot loop can photograph the frame and a
+    person, or another graphics API, can be compared against it.
+    """
+    name = _cs_body(prefab_stem)
+    variable = _identifier(prefab_stem)
+    return f"""
+        GameObject {variable}Staged = null;
+        queue.Add(CaseDef.Staged(label, "look_{name}", new[] {{ "capture", "bundle" }},
+            stage: ctx =>
+            {{{_stage_body(prefab_stem)}
             }},
             holdSeconds: 12f,
             fail: "could not stage {name} in front of the camera"));
+"""
+
+
+def _staged_clip_case(prefab_stem: str, motion: str) -> str:
+    """A `CaseDef.StagedClip` case: the staged hold plus captured frames.
+
+    The motion kind decides what the hold shows: `turntable` rotates the
+    staged prefab one full turn, so the captured frames prove the silhouette
+    from every side; `walk-cycle` and `fixed` hold the subject still (a walk
+    cycle is the game's own animation, which a generated provider cannot
+    drive; the captured frames still show whatever the staged prefab does).
+    The generated provider is the only place that already knows, per asset,
+    its stem and kind, which is why the declaration lives here rather than in
+    the playtest suite.
+    """
+    name = _cs_body(prefab_stem)
+    variable = _identifier(prefab_stem)
+    motion_line = ""
+    if motion == "turntable":
+        # One full turn over the hold: 360 degrees across 12 seconds of hold.
+        motion_line = f"""
+            onHold: (ctx, holdFraction) =>
+            {{
+                var staged = {variable}Staged;
+                if (staged == null) return;
+                staged.transform.Rotate(0f, 360f * Time.deltaTime / 12f, 0f);
+            }},"""
+    return f"""
+        GameObject {variable}Staged = null;
+        queue.Add(CaseDef.StagedClip(
+            label, "motion_{name}", new[] {{ "capture", "bundle", "clip" }},
+            stage: ctx =>
+            {{{_stage_body(prefab_stem)}
+            }},
+            holdSeconds: 12f,
+            {motion_line}
+            fail: "could not stage {name} for its motion clip"));
 """
 
 
@@ -346,8 +422,21 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
     """The provider's files, as `filename -> text`."""
     cases = "".join(_case(stem, kind) for stem, kind in plan_.stems)
     # One staged frame per prefab: the only case here that can fail on a bundle
-    # whose every member loads and whose prop is invisible.
-    cases += "".join(_staged_case(stem) for stem, kind in plan_.stems if kind == "GameObject")
+    # whose every member loads and whose prop is invisible. A prefab with a
+    # declared motion kind (turntable/walk-cycle) stages the same scene as a
+    # StagedClip so the playtest runner captures frames of the motion; a
+    # `fixed` kind keeps today's unchanged staged-look case.
+    motion_kinds = dict(plan_.motions)
+    staged: list[str] = []
+    for stem, kind in plan_.stems:
+        if kind != "GameObject":
+            continue
+        motion = motion_kinds.get(stem)
+        if motion in ("turntable", "walk-cycle"):
+            staged.append(_staged_clip_case(stem, motion))
+        else:
+            staged.append(_staged_case(stem))
+    cases += "".join(staged)
     mod_name = _cs_body(plan_.mod_name)
     source = _template("AcceptanceProvider.cs.in").format(
         MOD_NAME=mod_name,

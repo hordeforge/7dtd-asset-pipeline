@@ -442,6 +442,14 @@ Vulkan sub-programs are **accepted and rendering** since 2026-08-25: when
 `glslangValidator` and the SMOL-V encoder are present the bundle carries
 platform 18, and a live client under `-force-vulkan` runs the acceptance suite
 to `SUMMARY pass=6 fail=0 skip=0` with the textured card in the captured frame.
+The encoder is [`ywy50/zmol-v`](https://github.com/ywy50/zmol-v), which
+`scripts/install-tools.sh` builds at a pinned commit into this checkout's
+gitignored `.local/lib` — a default the library search knows; `ZMOLV_LIBRARY`
+overrides it. Without the encoder the bundle still builds, carries no
+platform 18, and the synthesize prints a degraded-lane caveat — a
+`-force-vulkan` client then draws the shader magenta ("not supported on this
+GPU"), which is the failure that motivated both the pinned install and the
+printed caveat.
 The eliminations that got there are measured in
 [Improvements](../status/improvements.md); the decisive one was the parameter
 record's entry encoding — `(stage << 24) | (kind << 16) | slot`, see

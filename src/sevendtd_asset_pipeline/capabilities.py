@@ -197,8 +197,8 @@ REGISTRY: tuple[_Spec, ...] = (
         purpose="compress the SPIR-V a Vulkan sub-program carries into the SMOL-V Unity "
         "stores. A client running Vulkan has no sub-program to create without it; every "
         "other graphics API is unaffected",
-        install="build https://github.com/ywy50/zmol-v with 'zig build' and set "
-        "ZMOLV_LIBRARY to the shared library it writes",
+        install="scripts/install-tools.sh (builds the pinned zmol-v into this "
+        "checkout's .local/lib); ZMOLV_LIBRARY overrides the search",
     ),
     _Spec(
         name="glslangValidator",

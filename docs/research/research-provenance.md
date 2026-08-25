@@ -1604,3 +1604,48 @@ AMD RADV, device lost, no log line - while the same modules with a
 payload length that is a multiple of 4, and the writer pads the payload
 before writing the length field. `test_the_record_satisfies_every_measured_invariant`
 asserts the padding.
+
+## A held block places through ItemClass.ExecuteAction, and UseHoldingItem cannot reach it
+
+**Decompiled 2026-08-25** from `hordeforge/7dtd-engine-research`
+(`EntityAlive.il.txt`, `ItemClassBlock.il.txt`, `BlockToolSelection.il.txt`).
+`EntityAlive.UseHoldingItem(idx, released)` indexes
+`holdingItem.Actions[idx]` directly and skips a null entry - and the implicit
+`ItemClassBlock` item every block gets sets **no** Actions, so
+`UseHoldingItem` on a held block is a silent no-op (measured: 40s of calls,
+no placement, no log line). The real input path is the virtual
+`ItemClass.ExecuteAction(actionIdx, data, released, playerActions)` -
+`PlayerMoveController`'s click - which `ItemClassBlock` overrides into
+`GameManager.GetActiveBlockTool()`: action 0 to `ExecuteAttackAction`,
+action 1 to `ExecuteUseAction`. Three of that tool's properties matter to a
+caller: it places on the **press** (`_bReleased == true` returns
+immediately - the opposite of `ItemActionPlaceAsBlock`), it reads the
+engine-maintained `EntityPlayerLocal.HitInfo` rather than any argument, and
+it dereferences `playerActions` unconditionally on the place path, so the
+caller must pass `Platform.PlatformManager.NativePlatform.Input.PrimaryPlayer`,
+never null. An explicit `<item>` with a `PlaceAsBlock` Action1 (the
+2026-08-25 items.xml, since removed) is a different, preview-less path that
+also replaces the frame-style in-hand behaviour of the implicit item.
+
+## The Vulkan vertex stage carries the clip-space Y flip
+
+**Measured 2026-08-25 by live A/B** (GFX_API=vulkan against the d3d11
+control, same bundle, fresh saves). Without a flip the writer's Vulkan draw
+is mirrored vertically: the block's albedo upside down (arrows down, orange
+band on top against the d3d11 frame), its top face swapped, and the mirror
+pivot moving with the camera. With `output.position.y = -output.position.y`
+in `UNLIT_VERTEX_HLSL_VULKAN` the Vulkan frame matches d3d11 exactly (arrow
+up, orange band at the bottom). The flip is shader semantics and lives in
+this writer's HLSL - not in the SMOL-V codec, which is a lossless byte
+transport and must not change what a module computes.
+
+## BlockShapeModelEntity seats a model at modelOffset (0, 0.5, 0) by default
+
+**Decompiled 2026-08-25** (`BlockShapeModelEntity.il.txt`: the constructor
+stores `new Vector3(0f, 0.5f, 0f)` before `Properties.ParseVec("ModelOffset")`
+may overwrite it) and **counted in the installed game's own config**
+(`Data/Config/blocks.xml`: 488 model blocks override `ModelOffset` to
+`0,0,0`, the single most common value). A prefab whose pivot is at its base -
+this pipeline's synthesized prefabs put the mesh AABB at y 0..h under an
+identity transform - floats half a block on the default and needs
+`ModelOffset` `0,0,0` in the block definition.

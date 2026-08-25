@@ -28,6 +28,11 @@ VKD3D_SOURCE_PREFIX="${VKD3D_SOURCE_PREFIX:-/opt/vkd3d}"
 # and the tarball builds with a C toolchain and Khronos headers alone.
 VKD3D_PINNED_VERSION="1.19"
 VKD3D_PINNED_SHA256="034613605baab8ba84674f8d272cf22b5e86bc6bc03fc5728ef9bce07308baa6"
+# Pinned rather than tracking master, like vkd3d above: the SMOL-V bytes a
+# codec emits are what the live Vulkan client was measured against. The commit
+# hash is its own checksum; bump it deliberately, with a re-measured client.
+ZMOLV_REPO="${ZMOLV_REPO:-https://github.com/ywy50/zmol-v}"
+ZMOLV_PINNED_COMMIT="${ZMOLV_PINNED_COMMIT:-9cf87314bb7ac27c4aaa09ce33e960052e13d857}"
 
 usage() {
 	cat <<'HELP'
@@ -276,6 +281,8 @@ collect_pacman() {
 	# pacman -Qo, currently 1.4.357.0). It compiles the OpenGLCore
 	# sub-program's GLSL offline, which the runtime will not explain.
 	have glslangValidator || PACKAGES+=(glslang)
+	# Zig builds the SMOL-V codec (zmol-v) the Vulkan shader lane loads.
+	have zig || PACKAGES+=(zig)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -309,6 +316,8 @@ collect_apt() {
 	have pactl || PACKAGES+=(pulseaudio-utils)
 	# Debian and Ubuntu ship glslangValidator in `glslang-tools`.
 	have glslangValidator || PACKAGES+=(glslang-tools)
+	# Zig builds the SMOL-V codec (zmol-v) the Vulkan shader lane loads.
+	have zig || PACKAGES+=(zig)
 	# Deliberately not installed here. Debian and Ubuntu package vkd3d 1.2
 	# (measured: Ubuntu noble ships vkd3d-compiler 1.2-15build1), which
 	# predates the HLSL support this writer needs, so `apt install
@@ -354,6 +363,8 @@ collect_dnf() {
 	# Ships glslangValidator in `glslang`. Not verified on this host:
 	# only the Arch name was checked, with pacman -Qo.
 	have glslangValidator || PACKAGES+=(glslang)
+	# Zig builds the SMOL-V codec (zmol-v) the Vulkan shader lane loads.
+	have zig || PACKAGES+=(zig)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -392,6 +403,8 @@ collect_zypper() {
 	# Ships glslangValidator in `glslang`. Not verified on this host:
 	# only the Arch name was checked, with pacman -Qo.
 	have glslangValidator || PACKAGES+=(glslang)
+	# Zig builds the SMOL-V codec (zmol-v) the Vulkan shader lane loads.
+	have zig || PACKAGES+=(zig)
 	if ((WITH_AUTHORING)); then
 		have blender || PACKAGES+=(blender)
 		have openscad || PACKAGES+=(openscad)
@@ -752,6 +765,40 @@ install_ilspycmd() {
 		echo "note: dotnet tool install ilspycmd failed; see https://github.com/icsharpcode/ILSpy"
 	fi
 }
+
+
+install_zmolv() {
+	# The SMOL-V codec the Vulkan shader lane loads (shader_blob.smolv_library).
+	# Installed into this checkout's gitignored .local/lib, which that search
+	# treats as a default; ZMOLV_LIBRARY still overrides. Without the library
+	# a synthesized shader carries no Vulkan sub-program and a -force-vulkan
+	# client draws it magenta - and that degradation was once silent.
+	local root lib clone
+	root="$(cd "$(dirname "$0")/.." && pwd)"
+	lib="$root/.local/lib/libzmolv.so"
+	if [[ -f "$lib" ]]; then
+		echo "OK: libzmolv is already installed ($lib)"
+		return
+	fi
+	if ! have zig || ! have git; then
+		echo "note: zig or git missing; skipped libzmolv (the shader's Vulkan lane stays off)"
+		return
+	fi
+	clone="$(mktemp -d)"
+	echo "Building zmol-v ($ZMOLV_PINNED_COMMIT) for the Vulkan shader lane"
+	if git clone --quiet "$ZMOLV_REPO" "$clone/zmol-v" &&
+		git -C "$clone/zmol-v" checkout --quiet "$ZMOLV_PINNED_COMMIT" &&
+		(cd "$clone/zmol-v" && zig build -Doptimize=ReleaseFast); then
+		mkdir -p "$root/.local/lib"
+		cp "$clone/zmol-v/zig-out/lib/libzmolv.so" "$lib"
+		echo "OK: installed $lib"
+	else
+		echo "note: zmol-v build failed; skipped libzmolv (the shader's Vulkan lane stays off)"
+	fi
+	rm -rf "$clone"
+}
+
+install_zmolv
 
 if ((WITH_AUTHORING)); then
 	install_blender

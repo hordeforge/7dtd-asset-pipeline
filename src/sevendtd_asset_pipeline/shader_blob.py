@@ -423,6 +423,59 @@ def compile_spirv(dxbc: bytes) -> bytes:
     return data
 
 
+# Unity's Vulkan sub-programs do not use the d3d11 constant-buffer names. Their
+# parameter records declare one buffer per stage - `VGlobals<hash>` for the
+# vertex stage, `PGlobals<hash>` for the pixel stage - and the built-in
+# constants live inside those rather than in `UnityPerDraw`/`UnityPerFrame`.
+# Decoded from `Legacy Shaders/Transparent/Cutout/VertexLit`, whose Vulkan
+# records name `unity_ObjectToWorld`, `unity_MatrixVP` and the rest inside them.
+VULKAN_VERTEX_GLOBALS = "VGlobals"
+VULKAN_PIXEL_GLOBALS = "PGlobals"
+
+# One buffer, this writer's own layout, because Unity fills a per-shader globals
+# buffer at the offsets the parameter record declares - unlike `UnityPerFrame`,
+# whose layout is the runtime's and which this writer had to match byte for byte.
+VULKAN_VERTEX_CBUFFER = CBuffer(
+    VULKAN_VERTEX_GLOBALS,
+    128,
+    (
+        CBufferMember("unity_ObjectToWorld", 0, rows=4, columns=4, is_matrix=True),
+        CBufferMember("unity_MatrixVP", 64, rows=4, columns=4, is_matrix=True),
+    ),
+)
+
+# The Vulkan vertex stage reads one buffer, so it declares one. `register(b0)`
+# rather than the d3d11 pair, and glslang maps it to a single uniform block.
+UNLIT_VERTEX_HLSL_VULKAN = """
+cbuffer VGlobals : register(b0)
+{
+    float4x4 unity_ObjectToWorld;
+    float4x4 unity_MatrixVP;
+};
+
+struct VertexIn
+{
+    float4 vertex : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+struct VertexOut
+{
+    float4 position : SV_POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+VertexOut main(VertexIn input)
+{
+    VertexOut output;
+    float4 world = mul(unity_ObjectToWorld, input.vertex);
+    output.position = mul(unity_MatrixVP, world);
+    output.uv = input.uv;
+    return output;
+}
+"""
+
+
 def compile_spirv_glslang(source: str, stage: str) -> bytes:
     """Compile HLSL straight to SPIR-V with `glslangValidator`.
 
@@ -611,6 +664,34 @@ def unity_descriptor_sets(spirv: bytes) -> bytes:
     return struct.pack(f"<{len(words)}I", *words)
 
 
+# The vulkan vertex SPIR-V binds its inputs at these Locations (read from the
+# glslang output: `input.vertex` at 0, `input.uv` at 1). A Vulkan bind-channels
+# target is the SPIR-V input **location**, not the d3d11 vertex-component slot -
+# stock Vulkan records use per-shader location values where d3d11 uses fixed
+# slots. Getting this wrong (reusing the d3d11 targets) fed the vertex shader
+# the wrong stream and hung the client mid-draw.
+# (mesh channel source, SPIR-V input location). Mesh Position is channel 0,
+# TexCoord0 is channel 4 - the same source numbers the d3d11 bind table uses.
+VULKAN_BIND_CHANNELS = (
+    (0, 0),  # Position -> input location 0
+    (4, 1),  # TexCoord0 -> input location 1
+)
+
+
+def vulkan_bind_channels() -> bytes:
+    """The `ParserBindChannels` tail for the unlit Vulkan vertex program."""
+    writer = _Writer()
+    source_map = 0
+    for source, _target in VULKAN_BIND_CHANNELS:
+        source_map |= 1 << source
+    writer.i32(source_map)
+    writer.i32(len(VULKAN_BIND_CHANNELS))
+    for source, target in VULKAN_BIND_CHANNELS:
+        writer.i32(source)
+        writer.i32(target)
+    return bytes(writer.out)
+
+
 def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     """One Vulkan code record: two SMOL-V modules behind a 176-byte header.
 
@@ -658,6 +739,16 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     writer.out += payload
     while len(writer.out) % 4:
         writer.out += b"\x00"
+    # The record does not end at its payload. A stock Vulkan code record carries
+    # the same `ParserBindChannels` block a d3d11 vertex record does - a source
+    # mask, a count, and (mesh channel, shader input) pairs - and a record
+    # without it is refused: the shader loads and the prop draws in the magenta
+    # error shader, with no log line. Found on 2026-08-25 by byte-diffing our
+    # record against a stock one carrying the same SMOL-V modules: they matched
+    # exactly but for the (unvalidated) hash, and stock was 32 bytes longer -
+    # this block. The channels come from the vertex DXBC the SPIR-V was compiled
+    # from, so the Vulkan and d3d11 lanes bind the same mesh data.
+    writer.out += vulkan_bind_channels()
     return bytes(writer.out)
 
 
@@ -1101,16 +1192,26 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
     # nothing on a default client.
     vulkan: tuple[PlatformBlob, ...] = ()
     if smolv_library() is not None:
+        # One parameter record for both stages, because one Vulkan code record
+        # carries both: a stock Vulkan parameter record declares `VGlobals` and
+        # `PGlobals` together, where d3d11 keeps a record per stage.
+        vulkan_parameters = ParameterBlob(
+            buffers=(VULKAN_VERTEX_CBUFFER,),
+            bindings=(CBufferBinding(VULKAN_VERTEX_GLOBALS, 0),),
+            textures=(TextureEntry(texture_property, index=0, sampler_index=0),),
+            samplers=(SamplerEntry(f"sampler{texture_property}", bind_point=0, sampler=0),),
+        )
         vulkan_raw = assemble_blob(
             [
-                vertex_parameters.to_bytes(),
-                fragment_parameters.to_bytes(),
+                vulkan_parameters.to_bytes(),
                 vulkan_code_blob(
                     compress_smolv(
                         unity_descriptor_sets(compile_spirv_glslang(fragment_source, "frag"))
                     ),
                     compress_smolv(
-                        unity_descriptor_sets(compile_spirv_glslang(UNLIT_VERTEX_HLSL, "vert"))
+                        unity_descriptor_sets(
+                            compile_spirv_glslang(UNLIT_VERTEX_HLSL_VULKAN, "vert")
+                        )
                     ),
                 ),
             ]
@@ -1122,11 +1223,12 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
                 len(vulkan_raw),
                 VULKAN_PROGRAM,
                 VULKAN_PROGRAM,
+                # One parameter record and one code record, both shared by the
+                # two stages - the shape a stock Vulkan blob has.
+                0,
                 0,
                 1,
-                # One record carries both stages, so both indices name it.
-                2,
-                2,
+                1,
                 stage_count=1,
             ),
         )

@@ -144,6 +144,13 @@ These produce or move the bundle:
 | `shamway verify-bundle` | load a bundle in a real Unity runtime; needs an editor, proves construction |
 | `shamway unity-release --json` | the official editor URL, changeset and MD5 for a revision |
 
+One check is advisory, networked by explicit consent, and writes evidence
+beside the asset rather than into the modlet:
+
+| Command | What it does |
+|---|---|
+| `shamway review-audio CLIP --intent F` | a configured audio model critiques the clip's actual bytes under its recorded intent; refuses without `--allow-network`, and never replaces the human listen |
+
 `build` (without `--probe`), `stage` and `render-icon` are the only commands
 that write into the modlet, and the first two only after every offline gate
 passes. Each exits non-zero with a single `ERROR: ...` line on stderr when a

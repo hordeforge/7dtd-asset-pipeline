@@ -17,7 +17,7 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
-from typing import Any
+from typing import IO, Any, cast
 from unittest import mock
 
 from sevendtd_asset_pipeline import OPERATIONS, PipelineError
@@ -221,6 +221,21 @@ class RedactionTests(unittest.TestCase):
     def test_a_bare_key_attribute_is_dropped(self) -> None:
         self.assertNotIn("key", redact({"key": "value", "name": "keep"}))
 
+    def test_usage_redaction_keeps_token_counts_but_drops_secret_names(self) -> None:
+        """In a usage block 'token' means billing; elsewhere it means auth."""
+        from sevendtd_asset_pipeline.audio_review import USAGE_SENSITIVE_KEY_PARTS
+
+        usage = {
+            "totalTokenCount": 10,
+            "promptTokenCount": 4,
+            "api_key": "AIzA-secret",
+            "Authorization": "Bearer x",
+        }
+        cleaned = redact(usage, USAGE_SENSITIVE_KEY_PARTS)
+        self.assertEqual({"totalTokenCount": 10, "promptTokenCount": 4}, cleaned)
+        # The broad rule keeps no count anywhere.
+        self.assertNotIn("totalTokenCount", redact({"totalTokenCount": 10}))
+
 
 class StubResponse:
     """A stand-in for what `provider.review` returns."""
@@ -229,6 +244,21 @@ class StubResponse:
         self.raw_text = raw_text
         self.usage = None
         self.model_reported = None
+
+
+class UnreadableBody:
+    """An HTTP error payload that dies mid-read, as a reset connection does.
+
+    It must carry ``close``: `HTTPError` inherits `addinfourl`, whose closer
+    calls it during collection, and an AttributeError escaping ``__del__``
+    lands in whatever stream happens to be capturing stderr at that moment.
+    """
+
+    def read(self, *_args: object) -> bytes:
+        raise OSError("connection reset while reading the error body")
+
+    def close(self) -> None:
+        return None
 
 
 class RunReviewTests(unittest.TestCase):
@@ -340,6 +370,39 @@ class RunReviewTests(unittest.TestCase):
     def test_usage_unavailability_is_reported_not_estimated(self) -> None:
         report = self._run()
         self.assertFalse(report["usage"]["reported_by_provider"])
+
+    def test_credential_shaped_usage_keys_never_reach_report_or_evidence(self) -> None:
+        """Usage is vendor payload: it crosses the same redaction backstop.
+
+        The provider envelope is the one input this module does not shape, so
+        nothing it sent may reach stdout, a JSON result, or the evidence
+        document without passing `redact` first.
+        """
+        original = FakeProvider.review
+
+        def leaky(provider: FakeProvider, request: ReviewRequest) -> ReviewResponse:
+            response = original(provider, request)
+            return ReviewResponse(
+                raw_text=response.raw_text,
+                # The counts are the cost record and must survive; the secret
+                # names must not.
+                usage={
+                    "totalTokenCount": 10,
+                    "api_key": "AIzA-secret",
+                    "key": "also-secret",
+                },
+                model_reported=response.model_reported,
+            )
+
+        output = self.root / "usage-evidence.json"
+        with mock.patch.object(FakeProvider, "review", leaky):
+            report = self._run(output=output)
+        self.assertEqual(10, report["usage"]["totalTokenCount"])
+        self.assertTrue(report["usage"]["reported_by_provider"])
+        flattened = json.dumps(report)
+        for secret in ("AIzA-secret", "also-secret"):
+            self.assertNotIn(secret, flattened)
+        self.assertNotIn("AIzA-secret", output.read_text(encoding="utf-8"))
 
     def test_invalid_structure_preserves_redacted_raw_only_when_requested(self) -> None:
         def broken(_self: FakeProvider, _request: object) -> StubResponse:
@@ -543,6 +606,40 @@ class OperationSurfaceTests(unittest.TestCase):
         self.assertTrue(any(line.startswith("summary: ") for line in lines))
         self.assertTrue(any(line.startswith("warning: ") for line in lines))
         self.assertTrue(any(line.startswith("note: Advisory only") for line in lines))
+
+
+class GeminiFaultTests(unittest.TestCase):
+    """The hosted adapter's fault paths, without any network."""
+
+    def test_an_unreadable_error_body_still_names_the_http_fault(self) -> None:
+        """A body that dies mid-read degrades to the status line, never a NameError."""
+        import urllib.error
+        from email.message import Message
+
+        body = UnreadableBody()
+        error = urllib.error.HTTPError(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            500,
+            "boom",
+            Message(),
+            cast("IO[bytes]", body),
+        )
+        provider = resolve_provider("gemini")
+        with tempfile.TemporaryDirectory() as directory:
+            clip = write_clip(Path(directory) / "falling.wav")
+            with (
+                mock.patch.dict("os.environ", {"GEMINI_API_KEY": "k"}, clear=True),
+                mock.patch("urllib.request.urlopen", side_effect=error),
+                self.assertRaisesRegex(
+                    PipelineError, r"provider 'gemini' refused the review \(HTTP 500\)"
+                ),
+            ):
+                run_review(
+                    clip,
+                    provider=provider,
+                    intent_text=json.dumps(VALID_INTENT),
+                    allow_network=True,
+                )
 
 
 class NetworkOptInTests(unittest.TestCase):

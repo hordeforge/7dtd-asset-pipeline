@@ -108,6 +108,9 @@ class GeminiProvider:
             ) as response:
                 envelope = json.load(response)
         except urllib.error.HTTPError as exc:
+            # A body that cannot be read must degrade to the status line, not
+            # to an unbound name when the message below formats it.
+            detail = ""
             with contextlib.suppress(OSError):
                 detail = exc.read().decode("utf-8", errors="replace")[:300]
             if exc.code in (401, 403):

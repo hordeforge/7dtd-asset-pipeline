@@ -15,11 +15,12 @@ together (intent and result validation, consent before credentials are
 read, exact bytes at the provider boundary, evidence hashing and
 no-overwrite, redaction).
 
-Still owed, and why the boxes under Acceptance criteria stay unchecked:
+Still owed, and why three boxes under Acceptance criteria stay unchecked:
 the live-provider run is strictly opt-in
 (`SHAMWAY_NETWORK_TESTS=gemini` + `GEMINI_API_KEY`) and has not been
 recorded here, and no fresh-client human listen has yet compared a model
-critique against an experienced sound.
+critique against an experienced sound. Every criterion an offline run can
+prove is checked below, with its pinning test named where one exists.
 
 ## Problem
 
@@ -233,23 +234,37 @@ It does not add a generator, prompt kind, host script, or Unity editor script.
 
 ## Acceptance criteria
 
-- [ ] Goal 1: a fake adapter test proves the exact candidate bytes and complete
+- [x] Goal 1: a fake adapter test proves the exact candidate bytes and complete
   intent reach the provider boundary.
+  (`test_the_exact_candidate_bytes_reach_the_boundary`,
+  `test_the_complete_intent_reaches_the_boundary`)
 - [ ] Goal 1: at least one real audio-capable provider reviews a non-speech
   generated sound and identifies audible properties beyond transcription.
-- [ ] Goal 2: output validates against the stable schema and names actionable
+- [x] Goal 2: output validates against the stable schema and names actionable
   observations with timestamps/time ranges where applicable.
-- [ ] Goal 2: rerunning against a revised candidate preserves both hash-addressed
-  evidence documents for comparison.
-- [ ] Goal 3: no network call occurs without explicit consent, and credentials
-  are absent from stdout, JSON results, logs, and stored evidence.
-- [ ] Goal 3: schema/capability discovery works offline with no provider SDK or
-  credentials installed.
-- [ ] Goal 4: documentation and result wording state that model review is
-  advisory and cannot satisfy human acceptance.
-- [ ] Goal 5: CLI, `shamway call`, `shamway serve`, schema, capability listing,
-  `shamway docs`, and packaged/source documentation agree.
-- [ ] Offline tests pass with fake adapters and no network.
+  (`validate_result` refuses every deviation; `test_a_valid_result_normalizes`)
+- [x] Goal 2: rerunning against a revised candidate preserves both hash-addressed
+  evidence documents for comparison. Pinned by
+  `test_an_earlier_evidence_document_is_never_overwritten_by_default`,
+  `test_two_reviews_of_one_candidate_are_both_preserved`, and the evidence
+  sha256 in `test_evidence_is_written_and_hashes_address_it`.
+- [x] Goal 3: no network call occurs without explicit consent, and credentials
+  are absent from stdout, JSON results, logs, and stored evidence. Pinned by
+  `test_consent_is_demanded_before_credentials_are_even_read`, the redaction
+  tests, and the usage backstop that keeps vendor payload out of both report
+  and evidence.
+- [x] Goal 3: schema/capability discovery works offline with no provider SDK or
+  credentials installed. The probe reads environment presence only, held there
+  by `test_the_model_review_capability_never_probes_a_provider`.
+- [x] Goal 4: documentation and result wording state that model review is
+  advisory and cannot satisfy human acceptance. (`ADVISORY_NOTE` rides every
+  result; README, audio authoring page and this PRD say it in prose)
+- [x] Goal 5: CLI, `shamway call`, `shamway serve`, schema, capability listing,
+  `shamway docs`, and packaged/source documentation agree. (verified against
+  the running tool on 2026-08-25; `OperationSurfaceTests` pins the registry
+  side)
+- [x] Offline tests pass with fake adapters and no network. (`make check test`;
+  the one skipped case in `test_audio_review.py` is the opt-in live-provider run)
 - [ ] A fresh client plays the reviewed candidate in its intended event path.
 - [ ] A human listens in game and records whether the model's critique matched
   the experienced sound; only that human review may accept the asset.

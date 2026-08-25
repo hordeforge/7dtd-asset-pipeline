@@ -47,6 +47,7 @@ all the platform offers and all that happens.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import subprocess
@@ -124,10 +125,9 @@ def _kill_group(process: subprocess.Popen[bytes]) -> None:
     where no groups exist.
     """
     if hasattr(os, "killpg"):
-        try:
+        # A child that already exited races the signal and loses silently.
+        with contextlib.suppress(ProcessLookupError):
             os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
     else:
         process.kill()
     process.wait()

@@ -540,22 +540,29 @@ def validate_result(
 # -- redaction and hashing ----------------------------------------------------
 
 
-def redact(value: Any) -> Any:
+def redact(value: Any, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> Any:
     """Deep-copy a JSON-shaped value, dropping credential-bearing mapping keys."""
     if isinstance(value, dict):
         return {
-            key: redact(item)
+            key: redact(item, parts)
             for key, item in value.items()
-            if isinstance(key, str) and not _is_sensitive_key(key)
+            if isinstance(key, str) and not _is_sensitive_key(key, parts)
         }
     if isinstance(value, list):
-        return [redact(item) for item in value]
+        return [redact(item, parts) for item in value]
     return value
 
 
-def _is_sensitive_key(key: str) -> bool:
+def _is_sensitive_key(key: str, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> bool:
     lowered = key.lower()
-    return lowered == "key" or any(part in lowered for part in SENSITIVE_KEY_PARTS)
+    return lowered == "key" or any(part in lowered for part in parts)
+
+
+# A provider's usage block reports its cost through names like
+# `totalTokenCount`, so it cannot share the broad rule above: there "token"
+# is billing, not authentication. It keeps every count and still drops the
+# names a secret actually travels in.
+USAGE_SENSITIVE_KEY_PARTS = tuple(part for part in SENSITIVE_KEY_PARTS if part != "token")
 
 
 def sha256_bytes(payload: bytes) -> str:
@@ -769,7 +776,9 @@ def run_review(
         evidence_path = output
         evidence_sha256 = sha256_bytes(payload.encode("utf-8"))
 
-    usage: dict[str, Any] = dict(response.usage) if response.usage else {}
+    usage: dict[str, Any] = (
+        redact(response.usage, USAGE_SENSITIVE_KEY_PARTS) if response.usage else {}
+    )
     usage.setdefault("reported_by_provider", response.usage is not None)
     return {
         "advisory_only": True,
@@ -849,9 +858,15 @@ def _evidence(
         "result": result,
         "error": error,
         # Raw responses are opt-in and redacted; they carry debugging value and
-        # sometimes the provider's own request metadata.
+        # sometimes the provider's own request metadata. Usage is redacted for
+        # the same reason: it is vendor payload, and nothing a provider sent
+        # may reach stdout, a JSON result, or evidence without the backstop.
         "raw_provider_response": raw_response,
-        "usage": dict(usage) if usage else {"reported_by_provider": False},
+        "usage": (
+            redact(dict(usage), USAGE_SENSITIVE_KEY_PARTS)
+            if usage
+            else {"reported_by_provider": False}
+        ),
         "disclosure": {
             "network_consent": True,
             "third_party": provider_name,

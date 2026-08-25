@@ -233,8 +233,12 @@ nowhere. Fixed by reproducing Unity's member order byte for byte, and gated
 offline by `assert_cbuffer_layout`, which reads the compiled bytecode's RDEF
 chunk on every synthesize and refuses any declared offset the bytecode does not
 read. Both OpenGL Core and Direct3D 11 have since been confirmed by eye in a
-live client ([improvements.md](improvements.md)); what is left of the graphics-
-API matrix is Vulkan's parameter records, tracked there. Full account:
+live client ([improvements.md](improvements.md)); the Vulkan parameter
+records, the last open item of the graphics-API matrix, were resolved on
+2026-08-25 - the entry encoding `(stage << 24) | (kind << 16) | slot`, see
+[research-provenance.md](../research/research-provenance.md) - and the
+Vulkan lane now renders in a live client too. Full account of the earlier
+d3d11 fault:
 [reports/2026-08-24-synthesized-shader-does-not-run.md](../reports/2026-08-24-synthesized-shader-does-not-run.md).
 
 **Blocks:** the claim that anything beyond that one prop is *right*. A live

@@ -1591,3 +1591,16 @@ the modules, and the entry indices are what the material binder keys on.
 DONE written, orchestrator exit 0; the captured 2560×1920 frame has zero
 magenta pixels and shows the textured card. `test_the_vulkan_texture_entry_uses_the_stock_index`
 and `test_the_vulkan_cbuffer_entry_uses_the_stock_index` pin both entries.
+
+
+## The Vulkan payload length is padded to 4 before the bind-channels block
+
+**Measured 2026-08-25.** The runtime reads a code record's payload length and
+then reads the `ParserBindChannels` block that follows the payload. A SMOL-V
+pair whose payload summed to **882 bytes** (176-byte header + 353 + 353) made
+the runtime read the bind block from mid-padding and fault the Vulkan draw -
+AMD RADV, device lost, no log line - while the same modules with a
+4-aligned payload length rendered. Every stock code record measured carries a
+payload length that is a multiple of 4, and the writer pads the payload
+before writing the length field. `test_the_record_satisfies_every_measured_invariant`
+asserts the padding.

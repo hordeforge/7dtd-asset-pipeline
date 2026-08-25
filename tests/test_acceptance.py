@@ -353,7 +353,7 @@ class MotionKindTests(unittest.TestCase):
                 f"{acceptance.plan(config).assembly}.cs"
             ]
             self.assertIn("CaseDef.Live", source)
-            self.assertIn("Helpers.TryEquipItem(player, \"prop\")", source)
+            self.assertIn('Helpers.TryEquipItem(player, "prop")', source)
             self.assertIn('Helpers.BeginClip("motion_prop", 2, 4)', source)
             self.assertIn("Helpers.StartWalk(1f)", source)
             self.assertIn("Helpers.StopWalk()", source)

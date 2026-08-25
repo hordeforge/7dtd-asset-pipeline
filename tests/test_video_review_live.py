@@ -77,13 +77,20 @@ def _mux_video(frames_dir: Path, output: Path) -> bool:
     Returns False when ffmpeg is unavailable; the caller then falls back to
     the frame-only path.
     """
-    if shutil.which("ffmpeg") is None:
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
         return False
     result = subprocess.run(
         [
-            "ffmpeg", "-y", "-framerate", "4",
-            "-i", str(frames_dir / "frame-%04d.png"),
-            "-pix_fmt", "yuv420p", str(output),
+            ffmpeg,
+            "-y",
+            "-framerate",
+            "4",
+            "-i",
+            str(frames_dir / "frame-%04d.png"),
+            "-pix_fmt",
+            "yuv420p",
+            str(output),
         ],
         capture_output=True,
         text=True,
@@ -101,8 +108,7 @@ def _gateway_configured(provider: str) -> bool:
             return False
         states = json.loads(result.stdout)
         return any(
-            state.get("name") == provider and state.get("state") == "configured"
-            for state in states
+            state.get("name") == provider and state.get("state") == "configured" for state in states
         )
     except (OSError, ValueError, json.JSONDecodeError):
         return False
@@ -188,7 +194,7 @@ class LiveEndToEndTests(unittest.TestCase):
             from sevendtd_asset_pipeline import PipelineError
 
             try:
-                report = run_review(
+                run_review(
                     "thing",
                     clip=capture_root / "thing",
                     provider="nvidia",

@@ -312,6 +312,29 @@ entity in the stability pass; the client just reports air. Ground each
 column of the placement, never fall back to a local-only `SetBlockLocal`,
 and read the server log before hypothesising about bundles or replication.
 
+## A placed block's model does not appear, or appears late and out of place
+
+The block voxel is set, but its model is missing, or pops in seconds later
+floating off to the side and above the block. Measured 2026-08-25 against a
+`Shape=ModelEntity` block placed through the server:
+
+- The placement itself does not spawn the model. `Chunk.OnDisplayBlockEntities`
+  instantiates it from the `GameObjectPool` in a **deferred display pass**
+  that walks the chunk's block-entity stubs with a per-call budget, so a
+  freshly placed stub at the end of a long list (a POI-heavy chunk) can take
+  many seconds to reach. The `BlockEntityData` stub exists immediately; its
+  `transform` appears only when the pass reaches it. A render check must wait
+  for the transform, not for the voxel.
+- The pass positions the model at a chunk-local offset under the origin
+  parent, which can land it off to the side and above the block; a capture
+  fixture repositions it explicitly into the camera's space.
+- The pass can leave the model's renderers disabled (the collision-only mesh
+  path); switch them on before asserting a renderer.
+
+The 7dtd-playtest `Helpers.Blocks` (`BlockEntityDataAt`,
+`ActivateBlockEntityModel`, `FindGroundedAir`, `AimBlockPlacement`,
+`CloseDebugConsole`) packages all of it for acceptance cases.
+
 ## `client capture` says there is no screenshot tool, or writes a black frame
 
 The session type decides which tools work, not what is installed. Under

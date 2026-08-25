@@ -229,6 +229,32 @@ loading, so the prefab root must stay at identity and let them apply:
   in XML; it must be authored at world scale. (The source project's first
   prototype reused a vanilla mine prefab and needed a 5× model to read at all.)
 
+### Placing a block from the player's hands needs an item
+
+A block alone is reachable only through the creative menu. To place it like a
+player, the mod defines an item whose `Action1` is the `PlaceAsBlock` action
+naming the block; the action runs `Block.PlaceBlock` with the player as the
+placer. Measured requirements (the SelfTestMod block item, 2026-08-25):
+
+```xml
+<item name="myBlock">
+    <property name="Material" value="Mwood" />
+    <property name="Meshfile" value="#@modfolder(MyMod):Resources/my.unity3d?myBlock.prefab" />
+    <property class="Action1">
+        <property name="Class" value="PlaceAsBlock" />
+        <property name="Blockname" value="myBlock" />
+    </property>
+</item>
+```
+
+- `Material` is required: omitting it aborts registration with
+  `EXC Attribute 'material' missing on item '...'` and the item never loads.
+- `Meshfile` (the held model, resolved like any item mesh) is required the
+  same way: `EXC Attribute 'Meshfile' missing on item '...'`.
+- The debug console swallows the use action while open, so a placement fired
+  from an acceptance case must close it first (see the 7dtd-playtest
+  `Helpers.CloseDebugConsole`).
+
 Test held, dropped, and placed forms separately; they are three different code
 paths over the same asset. For a placed model, a fresh client must also show
 correct placement bounds, orientation, and — when the block is powered — wire

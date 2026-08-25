@@ -206,15 +206,19 @@ This PRD adds one optional declaration per mesh/prefab entry, in the mod's
 motion_kinds = { thing = "turntable" }
 ```
 
-A motion kind (`turntable` | `walk-cycle` | `fixed`) turns that entry's
-generated look case into a `CaseDef.StagedClip` call (7dtd-playtest's
-primitive) instead of the plain `Staged` case: `turntable` rotates the staged
-prefab one full turn over the hold so the captured frames prove the
-silhouette from every side, `walk-cycle` holds (a walk cycle is the game's
-own animation, which a generated provider cannot drive), and `fixed` keeps
-today's generation byte-for-byte — a world-fixed thing has no motion worth
-capturing. The `Live` load case stays in every case: a clip is motion
-evidence, not the load gate. When the field is absent, generation is
+A motion kind (`turntable` | `walk-cycle` | `fixed`) changes that entry's
+generated look case: `turntable` stages the prefab in front of the camera
+and rotates it one full turn over a `CaseDef.StagedClip` hold, so the
+captured frames prove the silhouette from every side; `walk-cycle` generates
+a `CaseDef.Live` case that equips the item on the player
+(`Helpers.TryEquipItem`), records an on-demand clip
+(`Helpers.BeginClip`/`EndClip`) while the player actually walks with stock
+autorun (`Helpers.StartWalk`), then stops both — the motion is the game's own
+animation, not a staged spin, and a walk-cycle declared on a non-wearable
+asset fails the case rather than holding silently; `fixed` keeps today's
+generation byte-for-byte — a world-fixed thing has no motion worth
+capturing. The `Live`/`Staged` load case stays in every case: a clip is
+motion evidence, not the load gate. When the field is absent, generation is
 byte-for-byte unchanged from today. The declaration lives in the mod's
 configuration rather than the tracked manifest because the manifest is
 regenerated on every `shamway build`; see Status for the record of that

@@ -381,30 +381,19 @@ def _staged_case(prefab_stem: str) -> str:
 """
 
 
-def _staged_clip_case(prefab_stem: str, motion: str) -> str:
+def _staged_clip_case(prefab_stem: str) -> str:
     """A `CaseDef.StagedClip` case: the staged hold plus captured frames.
 
-    The motion kind decides what the hold shows: `turntable` rotates the
-    staged prefab one full turn, so the captured frames prove the silhouette
-    from every side; `walk-cycle` and `fixed` hold the subject still (a walk
-    cycle is the game's own animation, which a generated provider cannot
-    drive; the captured frames still show whatever the staged prefab does).
-    The generated provider is the only place that already knows, per asset,
-    its stem and kind, which is why the declaration lives here rather than in
-    the playtest suite.
+    The staged prefab rotates one full turn over the hold, so the captured
+    frames prove the silhouette from every side — the turntable. The
+    generated provider is the only place that already knows, per asset, its
+    stem and kind, which is why the declaration lives here rather than in the
+    playtest suite. A worn asset that must be seen *walking* is not staged
+    here: it uses `_walk_clip_case`, which equips it on the player and records
+    the player actually moving.
     """
     name = _cs_body(prefab_stem)
     variable = _identifier(prefab_stem)
-    motion_line = ""
-    if motion == "turntable":
-        # One full turn over the hold: 360 degrees across 12 seconds of hold.
-        motion_line = f"""
-            onHold: (ctx, holdFraction) =>
-            {{
-                var staged = {variable}Staged;
-                if (staged == null) return;
-                staged.transform.Rotate(0f, 360f * Time.deltaTime / 12f, 0f);
-            }},"""
     return f"""
         GameObject {variable}Staged = null;
         queue.Add(CaseDef.StagedClip(
@@ -413,8 +402,66 @@ def _staged_clip_case(prefab_stem: str, motion: str) -> str:
             {{{_stage_body(prefab_stem)}
             }},
             holdSeconds: 12f,
-            {motion_line}
+            onHold: (ctx, holdFraction) =>
+            {{
+                var staged = {variable}Staged;
+                if (staged == null) return;
+                // One full turn over the hold: 360 degrees across 12 seconds.
+                staged.transform.Rotate(0f, 360f * Time.deltaTime / 12f, 0f);
+            }},
             fail: "could not stage {name} for its motion clip"));
+"""
+
+
+def _walk_clip_case(prefab_stem: str) -> str:
+    """A case that equips the item on the player, walks, and records.
+
+    A walk cycle cannot be staged in front of a camera: the motion is the
+    game's own animation of the player actually walking, driven with stock
+    autorun (`Helpers.StartWalk`, not teleport). The case gives and equips
+    the item by its stem name (`Helpers.TryEquipItem`), records an on-demand
+    clip (`Helpers.BeginClip`/`EndClip`) while the player walks, and fails
+    cleanly when the item does not exist or cannot be equipped — a
+    `walk-cycle` declaration on a non-wearable asset reads as a failed case,
+    not a silent hold.
+    """
+    name = _cs_body(prefab_stem)
+    variable = _identifier(prefab_stem)
+    return f"""
+        int {variable}Equipped = -1;
+        queue.Add(CaseDef.Live(label, "motion_{name}", new[] {{ "capture", "clip" }},
+            act: ctx =>
+            {{
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {{
+                    Report.Info("{name}: no local player to equip and walk");
+                    return;
+                }}
+                ctx.FloatA = Time.unscaledTime;
+                {variable}Equipped = Helpers.TryEquipItem(player, "{name}");
+                if ({variable}Equipped < 0)
+                {{
+                    Report.Info("{name}: could not give/equip an item named \\"{name}\\"; "
+                        + "a walk-cycle case is for a worn/equippable asset");
+                    return;
+                }}
+                Helpers.BeginClip("motion_{name}", 2, 4);
+                Helpers.StartWalk(1f);
+            }},
+            wait: ctx =>
+            {{
+                float elapsed = Time.unscaledTime - ctx.FloatA;
+                return elapsed >= 12f;
+            }},
+            assert: ctx =>
+            {{
+                Helpers.StopWalk();
+                Helpers.EndClip("motion_{name}");
+                return {variable}Equipped >= 0;
+            }},
+            timeout: 40f,
+            fail: "could not walk {name} and record its motion clip"));
 """
 
 
@@ -423,17 +470,20 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
     cases = "".join(_case(stem, kind) for stem, kind in plan_.stems)
     # One staged frame per prefab: the only case here that can fail on a bundle
     # whose every member loads and whose prop is invisible. A prefab with a
-    # declared motion kind (turntable/walk-cycle) stages the same scene as a
-    # StagedClip so the playtest runner captures frames of the motion; a
-    # `fixed` kind keeps today's unchanged staged-look case.
+    # declared motion kind stages the same scene as a StagedClip turntable
+    # (turntable), equips the item on the player and records a real walk
+    # (walk-cycle), or keeps today's unchanged staged-look case (fixed and
+    # absent).
     motion_kinds = dict(plan_.motions)
     staged: list[str] = []
     for stem, kind in plan_.stems:
         if kind != "GameObject":
             continue
         motion = motion_kinds.get(stem)
-        if motion in ("turntable", "walk-cycle"):
-            staged.append(_staged_clip_case(stem, motion))
+        if motion == "turntable":
+            staged.append(_staged_clip_case(stem))
+        elif motion == "walk-cycle":
+            staged.append(_walk_clip_case(stem))
         else:
             staged.append(_staged_case(stem))
     cases += "".join(staged)

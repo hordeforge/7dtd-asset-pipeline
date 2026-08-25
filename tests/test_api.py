@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import tempfile
@@ -297,6 +298,44 @@ class DispatchTests(unittest.TestCase):
     def test_config_bound_operation_without_config_explains_itself(self) -> None:
         with self.assertRaisesRegex(PipelineError, "needs a mod configuration"):
             call_json(None, "status")
+
+    def test_a_broken_config_reports_its_own_error_not_needs_config(self) -> None:
+        """`shamway call` must not turn an unreadable config into "no config".
+
+        The stateless dispatch degrades to `pipeline=None` only when no
+        `.shamway.toml` exists. A file that exists but cannot be parsed has a
+        different fix, and swallowing its error here reported "needs a mod
+        configuration" for a configuration the caller was staring at.
+        """
+        from sevendtd_asset_pipeline.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as directory:
+            broken = Path(directory) / ".shamway.toml"
+            broken.write_text("mod_name = [unclosed", encoding="utf-8")
+            stderr = io.StringIO()
+            stdout = io.StringIO()
+            with contextlib.redirect_stderr(stderr), contextlib.redirect_stdout(stdout):
+                code = cli_main(["--config", str(broken), "call", "status"])
+            self.assertEqual(1, code)
+            self.assertIn("cannot read", stderr.getvalue())
+            self.assertNotIn("needs a mod configuration", stderr.getvalue())
+
+    def test_serve_survives_a_resolver_that_raises_on_a_broken_config(self) -> None:
+        """A per-request resolve failure is one failed response, not a dead server."""
+        from sevendtd_asset_pipeline.errors import PipelineError
+
+        def resolve() -> Pipeline | None:
+            raise PipelineError("cannot read .shamway.toml: invalid TOML at line 3")
+
+        output = io.StringIO()
+        stream = io.StringIO('{"id":7,"op":"status"}\n{"id":8,"op":"ping"}\n')
+        serve(resolve, False, stream, output)
+        responses = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertFalse(responses[0]["ok"])
+        self.assertEqual(7, responses[0]["id"])
+        self.assertIn("cannot read", cast(str, _nested(responses[0], "error")["message"]))
+        # The session survives: ping needs no config, so it still answers.
+        self.assertTrue(responses[1]["ok"])
 
     def test_every_result_is_json_serializable(self) -> None:
         for name in ("status", "capabilities", "refs"):

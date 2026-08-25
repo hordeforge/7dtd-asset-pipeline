@@ -9,7 +9,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .errors import PipelineError
+from .errors import ConfigNotFoundError, PipelineError
 
 CONFIG_NAME = ".shamway.toml"
 VALID_BUNDLE = re.compile(r"^[a-z0-9][a-z0-9._-]*\.unity3d$")
@@ -235,7 +235,9 @@ def find_config(start: Path | None = None) -> Path:
         candidate = directory / CONFIG_NAME
         if candidate.is_file():
             return candidate
-    raise PipelineError(f"could not find {CONFIG_NAME} from {current}; run 'shamway init MOD_ROOT'")
+    raise ConfigNotFoundError(
+        f"could not find {CONFIG_NAME} from {current}; run 'shamway init MOD_ROOT'"
+    )
 
 
 def load_config(path: Path | None = None) -> PipelineConfig:

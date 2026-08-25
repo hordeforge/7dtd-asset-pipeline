@@ -27,7 +27,7 @@ from .capabilities import Capability, capabilities, has_capability, require_capa
 from .config import PipelineConfig, load_config
 from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, failed, run_doctor
-from .errors import PipelineError
+from .errors import ConfigNotFoundError, PipelineError
 from .game import game_unity_version, project_unity_version
 from .icon_check import IconReport, check_icons
 from .icon_render import RenderResult, render_icon
@@ -47,6 +47,7 @@ __all__ = [
     "BundleInfo",
     "Capability",
     "Check",
+    "ConfigNotFoundError",
     "DeepReport",
     "IconReport",
     "MeshReport",

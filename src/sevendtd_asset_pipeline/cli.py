@@ -29,7 +29,7 @@ from .deep_inspect import deep_inspect
 from .docs import read as read_doc
 from .docs import topics as doc_topics
 from .doctor import failed, run_doctor
-from .errors import PipelineError
+from .errors import ConfigNotFoundError, PipelineError
 from .game import game_unity_version, project_unity_version
 from .generators import describe as describe_generators
 from .generators import run as run_generator
@@ -749,9 +749,15 @@ def run(args: argparse.Namespace) -> int:
     if args.command in ("call", "serve"):
 
         def resolve() -> Pipeline | None:
+            # Only a *missing* configuration degrades to None, so the stateless
+            # operations keep working with no modlet anywhere. A configuration
+            # that exists but cannot be read propagates its own error: catching
+            # every PipelineError here replaced "cannot read .shamway.toml:
+            # invalid TOML at line N" with "needs a mod configuration", which
+            # is the opposite of what a caller with a broken file needs.
             try:
                 return Pipeline(load_config(args.config))
-            except PipelineError:
+            except ConfigNotFoundError:
                 return None
 
         if args.command == "serve":

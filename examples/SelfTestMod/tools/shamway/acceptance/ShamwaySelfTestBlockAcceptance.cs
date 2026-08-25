@@ -82,7 +82,7 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                 }
                 ahead.Normalize();
                 var feet = Helpers.FixtureSeedOrigin(player, world);
-                var at = GroundedSpot(world, feet, ahead);
+                var at = Helpers.FindGroundedAir(world, feet, ahead);
                 if (at == null)
                 {
                     ctx.IntA = 0;
@@ -142,7 +142,7 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                     return;
                 }
                 var feet = Helpers.FixtureSeedOrigin(player, world);
-                var at = GroundedSpot(world, feet, ahead);
+                var at = Helpers.FindGroundedAir(world, feet, ahead);
                 if (at == null)
                 {
                     ctx.IntA = 0;
@@ -173,39 +173,17 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                     ctx.Detail = "could not equip the block item (slot=" + slot + ")";
                     return;
                 }
-                // Point the placement at the chosen voxel. The action reads the
-                // player's HitInfo: lastBlockPos is the *air* voxel the block
-                // goes into, hit.pos the point on the floor the ray hit.
-                var hit = player.HitInfo;
-                hit.bHitValid = true;
-                hit.tag = "";
-                hit.lastBlockPos = at.Value;
-                hit.hit.blockPos = at.Value;
-                hit.hit.pos = new Vector3(at.Value.x + 0.5f, at.Value.y - 0.5f, at.Value.z + 0.5f);
-                hit.hit.blockFace = BlockFace.Top;
-                hit.hit.distanceSq = 9f;
-                try
+                // Point the placement at the chosen voxel (Helpers.AimBlockPlacement
+                // fills the player's HitInfo the way a floor raycast would).
+                if (!Helpers.AimBlockPlacement(player, world, at.Value))
                 {
-                    hit.hit.voxelData = HitInfoDetails.VoxelData.GetFrom(world, at.Value + Vector3i.down);
-                }
-                catch
-                {
-                    hit.hit.voxelData = default;
+                    ctx.IntA = 0;
+                    ctx.Detail = "placement target is not a grounded air voxel";
+                    return;
                 }
                 // The debug console swallows the use action when it is open;
                 // close it so the placement fires like a normal click.
-                try
-                {
-                    if (GUIWindowConsole.instance != null)
-                    {
-                        GUIWindowConsole.instance.CloseConsole();
-                    }
-                }
-                catch
-                {
-                    // console may not exist in this game state; the action
-                    // check below still decides
-                }
+                Helpers.CloseDebugConsole();
                 var heldData = player.inventory.holdingItemData;
                 if (heldData == null || held.Actions == null || held.Actions.Length <= 1
                     || heldData.actionData == null || heldData.actionData.Count <= 1)
@@ -282,8 +260,7 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
         // block-entity stubs with a per-call budget, so a freshly placed stub
         // at the end of a long list can take a while to reach. The stub is
         // visible the moment the pass creates its transform.
-        var chunk = ctx.World.ChunkCache.GetChunkFromWorldPos(at);
-        var bed = chunk != null ? chunk.GetBlockEntity(at) : null;
+        var bed = Helpers.BlockEntityDataAt(ctx.World, at);
         if (bed == null || bed.transform == null)
         {
             if (ctx.IntB == 0)
@@ -320,20 +297,12 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
         }
         // The display pass may have left the renderers disabled (collision-only
         // mesh); switch them on so the model actually draws.
-        var renderers = bed.transform.GetComponentsInChildren<Renderer>(true);
-        if (renderers == null || renderers.Length == 0)
+        if (!Helpers.ActivateBlockEntityModel(bed))
         {
             ctx.Detail = "model transform exists at " + at + " but has no renderers";
             return false;
         }
-        foreach (var r in renderers)
-        {
-            r.enabled = true;
-        }
-        if (!bed.transform.gameObject.activeInHierarchy)
-        {
-            bed.transform.gameObject.SetActive(true);
-        }
+        var renderers = bed.transform.GetComponentsInChildren<Renderer>(true);
         _placed = true;
         _placedAt = at;
         ctx.Detail = "placed type=" + ctx.World.GetBlock(at).type + " model=" + renderers[0].name
@@ -362,8 +331,7 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                 }
                 // The model was repositioned in front of the camera by the
                 // place case; verify its renderers are still live.
-                var chunk = world.ChunkCache.GetChunkFromWorldPos(at);
-                var bed = chunk != null ? chunk.GetBlockEntity(at) : null;
+                var bed = Helpers.BlockEntityDataAt(world, at);
                 var modelRenderers = bed != null && bed.transform != null
                     ? bed.transform.GetComponentsInChildren<Renderer>(true)
                     : null;
@@ -380,52 +348,4 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
             fail: "could not stage the placed shamwaySelfTestPropBlock in view"));
     }
 
-    /// <summary>
-    /// A grounded air voxel ahead of the camera, one or two blocks out (the
-    /// closest that still reads as a floor placement): surface height at the
-    /// target column, one above it, with a solid voxel below so the server's
-    /// stability pass does not turn the placement into a falling block
-    /// (docs/runbooks/troubleshooting.md, "A placed block vanishes").
-    /// </summary>
-    private static Vector3i? GroundedSpot(World world, Vector3i feet, Vector3 ahead)
-    {
-        var dx = Mathf.RoundToInt(ahead.x * 2f);
-        var dz = Mathf.RoundToInt(ahead.z * 2f);
-        if (dx == 0 && dz == 0)
-        {
-            dx = Mathf.RoundToInt(ahead.x * 3f);
-            dz = Mathf.RoundToInt(ahead.z * 3f);
-        }
-        var tx = feet.x + dx;
-        var tz = feet.z + dz;
-        int surface = feet.y;
-        try
-        {
-            surface = Mathf.RoundToInt(world.GetHeightAt(tx, tz));
-        }
-        catch
-        {
-            // keep the player's surface; the support check below still applies
-        }
-        var candidates = new List<Vector3i>
-        {
-            new Vector3i(tx, surface + 1, tz),
-            new Vector3i(tx, surface + 2, tz),
-            new Vector3i(tx, feet.y + 1, tz),
-            new Vector3i(feet.x + dx, surface + 1, feet.z + dz),
-        };
-        foreach (var at in candidates)
-        {
-            if (world.GetBlock(at).type != 0)
-            {
-                continue; // occupied
-            }
-            if (world.GetBlock(at + Vector3i.down).isair)
-            {
-                continue; // no support: the stability pass would drop it
-            }
-            return at;
-        }
-        return null;
-    }
 }

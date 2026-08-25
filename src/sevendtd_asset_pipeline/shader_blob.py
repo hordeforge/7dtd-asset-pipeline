@@ -475,9 +475,31 @@ VertexOut main(VertexIn input)
 }
 """
 
+# The Vulkan fragment half is **GLSL, not HLSL**, and that is deliberate: Unity's
+# own Vulkan modules are compiled by glslang from the GLSL its HLSLCC emits, so
+# a `uniform sampler2D` becomes one combined image-sampler variable. The HLSL
+# form (`Texture2D` + `SamplerState`) makes glslang emit two variables on the
+# same binding - an image and a sampler - a shape **no stock module has** (all
+# six measured stock fragment modules are a single `OpTypeSampledImage` at
+# descriptor set 0, binding 0). GLSL 450 with explicit locations reproduces the
+# stock shape exactly. Whether the split form was the live client's crash is
+# not isolated: with the combined form in place the draw still dies on this
+# host's AMD RADV, so the crash's cause is still open - this change removes a
+# measured deviation from stock, not the whole blocker.
+UNLIT_FRAGMENT_GLSL_VULKAN = """
+#version 450
+layout(location = 0) in vec2 vs_TEXCOORD0;
+layout(location = 0) out vec4 SV_Target0;
+layout(binding = 0) uniform sampler2D _MainTex;
+void main()
+{
+    SV_Target0 = texture(_MainTex, vs_TEXCOORD0);
+}
+"""
 
-def compile_spirv_glslang(source: str, stage: str) -> bytes:
-    """Compile HLSL straight to SPIR-V with `glslangValidator`.
+
+def compile_spirv_glslang(source: str, stage: str, language: str = "hlsl") -> bytes:
+    """Compile a shader straight to SPIR-V with `glslangValidator`.
 
     **Unity's own Vulkan modules are glslang output** - decoded from a shipped
     bundle, their generator is `Khronos Glslang Reference Front End` - so this
@@ -490,7 +512,10 @@ def compile_spirv_glslang(source: str, stage: str) -> bytes:
     The cost is that the d3d11 and Vulkan sub-programs no longer come from one
     compiler. They still come from **one HLSL source**, so the two can differ
     only in how a compiler renders the same program, not in what the program
-    says.
+    says. The Vulkan fragment half is the exception: Unity compiles its Vulkan
+    modules from the GLSL its HLSLCC emits, and only GLSL yields the combined
+    image-sampler every stock module carries - so that half is authored in GLSL
+    and compiled with `language="glsl"`, which drops the HLSL `-D` flag.
     """
     binary = shutil.which("glslangValidator")
     if binary is None:
@@ -500,23 +525,26 @@ def compile_spirv_glslang(source: str, stage: str) -> bytes:
             "'shamway script install-tools'."
         )
     with tempfile.TemporaryDirectory() as work:
-        src = Path(work) / f"shader.{stage}.hlsl"
+        src = Path(work) / f"shader.{stage}.{language}"
         out = Path(work) / "shader.spv"
         src.write_text(source, encoding="utf-8")
+        command = [
+            binary,
+            "-D",  # the source is HLSL
+            "-e",
+            "main",
+            "-S",
+            stage,
+            "--target-env",
+            "vulkan1.0",
+            str(src),
+            "-o",
+            str(out),
+        ]
+        if language != "hlsl":
+            command.remove("-D")
         result = _compile(
-            [
-                binary,
-                "-D",  # the source is HLSL
-                "-e",
-                "main",
-                "-S",
-                stage,
-                "--target-env",
-                "vulkan1.0",
-                str(src),
-                "-o",
-                str(out),
-            ],
+            command,
             "glslangValidator",
             f"compiling the {stage} stage",
         )
@@ -664,17 +692,31 @@ def unity_descriptor_sets(spirv: bytes) -> bytes:
     return struct.pack(f"<{len(words)}I", *words)
 
 
-# The vulkan vertex SPIR-V binds its inputs at these Locations (read from the
-# glslang output: `input.vertex` at 0, `input.uv` at 1). A Vulkan bind-channels
-# target is the SPIR-V input **location**, not the d3d11 vertex-component slot -
-# stock Vulkan records use per-shader location values where d3d11 uses fixed
-# slots. Getting this wrong (reusing the d3d11 targets) fed the vertex shader
-# the wrong stream and hung the client mid-draw.
-# (mesh channel source, SPIR-V input location). Mesh Position is channel 0,
-# TexCoord0 is channel 4 - the same source numbers the d3d11 bind table uses.
+# A Vulkan bind-channels target is the shader input's **slot in the program's
+# vertex-input declaration**, offset by 13 - not the d3d11 vertex-component
+# slot and not the SPIR-V `Location` decoration as stored in the module.
+# Measured across seven stock 2022.3 shaders in the installed game
+# (`7DaysToDie_Data/data.unity3d`, Vulkan platform blobs):
+#
+#   VertexLit / Diffuse / Specular (Position, Normal, TexCoord0)
+#       (0,13) (1,14) (4,15)   - the module's SPIR-V locations are 0, 1, 2
+#   Bumped Diffuse (Position, Normal, Tangent, TexCoord0)
+#       (0,13) (1,14) (2,15) (4,16)   - SPIR-V locations 0, 1, 2, 3
+#   Particles/Additive (Position, Color, TexCoord0)
+#       (0,13) (3,14) (4,15)   - SPIR-V locations 0, 1, 2
+#
+# In every record the target is the declaration-index (equivalently the SPIR-V
+# location Unity assigned, which follows declaration order) plus 13, so the
+# runtime's pipeline puts the attribute at the offset slot the shader's input
+# list occupies. Our glslang vertex module declares `input.vertex` at location
+# 0 and `input.uv` at location 1, so the targets are 13 and 14. Reusing the
+# d3d11 targets or the bare locations (0 and 1) points the mesh binding at a
+# slot the pipeline does not bind, which hung a live client mid-draw.
+# (mesh channel source, target slot). Mesh Position is channel 0, TexCoord0
+# is channel 4 - the same source numbers the d3d11 bind table uses.
 VULKAN_BIND_CHANNELS = (
-    (0, 0),  # Position -> input location 0
-    (4, 1),  # TexCoord0 -> input location 1
+    (0, 13),  # Position -> input declaration slot 0 + 13
+    (4, 14),  # TexCoord0 -> input declaration slot 1 + 13
 )
 
 
@@ -1049,7 +1091,7 @@ class ParameterBlob:
             writer.string(texture.name)
             writer.i32(0)
             writer.i32(texture.index)
-            writer.i32(texture.sampler_index)
+            writer.u32(texture.sampler_index)  # 0xffffffff = the texture's own sampler
             writer.u32((texture.dimension << 1) | (1 if texture.multi_sampled else 0))
         for binding in self.bindings:
             writer.string(binding.name)
@@ -1195,18 +1237,30 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
         # One parameter record for both stages, because one Vulkan code record
         # carries both: a stock Vulkan parameter record declares `VGlobals` and
         # `PGlobals` together, where d3d11 keeps a record per stage.
+        #
+        # The fragment is GLSL (see UNLIT_FRAGMENT_GLSL_VULKAN) so the module
+        # carries the one combined image-sampler every stock fragment module
+        # has, and the parameter record mirrors stock: the texture entry names
+        # its own sampler (0xffffffff = none) and there is no separate sampler
+        # entry, exactly as the measured VertexLit record declares `_MainTex`.
+        vulkan_fragment = (
+            UNLIT_FRAGMENT_GLSL_VULKAN
+            if texture_property == "_MainTex"
+            else UNLIT_FRAGMENT_GLSL_VULKAN.replace("_MainTex", texture_property)
+        )
         vulkan_parameters = ParameterBlob(
             buffers=(VULKAN_VERTEX_CBUFFER,),
             bindings=(CBufferBinding(VULKAN_VERTEX_GLOBALS, 0),),
-            textures=(TextureEntry(texture_property, index=0, sampler_index=0),),
-            samplers=(SamplerEntry(f"sampler{texture_property}", bind_point=0, sampler=0),),
+            textures=(TextureEntry(texture_property, index=0, sampler_index=0xFFFFFFFF),),
         )
         vulkan_raw = assemble_blob(
             [
                 vulkan_parameters.to_bytes(),
                 vulkan_code_blob(
                     compress_smolv(
-                        unity_descriptor_sets(compile_spirv_glslang(fragment_source, "frag"))
+                        unity_descriptor_sets(
+                            compile_spirv_glslang(vulkan_fragment, "frag", language="glsl")
+                        )
                     ),
                     compress_smolv(
                         unity_descriptor_sets(

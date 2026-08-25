@@ -706,9 +706,14 @@ class VulkanSubProgramTests(unittest.TestCase):
         record with the same modules: identical but for the (unvalidated) hash,
         and stock was 32 bytes longer, this block.
 
-        The targets are SPIR-V input **locations**, not d3d11 vertex-component
-        slots: reusing the d3d11 targets fed the vertex shader the wrong stream
-        and hung a live client mid-draw.
+        The targets are the vertex-input declaration slots offset by 13, not
+        the d3d11 vertex-component slots and not the bare SPIR-V locations:
+        reusing the d3d11 targets fed the vertex shader the wrong stream and
+        hung a live client mid-draw. Measured across seven stock shaders in
+        the installed game - VertexLit (0,13)(1,14)(4,15) for SPIR-V locations
+        0,1,2, Bumped Diffuse (0,13)(1,14)(2,15)(4,16), Particles/Additive
+        (0,13)(3,14)(4,15) - so every target is location + 13. Our glslang
+        vertex module declares location 0 (Position) and 1 (TexCoord0).
         """
         fragment, vertex = b"F" * 391, b"V" * 4123
         record = shader_blob.vulkan_code_blob(fragment, vertex)
@@ -722,8 +727,8 @@ class VulkanSubProgramTests(unittest.TestCase):
         pairs = [struct.unpack_from("<2I", expected, 8 + i * 8) for i in range(count)]
         self.assertEqual(
             pairs,
-            [(0, 0), (4, 1)],
-            "targets are the SPIR-V input locations the glslang module declares",
+            [(0, 13), (4, 14)],
+            "targets are the vertex-input declaration slots + 13, the stock convention",
         )
 
     def test_the_platform_is_absent_without_the_encoder(self) -> None:
@@ -734,6 +739,60 @@ class VulkanSubProgramTests(unittest.TestCase):
             platforms = [p.platform for p in shader_blob.unlit_textured().platforms]
         self.assertNotIn(shader_blob.SHADER_COMPILER_PLATFORM_VULKAN, platforms)
         self.assertIn(shader_blob.SHADER_COMPILER_PLATFORM_D3D11, platforms)
+
+    def test_the_vulkan_fragment_is_one_combined_image_sampler(self) -> None:
+        """The module shape every stock fragment module has, and the HLSL form lacks.
+
+        Unity's own Vulkan modules are glslang output on the GLSL its HLSLCC
+        emits, so `uniform sampler2D` becomes a single `OpTypeSampledImage`
+        variable at set 0, binding 0. The HLSL form (`Texture2D` +
+        `SamplerState`) makes glslang emit an image **and** a sampler as two
+        variables on the same binding - a shape no stock module carries, and
+        one whose draw killed a live client on AMD RADV (device lost, no log
+        line). This pins the GLSL form so a future refactor cannot regress it
+        back to the split.
+        """
+        if shutil.which("glslangValidator") is None:
+            self.skipTest("glslangValidator that compiles the GLSL is not installed")
+        spirv = shader_blob.compile_spirv_glslang(
+            shader_blob.UNLIT_FRAGMENT_GLSL_VULKAN, "frag", language="glsl"
+        )
+        words = struct.unpack(f"<{len(spirv) // 4}I", spirv)
+        types: dict[int, int] = {}  # id -> opcode (25 image, 26 sampler, 27 sampled-image)
+        pointers: dict[int, int] = {}  # id -> target id
+        variables: dict[int, int] = {}  # id -> type id
+        decorations: dict[int, dict[int, int]] = {}
+        index = 5  # after the SPIR-V header
+        while index < len(words):
+            word = words[index]
+            count, opcode = word >> 16, word & 0xFFFF
+            operands = words[index + 1 : index + count]
+            if opcode in (25, 26, 27):
+                types[operands[0]] = opcode
+            elif opcode == 32:  # OpTypePointer: result, storage, target
+                pointers[operands[0]] = operands[2]
+            elif opcode == 59:  # OpVariable: result-type, result, storage
+                variables[operands[1]] = operands[0]
+            elif opcode == 71:  # OpDecorate: target, decoration, value
+                if len(operands) >= 3 and operands[1] in (33, 34):  # set, binding
+                    decorations.setdefault(operands[0], {})[operands[1]] = operands[2]
+            index += count
+        sampled_images = [
+            var_id
+            for var_id, type_id in variables.items()
+            if types.get(pointers.get(type_id, type_id)) == 27
+        ]
+        self.assertEqual(len(sampled_images), 1, "exactly one combined image-sampler variable")
+        var_id = sampled_images[0]
+        self.assertEqual(
+            decorations[var_id].get(33, None), 0, "descriptor set 0, as stock declares"
+        )
+        self.assertEqual(decorations[var_id].get(34, None), 0, "binding 0, as stock declares")
+        self.assertNotIn(
+            26,
+            {types.get(t) for t in variables.values()},
+            "no bare sampler variable: the split form is what a live client's draw killed",
+        )
 
 
 class LibraryDiscoveryTests(unittest.TestCase):

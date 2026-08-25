@@ -307,7 +307,7 @@ _DEFINITIONS: tuple[Operation, ...] = (
                 "provider": {
                     "type": "string",
                     "description": "provider the deadeye gateway resolves "
-                    "(fake, gemini); default gemini",
+                    "(fake, gemini, nvidia); default gemini",
                     "default": "gemini",
                 },
                 "model": {"type": "string", "description": "default per provider"},

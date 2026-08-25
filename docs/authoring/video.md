@@ -118,7 +118,8 @@ review kinds reads one shape.
   sends an authored asset to a third party; nothing here contacts a provider
   implicitly, and no refusal reads credentials before the consent gate.
 - Credentials come only from the provider's environment variables
-  (`GEMINI_API_KEY` / `GOOGLE_API_KEY` for gemini). They are never accepted as
+  (`GEMINI_API_KEY` / `GOOGLE_API_KEY` for gemini, `NVIDIA_API_KEY` for
+  nvidia). They are never accepted as
   a command argument, printed, or written into evidence.
 - The verdict is advisory. `ADVISORY_NOTE` rides every result: a model
   critique is evidence about the submitted clip under the recorded intent; it

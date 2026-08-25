@@ -119,6 +119,15 @@ while true; do
         if grep -q "\[7dtd-playtest\] DONE" "$log" 2>/dev/null; then
             exit 0
         fi
+        # The run is decided before DONE when the client is gone: a crash
+        # mid-draw leaves the staged marker in the log and no shot, and
+        # waiting out --timeout turns a five-second failure into a
+        # fifteen-minute stall. Only declare it when this run actually staged
+        # its case, so a client that never started is not misread as a crash.
+        if [[ -n "$seen" ]] && ! pgrep -f "7DaysToDie.exe" >/dev/null 2>&1; then
+            echo "playtest-capture.sh: client exited after staging ${seen}; no shot, no DONE" >&2
+            exit 1
+        fi
     fi
     sleep 1
 done

@@ -1,6 +1,6 @@
-# Shamway (7DTD Asset Pipeline)
+# 🏭 Shamway (7DTD Asset Pipeline)
 
-> **Part of [HordeForge](https://github.com/hordeforge)** — High-Performance Systems Engineering for 7 Days to Die.
+> **Part of [HordeForge](https://github.com/hordeforge)**: High-Performance Systems Engineering for 7 Days to Die.
 
 ![CI](https://github.com/hordeforge/7dtd-asset-pipeline/actions/workflows/ci.yml/badge.svg)
 ![coverage](https://raw.githubusercontent.com/hordeforge/7dtd-asset-pipeline/badges/coverage.svg)

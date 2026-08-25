@@ -1,0 +1,22 @@
+<configs>
+    <append xpath="/items">
+        <!-- The placeable form of the test block, following the same
+             Action1/PlaceAsBlock pattern a mod item uses (the game has no
+             item for a bare block; without this the block is only reachable
+             through the creative menu). The acceptance suite gives this to
+             the player and fires the placement action, so the frame shows
+             the character placing the block like a real player. -->
+        <item name="shamwaySelfTestPropBlock">
+            <property name="CreativeMode" value="Player" />
+            <property name="Material" value="Mwood" />
+            <property name="Meshfile" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestProp.prefab" />
+            <property name="HoldType" value="45" />
+            <property name="Stacknumber" value="500" />
+            <property name="EconomicValue" value="10" />
+            <property class="Action1">
+                <property name="Class" value="PlaceAsBlock" />
+                <property name="Blockname" value="shamwaySelfTestPropBlock" />
+            </property>
+        </item>
+    </append>
+</configs>

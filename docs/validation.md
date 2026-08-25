@@ -281,7 +281,10 @@ shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
 
 `scripts/playtest-acceptance.sh` runs the whole sequence — generate, build,
 deploy the modlet and the harness mods, hand off to the orchestrator, print
-the case results:
+the case results. The modlet goes to **both** the client's Mods folder and the
+dedicated server's: in multiplayer the block/item/recipe definitions arrive
+from the server ("Loaded (received): blocks"), so a suite that places a block
+the mod declares finds nothing if the server never loaded the mod.
 
 ```bash
 shamway script playtest-acceptance

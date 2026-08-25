@@ -1313,6 +1313,13 @@ controlled experiment is only controlled for the variables you checked.
 
 ## The Vulkan hash IS validated - a correction
 
+> **Retracted.** This section and the two below it are the wrong turn the
+> section above overturns: the hash field is **not** validated (a live client
+> renders a stock blob with every byte corrupted). Kept only as the record of
+> the negative-observation trap. The real blocker was the bind-channels block,
+> and after that the parameter record's entries — see the entry-encoding
+> section at the end of this page.
+
 **Measured 2026-08-25**, with the automated capture loop, and it corrects an
 earlier conclusion on this page.
 
@@ -1346,6 +1353,10 @@ session.
 
 
 ## Hunting the Vulkan hash: what the player binary says, and what is left
+
+> **Retracted.** Same wrong turn — see above. The field is unvalidated, so
+> nothing here matters; the "is validated" conclusion at the end of this
+> section is the trap, not a finding.
 
 **Measured 2026-08-25** against `UnityPlayer.dll` (31 MB) in the installed game,
 by scanning for constants:
@@ -1381,6 +1392,9 @@ stock's identical record with its real hash renders.
 
 
 ## The Vulkan hash: offline shortcuts are exhausted, it is disassembly now
+
+> **Retracted.** Same wrong turn — see above. The field is unvalidated; the
+> disassembly this section calls for never happened and never needed to.
 
 **Measured 2026-08-25.** Two automated sweeps closed the cheap routes, so the
 next attempt goes straight to the binary rather than re-permuting hashes.
@@ -1527,12 +1541,53 @@ live runs so far, all three dead at the draw: bare targets `(0,0) (4,1)`,
 convention targets `(0,13) (4,14)`, and `(0,13) (4,14)` plus the combined
 sampler. The record is accepted and executed each time (the scene stages and
 the prop's renderer is reported), and the same bundle draws on d3d11, GLCore
-and d3d12 - so the fault is in the Vulkan draw of this writer's sub-program,
-and which of the remaining differences from a stock record (the module
-content, the `VGlobals` member set, the buffer name without its hash suffix)
-kills the driver is still open. The measured fact that VGlobals member offsets
-are per-record, not fixed - ObjectToWorld sits at 0 in Diffuse and
-Particles/Additive but 256 in VertexLit - rules out one candidate but leaves
-the rest. The next step is a live bisection starting from the known-good
-control (a whole stock Vulkan blob transplanted into this writer's shader
-rendered on 2026-08-24) and swapping one record at a time.
+and d3d12 - so the fault is in the Vulkan draw of this writer's sub-program.
+The measured fact that VGlobals member offsets are per-record, not fixed -
+ObjectToWorld sits at 0 in Diffuse and Particles/Additive but 256 in VertexLit
+- ruled out one candidate, and a live bisection from the known-good control (a
+whole stock Vulkan blob transplanted into this writer's shader rendered on
+2026-08-24) pinned the rest.
+
+
+## The crash was the parameter record's entries: stock encodes `(stage << 24) | (kind << 16) | slot`
+
+**Pinned 2026-08-25 by live bisection** (each run ~2 min, verdict read from the
+orchestrator's run-ended marker). The bisection started from the known-good
+control (a whole stock Vulkan blob transplanted into this writer's shader) and
+swapped records toward the writer's own: the blob layout (2/3/7/12 records),
+the code record (our SMOL-V modules, version word 0x60 or 0x61, hash zero or
+stock's - that field is unvalidated), the bind-channels tail (none, our pair,
+or stock's three), the buffer name (`VGlobals` or `VGlobals<hash>`), the
+member set and offsets (2 members at 0/64, stock's 14 at per-record offsets),
+the buffer size (128 or 688) - all pass. The one block that never passed was
+the parameter record's **entries**: with this writer's entries the client died
+~5s after the draw started - AMD RADV, no log line, no crash dump - and with
+stock's entries the suite passed end to end.
+
+Stock entry indices are not plain slots. Measured across every stock param
+record in the installed game (VertexLit, Diffuse, Bumped Diffuse, Specular,
+Particles/Additive, Transparent/*): the index is
+`(stage << 24) | (kind << 16) | slot` with stage 0x04 = vertex program,
+0x08 = fragment program, kind 0x01 = constant buffer, 0x00 = texture:
+
+| entry | stock index |
+|---|---|
+| `_MainTex` (texture, fragment stage, slot 0) | `0x08000000` |
+| `VGlobals` in a vertex record (cbuffer, vertex stage, slot 0) | `0x04010000` |
+| `VGlobals` in a fragment record (slot 1, after PGlobals) | `0x04010001` |
+| `PGlobals` (cbuffer, fragment stage, slot 0) | `0x08010000` |
+
+This writer emitted plain indices (texture 0, cbuffer 0) with `array_size 1`
+where stock writes 0 - an interim reading of the texture slot as "8" (the t-slot
+of VertexLit's HLSL) was the first break in the bisection but the cbuffer
+entry stayed wrong and later rounds still died at the draw. The shipped record
+carries the measured encoding for both entries: texture `_MainTex` at
+`0x08000000` (sampler `0xffffffff`, dim 4), cbuffer `VGlobals` at `0x04010000`
+with `array_size 0`. The module's own descriptor bindings stay set 0 binding 0
+(texture) and set 1 binding 0 (cbuffer); the runtime derives the bindings from
+the modules, and the entry indices are what the material binder keys on.
+
+**Live result (2026-08-25, entryfix build):** `SUMMARY pass=6 fail=0 skip=0`,
+DONE written, orchestrator exit 0; the captured 2560×1920 frame has zero
+magenta pixels and shows the textured card. `test_the_vulkan_texture_entry_uses_the_stock_index`
+and `test_the_vulkan_cbuffer_entry_uses_the_stock_index` pin both entries.

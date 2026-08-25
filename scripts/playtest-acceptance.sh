@@ -21,6 +21,12 @@
 #   * 7dtd-playtest and 7dtd-fastconnect must both be deployed into the
 #     client's Mods folder: the first runs the cases, the second starts and
 #     connects the client.
+#   * the modlet itself must also sit in the *dedicated server's* Mods folder.
+#     In multiplayer the client's block/item/recipe definitions arrive from
+#     the server ("Loaded (received): blocks"), so a suite that places a block
+#     this mod declares finds nothing if the server never loaded the mod. The
+#     script deploys both sides; the server copy is what makes a blocks.xml
+#     suite possible at all.
 #
 # Disclosure, because this repository's own rule is that it never writes into a
 # game install: with CLIENT_PLATFORM=local (the default, and the only mode that
@@ -201,6 +207,19 @@ for pair in "$PLAYTEST_ROOT/dist/7dtd-playtest:7dtd-playtest" "$CONNECT_ROOT/dis
 	echo "  deployed $name"
 done
 echo
+
+# The client connects to the orchestrator's dedicated server, and in
+# multiplayer the block/item/recipe definitions arrive from the server, not
+# from the client's own mods — the client log says "Loaded (received): blocks".
+# A mod whose blocks.xml a suite places must therefore also sit in the
+# server's Mods/ before the orchestrator starts it. `client deploy` holds the
+# same shared lock the client deploy above did.
+if [[ -d "$SEVEN_DAYS_TO_DIE_SERVER_DIR/Mods" ]]; then
+	echo "DEPLOY (dedicated server Mods)"
+	(cd "$MOD_ROOT" && "$SHAMWAY" client deploy . --mods-dir "$SEVEN_DAYS_TO_DIE_SERVER_DIR/Mods")
+	echo "  deployed to the dedicated server's Mods/ so its block set reaches the client"
+	echo
+fi
 
 FRESH_ARGS=()
 ((FRESH)) && FRESH_ARGS=(--fresh-save)

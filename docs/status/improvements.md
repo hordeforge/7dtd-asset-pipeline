@@ -213,34 +213,31 @@ encoders; **2** and **3** are small once 1's XML-loading machinery exists.
 **6** is a decision before it is any code.
 
 
-## The Vulkan sub-program, and what is left of it
+## The Vulkan sub-program
 
-`bundle_source = "synthesized"` renders on **OpenGL Core**, **Direct3D 11** and
-therefore **Direct3D 12** - there is no separate d3d12 shader platform, and it
-consumes the same DXBC. Both of the first two are confirmed by eye in a live
-client.
+`bundle_source = "synthesized"` renders on **OpenGL Core**, **Direct3D 11**,
+**Direct3D 12** (it consumes the same DXBC as d3d11) and, since 2026-08-25,
+**Vulkan**. The Vulkan lane is confirmed in a live client: the acceptance suite
+runs to `SUMMARY pass=6 fail=0 skip=0` under `-force-vulkan` with DONE written,
+and the captured frame shows the textured card with zero magenta pixels.
 
-**Vulkan is emitted and refused.** The prop renders as Unity's magenta error
-shader under `-force-vulkan`. This is what is known, all of it measured:
+What the lane took, all of it measured against the installed game's own
+Vulkan records (`Legacy Shaders/VertexLit` and five more in `data.unity3d`):
 
 | | |
 |---|---|
-| the container | decoded, and the record this writer builds satisfies every invariant measured across four stock shaders |
-| the platform wiring | **correct** - a whole stock Vulkan blob transplanted into this writer's shader renders |
-| the section order | **proven** - `OpEntryPoint Fragment` in section A, `Vertex` in B |
-| the 32-byte field | **not the cause** - our modules carrying stock's own bytes still go magenta |
-| descriptor sets | moved to Unity's convention (constant buffers in set 1); no change |
-| the SPIR-V producer | glslang, as Unity uses, rather than a vkd3d translation; no change |
+| the container | a type-25 code record carrying both SMOL-V modules behind a 176-byte header, `stageCounts` 1 - matches stock |
+| the section order | fragment in section A, vertex in B, read from `OpEntryPoint` |
+| the 32-byte field | **not validated** - a live client renders a stock blob with every byte corrupted, and a synthesized record with non-stock bytes there |
+| descriptor sets | constant buffers in set 1, texture in set 0, as the stock modules declare |
+| the SPIR-V producer | glslang, as Unity uses; the fragment authored in GLSL so it is one combined image-sampler like every stock module |
+| the bind-channels tail | present, targets are the vertex-input slots + 13 (measured across seven stock shaders) |
+| the parameter-record entries | the crash was here: the entry index is `(stage << 24) \| (kind << 16) \| slot` - `_MainTex` at `0x08000000`, `VGlobals` at `0x04010000` with `array_size 0` - see research-provenance.md |
 
-**The one difference left is the parameter records.** The Vulkan platform reuses
-the d3d11 ones, which declare `UnityPerDraw` and `UnityPerFrame`. Unity's Vulkan
-parameter record declares **both stages in a single record**, with stage-prefixed
-names - `VGlobals<hash>` and `PGlobals<hash>` - which is consistent with
-`stageCounts` being 1 for Vulkan, where one code record also carries both stages.
-Nothing in a Vulkan blob uses the d3d11 names.
-
-That is the next thing to build, and the loop to check it with is now one
-command and nobody watching:
+Vulkan is optional in the writer: without the SMOL-V encoder the bundle carries
+the two platforms it always did, and the game reaches for platform 18 only
+under `-force-vulkan`. The loop to re-check the lane is one command and nobody
+watching:
 
 ```bash
 scripts/playtest-capture.sh --case look_myProp --label vulkan &

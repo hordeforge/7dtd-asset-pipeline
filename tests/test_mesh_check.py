@@ -61,10 +61,6 @@ class GlTFValidatorReportTests(unittest.TestCase):
         self.assertEqual([], [problem for problem in problems if "glTF" in problem])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class BoxUVTests(unittest.TestCase):
     """A generated box maps every face to the whole texture.
 
@@ -105,3 +101,7 @@ class BoxUVTests(unittest.TestCase):
                 "a box's UVs must be the four corners of the image; anything between "
                 "them is an atlas layout, and one albedo cannot fill an atlas",
             )
+
+
+if __name__ == "__main__":
+    unittest.main()

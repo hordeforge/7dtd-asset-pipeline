@@ -420,6 +420,18 @@ def _print_pairs(data: dict[str, object]) -> None:
         print(f"{key}: {value}")
 
 
+def _resolve_version(args: argparse.Namespace, demand: str) -> str:
+    """The revision a bundle must carry: detected from the game, or named."""
+    if args.game_dir:
+        version, source = game_unity_version(args.game_dir.resolve())
+        print(f"Detected Unity {version} from {source}")
+        return version
+    if args.unity_version:
+        named: str = args.unity_version
+        return named
+    raise PipelineError(demand)
+
+
 def run(args: argparse.Namespace) -> int:
     if args.command == "init":
         # Resolved here as well as in `initialize`, because everything this
@@ -429,15 +441,11 @@ def run(args: argparse.Namespace) -> int:
             # No bundle means no editor, so no revision has to be resolved and
             # neither a game install nor a network is needed to scaffold.
             version = ""
-        elif args.game_dir:
-            version, source = game_unity_version(args.game_dir.resolve())
-            print(f"Detected Unity {version} from {source}")
-        elif args.unity_version:
-            version = args.unity_version
         else:
-            raise PipelineError(
+            version = _resolve_version(
+                args,
                 "init needs --game-dir or --unity-version, or --bundle-source none for a mod "
-                "that ships no bundle"
+                "that ships no bundle",
             )
         changeset = args.changeset
         if not changeset and version:
@@ -625,16 +633,11 @@ def run(args: argparse.Namespace) -> int:
             print(f"note: {report['note']}")
         return 0
     if args.command == "pack":
-        if args.game_dir:
-            version, source = game_unity_version(args.game_dir.resolve())
-            print(f"Detected Unity {version} from {source}")
-        elif args.unity_version:
-            version = args.unity_version
-        else:
-            raise PipelineError(
-                "pack needs --game-dir or --unity-version: a bundle carries the revision "
-                "it claims to be for, and the installed game is what has to load it"
-            )
+        version = _resolve_version(
+            args,
+            "pack needs --game-dir or --unity-version: a bundle carries the revision "
+            "it claims to be for, and the installed game is what has to load it",
+        )
         bundle, manifest_text = pack_directory(
             args.source, args.output.name, version, compress_textures=args.compress_textures
         )

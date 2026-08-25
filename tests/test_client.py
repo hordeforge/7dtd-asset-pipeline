@@ -879,10 +879,6 @@ class FreshClientRunTests(unittest.TestCase):
         self.assertEqual(["mute", "unmute", "stop"], self.calls)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SettledScanTests(unittest.TestCase):
     """A log that exists is not a log that has finished loading mods.
 
@@ -965,3 +961,7 @@ class LocalizationRequirementTests(unittest.TestCase):
     def test_an_unknown_mods_directory_does_not_invent_a_requirement(self) -> None:
         self.assertFalse(client.ships_localization(None, "Mod"))
         self.assertFalse(client.ships_localization(Path("/nonexistent"), None))
+
+
+if __name__ == "__main__":
+    unittest.main()

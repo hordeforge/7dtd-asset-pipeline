@@ -575,23 +575,25 @@ def disable_discord_integration(user_reg: Path) -> bool:
 # -------------------------------------------------------------------- audio
 
 
-def _sink_inputs() -> list[dict[str, object]]:
-    if shutil.which("pactl") is None:
-        raise PipelineError("pactl is not installed; cannot reach the PipeWire/Pulse sink inputs")
-    # A wedged audio server must fail the run, not hang it: set_client_mute
-    # polls this until its own deadline, so an unbounded pactl here is an
-    # unbounded command.
+def _run_pactl(*args: str, subject: str = "pactl") -> subprocess.CompletedProcess[str]:
+    """One bounded pactl call: a wedged audio server must fail the run, not hang it."""
     try:
-        result = subprocess.run(
-            # PATH lookup is deliberate: pactl is a user tool located by shutil.which above.
-            ["pactl", "-f", "json", "list", "sink-inputs"],  # noqa: S607
+        return subprocess.run(
+            # PATH lookup is deliberate: pactl is a user tool located by shutil.which.
+            ["pactl", *args],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,
             timeout=10,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        raise PipelineError(f"pactl did not answer: {exc}") from exc
+        raise PipelineError(f"{subject} did not answer: {exc}") from exc
+
+
+def _sink_inputs() -> list[dict[str, object]]:
+    if shutil.which("pactl") is None:
+        raise PipelineError("pactl is not installed; cannot reach the PipeWire/Pulse sink inputs")
+    result = _run_pactl("-f", "json", "list", "sink-inputs")
     if result.returncode != 0:
         raise PipelineError(f"pactl failed: {result.stderr.strip() or result.returncode}")
     try:
@@ -643,20 +645,12 @@ def set_client_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
                 # A mute that failed at the audio server must not be reported
                 # as applied: WirePlumber persists the stream's state, so a
                 # silent failure here outlives this run.
-                try:
-                    changed = subprocess.run(
-                        # PATH lookup deliberate, as in client_sink_inputs above.
-                        # pactl is a user tool resolved over PATH by design.
-                        ["pactl", "set-sink-input-mute", str(index), "1" if muted else "0"],  # noqa: S607
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                        timeout=10,
-                    )
-                except (OSError, subprocess.SubprocessError) as exc:
-                    raise PipelineError(
-                        f"pactl did not answer for sink input {index}: {exc}"
-                    ) from exc
+                changed = _run_pactl(
+                    "set-sink-input-mute",
+                    str(index),
+                    "1" if muted else "0",
+                    subject=f"pactl for sink input {index}",
+                )
                 if changed.returncode != 0:
                     raise PipelineError(
                         f"pactl could not {'mute' if muted else 'unmute'} sink input "

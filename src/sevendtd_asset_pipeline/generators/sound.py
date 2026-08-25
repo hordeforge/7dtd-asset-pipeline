@@ -523,7 +523,7 @@ def hum(duration: float, generator: random.Random, base_hz: float, loop: bool) -
     return normalize(fade_tail(output, 0.05), -6.0)
 
 
-def beep(hz: float, count: int, generator: random.Random) -> list[float]:
+def beep(hz: float, count: int) -> list[float]:
     """A short electronic cue, optionally repeated. For UI and warnings."""
     single = seconds(0.11)
     shape = envelope(single, 0.004, 0.045)
@@ -759,7 +759,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "hum":
         samples = hum(args.seconds, generator, args.hz, args.loop)
     elif args.command == "beep":
-        samples = beep(args.hz, args.beeps, generator)
+        samples = beep(args.hz, args.beeps)
     else:  # pragma: no cover - argparse rejects anything else
         raise SystemExit(f"ERROR: unknown voice {args.command}")
 

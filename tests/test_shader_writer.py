@@ -466,10 +466,6 @@ class DegradedLaneReportTests(unittest.TestCase):
         self.assertEqual(SYNTHESIZED_CAVEATS, self.caveats(compiler_present=True))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class GLCoreRecordTailTests(unittest.TestCase):
     """The eight bytes a GLCore code record carries after its source.
 
@@ -816,3 +812,7 @@ class DescriptorSetTests(unittest.TestCase):
         self.assertLessEqual(
             differing, 8, "only the descriptor-set literals should differ, one byte each"
         )
+
+
+if __name__ == "__main__":
+    unittest.main()

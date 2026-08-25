@@ -545,10 +545,6 @@ class ManifestTests(unittest.TestCase):
             self.assertEqual(["bundle/a.png", "bundle/b.wav"], manifest_assets(manifest))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class PrefabColliderTests(unittest.TestCase):
     """A prefab without a collider is walked through.
 
@@ -593,3 +589,7 @@ class PrefabColliderTests(unittest.TestCase):
         self.assertEqual([o for o in objects if o.class_id == bundle_writer.BOX_COLLIDER], [])
         game_object = next(o for o in objects if o.class_id == bundle_writer.GAME_OBJECT)
         self.assertEqual(len(game_object.fields["m_Component"]), 3)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -233,6 +233,16 @@ class ResultTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "at_frame"):
             validate_result(data)
 
+    def test_a_single_frame_index_or_second_normalizes_to_a_pair(self) -> None:
+        data = dict(_gateway_envelope()["result"])  # type: ignore[arg-type]
+        data["issues"] = [{"description": "pops at frame 10", "at_frame": 10}]
+        result = validate_result(data)
+        self.assertEqual([10.0, 10.0], result["issues"][0]["at_frame"])
+        data = dict(_gateway_envelope()["result"])  # type: ignore[arg-type]
+        data["issues"] = [{"description": "starts at 2s", "at_seconds": 2}]
+        result = validate_result(data)
+        self.assertEqual([2.0, 2.0], result["issues"][0]["at_seconds"])
+
     def test_a_null_score_is_allowed_but_a_non_number_is_not(self) -> None:
         data = _valid_result()
         data["rubric_scores"] = {"semantic_fit": None, "timing": True}

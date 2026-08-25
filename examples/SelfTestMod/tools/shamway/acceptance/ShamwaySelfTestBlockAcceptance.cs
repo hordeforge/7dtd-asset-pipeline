@@ -27,6 +27,7 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
     // place case and the look case in a field of the provider.
     private static Vector3i _placedAt;
     private static bool _placed;
+    private static float _lastClick;
 
     public IEnumerable<string> SuiteIds
     {
@@ -111,10 +112,13 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
         AppendLookCase(queue, label);
     }
 
-    /// <summary>Give the character the item and fire its PlaceAsBlock action.</summary>
+    /// <summary>The character genuinely places the block: give and equip the
+    /// item, aim at the floor a couple of meters ahead, and drive the real use
+    /// action (UseHoldingItem) every tick until the engine's own placement ray
+    /// lands the block. No fabricated HitInfo, no direct ExecuteAction.</summary>
     private void AppendPlaceSuite(List<CaseDef> queue, string label)
     {
-        queue.Add(CaseDef.Live(label, "place_shamwaySelfTestPropBlock", new[] { "block", "setblock" },
+        queue.Add(CaseDef.Live(label, "place_shamwaySelfTestPropBlock", new[] { "block", "place" },
             act: ctx =>
             {
                 var player = ctx.Player;
@@ -122,6 +126,19 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                 if (player == null || world == null)
                 {
                     ctx.Detail = "no player or world";
+                    return;
+                }
+                var bv = Block.GetBlockValue(BlockName, true);
+                if (bv.isair || bv.Block == null)
+                {
+                    ctx.IntA = 0;
+                    ctx.Detail = "block " + BlockName + " is not registered";
+                    return;
+                }
+                if (!Helpers.TryGetItem(BlockName, out var itemValue) || itemValue.IsEmpty())
+                {
+                    ctx.IntA = 0;
+                    ctx.Detail = "item " + BlockName + " is not registered";
                     return;
                 }
                 var camera = player.playerCamera != null
@@ -135,67 +152,35 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                     ahead.y = 0f;
                 }
                 ahead.Normalize();
-                if (!Helpers.TryGetItem(BlockName, out var itemValue) || itemValue.IsEmpty())
-                {
-                    ctx.IntA = 0;
-                    ctx.Detail = "item " + BlockName + " is not registered";
-                    return;
-                }
+                // The aim target is a floor voxel a couple of meters ahead of
+                // the feet, one below eye level: looking at its center points
+                // the character slightly down at the ground. It is only where
+                // the character looks - where the block lands is whatever the
+                // engine's placement ray decides, and the wait scans for it.
                 var feet = Helpers.FixtureSeedOrigin(player, world);
-                var at = Helpers.FindGroundedAir(world, feet, ahead);
-                if (at == null)
-                {
-                    ctx.IntA = 0;
-                    ctx.Detail = "no grounded air voxel ahead of the camera to place into";
-                    return;
-                }
-                ctx.TargetBlock = at.Value;
-                _placedAt = at.Value;
+                var aheadPoint = new Vector3(feet.x + 0.5f, 0f, feet.z + 0.5f) + ahead * 2f;
+                ctx.TargetBlock = new Vector3i(
+                    Mathf.FloorToInt(aheadPoint.x), feet.y - 1, Mathf.FloorToInt(aheadPoint.z));
                 _placed = false;
+                _lastClick = 0f;
                 if (!Helpers.TryGiveItem(player, new ItemStack(itemValue, 1)))
                 {
                     ctx.IntA = 0;
                     ctx.Detail = "could not give the block item";
                     return;
                 }
-                int have = Helpers.CountItemType(player, itemValue.type);
-                if (have <= 0)
+                if (Helpers.TryEquipItemType(player, itemValue.type) < 0)
                 {
                     ctx.IntA = 0;
-                    ctx.Detail = "block item is not in the inventory after the give";
+                    ctx.Detail = "could not equip the block item";
                     return;
                 }
-                int slot = Helpers.TryEquipItemType(player, itemValue.type);
-                var held = player.inventory.holdingItem;
-                if (slot < 0 || held == null || held.Id != itemValue.type)
-                {
-                    ctx.IntA = 0;
-                    ctx.Detail = "could not equip the block item (slot=" + slot + ")";
-                    return;
-                }
-                // Point the placement at the chosen voxel (Helpers.AimBlockPlacement
-                // fills the player's HitInfo the way a floor raycast would).
-                if (!Helpers.AimBlockPlacement(player, world, at.Value))
-                {
-                    ctx.IntA = 0;
-                    ctx.Detail = "placement target is not a grounded air voxel";
-                    return;
-                }
-                // The debug console swallows the use action when it is open;
-                // close it so the placement fires like a normal click.
+                // An open window or debug console swallows the use action.
+                Helpers.TryCloseWindows();
                 Helpers.CloseDebugConsole();
-                var heldData = player.inventory.holdingItemData;
-                if (heldData == null || held.Actions == null || held.Actions.Length <= 1
-                    || heldData.actionData == null || heldData.actionData.Count <= 1)
-                {
-                    ctx.IntA = 0;
-                    ctx.Detail = "equipped item has no Action1 to fire";
-                    return;
-                }
                 ctx.IntA = 1;
-                held.Actions[1].ExecuteAction(heldData.actionData[1], true);
-                ctx.Detail = "gave + equipped block item (count=" + have + ", slot=" + slot
-                    + "), fired PlaceAsBlock at " + at.Value;
+                ctx.IntB = itemValue.type;
+                ctx.Detail = "gave + equipped " + BlockName + ", aiming at the floor " + ctx.TargetBlock;
             },
             wait: ctx =>
             {
@@ -203,22 +188,77 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                 {
                     return true;
                 }
-                // The character placed the block: wait until the voxel the
-                // action targeted is really the block. The model and its
-                // rendering are the model suite's concern, not this one's.
-                if (ctx.World.GetBlock(ctx.TargetBlock).type == 0)
+                var player = ctx.Player;
+                var world = ctx.World;
+                var bv = Block.GetBlockValue(BlockName, true);
+                // Landed? Scan the floor around the aim point for the shamway
+                // block's own type - never "any non-air voxel".
+                var found = FindPlacedBlock(world, ctx.TargetBlock, bv.type);
+                if (found != null)
                 {
-                    ctx.Detail = "placed? waiting for the block at " + ctx.TargetBlock;
+                    _placed = true;
+                    _placedAt = found.Value;
+                    ctx.Detail = "player placed type=" + bv.type + " at " + found.Value;
+                    return true;
+                }
+                // Re-drive the real player path, the mining probe's loop:
+                // equip, aim at the floor, click. Throttled to ~1s per click -
+                // ItemActionPlaceAsBlock rejects uses closer together than its
+                // Delay/cBuildIntervall, and spamming every tick just churns
+                // the aim before the engine's ray settles on the floor.
+                var held = player.inventory.holdingItem;
+                if (held == null || held.Id != ctx.IntB)
+                {
+                    if (Helpers.TryEquipItemType(player, ctx.IntB) < 0)
+                    {
+                        ctx.Detail = "waiting for the block item to reach the held slot";
+                        return false;
+                    }
+                }
+                if (Time.unscaledTime - _lastClick < 1f)
+                {
                     return false;
                 }
-                _placed = true;
-                _placedAt = ctx.TargetBlock;
-                ctx.Detail = "placed type=" + ctx.World.GetBlock(ctx.TargetBlock).type + " at " + ctx.TargetBlock;
-                return true;
+                _lastClick = Time.unscaledTime;
+                Helpers.LookAt(player, ctx.TargetBlock.ToVector3Center());
+                // A held block's Action0 is the melee swing; the place is the
+                // right-click, Action1. Press then release, like a real click.
+                try
+                {
+                    player.UseHoldingItem(1, false);
+                    player.UseHoldingItem(1, true);
+                }
+                catch { /* next click */ }
+                // Diagnostic only: what the engine's own look ray sees, and
+                // which of ExecuteAction's silent gates would reject it. The
+                // placement still reads HitInfo itself; nothing is written.
+                string ray = "ray=?";
+                try
+                {
+                    var hi = player.HitInfo;
+                    if (hi != null && hi.bHitValid)
+                    {
+                        var target = hi.lastBlockPos;
+                        var tb = world.GetBlock(target);
+                        ray = "ray block=" + target + " tag=" + hi.tag
+                            + " targetAir=" + tb.isair
+                            + " distSq=" + hi.hit.distanceSq
+                            + "/" + bv.Block.GetPlacementDistanceSq()
+                            + " canPlace=" + bv.Block.CanPlaceBlockAt(world, target, bv, false);
+                    }
+                    else
+                    {
+                        ray = "ray invalid";
+                    }
+                }
+                catch (System.Exception ex) { ray = "ray err " + ex.Message; }
+                ctx.Detail = "clicked " + BlockName + " aimed at " + ctx.TargetBlock + ", " + ray;
+                return false;
             },
-            assert: ctx => ctx.IntA == 1 && _placed,
+            assert: ctx => ctx.IntA == 1 && _placed
+                && ctx.World.GetBlock(_placedAt).type == Block.GetBlockValue(BlockName, true).type,
             timeout: 40f,
-            fail: "the player did not place shamwaySelfTestPropBlock"));
+            fail: "the player's use action did not place " + BlockName));
 
         // The character placed the block; hold the scene for the capture. This
         // suite only asserts the placement - how the model looks is the model
@@ -234,16 +274,39 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                     return false;
                 }
                 var at = _placedAt;
-                if (!_placed || world.GetBlock(at).type == 0)
+                var bv = Block.GetBlockValue(BlockName, true);
+                if (!_placed || world.GetBlock(at).type != bv.type)
                 {
                     Report.Info("shamwaySelfTestPropBlock: block is not in the world at " + at);
                     return false;
                 }
+                // Frame the placed block: look at the voxel the player placed.
+                Helpers.LookAt(player, at.ToVector3Center());
                 Report.Info("shamwaySelfTestPropBlock: placed type=" + world.GetBlock(at).type + " at " + at);
                 return true;
             },
             holdSeconds: 12f,
             fail: "could not stage the placed shamwaySelfTestPropBlock in view"));
+    }
+
+    /// <summary>Scan the floor around the aim point for the block's type.</summary>
+    private static Vector3i? FindPlacedBlock(World world, Vector3i center, int type)
+    {
+        for (int dy = -1; dy <= 2; dy++)
+        {
+            for (int dx = -3; dx <= 3; dx++)
+            {
+                for (int dz = -3; dz <= 3; dz++)
+                {
+                    var p = new Vector3i(center.x + dx, center.y + dy, center.z + dz);
+                    if (world.GetBlock(p).type == type)
+                    {
+                        return p;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /// <summary>Wait until the block is in the world and its model spawned.</summary>

@@ -51,12 +51,12 @@ ADMIN_PORT="${PLAYTEST_ADMIN_PORT:-8081}"
 WORLD_NAME="${PLAYTEST_WORLD_NAME:-Navezgane}"
 GAME_NAME="${PLAYTEST_GAME_NAME:-PlaytestNav}"
 CLIENT_PLATFORM="${PLAYTEST_CLIENT_PLATFORM:-local}"
-# Fresh by default. A reused world is a reused set of registered blocks, item
-# ids and chunk state, and the whole point of this run is that nothing carried
-# over from the last one - the same reason `client launch` refuses a running
-# client. Opting out is a deliberate act with a flag, not the thing you get by
-# forgetting one.
-FRESH=1
+# Fresh save is a hard rule and cannot be turned off: the orchestrator wipes the
+# save before every run. A reused world is a reused set of registered blocks,
+# item ids and chunk state, and the whole point of this run is that nothing
+# carried over from the last one - the same reason `client launch` refuses a
+# running client. This script never passes a fresh/reuse flag; the orchestrator
+# is always fresh by default.
 LISTEN=0
 SHAMWAY="${SHAMWAY:-shamway}"
 
@@ -79,9 +79,6 @@ usage() {
 		  --admin-port N           telnet port                 (default: 8081)
 		  --timeout SECONDS        orchestrator budget         (default: 900)
 		  --client-platform MODE   local or steam              (default: local)
-		  --fresh-save             regenerate the save first (the default)
-		  --reuse-save             keep the existing save; faster, and weaker
-		                           evidence - say so in any report that used it
 		  --listen                 do not mute the client, for an audio sign-off
 		  -h, --help               this text
 
@@ -91,10 +88,12 @@ usage() {
 		  PLAYTEST_SESSION_ID           lock holder id (generated when unset)
 		  SHAMWAY                       the shamway entry point (default: shamway)
 
+		The orchestrator always wipes the save before a run: fresh save is a hard
+		rule with no opt-out. There is no --reuse-save.
+
 		EXAMPLES
 		  playtest-acceptance.sh                        # accept the mod in this directory
 		  playtest-acceptance.sh --listen               # same, audible, for a sound check
-		  playtest-acceptance.sh --reuse-save            # keep the world, for a quick loop
 		  playtest-acceptance.sh --client-platform steam  # never touch platform.cfg
 	EOF
 }
@@ -111,8 +110,8 @@ while (($#)); do
 		--admin-port) ADMIN_PORT="${2:-}"; shift 2 ;;
 		--timeout) TIMEOUT="${2:-}"; shift 2 ;;
 		--client-platform) CLIENT_PLATFORM="${2:-}"; shift 2 ;;
-		--fresh-save) FRESH=1; shift ;;
-		--reuse-save) FRESH=0; shift ;;
+		--fresh-save) shift ;; # accepted; fresh is already the unconditional default
+		--reuse-save) die "reuse is not allowed: every run starts from a fresh save (hard rule)" ;;
 		--listen) LISTEN=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) die "unknown option: $1 (try --help)" ;;
@@ -163,11 +162,7 @@ echo "  connect        $CONNECT_ROOT"
 echo "  client log     $CLIENT_LOG"
 echo "  client mode    $CLIENT_PLATFORM"
 echo "  client audio   $AUDIO"
-if ((FRESH)); then
-	echo "  save           regenerated for this run"
-else
-	echo "  save           REUSED (--reuse-save): weaker evidence, say so in the report"
-fi
+echo "  save           fresh for this run (hard rule, no opt-out)"
 echo "  session        $SESSION"
 if [[ "$CLIENT_PLATFORM" == "local" ]]; then
 	echo "  note           fastconnect swaps $GAME/platform.cfg for the run and restores it on exit"
@@ -221,9 +216,7 @@ if [[ -d "$SEVEN_DAYS_TO_DIE_SERVER_DIR/Mods" ]]; then
 	echo
 fi
 
-FRESH_ARGS=()
-((FRESH)) && FRESH_ARGS=(--fresh-save)
-
+# No fresh/reuse flag is passed: the orchestrator wipes the save unconditionally.
 echo "ORCH (7dtd-playtest playtest_run.py suite=$SUITE)"
 export GAME COMPAT CLIENT_PLATFORM CLIENT_MUTE
 export PLAYTEST_SESSION_ID="$SESSION"
@@ -238,8 +231,7 @@ uv run --project "$PLAYTEST_ROOT" python "$PLAYTEST_ROOT/scripts/playtest_run.py
 	--admin-port "$ADMIN_PORT" \
 	--client-log "$CLIENT_LOG" \
 	--session "$SESSION" \
-	--timeout "$TIMEOUT" \
-	"${FRESH_ARGS[@]}"
+	--timeout "$TIMEOUT"
 STATUS=$?
 set -e
 

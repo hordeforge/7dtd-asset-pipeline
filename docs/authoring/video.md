@@ -182,10 +182,10 @@ asset provenance, that no credential leaked, that the muxed video actually
 reached the provider (not sampled frames), and that the verdict passes the
 result schema; then it prints the model's verdict for the human.
 
-Run it with the gateway configured (key in its `config.local.toml`):
+Run it from this repository's root, with the gateway configured (its
+`deadeye` on PATH and the key in its `config.local.toml`):
 
 ```bash
-cd ~/code/hordeforge/7dtd-asset-pipeline
 export PATH="$HOME/code/hordeforge/7dtd-vision-review/.venv/bin:$PATH"
 export DEADEYE_CONFIG_DIR="$HOME/code/hordeforge/7dtd-vision-review"
 export SHAMWAY_NETWORK_TESTS=nvidia

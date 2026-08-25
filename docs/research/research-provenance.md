@@ -1287,6 +1287,30 @@ compiled the way Unity compiles them, and what remains unlike Unity's is the
 parameter description beside them.
 
 
+## RETRACTED: the Vulkan hash is NOT validated, and it was never the blocker
+
+**Overturned 2026-08-25 by the experiment none of the three sections below ran.**
+Corrupting **every byte** of the hash in an otherwise-untouched *stock* Vulkan
+blob and loading it under `-force-vulkan` **still renders** (measured card
+colour `(53, 60, 49)` - the albedo's navy, not magenta). Unity does not check
+the field. Everything below about "the hash is validated" and the hunt for its
+algorithm is wrong, and is kept only as the record of a wrong turn.
+
+The real blocker was found the same day by byte-diffing our record against a
+stock one carrying the **same** SMOL-V modules: they were identical but for the
+(unvalidated) hash, and stock was **32 bytes longer**. Those 32 bytes are a
+`ParserBindChannels` block - a source mask, a count, and (mesh channel, shader
+input) pairs - the same block a d3d11 vertex record carries. `vulkan_code_blob`
+omitted it, and a Vulkan code record without it is refused silently. See
+"The Vulkan record needs its bind channels" below.
+
+This is the negative-observation trap a fourth time in one investigation: three
+sections and two merged PRs concluded the hash mattered, from a controlled pair
+that had a *second* difference nobody had measured. The lesson, again: a
+controlled experiment is only controlled for the variables you checked.
+
+---
+
 ## The Vulkan hash IS validated - a correction
 
 **Measured 2026-08-25**, with the automated capture loop, and it corrects an
@@ -1385,3 +1409,59 @@ Starting points in `UnityPlayer.dll`, re-confirmed: SMOL-V magic at file offsets
 SpookyHash's `0xDEADBEEFDEADBEEF` at seven sites near `0xa36ef4`. Find
 `Decode`'s caller; the buffer, length and seeds it hashes before decoding are
 the recipe.
+
+
+## The Vulkan record needs its bind channels
+
+**Measured 2026-08-25.** A Vulkan code record does not end at its SMOL-V
+payload. After the payload (padded to 4), it carries a `ParserBindChannels`
+block, byte-for-byte the same structure a d3d11 vertex code record ends with:
+
+| field | bytes | meaning |
+|---|---|---|
+| source mask | u32 | bit per mesh channel bound (bit 0 Position, 4 TexCoord0, ...) |
+| count | u32 | number of channel pairs |
+| pairs | count x (u32, u32) | (mesh channel, shader input slot) |
+
+For `Legacy Shaders/Transparent/Cutout/VertexLit` (Position+Normal+TexCoord0)
+the block reads mask `19` (bits 0,1,4), count `3`, pairs `(0,13) (1,14) (4,15)`.
+For this writer's unlit shader (Position+TexCoord0) it is mask `17`, count `2`.
+
+`vulkan_code_blob` omitted it entirely - the record ended at the payload - and
+the runtime refused the sub-program the way it refuses any malformed record: the
+shader loads, `Shader.isSupported` is true, and the prop draws in the magenta
+error shader with no log line. Exactly the GLCore "eight bytes short" failure
+from earlier in this investigation, on a different record.
+
+The channels come from the vertex **DXBC** the SPIR-V was compiled from - the
+same `bind_channels(dxbc)` the d3d11 lane already used - so the Vulkan and d3d11
+sub-programs bind the same mesh data by construction.
+
+
+## Bind channels present: the record is now accepted, and the client hangs
+
+**Measured 2026-08-25.** With the `ParserBindChannels` block appended, a live
+client on `-force-vulkan` no longer draws the magenta error shader. It **stages
+the prop and then hangs** during the hold - the log stops at `scene staged`, the
+client stops advancing, and the orchestrator tears it down at its timeout with
+no screenshot written. Every prior Vulkan run captured its frame cleanly; this
+one does not, and the only change is the bind-channels tail.
+
+A hang at render, where before there was a clean fallback, means the runtime is
+now **executing** our sub-program rather than rejecting it - the record is
+accepted. So the missing block was the acceptance blocker, confirmed. What hangs
+is the draw itself.
+
+The most likely cause is the **target** values in the block. This writer reuses
+`bind_channels(vertex_dxbc)`, which emits the d3d11 slot targets - `(0, 0)` and
+`(4, 5)` for Position and TexCoord0. Stock's *Vulkan* record used different
+targets for the same channels: `(0, 13) (1, 14) (4, 15)`. The d3d11 targets are
+Unity's fixed vertex-component slots; the Vulkan targets look like SPIR-V input
+**locations** offset by a base, and pointing the mesh binding at the wrong input
+would feed the vertex shader garbage and can fault the GPU.
+
+Next step, bounded: decode the target convention from a few stock Vulkan records
+(correlate each pair's target against that module's SPIR-V `OpDecorate ...
+Location`), or brute the two targets for our two channels against a live client -
+there are only a handful of plausible values. The acceptance question is
+answered; this is the draw-correctness question, and it is the last one.

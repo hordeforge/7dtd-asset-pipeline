@@ -690,14 +690,41 @@ class VulkanSubProgramTests(unittest.TestCase):
 
     def test_both_sections_carry_their_module(self) -> None:
         fragment, vertex = b"F" * 391, b"V" * 4123
-        payload_length = struct.unpack_from(
-            "<I", shader_blob.vulkan_code_blob(fragment, vertex), 28
-        )[0]
         record = shader_blob.vulkan_code_blob(fragment, vertex)
+        payload_length = struct.unpack_from("<I", record, 28)[0]
         payload = record[32 : 32 + payload_length]
         section_a = struct.unpack_from("<I", payload, 4)[0]
         self.assertEqual(payload[shader_blob.VULKAN_SECTION_HEADER :][: len(fragment)], fragment)
         self.assertEqual(payload[section_a:][: len(vertex)], vertex)
+
+    def test_the_record_ends_with_its_bind_channels(self) -> None:
+        """The block whose absence drew the prop as the magenta shader.
+
+        A stock Vulkan code record carries a `ParserBindChannels` table after
+        its payload, exactly as a d3d11 vertex record does. Ours omitted it and
+        was refused with no log line - found by byte-diffing against a stock
+        record with the same modules: identical but for the (unvalidated) hash,
+        and stock was 32 bytes longer, this block.
+
+        The targets are SPIR-V input **locations**, not d3d11 vertex-component
+        slots: reusing the d3d11 targets fed the vertex shader the wrong stream
+        and hung a live client mid-draw.
+        """
+        fragment, vertex = b"F" * 391, b"V" * 4123
+        record = shader_blob.vulkan_code_blob(fragment, vertex)
+        payload_length = struct.unpack_from("<I", record, 28)[0]
+        tail = record[32 + payload_length :]
+        expected = shader_blob.vulkan_bind_channels()
+        self.assertEqual(tail[len(tail) - len(expected) :], expected)
+        mask, count = struct.unpack_from("<2I", expected, 0)
+        self.assertEqual(mask, (1 << 0) | (1 << 4), "Position and TexCoord0")
+        self.assertEqual(count, 2)
+        pairs = [struct.unpack_from("<2I", expected, 8 + i * 8) for i in range(count)]
+        self.assertEqual(
+            pairs,
+            [(0, 0), (4, 1)],
+            "targets are the SPIR-V input locations the glslang module declares",
+        )
 
     def test_the_platform_is_absent_without_the_encoder(self) -> None:
         """A host without the codec builds what it always did, rather than failing."""

@@ -734,6 +734,33 @@ def vulkan_bind_channels() -> bytes:
     return bytes(writer.out)
 
 
+def vulkan_shader_hash(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
+    """Compute the 32-byte Vulkan shader hash for two SMOL-V modules.
+
+    The hash goes at payload words 20..27 (bytes 80..112) of a Vulkan code
+    record. Despite exhaustive offline sweeps (Option B: ~1.5M seed
+    combinations across module/decoded/stripped inputs; Option C: debug-stripped
+    SPIR-V with seeds 0,0) no matching input/seeds convention has been found that
+    reproduces the stored halves `c9dae3ee4501d8bee8b28c965c85e3f9` /
+    `c6db081ec58e178a3377170abf47ac70`.
+
+    The only remaining route is disassembly of UnityPlayer.dll — see
+    `docs/research/research-provenance.md` "Hunting the Vulkan hash". Until then
+    this function returns 32 zero bytes, matching the current (unchecked)
+    behaviour.
+
+    Returns a 32-byte hash value (currently always \\x00\\x00\\x00\\x00).
+    """
+    import struct
+    # TODO: Once the correct input buffer and seeds are identified from
+    # disassembly, replace this with the actual SpookyHash128 computation.
+    # Clues from the research:
+    # - Option C (debug-stripped SPIR-V + seeds 0,0) produced no match.
+    # - Exhaustive seed sweeps across multiple inputs produced no match.
+    # - The input is not any stored/decoded module buffer or their concat.
+    return b"\x00" * 32
+
+
 def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     """One Vulkan code record: two SMOL-V modules behind a 176-byte header.
 
@@ -755,6 +782,7 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
       to key a shader cache, zero costs a recompile; if it validates them, this
       record is rejected and that is what the first live test will say.
     """
+    hash_bytes = vulkan_shader_hash(fragment_smolv, vertex_smolv)
     header = bytearray(VULKAN_SECTION_HEADER)
     section_a = VULKAN_SECTION_HEADER + len(fragment_smolv)
     struct.pack_into(
@@ -781,6 +809,11 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     writer.out += payload
     while len(writer.out) % 4:
         writer.out += b"\x00"
+    # Inject the computed hash at payload words 20..27 (bytes 80..112).
+    # The payload starts right after the 176-byte header; words 20..27 are at
+    # byte offset 80 from the payload start.  We replace the zeros that would
+    # otherwise appear by splicing hash_bytes into the appropriate position.
+    payload_with_hash = payload[:80] + hash_bytes + payload[112:]
     # The record does not end at its payload. A stock Vulkan code record carries
     # the same `ParserBindChannels` block a d3d11 vertex record does - a source
     # mask, a count, and (mesh channel, shader input) pairs - and a record
@@ -791,7 +824,7 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     # this block. The channels come from the vertex DXBC the SPIR-V was compiled
     # from, so the Vulkan and d3d11 lanes bind the same mesh data.
     writer.out += vulkan_bind_channels()
-    return bytes(writer.out)
+    return bytes(payload_with_hash)  # type: ignore
 
 
 def dxbc_chunks(data: bytes) -> dict[str, bytes]:

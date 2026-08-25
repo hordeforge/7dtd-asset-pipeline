@@ -161,3 +161,64 @@ contacting any of them.
 
 A load is not a look. A green acceptance suite and a passing model critique
 are both evidence; only the human look at the end accepts anything.
+
+## Worked example
+
+A complete review of one clip, run end to end on 2026-08-25 against the
+NVIDIA omni model through the deadeye gateway. The clip is synthetic (a red
+marker that sweeps across 12 frames and disappears for one) so the whole loop
+runs without a game client; the commands are the same for a real `StagedClip`
+capture.
+
+The intent file, committed beside the source:
+
+```json
+{
+  "schema_version": 1,
+  "purpose": "verify the marker moves smoothly across the clip without popping or jumping",
+  "subject": "thing (synthetic marker)",
+  "camera_path": "fixed",
+  "desired_qualities": "continuous, evenly spaced motion",
+  "avoid": ["popping", "jumping", "jitter"],
+  "questions": ["does the marker pop at any point?"],
+  "suite": "demo",
+  "case": "thing"
+}
+```
+
+Adopt the captured clip (here a `frame-*.png` sequence muxed to `clip.mp4` by
+`capture_video.sh`), then review it:
+
+```bash
+shamway client capture thing --clip .local/capture/demo-20260825/thing \
+    --observable "the marker must sweep smoothly without popping"
+shamway review-video thing --clip .local/acceptance/thing \
+    --intent assets-src/bundle/thing.review.json \
+    --provider nvidia --allow-network --json
+```
+
+The muxed mp4 is submitted as video (`video_url`, not sampled frames — the
+evidence's `sampling` note says so), and the evidence document lands beside
+the clip. The model's verdict on that run:
+
+```text
+summary: The red square moves smoothly from left to right across a black
+         background, maintaining a consistent size and clear silhouette.
+         The motion is continuous with no visible popping, jumping, or
+         clipping, meeting the author's criteria.
+issue:   Marker decelerates, indicating non-even spacing of motion
+confidence: 0.96
+```
+
+Before submitting anything, render the exact instruction the gateway will
+inject — the harness for an agent:
+
+```bash
+deadeye prompt --intent assets-src/bundle/thing.review.json --clip .local/acceptance/thing
+```
+
+Model verdicts are advisory and vary by run (the same clip's disappearance
+was named "marker disappears (pop)" on an earlier run; the positional-jump
+variant has been called both smooth and flagged). The review is evidence for
+the human look, never a substitute — and the evidence document is what makes
+each run's verdict citable and comparable.

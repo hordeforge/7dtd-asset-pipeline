@@ -71,6 +71,27 @@ def _defective_clip(directory: Path) -> Path:
     return directory
 
 
+def _mux_video(frames_dir: Path, output: Path) -> bool:
+    """Mux the clip's frames into an mp4 with ffmpeg, like capture_video.sh.
+
+    Returns False when ffmpeg is unavailable; the caller then falls back to
+    the frame-only path.
+    """
+    if shutil.which("ffmpeg") is None:
+        return False
+    result = subprocess.run(
+        [
+            "ffmpeg", "-y", "-framerate", "4",
+            "-i", str(frames_dir / "frame-%04d.png"),
+            "-pix_fmt", "yuv420p", str(output),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0 and output.is_file()
+
+
 def _gateway_configured(provider: str) -> bool:
     try:
         result = subprocess.run(
@@ -131,6 +152,9 @@ class LiveEndToEndTests(unittest.TestCase):
             captured = root / "capture" / "thing"
             captured.mkdir(parents=True, exist_ok=True)
             _defective_clip(captured)
+            muxed = _mux_video(captured, captured / "clip.mp4")
+            if not muxed:
+                self.skipTest("ffmpeg unavailable; the muxed-video path cannot run")
             (captured / "client.log").write_text("clip complete demo/thing frames=12\n")
             capture_root = root / ".local" / "acceptance"
             adopted = record_existing_clip(
@@ -189,6 +213,15 @@ class LiveEndToEndTests(unittest.TestCase):
             self.assertTrue(document["result"]["summary"])
             self.assertEqual("deadeye-review", document["gateway"]["kind"])
             self.assertNotIn("NVIDIA_API_KEY", evidence.read_text(encoding="utf-8"))
+
+            # The clip had a muxed mp4 and the provider takes video, so the
+            # submission must have gone as video — not silently as frames.
+            media = document["clip"]["files"]
+            self.assertTrue(
+                any(entry.get("kind") == "video" for entry in media),
+                f"the muxed video must reach the provider; media was {media}",
+            )
+            self.assertIn("muxed video", document["sampling"]["note"])
 
             issues = document["result"]["issues"]
             # The pipeline mechanics above are the hard contract. Whether the

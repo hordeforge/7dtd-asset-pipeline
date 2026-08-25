@@ -1460,8 +1460,79 @@ Unity's fixed vertex-component slots; the Vulkan targets look like SPIR-V input
 **locations** offset by a base, and pointing the mesh binding at the wrong input
 would feed the vertex shader garbage and can fault the GPU.
 
-Next step, bounded: decode the target convention from a few stock Vulkan records
-(correlate each pair's target against that module's SPIR-V `OpDecorate ...
-Location`), or brute the two targets for our two channels against a live client -
-there are only a handful of plausible values. The acceptance question is
-answered; this is the draw-correctness question, and it is the last one.
+
+## Bind-channel targets: the declaration slot plus 13, decoded from seven stock shaders
+
+**Decoded 2026-08-25** from the installed game's own Vulkan platform blobs
+(`7DaysToDie_Data/data.unity3d`, each shader's `compressedBlob` decompressed
+with LZ4, the `ParserBindChannels` block read from the end of each type-25 code
+record, the vertex SMOL-V module decoded and its `OpDecorate ... Location`
+values read with `spirv-dis`). A Vulkan bind-channel **target is not** the
+SPIR-V location as stored in the module: every stock shader's module carries
+locations `0, 1, 2, ...` in declaration order while its bind record carries the
+same order offset by **13**:
+
+| Shader | channels (source, target) | module SPIR-V locations |
+|---|---|---|
+| VertexLit, Diffuse, Specular, Transparent/* (Position, Normal, TexCoord0) | `(0,13) (1,14) (4,15)` | 0, 1, 2 |
+| Bumped Diffuse (Position, Normal, Tangent, TexCoord0) | `(0,13) (1,14) (2,15) (4,16)` | 0, 1, 2, 3 |
+| Particles/Additive (Position, Color, TexCoord0) | `(0,13) (3,14) (4,15)` | 0, 1, 2 |
+
+So the target is the attribute's slot in the program's vertex-input declaration
+(which Unity's compiler numbers in declaration order, hence the SPIR-V
+locations) **plus 13** - the offset Unity's Vulkan pipeline reserves for the
+shader's input list. `#99` had already stopped reusing the d3d11 targets and
+emitted `(0,0) (4,1)` (the bare locations of this writer's glslang module), but
+the correct targets for this writer's two inputs are **`(0,13) (4,14)`**, and
+that is what `vulkan_bind_channels()` now writes. A live client with those
+targets stages the prop and still dies at the draw (see the sampler section
+below) - so the targets were necessary but not sufficient; the record is now
+stock-shaped in every measurable dimension, and the fault is in what the
+record carries, not its shape.
+
+
+## The Vulkan fragment is a combined image-sampler, and the HLSL form is not
+
+**Measured 2026-08-25** against the installed game's Vulkan fragment modules
+(decoded from `data.unity3d`, disassembled with `spirv-dis`). Every stock
+fragment module - VertexLit, Diffuse, Bumped Diffuse, Specular,
+Particles/Additive, Transparent/* - declares its texture as **one**
+`OpTypeSampledImage` variable at descriptor set 0, binding 0, because Unity
+compiles its Vulkan modules with glslang from the GLSL its HLSLCC emits, where
+`uniform sampler2D` is one object.
+
+This writer's fragment was compiled from HLSL (`Texture2D` + `SamplerState`),
+and glslang's HLSL front end renders that as **two** variables - an
+`OpTypeImage` and an `OpTypeSampler` - both decorated binding 0. No stock
+module has that shape. The live client under `-force-vulkan` with the bind
+channels in place no longer drew magenta: the record was accepted, the prop
+staged, and then the client **died** about five seconds into the draw - AMD
+RADV (RX 7900 XTX), no log line, no crash dump, the process simply gone. The
+same record shape draws fine on d3d11, GLCore and d3d12, which is why this
+stayed hidden until the Vulkan draw actually executed.
+
+The fix mirrors stock: the Vulkan fragment is now authored in GLSL 450
+(`UNLIT_FRAGMENT_GLSL_VULKAN`) and compiled with glslang in GLSL mode, which
+produces exactly the stock shape - one combined image-sampler at set 0,
+binding 0 - and the Vulkan parameter record drops the separate sampler entry,
+naming the texture's own sampler (`0xffffffff`) as the measured VertexLit
+record does. `test_the_vulkan_fragment_is_one_combined_image_sampler` pins the
+module shape.
+
+**That was not the whole blocker.** With the combined sampler in place the live
+client (AMD RADV, RX 7900 XTX, Proton) still dies about five seconds after the
+prop starts drawing: staged at 41.9s of client time, the process gone by 46.9s,
+no log line, no crash dump - the same signature as before the change. Three
+live runs so far, all three dead at the draw: bare targets `(0,0) (4,1)`,
+convention targets `(0,13) (4,14)`, and `(0,13) (4,14)` plus the combined
+sampler. The record is accepted and executed each time (the scene stages and
+the prop's renderer is reported), and the same bundle draws on d3d11, GLCore
+and d3d12 - so the fault is in the Vulkan draw of this writer's sub-program,
+and which of the remaining differences from a stock record (the module
+content, the `VGlobals` member set, the buffer name without its hash suffix)
+kills the driver is still open. The measured fact that VGlobals member offsets
+are per-record, not fixed - ObjectToWorld sits at 0 in Diffuse and
+Particles/Additive but 256 in VertexLit - rules out one candidate but leaves
+the rest. The next step is a live bisection starting from the known-good
+control (a whole stock Vulkan blob transplanted into this writer's shader
+rendered on 2026-08-24) and swapping one record at a time.

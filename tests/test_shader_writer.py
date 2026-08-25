@@ -875,6 +875,18 @@ class LibraryDiscoveryTests(unittest.TestCase):
         self.assertIn(Path("/usr/lib/libzmolv.dylib"), candidates)
         self.assertEqual(candidates.index(Path("/usr/lib/libzmolv.dylib")), 0)
 
+    def test_the_checkout_local_lib_is_searched_before_the_system_directories(self) -> None:
+        """`scripts/install-tools.sh` builds zmol-v into the checkout's own
+        gitignored .local/lib, so that path must be a default - the /tmp build
+        it replaces evaporated on reboot and silently dropped the Vulkan lane."""
+        with (
+            mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),
+            mock.patch.object(ctypes.util, "find_library", return_value=None),
+        ):
+            candidates = shader_blob._library_candidates()
+        checkout = Path(shader_blob.__file__).resolve().parents[2]
+        self.assertEqual(candidates[0], checkout / ".local" / "lib" / "libzmolv.so")
+
     def test_the_linux_directories_are_the_final_fallback(self) -> None:
         with (
             mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),

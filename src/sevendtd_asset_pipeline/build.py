@@ -279,20 +279,33 @@ def synthesized_caveats() -> tuple[str, ...]:
     `vkd3d-compiler` that is present and cannot read HLSL, and telling that
     host to install what it already has is the least useful sentence available.
     """
+    extra: list[str] = []
     shader_lane = next((item for item in capabilities() if item.name == "vkd3d-compiler"), None)
-    if shader_lane is None or shader_lane.available:
-        return SYNTHESIZED_CAVEATS
-    if shader_lane.unusable_reason:
-        degraded = (
-            f"the vkd3d-compiler at {shader_lane.path} cannot be used — "
-            f"{shader_lane.unusable_reason} — {_DEGRADED_MESH_LANE}"
-        )
-    else:
-        degraded = (
-            f"vkd3d-compiler is not installed, {_DEGRADED_MESH_LANE}: "
+    if shader_lane is not None and not shader_lane.available:
+        if shader_lane.unusable_reason:
+            extra.append(
+                f"the vkd3d-compiler at {shader_lane.path} cannot be used — "
+                f"{shader_lane.unusable_reason} — {_DEGRADED_MESH_LANE}"
+            )
+        else:
+            extra.append(
+                f"vkd3d-compiler is not installed, {_DEGRADED_MESH_LANE}: "
+                "'shamway capabilities --missing' prints the install line"
+            )
+    # The Vulkan platform is additive: without the SMOL-V encoder the shader
+    # still builds for d3d11 and GLCore and every offline gate passes — and a
+    # client under `-force-vulkan` then falls back to magenta with 'shader is
+    # not supported on this GPU'. That happened silently on 2026-08-25 (a
+    # bundle rebuilt on a host whose libzmolv lived only under /tmp), so the
+    # degradation now prints like every other lane's.
+    vulkan_lane = next((item for item in capabilities() if item.name == "libzmolv"), None)
+    if vulkan_lane is not None and not vulkan_lane.available:
+        extra.append(
+            "libzmolv is not available, so the shader carries no Vulkan sub-program: "
+            "a client under -force-vulkan draws it magenta. "
             "'shamway capabilities --missing' prints the install line"
         )
-    return (*SYNTHESIZED_CAVEATS, degraded)
+    return (*SYNTHESIZED_CAVEATS, *extra)
 
 
 def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:

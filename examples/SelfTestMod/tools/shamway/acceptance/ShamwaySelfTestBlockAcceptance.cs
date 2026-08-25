@@ -221,14 +221,28 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                 }
                 _lastClick = Time.unscaledTime;
                 Helpers.LookAt(player, ctx.TargetBlock.ToVector3Center());
-                // A held block's Action0 is the melee swing; the place is the
-                // right-click, Action1. Press then release, like a real click.
+                // A held block's place is the right-click - but NOT through
+                // UseHoldingItem: that indexes holdingItem.Actions[1], which
+                // the implicit ItemClassBlock item leaves null, so the call is
+                // a silent no-op. The real input path (PlayerMoveController's
+                // click) is ItemClass.ExecuteAction(1, data, pressed,
+                // playerActions), which ItemClassBlock overrides into
+                // IBlockTool.ExecuteUseAction - and the tool places on the
+                // PRESS (release returns immediately) and dereferences
+                // playerActions unconditionally, so the real primary-player
+                // input object is required, not null.
                 try
                 {
-                    player.UseHoldingItem(1, false);
-                    player.UseHoldingItem(1, true);
+                    var heldClass = player.inventory.holdingItem;
+                    var heldData = player.inventory.holdingItemData;
+                    var actions = Platform.PlatformManager.NativePlatform.Input.PrimaryPlayer;
+                    heldClass.ExecuteAction(1, heldData, false, actions);
                 }
-                catch { /* next click */ }
+                catch (System.Exception ex)
+                {
+                    ctx.Detail = "use threw: " + ex.GetType().Name + " " + ex.Message;
+                    return false;
+                }
                 // Diagnostic only: what the engine's own look ray sees, and
                 // which of ExecuteAction's silent gates would reject it. The
                 // placement still reads HitInfo itself; nothing is written.

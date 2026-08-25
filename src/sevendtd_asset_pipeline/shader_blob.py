@@ -470,6 +470,13 @@ VertexOut main(VertexIn input)
     VertexOut output;
     float4 world = mul(unity_ObjectToWorld, input.vertex);
     output.position = mul(unity_MatrixVP, world);
+    // Vulkan's clip space points Y down where d3d11's points up, and Unity
+    // compensates in the shader rather than with a negative viewport: without
+    // this flip the live draw is mirrored vertically - the block's albedo
+    // upside down, its top face swapped, the mirror pivot moving with the
+    // camera. Measured by A/B on a live Vulkan client (GFX_API=vulkan),
+    // d3d11 as the unflipped control.
+    output.position.y = -output.position.y;
     output.uv = input.uv;
     return output;
 }
@@ -598,10 +605,17 @@ def _library_candidates() -> list[Path]:
 
     `ZMOLV_LIBRARY` wins, then the platform's own library search
     (`ctypes.util.find_library`, which resolves `libzmolv.so`, `libzmolv.dylib`
-    and `zmolv.dll` per host), then the two directories a plain `zig build -p
-    /usr/local` install lands in on Linux. The last leg is a fallback rather
-    than the only route because find_library reads the linker cache, which a
-    freshly copied library is absent from.
+    and `zmolv.dll` per host), then this checkout's own gitignored
+    `.local/lib` — where `scripts/install-tools.sh` builds the pinned zmol-v —
+    then the two directories a plain `zig build -p /usr/local` install lands
+    in on Linux. The explicit legs are fallbacks rather than the only route
+    because find_library reads the linker cache, which a freshly copied
+    library is absent from. A session-local build under /tmp is deliberately
+    not a candidate: it evaporates on reboot, and a default that sometimes
+    exists is how the Vulkan lane silently degraded on 2026-08-25. The
+    checkout leg resolves from this file (src layout), so it exists only when
+    the pipeline runs from a checkout; a wheel install relies on the other
+    legs.
     """
     candidates: list[Path] = []
     override = os.environ.get("ZMOLV_LIBRARY")
@@ -610,6 +624,8 @@ def _library_candidates() -> list[Path]:
     found = ctypes.util.find_library("zmolv")
     if found:
         candidates.append(Path(found))
+    checkout = Path(__file__).resolve().parents[2]
+    candidates.append(checkout / ".local" / "lib" / "libzmolv.so")
     for directory in ("/usr/local/lib", "/usr/lib"):
         candidates.append(Path(directory) / "libzmolv.so")
     return candidates

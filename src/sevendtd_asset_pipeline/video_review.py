@@ -569,11 +569,6 @@ def run_review(
             f"review-video is gated on the 'model-video-review' capability: the "
             f"{GATEWAY} gateway CLI is not on PATH. {GATEWAY_INSTALL_HINT}"
         )
-    if provider != "fake" and not _provider_credential_present(provider):
-        raise PipelineError(
-            f"provider {provider!r} is not configured for the {GATEWAY} gateway; set the "
-            "credential environment variable the provider's `deadeye doctor` names"
-        )
 
     resolved_model = model or ""
     asset = _asset_record(stem, config)
@@ -676,19 +671,6 @@ def run_review(
         "gateway": envelope,
         "_document": document,
     }
-
-
-def _provider_credential_present(provider: str) -> bool:
-    """Presence check for the providers the gateway knows, offline.
-
-    The gateway is the credential authority; this mirror exists so a refusal
-    happens before any submission with a clear message instead of a round trip.
-    """
-    if provider == "gemini":
-        import os
-
-        return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
-    return True  # fake and unknown providers are the gateway's to refuse
 
 
 def _evidence(

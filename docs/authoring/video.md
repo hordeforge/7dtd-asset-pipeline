@@ -117,9 +117,11 @@ review kinds reads one shape.
 - `--allow-network` is required. The submission is networked, billable, and
   sends an authored asset to a third party; nothing here contacts a provider
   implicitly, and no refusal reads credentials before the consent gate.
-- Credentials come only from the provider's environment variables
+- Credentials come from the provider's environment variables
   (`GEMINI_API_KEY` / `GOOGLE_API_KEY` for gemini, `NVIDIA_API_KEY` for
-  nvidia). They are never accepted as
+  nvidia) or from the gateway's gitignored `config.local.toml`
+  (`[providers.<name>] api_key`, see the gateway's README for the
+  precedence). They are never accepted as
   a command argument, printed, or written into evidence.
 - The verdict is advisory. `ADVISORY_NOTE` rides every result: a model
   critique is evidence about the submitted clip under the recorded intent; it

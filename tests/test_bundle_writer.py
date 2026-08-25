@@ -593,3 +593,30 @@ class PrefabColliderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShaderRequirementTests(unittest.TestCase):
+    """Every sub-program must carry the vertex-input requirement bit.
+
+    Stock sub-programs sampled across all platforms and stages carry
+    `m_ShaderRequirements = 1`; zero is the one field in which this writer's
+    shader differed from every stock one, and it means the engine builds no
+    vertex input state for the sub-program - a fault on the Vulkan draw.
+    """
+
+    def test_every_sub_program_declares_the_vertex_input_requirement(self) -> None:
+        obj = bundle_writer.shader("Shamway/Test")
+        pf = obj.fields["m_ParsedForm"]
+        seen = 0
+        for sub in pf["m_SubShaders"]:
+            for pass_ in sub["m_Passes"]:
+                for prog in ("progVertex", "progFragment"):
+                    for group in pass_[prog]["m_PlayerSubPrograms"]:
+                        for entry in group:
+                            self.assertEqual(
+                                entry["m_ShaderRequirements"],
+                                1,
+                                "bit 0 = vertex inputs bound, as every stock sub-program carries",
+                            )
+                            seen += 1
+        self.assertGreater(seen, 0, "the shader declares sub-programs to assert on")

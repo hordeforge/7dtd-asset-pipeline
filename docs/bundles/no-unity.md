@@ -438,11 +438,14 @@ is written here. What is left is **inside** the shader lane, not outside it:
 | instancing and multi-pass | more than one `m_Passes` entry, and the instancing variant flag |
 | Metal sub-programs | a Metal source lane; the blob container is already proven by the other three platforms |
 
-Vulkan sub-programs are **written, not yet accepted**: when `glslangValidator`
-and the SMOL-V encoder are present the bundle carries platform 18, and a client
-running it renders Unity's magenta error shader. Every elimination is measured
-in [Improvements](../status/improvements.md); what is left is Unity's
-two-stage parameter record shape.
+Vulkan sub-programs are **accepted and rendering** since 2026-08-25: when
+`glslangValidator` and the SMOL-V encoder are present the bundle carries
+platform 18, and a live client under `-force-vulkan` runs the acceptance suite
+to `SUMMARY pass=6 fail=0 skip=0` with the textured card in the captured frame.
+The eliminations that got there are measured in
+[Improvements](../status/improvements.md); the decisive one was the parameter
+record's entry encoding — `(stage << 24) | (kind << 16) | slot`, see
+[research-provenance.md](../research/research-provenance.md).
 
 A prop that needs one of those still uses `unity` or `external`, and neither is
 second-class. Everything else does not.

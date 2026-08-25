@@ -1078,10 +1078,12 @@ def _program(variants: list[tuple[int, int, int]]) -> dict[str, Any]:
             {
                 "m_BlobIndex": blob_index,
                 "m_KeywordIndices": [],
-                # 0 = no special GPU requirement. A shader that overstates its
-                # requirements is one the engine refuses; this pass needs
-                # nothing beyond shader model 4.
-                "m_ShaderRequirements": 0,
+                # Bit 0 = vertex inputs are bound through the bind-channels
+                # table. Every stock sub-program sampled - all platforms, all
+                # stages - carries 1, and zero means the engine builds no
+                # vertex input state for the sub-program, which is a fault on
+                # the Vulkan draw (AMD RADV, device lost, no log line).
+                "m_ShaderRequirements": 1,
                 "m_GpuProgramType": gpu_program_type,
             }
             for gpu_program_type, blob_index, _parameter in variants

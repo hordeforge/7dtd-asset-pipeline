@@ -677,15 +677,18 @@ class VulkanSubProgramTests(unittest.TestCase):
         word0, section_a, section_b, header, a_payload, word5 = struct.unpack_from(
             "<6I", payload, 0
         )
-        self.assertEqual(word0, 0x02000061)
-        self.assertEqual(
-            section_a + section_b,
-            payload_length,
-            "the two section sizes sum to the payload length in every stock record",
-        )
+        self.assertEqual(word0, 0x02000060)
         self.assertEqual(header, shader_blob.VULKAN_SECTION_HEADER)
         self.assertEqual(a_payload, section_a - shader_blob.VULKAN_SECTION_HEADER)
         self.assertEqual(word5, 0)
+        # The payload length is padded to 4 so the bind-channels block that
+        # follows it is never read from mid-padding (a 882-byte payload made a
+        # live Vulkan draw fault that way); the two sections sum to the
+        # unpadded length, so they are within 0..3 bytes of the field.
+        unpadded = section_a + section_b
+        self.assertLessEqual(unpadded, payload_length)
+        self.assertLess(payload_length - unpadded, 4)
+        self.assertEqual(payload_length % 4, 0, "payload length is 4-aligned")
         self.assertEqual(struct.unpack_from("<I", payload, 19 * 4)[0], 1)
 
     def test_both_sections_carry_their_module(self) -> None:
@@ -773,9 +776,9 @@ class VulkanSubProgramTests(unittest.TestCase):
                 pointers[operands[0]] = operands[2]
             elif opcode == 59:  # OpVariable: result-type, result, storage
                 variables[operands[1]] = operands[0]
-            elif opcode == 71:  # OpDecorate: target, decoration, value
-                if len(operands) >= 3 and operands[1] in (33, 34):  # set, binding
-                    decorations.setdefault(operands[0], {})[operands[1]] = operands[2]
+            elif opcode == 71 and len(operands) >= 3 and operands[1] in (33, 34):
+                # OpDecorate: target, decoration (33=set, 34=binding), value
+                decorations.setdefault(operands[0], {})[operands[1]] = operands[2]
             index += count
         sampled_images = [
             var_id
@@ -793,6 +796,57 @@ class VulkanSubProgramTests(unittest.TestCase):
             {types.get(t) for t in variables.values()},
             "no bare sampler variable: the split form is what a live client's draw killed",
         )
+
+    def test_the_vulkan_texture_entry_uses_the_stock_index(self) -> None:
+        """The material binder keys on the texture entry's index, and stock
+        records encode it as `(fragment stage << 24) | slot` = 0x08000000 for
+        `_MainTex` - an index of 0 made the Vulkan draw fault (AMD RADV,
+        device lost, no log line) with every other dimension of the record
+        stock-shaped. The module's own descriptor binding stays 0; the runtime
+        derives the binding from the module, not this index."""
+        if shader_blob.smolv_library() is None:
+            self.skipTest("the SMOL-V encoder is not loadable")
+        compiled = shader_blob.unlit_textured()
+        vulkan = next(p for p in compiled.platforms if p.platform == 18)
+        raw = __import__("lz4").block.decompress(
+            vulkan.blob, uncompressed_size=vulkan.decompressed_size
+        )
+        count = struct.unpack_from("<I", raw, 0)[0]
+        assert count >= 1
+        off, ln, _ = struct.unpack_from("<III", raw, 4)
+        param = raw[off : off + ln]
+        index = param.find(b"_MainTex")
+        self.assertGreater(index, 40, "the texture entry is inside the parameter record")
+        fstart = (index + len(b"_MainTex") + 3) & ~3
+        entry = struct.unpack_from("<4I", param, fstart)
+        self.assertEqual(entry[1], 0x08000000, "fragment stage, slot 0 - the measured stock value")
+        self.assertEqual(entry[2], 0xFFFFFFFF, "no separate sampler, as stock declares")
+
+    def test_the_vulkan_cbuffer_entry_uses_the_stock_index(self) -> None:
+        """The vertex program binds its globals buffer through the entry index,
+        which stock encodes as `(vertex stage << 24) | kind | slot` = 0x04010000
+        for `VGlobals` in a vertex parameter record - ours wrote a plain 0 with
+        array size 1, and the Vulkan draw faulted (AMD RADV, device lost, no
+        log line) while every other dimension of the record was stock-shaped.
+        """
+        if shader_blob.smolv_library() is None:
+            self.skipTest("the SMOL-V encoder is not loadable")
+        compiled = shader_blob.unlit_textured()
+        vulkan = next(p for p in compiled.platforms if p.platform == 18)
+        raw = __import__("lz4").block.decompress(
+            vulkan.blob, uncompressed_size=vulkan.decompressed_size
+        )
+        off, ln, _ = struct.unpack_from("<III", raw, 4)
+        param = raw[off : off + ln]
+        # The buffer section names the same buffer first; the binding entry is
+        # the last occurrence of the name in the record.
+        index = param.rfind(b"VGlobals")
+        self.assertGreater(index, 40, "the binding entry is inside the parameter record")
+        fstart = (index + len(b"VGlobals") + 3) & ~3
+        entry = struct.unpack_from("<3I", param, fstart)
+        self.assertEqual(entry[0], 1, "cbuffer entry kind, as stock writes")
+        self.assertEqual(entry[1], 0x04010000, "vertex stage, slot 0 - the measured stock value")
+        self.assertEqual(entry[2], 0, "array size 0, as stock writes")
 
 
 class LibraryDiscoveryTests(unittest.TestCase):

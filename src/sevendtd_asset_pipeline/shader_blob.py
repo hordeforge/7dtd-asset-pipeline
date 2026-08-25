@@ -735,29 +735,19 @@ def vulkan_bind_channels() -> bytes:
 
 
 def vulkan_shader_hash(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
-    """Compute the 32-byte Vulkan shader hash for two SMOL-V modules.
+    """The 32 bytes at payload words 20..27 of a Vulkan code record, as zero.
 
-    The hash goes at payload words 20..27 (bytes 80..112) of a Vulkan code
-    record. Despite exhaustive offline sweeps (Option B: ~1.5M seed
-    combinations across module/decoded/stripped inputs; Option C: debug-stripped
-    SPIR-V with seeds 0,0) no matching input/seeds convention has been found that
-    reproduces the stored halves `c9dae3ee4501d8bee8b28c965c85e3f9` /
-    `c6db081ec58e178a3377170abf47ac70`.
+    An earlier session read these bytes as a content hash and spent ~1.5M
+    seed sweeps trying to reproduce the stored halves
+    `c9dae3ee4501d8bee8b28c965c85e3f9` / `c6db081ec58e178a3377170abf47ac70`
+    from the SMOL-V or decoded SPIR-V modules. They are not validated: a live
+    client rendered a stock blob with every byte of the field corrupted, and
+    renders a synthesized record whose bytes here do not match stock's at all
+    (see research-provenance.md, "The Vulkan hash is not validated"). The
+    content is irrelevant, so the writer emits zeros.
 
-    The only remaining route is disassembly of UnityPlayer.dll — see
-    `docs/research/research-provenance.md` "Hunting the Vulkan hash". Until then
-    this function returns 32 zero bytes, matching the current (unchecked)
-    behaviour.
-
-    Returns a 32-byte hash value (currently always \\x00\\x00\\x00\\x00).
+    Returns a 32-byte field of zeros.
     """
-    import struct
-    # TODO: Once the correct input buffer and seeds are identified from
-    # disassembly, replace this with the actual SpookyHash128 computation.
-    # Clues from the research:
-    # - Option C (debug-stripped SPIR-V + seeds 0,0) produced no match.
-    # - Exhaustive seed sweeps across multiple inputs produced no match.
-    # - The input is not any stored/decoded module buffer or their concat.
     return b"\x00" * 32
 
 
@@ -769,18 +759,15 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     unlike d3d11 and GLCore, carries **both stages** - which is why Unity
     reports `stageCounts` of 1 for Vulkan and 2 for d3d11.
 
-    Two things here are **inferred and untested**, and are the reason this lane
-    is not called finished:
-
-    - **Which section holds which stage.** Section B is the larger module in all
-      four stock shaders measured, and in `VertexLit` - whose lighting is done
-      per-vertex - the vertex program is the larger one, so B is read as the
-      vertex stage. That is an argument from size, not a decode.
-    - **The 32 bytes at words 20..27**, which look like a hash. No MD5, SHA-1
-      or SHA-256 of either module, of both concatenated, or of the payload
-      matched, so they are written as zero here. If the runtime only uses them
-      to key a shader cache, zero costs a recompile; if it validates them, this
-      record is rejected and that is what the first live test will say.
+    The section order was read as fragment-then-vertex from `OpEntryPoint` of
+    the decoded modules (a size argument only, in the first survey), and the
+    32 bytes at payload words 20..27 are not validated (measured: a live
+    client renders a corrupted stock blob and a synthesized record with
+    non-stock bytes there - see `vulkan_shader_hash`). What the live Vulkan
+    acceptance proves is the whole shape: this record plus the parameter
+    record's stock-shaped binding entries draws the textured prop in a fresh
+    client, where every earlier shape drew the magenta error shader or lost
+    the device.
     """
     hash_bytes = vulkan_shader_hash(fragment_smolv, vertex_smolv)
     header = bytearray(VULKAN_SECTION_HEADER)
@@ -789,7 +776,7 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
         "<6I",
         header,
         0,
-        0x02000061,  # version and flags, as every stock record carries
+        0x02000060,  # version and flags, as every measured stock record carries
         section_a,
         len(vertex_smolv),
         VULKAN_SECTION_HEADER,
@@ -805,15 +792,20 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     for _ in range(4):
         writer.i32(0)
     writer.i32(0)  # keyword count
-    writer.i32(len(payload))
-    writer.out += payload
+    # Inject the computed hash at payload words 20..27 (bytes 80..112).
+    # `vulkan_shader_hash` returns zeros today, so the splice is
+    # content-neutral until the recipe is known.
+    payload_with_hash = payload[:80] + hash_bytes + payload[112:]
+    # The runtime reads the record's payload length and then the bind-channels
+    # block, so the length must be a multiple of 4 - a SMOL-V pair that sums to
+    # 882 bytes made the runtime read the bind block from mid-padding and fault
+    # the Vulkan draw (AMD RADV, device lost, no log line). The stock records
+    # all carry a 4-aligned payload length.
+    payload_with_hash += b"\x00" * (-len(payload_with_hash) % 4)
+    writer.i32(len(payload_with_hash))
+    writer.out += payload_with_hash
     while len(writer.out) % 4:
         writer.out += b"\x00"
-    # Inject the computed hash at payload words 20..27 (bytes 80..112).
-    # The payload starts right after the 176-byte header; words 20..27 are at
-    # byte offset 80 from the payload start.  We replace the zeros that would
-    # otherwise appear by splicing hash_bytes into the appropriate position.
-    payload_with_hash = payload[:80] + hash_bytes + payload[112:]
     # The record does not end at its payload. A stock Vulkan code record carries
     # the same `ParserBindChannels` block a d3d11 vertex record does - a source
     # mask, a count, and (mesh channel, shader input) pairs - and a record
@@ -824,7 +816,7 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     # this block. The channels come from the vertex DXBC the SPIR-V was compiled
     # from, so the Vulkan and d3d11 lanes bind the same mesh data.
     writer.out += vulkan_bind_channels()
-    return bytes(payload_with_hash)  # type: ignore
+    return bytes(writer.out)
 
 
 def dxbc_chunks(data: bytes) -> dict[str, bytes]:
@@ -1283,8 +1275,17 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
         )
         vulkan_parameters = ParameterBlob(
             buffers=(VULKAN_VERTEX_CBUFFER,),
-            bindings=(CBufferBinding(VULKAN_VERTEX_GLOBALS, 0),),
-            textures=(TextureEntry(texture_property, index=0, sampler_index=0xFFFFFFFF),),
+            # The entry indices are the (stage, kind, slot) encoding every
+            # measured stock record carries: VGlobals is bound by the vertex
+            # program (0x04) as a constant buffer (0x01) at slot 0, the
+            # texture by the fragment program (0x08) at slot 0. The material
+            # binder finds the texture by name and reads the slot from this
+            # index; an index of plain 8 - slot 8, stage 0 - makes the Vulkan
+            # draw fault (AMD RADV, device lost, no log line) with everything
+            # else stock-shaped. The module's own descriptor binding stays 0;
+            # the runtime derives the binding from the module, not this index.
+            bindings=(CBufferBinding(VULKAN_VERTEX_GLOBALS, 0x04010000, array_size=0),),
+            textures=(TextureEntry(texture_property, index=0x08000000, sampler_index=0xFFFFFFFF),),
         )
         vulkan_raw = assemble_blob(
             [

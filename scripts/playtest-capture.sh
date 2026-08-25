@@ -65,6 +65,10 @@ logs="$(printf '%s' "$where" | python3 -c 'import json,sys; print(json.load(sys.
 shots_dir="$(printf '%s' "$where" | python3 -c 'import json,sys; print(json.load(sys.stdin)["user_data"])')/playtest-shots"
 started="$(date +%s)"
 seen=""
+# The orchestrator writes this when its poll loop ends (done / timeout /
+# client_exit) - the deterministic end of the run. Its directory mirrors the
+# orchestrator's --logdir default: $LOGDIR or ~/.cache/7dtd-playtest.
+run_ended="${LOGDIR:-$HOME/.cache/7dtd-playtest}/run-ended"
 
 # The newest log, but only if this run wrote it. A client log lives at a fixed
 # path and a finished run leaves its own behind, so without this the first poll
@@ -117,6 +121,26 @@ while true; do
             echo "playtest-capture.sh: kept $OUT_DIR/${LABEL}-${case_id}.png"
         done < <(grep -oE "${MARKER}[^ ]* [a-zA-Z0-9_/.-]+" "$log" 2>/dev/null | awk '{print $2}' || true)
         if grep -q "\[7dtd-playtest\] DONE" "$log" 2>/dev/null; then
+            exit 0
+        fi
+        # The run is decided before DONE when the client is gone: a crash
+        # mid-draw leaves the staged marker in the log and no shot, and
+        # waiting out --timeout turns a five-second failure into a
+        # fifteen-minute stall. Only declare it when this run actually staged
+        # its case, so a client that never started is not misread as a crash.
+        if [[ -n "$seen" ]] && ! pgrep -f "7DaysToDie.exe" >/dev/null 2>&1; then
+            echo "playtest-capture.sh: client exited after staging ${seen}; no shot, no DONE" >&2
+            exit 1
+        fi
+        # The orchestrator's run-ended marker is the deterministic end of the
+        # run (done / timeout / client_exit). React only to a marker written
+        # after this loop started, so a previous run's marker cannot end us.
+        if [[ -f "$run_ended" && "$(stat -c %Y "$run_ended" 2>/dev/null)" -ge "$started" ]]; then
+            reason="$(cat "$run_ended" 2>/dev/null)"
+            if [[ -n "$seen" && "$reason" != "done" ]]; then
+                echo "playtest-capture.sh: run ended ($reason) after staging ${seen}; no shot" >&2
+                exit 1
+            fi
             exit 0
         fi
     fi

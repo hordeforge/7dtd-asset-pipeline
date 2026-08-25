@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -8,6 +9,7 @@ import threading
 import unittest
 from importlib.util import find_spec
 from pathlib import Path
+from typing import Any, cast
 from unittest import mock
 
 from sevendtd_asset_pipeline.capabilities import REGISTRY
@@ -306,3 +308,80 @@ class ManifestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClipAdoptionTests(unittest.TestCase):
+    """`client capture --clip`: adopting an external clip directory one level up."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.capture_root = self.root / "acceptance"
+        self.source = self.root / "capture" / "demo-20260825" / "thing"
+        self.source.mkdir(parents=True, exist_ok=True)
+        for index in range(4):
+            (self.source / f"frame-{index:04d}.png").write_bytes(bytes([index] * 4))
+        (self.source / "thing.mp4").write_bytes(b"muxed")
+        (self.source / "client.log").write_text("clip complete demo/thing frames=4\n")
+
+    def test_adoption_copies_hashes_and_records_every_file(self) -> None:
+        from sevendtd_asset_pipeline.capture import record_existing_clip
+
+        entry = record_existing_clip(
+            self.source,
+            "thing",
+            "grip reads at the right thickness through a full turn",
+            self.capture_root,
+        )
+        self.assertEqual("adopted-clip", entry.backend)
+        self.assertEqual("thing", entry.directory)
+        names = {item.name for item in entry.files}
+        self.assertIn("frame-0000.png", names)
+        self.assertIn("thing.mp4", names)
+        self.assertIn("client.log", names)
+        for item in entry.files:
+            source = self.capture_root / "thing" / item.name
+            self.assertEqual(
+                hashlib.sha256(source.read_bytes()).hexdigest(),
+                item.sha256,
+                "adoption must hash the copied bytes, not the path",
+            )
+        manifest = read_manifest(self.capture_root)
+        self.assertEqual(1, len(manifest))
+        self.assertEqual("thing", manifest[0]["directory"])
+
+    def test_re_adopting_a_label_replaces_the_earlier_entry(self) -> None:
+        from sevendtd_asset_pipeline.capture import record_existing_clip
+
+        record_existing_clip(self.source, "thing", "", self.capture_root)
+        (self.source / "frame-0004.png").write_bytes(b"extra")
+        record_existing_clip(self.source, "thing", "", self.capture_root)
+        manifest = read_manifest(self.capture_root)
+        self.assertEqual(1, len(manifest))
+        self.assertIn(
+            "frame-0004.png",
+            {item["name"] for item in cast("list[dict[str, Any]]", manifest[0]["files"])},
+        )
+
+    def test_a_directory_without_frames_or_video_is_refused(self) -> None:
+        from sevendtd_asset_pipeline.capture import record_existing_clip
+
+        empty = self.root / "empty"
+        empty.mkdir()
+        (empty / "notes.txt").write_text("not a clip")
+        with self.assertRaisesRegex(PipelineError, "does not look like a clip"):
+            record_existing_clip(empty, "thing", "", self.capture_root)
+
+    def test_adopting_in_place_records_without_copying(self) -> None:
+        from sevendtd_asset_pipeline.capture import record_existing_clip
+
+        adopted = self.capture_root / "thing"
+        record_existing_clip(self.source, "thing", "", self.capture_root)
+        before = {
+            item["name"]
+            for item in cast("list[dict[str, Any]]", read_manifest(self.capture_root)[0]["files"])
+        }
+        # Re-adopt the adopted directory itself: no copy, no wipe, just re-record.
+        entry = record_existing_clip(adopted, "thing", "", self.capture_root)
+        self.assertEqual(before, {item.name for item in entry.files})

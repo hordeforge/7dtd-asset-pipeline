@@ -150,6 +150,7 @@ beside the asset rather than into the modlet:
 | Command | What it does |
 |---|---|
 | `shamway review-audio CLIP --intent F` | a configured audio model critiques the clip's actual bytes under its recorded intent; refuses without `--allow-network`, and never replaces the human listen |
+| `shamway review-video STEM --clip DIR --intent F` | a configured vision model critiques an adopted motion clip through the deadeye gateway; refuses without `--allow-network`, and never replaces the human look |
 
 `build` (without `--probe`), `stage` and `render-icon` are the only commands
 that write into the modlet, and the first two only after every offline gate
@@ -259,6 +260,24 @@ shamway review-audio assets-src/audio/blast.wav \
 
 The contract is [PRD 0001](docs/prds/0001-contextual-model-audio-review.md),
 served as `shamway docs model-audio-review`.
+
+The sight twin is `shamway review-video`: it critiques an adopted motion clip
+(frames or a muxed video, captured by a `CaseDef.StagedClip` case and adopted
+with `shamway client capture --clip`) against its recorded intent through the
+**deadeye** gateway (`hordeforge/7dtd-vision-review`), the shared vision-model
+review component. The same advisory posture applies — the verdict is evidence
+for the human look, never a substitute:
+
+```bash
+shamway client capture thing --clip .local/capture/demo-20260825/thing \
+    --observable "grip reads at the right thickness through a full turn"
+shamway review-video thing --clip .local/acceptance/thing \
+    --intent assets-src/bundle/thing.review.json --allow-network
+```
+
+The contract is [PRD 0002](docs/prds/0002-video-based-asset-review.md),
+served as `shamway docs model-video-review`, and the authoring lane is
+`shamway docs video`.
 
 ## Driving it from code or an agent
 

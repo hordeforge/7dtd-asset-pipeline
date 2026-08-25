@@ -64,6 +64,14 @@ TOPICS: dict[str, tuple[str, str]] = {
         "prds/0001-contextual-model-audio-review.md",
         "the contextual model-audition and advisory-review contract, and what shipped with it",
     ),
+    "model-video-review": (
+        "prds/0002-video-based-asset-review.md",
+        "the video-based asset review: motion clips, the deadeye gateway, and what shipped with it",
+    ),
+    "video": (
+        "authoring/video.md",
+        "staged motion clips, the motion-kind declaration, and the deadeye review lane",
+    ),
     "vfx": ("authoring/vfx.md", "particle budgets, LOD tiers, and two silent material failures"),
     "skinned-gear": (
         "authoring/skinned-gear.md",

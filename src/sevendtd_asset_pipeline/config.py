@@ -6,7 +6,7 @@ import json
 import os
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .errors import PipelineError
@@ -78,6 +78,13 @@ LOCAL_BUNDLE_SOURCES = ("synthesized", "unity")
 MACHINE_BUNDLE_SOURCES = tuple(name for name in BUNDLE_SOURCES if name != "none")
 BUNDLE_SOURCE_ENV = "SHAMWAY_BUNDLE_SOURCE"
 
+# The motion a generated acceptance case may capture. Declared per asset stem
+# under `[acceptance] motion_kinds`; see docs/authoring/video.md for what each
+# generates. "fixed" opts out of a motion clip entirely (a world-fixed thing
+# has no motion worth capturing), which is why the fixture pins it to today's
+# unchanged generation.
+MOTION_KINDS = ("turntable", "walk-cycle", "fixed")
+
 
 @dataclass(frozen=True)
 class PipelineConfig:
@@ -122,6 +129,15 @@ class PipelineConfig:
     offline unless the mod declares them here. Listed stems are checked against
     the tracked manifest exactly like an XML reference: present, unambiguous,
     exact case.
+    """
+    acceptance_motion_kinds: dict[str, str] = field(default_factory=dict)
+    """Per-asset motion kind (`turntable` | `walk-cycle` | `fixed`).
+
+    Declared under `[acceptance] motion_kinds = {"thing": "turntable"}` and
+    read by `shamway acceptance-provider`: a declared kind turns that asset's
+    generated look case into a `CaseDef.StagedClip` (a motion clip the
+    playtest runner captures), except `fixed`, which keeps today's unchanged
+    generation. Absent means today's behavior, byte for byte.
     """
 
     @property
@@ -271,6 +287,21 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         raise PipelineError(
             'code_references name assets inside a bundle, but bundle_source = "none"'
         )
+    acceptance = data.get("acceptance", {})
+    if not isinstance(acceptance, dict):
+        raise PipelineError("[acceptance] must be a TOML table")
+    motion_kinds = acceptance.get("motion_kinds", {})
+    if not isinstance(motion_kinds, dict) or any(
+        not isinstance(stem, str)
+        or not stem.strip()
+        or not isinstance(kind, str)
+        or kind not in MOTION_KINDS
+        for stem, kind in motion_kinds.items()
+    ):
+        raise PipelineError(
+            "acceptance.motion_kinds must map asset stems to a motion kind "
+            f"({', '.join(MOTION_KINDS)})"
+        )
 
     config = PipelineConfig(
         config_file=config_file,
@@ -294,6 +325,7 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         game_dir=_optional_path(base, game.get("directory"), "SEVEN_DAYS_TO_DIE_DIR"),
         compress_textures=bool(data.get("compress_textures", False)),
         code_references=tuple(item.strip() for item in code_references),
+        acceptance_motion_kinds=dict(motion_kinds),
     )
     # `source_root` means two different things per bundle source: a path inside
     # the Unity project for "unity", and a path in the mod for "synthesized".
@@ -317,12 +349,12 @@ def load_config(path: Path | None = None) -> PipelineConfig:
             '"assets-src/bundle") and put the source files there. Moving a mod off the '
             "editor lane: 'shamway docs no-unity'."
         )
-    for field, owned_path in (
+    for config_field, owned_path in (
         ("resources_dir", config.resources_dir),
         ("config_dir", config.config_dir),
     ):
         if not owned_path.is_relative_to(config.mod_root):
-            raise PipelineError(f"{field} must stay below mod_root: {owned_path}")
+            raise PipelineError(f"{config_field} must stay below mod_root: {owned_path}")
     return config
 
 

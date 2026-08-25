@@ -343,6 +343,19 @@ REGISTRY: tuple[_Spec, ...] = (
         # rather than installing a tool; the command below is still exact.
         install="export GEMINI_API_KEY=<key>  # create one at https://aistudio.google.com/apikey",
     ),
+    _Spec(
+        name="model-video-review",
+        kind="command",
+        probe="deadeye",
+        unlocks=("shamway review-video",),
+        purpose="submit an adopted clip's frames or muxed video plus its recorded "
+        "intent to a configured vision-capable model (the deadeye gateway in "
+        "hordeforge/7dtd-vision-review) for an advisory critique. Availability "
+        "reports the gateway CLI on PATH — configured, not verified: nothing "
+        "contacts a provider until a review is submitted, and the verdict never "
+        "satisfies the human-look gate",
+        install="uv tool install --from git+https://github.com/hordeforge/7dtd-vision-review",
+    ),
 )
 
 

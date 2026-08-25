@@ -173,6 +173,7 @@ machine**. Only three ever do, and `build` only when the mod set
 | `check-mesh [--json] FILE` | no | no | no | mesh extents and glTF conformance |
 | `check-sound [--json] FILE` | no | no | no | clip format, level, clipping, DC offset |
 | `review-audio CLIP [--intent F]` | **yes** | no | **yes** (evidence doc) | advisory model critique of a clip; refuses without `--allow-network` |
+| `review-video STEM --clip DIR [--intent F]` | **yes** | no | **yes** (evidence doc) | advisory vision-model critique of an adopted motion clip via the deadeye gateway; refuses without `--allow-network` |
 | `check-icons [--json]` | no | no | no | atlas cells and every `CustomIcon` key |
 | `render-icon STEM` | no | yes | **yes** | photograph a prefab into its atlas cell |
 | `generate NAME [ARGS]` | no | Blender for `mesh` | **yes** (writes what you ask for) | run a packaged asset generator |

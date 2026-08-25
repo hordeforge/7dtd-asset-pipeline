@@ -290,15 +290,12 @@ the mod declares finds nothing if the server never loaded the mod.
 shamway script playtest-acceptance
 ```
 
-**It regenerates the save on every run.** A reused world carries registered
-blocks, item ids and chunk state from the last one, which is the same reason
-`client launch` refuses a client that is already up: the run is supposed to
-prove what *this* build does, and anything carried over is a result nobody can
-attribute. Opting out is a deliberate flag, and a report that used it says so:
-
-```bash
-shamway script playtest-acceptance --reuse-save
-```
+**It regenerates the save on every run — always, as a hard rule.** A reused
+world carries registered blocks, item ids and chunk state from the last one,
+which is the same reason `client launch` refuses a client that is already up:
+the run is supposed to prove what *this* build does, and anything carried over
+is a result nobody can attribute. There is no `--reuse-save`; the orchestrator
+wipes the save unconditionally and there is no opt-out.
 
 ### The editorless path has its own live-client regression
 

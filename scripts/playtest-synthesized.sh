@@ -50,8 +50,9 @@ usage() {
 		  --stem NAME       asset stem it carries (default: shamwaySelfTestProp)
 		  -h, --help        this text
 
-		Anything after -- is passed to playtest-acceptance.sh, so --listen and
-		--reuse-save reach the orchestrator unchanged.
+		Anything after -- is passed to playtest-acceptance.sh, so --listen (and
+		any other accepted flag) reaches the orchestrator unchanged. There is no
+		--reuse-save: every run starts from a fresh save, a hard rule.
 
 		ENVIRONMENT
 		  SEVEN_DAYS_TO_DIE_DIR         the client install (required)

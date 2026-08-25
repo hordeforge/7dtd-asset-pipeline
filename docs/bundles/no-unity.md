@@ -547,9 +547,10 @@ together: generate, build, deploy, hand off to the harness.
 shamway script playtest-acceptance
 ```
 
-It regenerates the save every run — a reused world is state from the last one,
-and this run is meant to prove what *this* build does. `--reuse-save` opts out
-for a quick loop, and a report that used it has to say so.
+It regenerates the save every run, always, as a hard rule — a reused world is
+state from the last one, and this run is meant to prove what *this* build does.
+There is no `--reuse-save` and no opt-out: the orchestrator wipes the save
+unconditionally.
 
 To prove the **writer** rather than a particular mod, there is a self test that
 brings its own modlet — `examples/SelfTestMod`, committed in this repository

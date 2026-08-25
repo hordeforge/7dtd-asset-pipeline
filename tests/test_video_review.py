@@ -243,6 +243,12 @@ class ResultTests(unittest.TestCase):
         result = validate_result(data)
         self.assertEqual([2.0, 2.0], result["issues"][0]["at_seconds"])
 
+    def test_an_explicit_null_moment_is_allowed_like_an_absent_one(self) -> None:
+        data = dict(_gateway_envelope()["result"])  # type: ignore[arg-type]
+        data["issues"] = [{"description": "whole-clip read", "at_frame": None, "at_seconds": None}]
+        result = validate_result(data)
+        self.assertEqual({"description": "whole-clip read"}, result["issues"][0])
+
     def test_a_null_score_is_allowed_but_a_non_number_is_not(self) -> None:
         data = _valid_result()
         data["rubric_scores"] = {"semantic_fit": None, "timing": True}

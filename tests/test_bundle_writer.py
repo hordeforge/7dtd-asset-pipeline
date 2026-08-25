@@ -222,6 +222,29 @@ class WriterTests(unittest.TestCase):
         finally:
             Image.MAX_IMAGE_PIXELS = original
 
+    def test_a_block_compressed_texture_reports_the_quality_it_achieved(self) -> None:
+        # Compression is lossy and opt-in, and a lossy conversion that reports
+        # nothing is indistinguishable from a lossless one. The note names the
+        # format and the visible PSNR of what will actually ship; the plain
+        # RGBA32 path stays silent.
+        import contextlib
+        import io
+
+        png = write_png(self.root / "panel.png", size=(8, 8))
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            compressed = texture_2d("myModPanel", png, compress=True)
+        self.assertEqual(10, compressed.fields["m_TextureFormat"])  # DXT1: opaque
+        self.assertIn(
+            "note: myModPanel: block-compressed to format 10, visible PSNR",
+            stderr.getvalue(),
+        )
+        self.assertRegex(stderr.getvalue(), r"visible PSNR [0-9.]+ dB")
+        quiet = io.StringIO()
+        with contextlib.redirect_stderr(quiet):
+            texture_2d("myModPanel", png)
+        self.assertEqual("", quiet.getvalue())
+
 
 @needs_unitypy
 class SourceDirectoryTests(unittest.TestCase):

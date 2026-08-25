@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
+import sys
 from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -544,9 +545,10 @@ def texture_2d(
     `compress` block-compresses to `DXT1` when the image is fully opaque and
     `DXT5` when it is not — 8x and 4x smaller than RGBA32, and what Unity's
     own importer would have done. It is **off by default and lossy**: this
-    project does not silently change what an author signed off on, and the
-    quality achieved is reported by the caller rather than assumed. Both sides
-    must be a multiple of four, which a block format cannot avoid.
+    project does not silently change what an author signed off on, so the
+    visible PSNR of what will actually ship is decoded back out of the blocks
+    and printed as a note. Both sides must be a multiple of four, which a
+    block format cannot avoid.
     """
     require_capability("pillow")
     from PIL import Image
@@ -571,6 +573,18 @@ def texture_2d(
 
         raw = numpy.frombuffer(pixels, dtype="uint8").reshape(height, width, 4)
         pixels, texture_format = block_compress.compress(raw, alpha=bool((raw[..., 3] < 255).any()))
+        # A lossy conversion nobody measures is a silent quality change, the
+        # exact class of silence this writer exists to remove. Grade what will
+        # ship: decode the blocks the way a GPU does and composite as a viewer
+        # would, so invisible garbage cannot depress the number (and an inf
+        # from identical bytes prints as `inf`, which reads as what it is).
+        decoded = block_compress.decode(pixels, width, height, texture_format)
+        score = block_compress.visible_psnr(raw, decoded)
+        print(
+            f"note: {name}: block-compressed to format {texture_format}, "
+            f"visible PSNR {score:.1f} dB",
+            file=sys.stderr,
+        )
 
     return BundleObject(
         TEXTURE_2D,

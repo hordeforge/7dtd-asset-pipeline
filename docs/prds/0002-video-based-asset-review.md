@@ -345,9 +345,21 @@ in-repo provider adapter (the gateway owns that surface).
   repository's stubbed-runner tests prove the adopted clip and complete
   intent reach the gateway boundary (`test_the_gateway_receives_the_adopted_clip_and_intent`,
   plus the gateway's own suite).
-- [ ] Goal 1: at least one real video-capable provider reviews a non-trivial
+- [x] Goal 1: at least one real video-capable provider reviews a non-trivial
   staged clip and identifies a motion-dependent property a single still
-  could not show. (Opt-in live run; not yet recorded.)
+  could not show. Recorded 2026-08-25 on a synthetic 12-frame clip (a marker
+  that disappears for one frame mid-sweep): the NVIDIA omni model named the
+  disappearance ("marker disappears (pop) at end of sequence"), a property a
+  still cannot show. Pinned by the opt-in live run
+  `tests/test_video_review_live.py` (`SHAMWAY_NETWORK_TESTS=nvidia`), which
+  also surfaced and fixed two real defects on the way: the provider's 12-image
+  per-prompt cap (adapter budget was 16) and single-frame issue moments
+  (`at_frame` scalars) that the result schema now normalizes. Evaluation
+  note: the same clip variant with a positional *jump* (no disappearance)
+  was called "smooth, no artifacts" at 0.96 confidence on one run and flagged
+  with three issues on another — model verdicts are non-deterministic, and a
+  subtle defect is not always named; the disappearance variant is reliably
+  flagged.
 - [x] Goal 2: output validates against the stable result schema shared with
   `0001`'s audio result shape, with `at_frame` as the video addition
   (`ResultTests`).

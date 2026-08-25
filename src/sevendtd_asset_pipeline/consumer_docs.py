@@ -304,9 +304,10 @@ the wrong pitch, a mesh at ten times scale, an icon whose alpha is inverted.
 
 **Whether it works is yours to prove, because only this repository knows what
 "right" means here.** Write your own `IScenarioProvider` alongside the
-generated one — a separate mod, your own suite id, not an edit to the
-generated file, which is rewritten on every run — and assert the things your
-content promises:
+generated one — its own file and its own suite id, not an edit to the
+generated file, which is rewritten on every run (the suite id is what
+separates it; it does not need its own mod or assembly) — and assert the
+things your content promises:
 
 - the item spawns, is held, and its mesh sits in the hand at the right scale
   and orientation;

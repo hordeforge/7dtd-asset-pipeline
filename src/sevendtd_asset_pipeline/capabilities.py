@@ -246,7 +246,7 @@ REGISTRY: tuple[_Spec, ...] = (
         unlocks=("shamway generate mesh-optimize",),
         purpose="simplify a mesh and reorder it for vertex-cache locality; it cuts "
         "triangles, which reaches the bundle, not bytes on disk, which does not",
-        install="npm install -g gltfpack",
+        install="bun install -g gltfpack",
     ),
     _Spec(
         name="openscad",

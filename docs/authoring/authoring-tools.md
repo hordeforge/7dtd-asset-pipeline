@@ -127,7 +127,7 @@ anything past `--max-drift` (2% by default), deleting the output. At
 `--simplify 0.02` the same sphere drifts 1.54% and is refused at a 0.5% limit.
 
 - Official repository: <https://github.com/zeux/meshoptimizer>
-- Install: `npm install -g gltfpack`
+- Install: `bun install -g gltfpack`
 
 ### AssetRipper — full vanilla reference extraction
 

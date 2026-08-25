@@ -24,7 +24,7 @@ simplification is lossy in *shape*, and a collapsed mesh still loads, still
 passes `check-mesh`, and is simply the wrong object. This compares extents
 before and after and refuses a mesh that moved further than `--max-drift`.
 
-Requires gltfpack on PATH: `npm install -g gltfpack`, or a build from
+Requires gltfpack on PATH: `bun install -g gltfpack`, or a build from
 meshoptimizer. Validate the result with `shamway check-mesh` as usual.
 """
 
@@ -82,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     gltfpack = shutil.which("gltfpack")
     if not gltfpack:
         print(
-            "ERROR: gltfpack is not on PATH. Install it with 'npm install -g gltfpack', "
+            "ERROR: gltfpack is not on PATH. Install it with 'bun install -g gltfpack', "
             "or build it from https://github.com/zeux/meshoptimizer.",
             file=sys.stderr,
         )

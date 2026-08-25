@@ -164,11 +164,48 @@ are both evidence; only the human look at the end accepts anything.
 
 ## Worked example
 
-A complete review of one clip, run end to end on 2026-08-25 against the
-NVIDIA omni model through the deadeye gateway. The clip is synthetic (a red
-marker that sweeps across 12 frames and disappears for one) so the whole loop
-runs without a game client; the commands are the same for a real `StagedClip`
-capture.
+### The end-to-end test
+
+The specific, runnable proof of the whole loop is one opt-in live test:
+
+```text
+tests/test_video_review_live.py
+  └─ test_the_full_chain_reviews_a_real_clip_and_names_the_pop
+```
+
+It scaffolds a minimal mod, generates a synthetic 12-frame clip (a red marker
+that sweeps smoothly and disappears for one frame), muxes it to `clip.mp4`
+with ffmpeg, adopts it through the same `record_existing_clip` path
+`shamway client capture --clip` uses, writes the intent, and runs the real
+review against the NVIDIA omni model. It asserts the evidence document, the
+asset provenance, that no credential leaked, that the muxed video actually
+reached the provider (not sampled frames), and that the verdict passes the
+result schema; then it prints the model's verdict for the human.
+
+Run it with the gateway configured (key in its `config.local.toml`):
+
+```bash
+export PATH="$HOME/code/hordeforge/7dtd-vision-review/.venv/bin:$PATH"
+export DEADEYE_CONFIG_DIR="$HOME/code/hordeforge/7dtd-vision-review"
+export SHAMWAY_NETWORK_TESTS=nvidia
+PYTHONPATH=src:tests python3 -m unittest tests.test_video_review_live -v
+```
+
+Real output from a green run:
+
+```text
+test_the_full_chain_reviews_a_real_clip_and_names_the_pop ... ok
+
+LIVE REVIEW SUMMARY: The red square moves smoothly from left to right across a
+         black background, maintaining a consistent size and clear silhouette.
+LIVE REVIEW ISSUE: Marker decelerates, indicating non-even spacing of motion
+LIVE REVIEW CONFIDENCE: 0.96
+```
+
+### The same loop by hand
+
+The test's steps are the real commands for a captured clip (here a
+`frame-*.png` sequence muxed to `clip.mp4` by `capture_video.sh`):
 
 The intent file, committed beside the source:
 
@@ -186,8 +223,7 @@ The intent file, committed beside the source:
 }
 ```
 
-Adopt the captured clip (here a `frame-*.png` sequence muxed to `clip.mp4` by
-`capture_video.sh`), then review it:
+Adopt the captured clip, then review it:
 
 ```bash
 shamway client capture thing --clip .local/capture/demo-20260825/thing \
@@ -210,8 +246,8 @@ issue:   Marker decelerates, indicating non-even spacing of motion
 confidence: 0.96
 ```
 
-Before submitting anything, render the exact instruction the gateway will
-inject — the harness for an agent:
+Optionally, before submitting anything, render the exact instruction the
+gateway will inject (the prompt is built for you; this just shows it):
 
 ```bash
 deadeye prompt --intent assets-src/bundle/thing.review.json --clip .local/acceptance/thing

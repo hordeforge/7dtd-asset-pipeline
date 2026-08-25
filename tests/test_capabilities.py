@@ -53,10 +53,7 @@ class CapabilityTests(unittest.TestCase):
 
     def test_require_names_the_capability_and_its_install_command(self) -> None:
         with (
-            mock.patch(
-                "sevendtd_asset_pipeline.capabilities._availability",
-                return_value={"UnityPy": False},
-            ),
+            mock.patch("sevendtd_asset_pipeline.capabilities.has_capability", return_value=False),
             self.assertRaises(PipelineError) as caught,
         ):
             require_capability("UnityPy")
@@ -79,9 +76,7 @@ class CapabilityTests(unittest.TestCase):
                     self.assertIn("@ " + SOURCE_URL, capability.install)
 
     def test_require_passes_when_available(self) -> None:
-        with mock.patch(
-            "sevendtd_asset_pipeline.capabilities._availability", return_value={"UnityPy": True}
-        ):
+        with mock.patch("sevendtd_asset_pipeline.capabilities.has_capability", return_value=True):
             require_capability("UnityPy")
 
     def test_unknown_capability_is_rejected(self) -> None:
@@ -123,10 +118,7 @@ class OptionalFeatureTests(unittest.TestCase):
         from sevendtd_asset_pipeline.deep_inspect import deep_inspect
 
         with (
-            mock.patch(
-                "sevendtd_asset_pipeline.capabilities._availability",
-                return_value={"UnityPy": False},
-            ),
+            mock.patch("sevendtd_asset_pipeline.capabilities.has_capability", return_value=False),
             self.assertRaisesRegex(PipelineError, "uv pip install"),
         ):
             deep_inspect(Path("/nonexistent.unity3d"))
@@ -139,10 +131,7 @@ class OptionalFeatureTests(unittest.TestCase):
 
         with (
             tempfile.NamedTemporaryFile(suffix=".glb") as handle,
-            mock.patch(
-                "sevendtd_asset_pipeline.capabilities._availability",
-                return_value={"trimesh": False},
-            ),
+            mock.patch("sevendtd_asset_pipeline.mesh_check.has_capability", return_value=False),
             mock.patch("sevendtd_asset_pipeline.mesh_check.shutil.which", return_value=None),
             self.assertRaisesRegex(PipelineError, "install-tools|uv pip install"),
         ):

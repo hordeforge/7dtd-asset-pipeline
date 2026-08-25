@@ -457,6 +457,9 @@ def capabilities(probe_versions: bool = False) -> list[Capability]:
     return [_resolve(spec, probe_versions) for spec in REGISTRY]
 
 
+_SPEC_BY_NAME: dict[str, _Spec] = {spec.name: spec for spec in REGISTRY}
+
+
 def _availability() -> dict[str, bool]:
     # Deliberately recomputed on every ask rather than cached: a `shamway serve`
     # session outlives the installs its own error messages call for, and a
@@ -467,22 +470,34 @@ def _availability() -> dict[str, bool]:
 
 
 def has_capability(name: str) -> bool:
-    return _availability().get(name, False)
+    """One capability's availability, probed fresh.
+
+    Resolves only the named spec rather than sweeping the whole registry:
+    these gates sit inside per-texture and per-class loops (`compress`,
+    `check_texture`, the bundle writer's type trees), and a sweep runs every
+    command probe (including the `usable` subprocess for a tool like
+    `vkd3d-compiler`) to answer a question about one module. Freshness is
+    unchanged: no answer is ever cached across asks.
+    """
+    spec = _SPEC_BY_NAME.get(name)
+    return _resolve(spec, probe_versions=False).available if spec is not None else False
 
 
 def require_capability(name: str) -> None:
     """Raise a message that names the capability and how to install it."""
     if has_capability(name):
         return
-    spec = next((item for item in REGISTRY if item.name == name), None)
+    spec = _SPEC_BY_NAME.get(name)
     if spec is None:
         raise PipelineError(f"unknown capability {name!r}")
     # A tool that is present but too old needs a different sentence from one
     # that is absent: "install it" is useless advice when it is installed.
     # (For provider-config capabilities the same distinction separates an
-    # unconfigured credential from anything PATH-shaped.)
-    found = next((item for item in capabilities() if item.name == name), None)
-    if found is not None and found.unusable_reason:
+    # unconfigured credential from anything PATH-shaped.) Only the failed
+    # capability is re-resolved, for its reason; the sweep a whole-registry
+    # report would pay buys nothing here.
+    found = _resolve(spec, probe_versions=False)
+    if found.unusable_reason:
         raise PipelineError(
             f"{', '.join(spec.unlocks)} needs the optional capability {spec.name!r} "
             f"({spec.purpose}), and the one on this host cannot be used: "

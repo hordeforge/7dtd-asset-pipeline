@@ -520,8 +520,7 @@ class OperationSurfaceTests(unittest.TestCase):
             intent.write_text(json.dumps(VALID_INTENT), encoding="utf-8")
             with (
                 mock.patch(
-                    "sevendtd_asset_pipeline.capabilities._availability",
-                    return_value={"model-audio-review": True},
+                    "sevendtd_asset_pipeline.capabilities.has_capability", return_value=True
                 ),
                 mock.patch(
                     "sevendtd_asset_pipeline.api.resolve_provider",
@@ -562,8 +561,7 @@ class OperationSurfaceTests(unittest.TestCase):
             intent.write_text(json.dumps(VALID_INTENT), encoding="utf-8")
             with (
                 mock.patch(
-                    "sevendtd_asset_pipeline.capabilities._availability",
-                    return_value={"model-audio-review": True},
+                    "sevendtd_asset_pipeline.capabilities.has_capability", return_value=True
                 ),
                 mock.patch(
                     "sevendtd_asset_pipeline.cli.resolve_provider",

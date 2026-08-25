@@ -13,12 +13,12 @@ using ZdtdPlaytest;
 //       render verification: does the block's model draw (where the generated
 //       look case instantiates the prefab directly, bypassing the block)?
 //
-//   shamwayselftest_block_place — the character places the block. The item
-//       from Config/items.xml is given and equipped, and the PlaceAsBlock
-//       action fires against a floor voxel ahead of the camera — the same path
-//       a player uses (ItemActionPlaceAsBlock.ExecuteAction → Block.PlaceBlock)
-//       — so the server places the block with the player as its placer, and
-//       the captured frame shows the character holding the block.
+//   shamwayselftest_block_place — the character places the block. The block's
+//       implicit item (ItemClassBlock; the mod ships no items.xml, so the
+//       block behaves like a frame: outline preview and all) is given and
+//       equipped, and the right-click use — Action1, which ItemClassBlock
+//       routes to IBlockTool.ExecuteUseAction — fires while aiming at the
+//       floor ahead, the same input path a player's click takes.
 public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
 {
     private const string BlockName = "shamwaySelfTestPropBlock";

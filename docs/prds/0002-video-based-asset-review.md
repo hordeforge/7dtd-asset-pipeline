@@ -391,11 +391,25 @@ in-repo provider adapter (the gateway owns that surface).
 - [x] Offline tests pass with stubbed runners and no network. (`make check
   test`; the shader-writer and packaged-mirror failures are the pre-existing
   baseline, present on main)
-- [ ] A fresh client stages and plays the reviewed candidate's clip in its
-  intended path. (needs the playtest side and a live run)
+- [x] A fresh client stages and plays the reviewed candidate's clip in its
+  intended path. Recorded 2026-08-25 on a real client: a synthesized box
+  bundle was staged in game by the generated `CaseDef.StagedClip` turntable
+  case and captured 48 frames in-game (ScreenCapture, superSize), muxed by
+  ffmpeg, adopted with `shamway client capture --clip`, and reviewed through
+  the full chain (`shamway review-video` -> deadeye -> NVIDIA omni, mp4
+  submitted as `video_url`); the hash-addressed evidence document landed in
+  the mod's `.local/acceptance/`. The run surfaced and fixed five real
+  defects on the way: the runner's `--port` default crash, a stale
+  `platform.cfg` (Local+EOS) breaking platform init, `capture_video.sh`
+  resolving the frames dir against a hardcoded Steam library instead of
+  COMPAT, its missing exec bit, and three model moment-shape variants
+  (singular `frame`/`seconds`, `start_*/end_*` pairs, explicit nulls) now
+  normalized by the result schema in all three repositories.
 - [ ] A human watches the clip in game and records whether the model's
   critique matched the experienced motion; only that human review may
-  accept the asset.
+  accept the asset. The reviewed mp4 and evidence are in the e2e mod's
+  `.local/acceptance/` from the 2026-08-25 run; the human look is the
+  remaining acceptance step.
 
 ## Open questions
 

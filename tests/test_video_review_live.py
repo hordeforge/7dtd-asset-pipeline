@@ -19,9 +19,9 @@ import os
 import shutil
 import struct
 import subprocess
-import tempfile
 import unittest
 import zlib
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sevendtd_asset_pipeline.capture import record_existing_clip
@@ -129,122 +129,135 @@ class LiveEndToEndTests(unittest.TestCase):
             )
 
     def test_the_full_chain_reviews_a_real_clip_and_names_the_pop(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+        # Artifacts persist under .local/e2e/<stamp>/ (gitignored) so the
+        # human can watch the reviewed video and read the evidence after the
+        # run — a verdict nobody can look at is not validation.
+        root = (
+            Path(__file__).resolve().parents[1]
+            / ".local"
+            / "e2e"
+            / datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        )
+        root.mkdir(parents=True, exist_ok=True)
 
-            # A minimal mod: one synthesized mesh asset.
-            (root / "Config").mkdir(parents=True, exist_ok=True)
-            (root / "Resources").mkdir(parents=True, exist_ok=True)
-            (root / "tools/shamway/manifests").mkdir(parents=True, exist_ok=True)
-            (root / "ModInfo.xml").write_text(
-                '<?xml version="1.0"?><xml><Name value="ExampleMod" /></xml>',
-                encoding="utf-8",
-            )
-            (root / ".shamway.toml").write_text(
-                render_config(
-                    mod_name="ExampleMod",
-                    bundle_name="examplemod.unity3d",
-                    unity_version="2022.3.62f2",
-                    bundle_source="synthesized",
-                ),
-                encoding="utf-8",
-            )
-            source = root / "assets-src" / "bundle"
-            source.mkdir(parents=True, exist_ok=True)
-            (source / "thing.glb").write_bytes(b"mesh-bytes")
-            config = load_config(root / ".shamway.toml")
+        # A minimal mod: one synthesized mesh asset.
+        (root / "Config").mkdir(parents=True, exist_ok=True)
+        (root / "Resources").mkdir(parents=True, exist_ok=True)
+        (root / "tools/shamway/manifests").mkdir(parents=True, exist_ok=True)
+        (root / "ModInfo.xml").write_text(
+            '<?xml version="1.0"?><xml><Name value="ExampleMod" /></xml>',
+            encoding="utf-8",
+        )
+        (root / ".shamway.toml").write_text(
+            render_config(
+                mod_name="ExampleMod",
+                bundle_name="examplemod.unity3d",
+                unity_version="2022.3.62f2",
+                bundle_source="synthesized",
+            ),
+            encoding="utf-8",
+        )
+        source = root / "assets-src" / "bundle"
+        source.mkdir(parents=True, exist_ok=True)
+        (source / "thing.glb").write_bytes(b"mesh-bytes")
+        config = load_config(root / ".shamway.toml")
 
-            # A synthetic clip with a deliberate pop; adopted like a real one.
-            captured = root / "capture" / "thing"
-            captured.mkdir(parents=True, exist_ok=True)
-            _defective_clip(captured)
-            muxed = _mux_video(captured, captured / "clip.mp4")
-            if not muxed:
-                self.skipTest("ffmpeg unavailable; the muxed-video path cannot run")
-            (captured / "client.log").write_text("clip complete demo/thing frames=12\n")
-            capture_root = root / ".local" / "acceptance"
-            adopted = record_existing_clip(
-                captured,
+        # A synthetic clip with a deliberate pop; adopted like a real one.
+        captured = root / "capture" / "thing"
+        captured.mkdir(parents=True, exist_ok=True)
+        _defective_clip(captured)
+        muxed = _mux_video(captured, captured / "clip.mp4")
+        if not muxed:
+            self.skipTest("ffmpeg unavailable; the muxed-video path cannot run")
+        (captured / "client.log").write_text("clip complete demo/thing frames=12\n")
+        capture_root = root / ".local" / "acceptance"
+        adopted = record_existing_clip(
+            captured,
+            "thing",
+            "the marker must sweep smoothly without popping",
+            capture_root,
+        )
+        self.assertEqual("thing", adopted.directory)
+
+        intent = root / "thing.review.json"
+        intent.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "purpose": "verify the marker moves smoothly across the clip "
+                    "without popping or jumping",
+                    "subject": "thing (synthetic marker)",
+                    "camera_path": "fixed",
+                    "desired_qualities": "continuous, evenly spaced motion",
+                    "avoid": ["popping", "jumping", "jitter"],
+                    "questions": ["does the marker pop at any point?"],
+                    "suite": "demo",
+                    "case": "thing",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        evidence = root / "evidence.json"
+        from sevendtd_asset_pipeline import PipelineError
+
+        try:
+            run_review(
                 "thing",
-                "the marker must sweep smoothly without popping",
-                capture_root,
+                clip=capture_root / "thing",
+                provider="nvidia",
+                intent_path=intent,
+                config=config,
+                capture_root=capture_root,
+                allow_network=True,
+                output=evidence,
+                timeout_seconds=180.0,
             )
-            self.assertEqual("thing", adopted.directory)
+        except PipelineError as exc:
+            if "rate-limited" in str(exc) or "503" in str(exc):
+                # The free-tier NVIDIA worker caps requests; not a code
+                # failure. Rerun when the limit resets.
+                self.skipTest(f"provider rate-limited: {exc}")
+            raise
 
-            intent = root / "thing.review.json"
-            intent.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "purpose": "verify the marker moves smoothly across the clip "
-                        "without popping or jumping",
-                        "subject": "thing (synthetic marker)",
-                        "camera_path": "fixed",
-                        "desired_qualities": "continuous, evenly spaced motion",
-                        "avoid": ["popping", "jumping", "jitter"],
-                        "questions": ["does the marker pop at any point?"],
-                        "suite": "demo",
-                        "case": "thing",
-                    }
-                ),
-                encoding="utf-8",
+        self.assertTrue(evidence.is_file(), "the evidence document must be written")
+        document = json.loads(evidence.read_text(encoding="utf-8"))
+        self.assertEqual("shamway-video-review-evidence", document["kind"])
+        self.assertEqual("thing", document["asset"]["stem"])
+        self.assertTrue(document["result"]["summary"])
+        self.assertEqual("deadeye-review", document["gateway"]["kind"])
+        self.assertNotIn("NVIDIA_API_KEY", evidence.read_text(encoding="utf-8"))
+
+        # The clip had a muxed mp4 and the provider takes video, so the
+        # submission must have gone as video — not silently as frames.
+        media = document["clip"]["files"]
+        self.assertTrue(
+            any(entry.get("kind") == "video" for entry in media),
+            f"the muxed video must reach the provider; media was {media}",
+        )
+        self.assertIn("muxed video", document["sampling"]["note"])
+
+        issues = document["result"]["issues"]
+        # The pipeline mechanics above are the hard contract. Whether the
+        # model names the planted defect is advisory and varies by run
+        # (one live run flagged the pop with three issues; another called
+        # the motion smooth at 0.96 confidence) — printed for the human,
+        # recorded in PRD 0002 as an evaluation finding, not a gate.
+        print("\nLIVE REVIEW SUMMARY:", document["result"]["summary"])
+        for issue in issues:
+            print("LIVE REVIEW ISSUE:", issue.get("description"))
+        print("LIVE REVIEW LIMITATIONS:", document["result"]["limitations"])
+        print("LIVE REVIEW CONFIDENCE:", document["result"].get("confidence"))
+        if not issues:
+            print(
+                "NOTE: the model did not name the planted defect this run; "
+                "see the finding in PRD 0002 (model verdicts are advisory)."
             )
-
-            evidence = root / "evidence.json"
-            from sevendtd_asset_pipeline import PipelineError
-
-            try:
-                run_review(
-                    "thing",
-                    clip=capture_root / "thing",
-                    provider="nvidia",
-                    intent_path=intent,
-                    config=config,
-                    capture_root=capture_root,
-                    allow_network=True,
-                    output=evidence,
-                    timeout_seconds=180.0,
-                )
-            except PipelineError as exc:
-                if "rate-limited" in str(exc) or "503" in str(exc):
-                    # The free-tier NVIDIA worker caps requests; not a code
-                    # failure. Rerun when the limit resets.
-                    self.skipTest(f"provider rate-limited: {exc}")
-                raise
-
-            self.assertTrue(evidence.is_file(), "the evidence document must be written")
-            document = json.loads(evidence.read_text(encoding="utf-8"))
-            self.assertEqual("shamway-video-review-evidence", document["kind"])
-            self.assertEqual("thing", document["asset"]["stem"])
-            self.assertTrue(document["result"]["summary"])
-            self.assertEqual("deadeye-review", document["gateway"]["kind"])
-            self.assertNotIn("NVIDIA_API_KEY", evidence.read_text(encoding="utf-8"))
-
-            # The clip had a muxed mp4 and the provider takes video, so the
-            # submission must have gone as video — not silently as frames.
-            media = document["clip"]["files"]
-            self.assertTrue(
-                any(entry.get("kind") == "video" for entry in media),
-                f"the muxed video must reach the provider; media was {media}",
-            )
-            self.assertIn("muxed video", document["sampling"]["note"])
-
-            issues = document["result"]["issues"]
-            # The pipeline mechanics above are the hard contract. Whether the
-            # model names the planted defect is advisory and varies by run
-            # (one live run flagged the pop with three issues; another called
-            # the motion smooth at 0.96 confidence) — printed for the human,
-            # recorded in PRD 0002 as an evaluation finding, not a gate.
-            print("\nLIVE REVIEW SUMMARY:", document["result"]["summary"])
-            for issue in issues:
-                print("LIVE REVIEW ISSUE:", issue.get("description"))
-            print("LIVE REVIEW LIMITATIONS:", document["result"]["limitations"])
-            print("LIVE REVIEW CONFIDENCE:", document["result"].get("confidence"))
-            if not issues:
-                print(
-                    "NOTE: the model did not name the planted defect this run; "
-                    "see the finding in PRD 0002 (model verdicts are advisory)."
-                )
+        print(f"\nARTIFACTS (kept for inspection, under gitignored .local/):")
+        print(f"  watch the reviewed video: {captured / 'clip.mp4'}")
+        print(f"  source frames:            {captured}")
+        print(f"  evidence document:        {evidence}")
+        print(f"  intent:                   {intent}")
 
 
 if __name__ == "__main__":

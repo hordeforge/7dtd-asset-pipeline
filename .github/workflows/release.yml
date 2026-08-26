@@ -64,6 +64,32 @@ jobs:
 
       - run: uv build
 
+      # setup.py stages docs/ and scripts/ into the package at build time, and
+      # `uv build` builds the wheel from the sdist. When the sdist carried no
+      # top-level docs/ or scripts/, that staging step found nothing, skipped
+      # without a word, and the wheel shipped whatever copy happened to be
+      # staged in the build tree already. MANIFEST.in grafts the sources so it
+      # cannot; this proves the published artifact against the tagged tree
+      # rather than trusting that it did.
+      - name: The wheel must carry this tree's docs and scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q -o dist/*.whl -d "$RUNNER_TEMP/wheel"
+          staged="$RUNNER_TEMP/wheel/sevendtd_asset_pipeline"
+          for file in "$staged"/scripts/*; do
+            cmp -s "$file" "scripts/$(basename "$file")" ||
+              { echo "ERROR: wheel's $(basename "$file") differs from scripts/" >&2; exit 1; }
+          done
+          count=0
+          while IFS= read -r page; do
+            cmp -s "$staged/docs/$page" "docs/$page" ||
+              { echo "ERROR: wheel's docs/$page differs from docs/" >&2; exit 1; }
+            count=$((count + 1))
+          done < <(cd "$staged/docs" && find . -name '*.md' -printf '%P\n')
+          test "$count" -gt 0 || { echo "ERROR: the wheel carries no documentation" >&2; exit 1; }
+          echo "OK: wheel carries $count documentation pages and $(ls "$staged"/scripts | wc -l) scripts, all matching the tree"
+
       # A CycloneDX 1.5 inventory of exactly what the committed uv.lock
       # resolves to for the released wheel: every optional extra, no dev
       # tooling. Attached beside the artifacts so consumers and vulnerability

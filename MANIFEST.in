@@ -1,0 +1,19 @@
+# docs/ and scripts/ live at the repository root, and setup.py copies them
+# into the package at build time so `shamway docs` and `shamway script` work
+# from a wheel. Both halves of that need saying here.
+#
+# Graft the roots: `uv build` builds the wheel from the sdist, and without the
+# sources in it setup.py's staging step finds no docs/ and no scripts/, skips
+# silently, and the wheel ships whatever was already staged in the working
+# tree. That is how a build published documentation and an installer older
+# than the tree it was cut from.
+graft docs
+graft scripts
+
+# Prune the staged copies: they are build output, regenerated on every build
+# from the grafted originals above. Shipping them in the sdist is what let a
+# stale one survive into the next wheel.
+prune src/sevendtd_asset_pipeline/docs
+prune src/sevendtd_asset_pipeline/scripts
+
+global-exclude *.py[cod] __pycache__/*

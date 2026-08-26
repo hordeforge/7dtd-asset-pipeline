@@ -30,16 +30,37 @@ class ScriptRegistryTests(unittest.TestCase):
                 self.assertTrue(script.read_bytes().startswith(b"#!"), str(script))
 
     def test_packaged_scripts_are_the_repo_scripts(self) -> None:
-        """setup.py copies scripts/*.sh into the package on every build.
+        """setup.py copies scripts/*.sh and scripts/*.py into the package on every build.
 
         A wheel built from a stale tree ships yesterday's installer; equality
         here is cheap to keep and expensive to lose.
+
+        The file list comes from the directory rather than a literal, for the
+        reason setup.py globs both suffixes: the shell scripts keep their JSON
+        and import probes in sibling .py files so each file stays one language,
+        and a staged installer whose helper did not come along resolves
+        nothing. A hand-kept list is a list that forgets one.
         """
         source_root = Path(sevendtd_asset_pipeline.__file__).resolve().parents[2] / "scripts"
         if not source_root.is_dir():
             self.skipTest("running from a packaged install without the repo scripts/")
         packaged_root = Path(sevendtd_asset_pipeline.__file__).resolve().parent / "scripts"
+        if not packaged_root.is_dir():
+            # A plain checkout stages nothing: MANIFEST.in prunes the staged
+            # copies from the sdist, so the build regenerates them in its own
+            # tree and `scripts.path()` falls back to scripts/ here. There is
+            # no second copy to drift. The release workflow compares the built
+            # wheel against the tree, which is where the two can differ.
+            self.skipTest("nothing staged in this tree; the wheel is checked at release")
+        staged = sorted(
+            path.name for suffix in ("*.sh", "*.py") for path in source_root.glob(suffix)
+        )
+        self.assertTrue(staged, "scripts/ carries no script to stage")
+        # Every registered name must be among them, so the registry cannot
+        # point at a file the build does not ship.
         for filename in (filename for filename, _summary in SCRIPTS.values()):
+            self.assertIn(filename, staged)
+        for filename in staged:
             with self.subTest(filename):
                 self.assertEqual(
                     (source_root / filename).read_bytes(),
@@ -47,15 +68,6 @@ class ScriptRegistryTests(unittest.TestCase):
                     f"{filename} differs between scripts/ and the packaged copy; "
                     "re-copy it (or rebuild the wheel) so both readers see one script",
                 )
-        # install-tools.sh resolves GitHub release URLs through this sibling,
-        # so a staged installer without its current copy can resolve nothing.
-        with self.subTest("github_asset_url.py"):
-            self.assertEqual(
-                (source_root / "github_asset_url.py").read_bytes(),
-                (packaged_root / "github_asset_url.py").read_bytes(),
-                "github_asset_url.py differs between scripts/ and the packaged copy; "
-                "re-copy it (or rebuild the wheel) so both readers see one script",
-            )
 
     def test_an_unknown_script_lists_the_known_ones(self) -> None:
         with self.assertRaisesRegex(PipelineError, "install-tools"):

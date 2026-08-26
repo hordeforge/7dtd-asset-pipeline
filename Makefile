@@ -1,4 +1,4 @@
-.PHONY: check lint typecheck test coverage all
+.PHONY: check lint typecheck locked test coverage all
 
 # scripts/bootstrap installs the pinned analyzers into .venv/bin without
 # putting them on PATH; prefer them so a bootstrapped checkout always runs
@@ -16,7 +16,7 @@ all: check test
 # line named only their older siblings. The wildcard cannot forget one.
 SHELL_SCRIPTS := scripts/bootstrap $(wildcard scripts/*.sh)
 
-check: lint typecheck
+check: lint typecheck locked
 	$(PYTHON) -m compileall -q src tests $(wildcard scripts/*.py)
 	bash -n $(SHELL_SCRIPTS)
 	@if command -v shellcheck >/dev/null 2>&1; then \
@@ -53,6 +53,18 @@ typecheck:
 		exit 1; \
 	else \
 		echo "note: mypy not installed; skipped type checking"; \
+	fi
+
+# Every CI job installs with `uv sync --locked`, which fails outright when
+# uv.lock has drifted from pyproject.toml. Catching that here costs
+# milliseconds and turns a whole-matrix red build into one local line: the
+# dynamic-version switch went in without a re-lock and every job died at
+# install, before a single test ran.
+locked:
+	@if command -v uv >/dev/null 2>&1; then \
+		uv lock --check; \
+	else \
+		echo "note: uv not installed; skipped the lockfile check"; \
 	fi
 
 test:

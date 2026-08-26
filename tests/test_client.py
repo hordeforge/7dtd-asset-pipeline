@@ -378,14 +378,22 @@ class LatestLogTests(unittest.TestCase):
             past = time.time() - 3600
             os.utime(old, (past, past))
             now = time.monotonic()
+
+            def advance(seconds: float) -> None:
+                nonlocal now
+                now += seconds
+
             with (
-                # Each clock read advances a simulated second, so the wait
-                # expires without three real seconds of busy-looping.
+                # The mocked sleep advances the simulated clock, so the wait
+                # expires without five real seconds of busy-looping. The clock
+                # has to advance somewhere: `latest_client_log` polls until
+                # monotonic() reaches its deadline, so a constant clock plus a
+                # sleep that does nothing spins that loop forever.
                 mock.patch(
                     "sevendtd_asset_pipeline.client.time.monotonic",
-                    side_effect=lambda: now + 1,
+                    side_effect=lambda: now,
                 ),
-                mock.patch("sevendtd_asset_pipeline.client.time.sleep"),
+                mock.patch("sevendtd_asset_pipeline.client.time.sleep", side_effect=advance),
                 self.assertRaisesRegex(PipelineError, "after waiting 5s"),
             ):
                 client.latest_client_log(logs, written_after=time.time() - 60, wait_seconds=5)

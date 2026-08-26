@@ -22,12 +22,12 @@ import os
 import shutil
 import struct
 import subprocess
-import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .errors import PipelineError
+from .workdir import scratch_dir
 
 BLOB_VERSION = 202012090
 """Unity's `LoadGpuProgramFromData` tag for 2021.2 and up."""
@@ -346,9 +346,9 @@ def compile_hlsl(source: str, profile: str) -> bytes:
             "'shamway script install-tools --with-authoring', or declare "
             'bundle_source other than "synthesized" for a bundle with a shader.'
         )
-    with tempfile.TemporaryDirectory() as work:
-        src = Path(work) / "shader.hlsl"
-        out = Path(work) / "shader.dxbc"
+    with scratch_dir("shader-dxbc-") as work:
+        src = work / "shader.hlsl"
+        out = work / "shader.dxbc"
         src.write_text(source, encoding="utf-8")
         result = _compile(
             [
@@ -403,9 +403,9 @@ def compile_spirv(dxbc: bytes) -> bytes:
             "into the SPIR-V a Vulkan sub-program carries. Install it with "
             "'shamway script install-tools'."
         )
-    with tempfile.TemporaryDirectory() as work:
-        src = Path(work) / "shader.dxbc"
-        out = Path(work) / "shader.spv"
+    with scratch_dir("shader-spv-") as work:
+        src = work / "shader.dxbc"
+        out = work / "shader.spv"
         src.write_bytes(dxbc)
         result = _compile(
             [binary, "-x", "dxbc-tpf", "-b", "spirv-binary", str(src), "-o", str(out)],
@@ -531,9 +531,9 @@ def compile_spirv_glslang(source: str, stage: str, language: str = "hlsl") -> by
             "SPIR-V a Vulkan sub-program carries. Install it with "
             "'shamway script install-tools'."
         )
-    with tempfile.TemporaryDirectory() as work:
-        src = Path(work) / f"shader.{stage}.{language}"
-        out = Path(work) / "shader.spv"
+    with scratch_dir("shader-glsl-") as work:
+        src = work / f"shader.{stage}.{language}"
+        out = work / "shader.spv"
         src.write_text(source, encoding="utf-8")
         command = [
             binary,

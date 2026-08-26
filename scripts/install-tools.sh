@@ -11,6 +11,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Every mktemp below follows TMPDIR, and the default /tmp is tmpfs on most
+# Linux hosts: the release tarballs and the vkd3d source build staged here run
+# to hundreds of megabytes, which that default charges against RAM. Keep them
+# on disk unless the caller already chose somewhere.
+: "${TMPDIR:=${XDG_CACHE_HOME:-$HOME/.cache}/shamway/tmp}"
+mkdir -p "$TMPDIR"
+export TMPDIR
+
 WITH_AUTHORING=0
 WITH_UNITY_PREREQS=0
 WITH_RESEARCH=0
@@ -154,10 +162,20 @@ while (($#)); do
 	esac
 done
 
+# The version comes from the interpreter's own --version line rather than an
+# embedded program, so this file stays one language. sort -V decides the
+# comparison, which is what handles 3.10 < 3.9 correctly.
 has_python_311() {
-	command -v python3 >/dev/null 2>&1 &&
-		python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))'
+	local version
+	command -v python3 >/dev/null 2>&1 || return 1
+	version="$(python3 --version 2>&1 | awk '{print $2}')"
+	[[ -n "$version" ]] || return 1
+	[[ "$(printf '%s\n3.11\n' "$version" | sort -V | head -n1)" == "3.11" ]]
 }
+
+# The optional Python capabilities, probed by a sibling script for the reason
+# the JSON selection is one: this file stays shell.
+has_module() { python3 "$ROOT/scripts/have_module.py" "$@"; }
 
 # Presence is not capability: vkd3d-shader grew HLSL support in 1.3, and Debian
 # and Ubuntu both still package 1.2. Ask the binary what it reads rather than
@@ -227,10 +245,10 @@ run_check() {
 		report ffmpeg "audio" have ffmpeg
 		report xvfb-run "icon rendering on a headless host" have xvfb-run
 		report gltf_validator "glTF conformance" have gltf_validator
-		report UnityPy "deep bundle inspection" python3 -c "import UnityPy"
-		report Pillow "icon and texture lanes" python3 -c "import PIL"
-		report NumPy "texture lane" python3 -c "import numpy"
-		report trimesh "mesh checks" python3 -c "import trimesh"
+		report UnityPy "deep bundle inspection" has_module UnityPy
+		report Pillow "icon and texture lanes" has_module PIL
+		report NumPy "texture lane" has_module numpy
+		report trimesh "mesh checks" has_module trimesh
 	fi
 	if ((WITH_UNITY_PREREQS)); then
 		local tool

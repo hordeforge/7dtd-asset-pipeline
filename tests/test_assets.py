@@ -989,6 +989,13 @@ class DocumentationTests(unittest.TestCase):
         if not source.is_dir():
             self.skipTest("running from a packaged install without the repo docs/")
         packaged = Path(sevendtd_asset_pipeline.__file__).resolve().parent / "docs"
+        if not packaged.is_dir():
+            # A plain checkout stages nothing: MANIFEST.in prunes the staged
+            # copies from the sdist, so the build regenerates them in its own
+            # tree and `docs._root()` falls back to docs/ here. There is no
+            # second copy to drift. The release workflow compares the built
+            # wheel against the tree, which is where the two can differ.
+            self.skipTest("nothing staged in this tree; the wheel is checked at release")
         packaged_pages = sorted(path.relative_to(packaged) for path in packaged.rglob("*.md"))
         source_pages = sorted(path.relative_to(source) for path in source.rglob("*.md"))
         self.assertEqual(

@@ -15,6 +15,14 @@ concurrency:
 permissions:
   contents: read
 
+# The implicit shell is `bash -e`, which has no pipefail, so a failing command
+# on the left of a pipe is reported as the exit code of the one on the right:
+# `shamway build | tee log` passes on a failed build. Naming bash explicitly
+# gets `bash --noprofile --norc -eo pipefail`.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -120,40 +128,34 @@ jobs:
       - run: uv sync --locked --no-dev --all-extras
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
+      # RUNNER_TEMP rather than /tmp: it is disk-backed and cleaned per job,
+      # and it is where this repository's own scripts point TMPDIR. Exported
+      # through GITHUB_ENV because the `runner` context is not available in a
+      # job-level `env:` block, only inside a step.
+      - run: echo "MOD_DIR=$RUNNER_TEMP/MyMod" >> "$GITHUB_ENV"
+
       - name: Scaffold a modlet with no flags, and prove the default is editorless
         run: |
-          mkdir -p /tmp/MyMod/Config
-          printf '<xml><Name value="MyMod" /></xml>\n' > /tmp/MyMod/ModInfo.xml
-          shamway init /tmp/MyMod --unity-version 2022.3.62f2
-          test -f /tmp/MyMod/tools/shamway/AGENTS.md
-          test -d /tmp/MyMod/assets-src/bundle
+          mkdir -p "$MOD_DIR/Config"
+          printf '<xml><Name value="MyMod" /></xml>\n' > "$MOD_DIR/ModInfo.xml"
+          shamway init "$MOD_DIR" --unity-version 2022.3.62f2
+          test -f "$MOD_DIR/tools/shamway/AGENTS.md"
+          test -d "$MOD_DIR/assets-src/bundle"
           # No editor was requested, so none of its scaffolding may appear.
-          test ! -e /tmp/MyMod/tools/shamway/UnityProject
-          grep -q 'bundle_source = "synthesized"' /tmp/MyMod/.shamway.toml
-          cd /tmp/MyMod && shamway status --json || true
-          cd /tmp/MyMod && shamway refs
-          cd /tmp/MyMod && shamway call capabilities > /dev/null
+          test ! -e "$MOD_DIR/tools/shamway/UnityProject"
+          grep -q 'bundle_source = "synthesized"' "$MOD_DIR/.shamway.toml"
+          cd "$MOD_DIR"
+          shamway status --json || true
+          shamway refs
+          shamway call capabilities > /dev/null
 
       - name: Author the sources the writer reads
         run: |
-          cd /tmp/MyMod
-          # trimesh and Pillow write the two sources directly. `shamway generate
-          # mesh` would be the authoring command, but it shells out to Blender,
-          # which this runner has no reason to install: what is under test is
-          # the writer reading an interchange file, not how the file was made.
-          # With UV0: the writer refuses a mesh that has an albedo beside it
-          # and nothing to sample it with, because that combination draws one
-          # flat colour while every gate still passes. trimesh's primitives
-          # carry no UVs, so the fixture supplies them like a real export.
-          python - <<'MESH'
-          import numpy, trimesh
-          box = trimesh.creation.box(extents=(0.4, 0.4, 0.4))
-          span = box.vertices.max(axis=0) - box.vertices.min(axis=0)
-          uv = (box.vertices[:, :2] - box.vertices[:, :2].min(axis=0)) / span[:2]
-          box.visual = trimesh.visual.TextureVisuals(uv=numpy.asarray(uv, dtype=float))
-          box.export("assets-src/bundle/myModThing.glb")
-          MESH
-          python -c "from PIL import Image; Image.new('RGBA', (64, 64), (120, 60, 40, 255)).save('assets-src/bundle/myModThing_albedo.png')"
+          # The fixtures are a sibling script, so this workflow stays one
+          # language and `make check` lints and type-checks the authoring.
+          python "$GITHUB_WORKSPACE/scripts/ci_scaffold.py" author-sources \
+            "$MOD_DIR/assets-src/bundle"
+          cd "$MOD_DIR"
           printf '%s\n' \
             '<configs><append xpath="/blocks"><block name="myModBlock">' \
             '<property name="Model" value="#@modfolder(MyMod):Resources/mymod.unity3d?myModThing.prefab" />' \
@@ -166,33 +168,20 @@ jobs:
         env:
           UNITY_EDITOR: ""
         run: |
-          cd /tmp/MyMod
+          check="$GITHUB_WORKSPACE/scripts/ci_scaffold.py"
+          cd "$MOD_DIR"
           vkd3d-compiler --version || true
-          # Written to a file, not piped: `cmd | python - <<'EOF'` gives the
-          # interpreter two stdins and it executes the JSON as the program.
-          shamway capabilities --json > /tmp/caps-old.json
-          python - <<'CHECK'
-          import json
-          lane = [c for c in json.load(open("/tmp/caps-old.json")) if c["name"] == "vkd3d-compiler"][0]
-          assert lane["path"], "the packaged binary should be on PATH for this step"
-          assert not lane["available"], "vkd3d 1.2 cannot read HLSL and must not report available"
-          assert lane["unusable_reason"], "an unusable tool must say why"
-          print("OK: present but unusable, reported as:", lane["unusable_reason"])
-          CHECK
+          shamway capabilities --json > "$RUNNER_TEMP/caps-old.json"
+          python "$check" check-vkd3d "$RUNNER_TEMP/caps-old.json" --expect unusable
           # The build must still succeed, packing less and saying so.
-          shamway build | tee /tmp/degraded.log
-          grep -q "cannot be used" /tmp/degraded.log
+          shamway build | tee "$RUNNER_TEMP/degraded.log"
+          grep -q "cannot be used" "$RUNNER_TEMP/degraded.log"
           shamway validate
-          shamway inspect --deep --json Resources/mymod.unity3d > /tmp/degraded.json
-          python - <<'CHECK'
-          import json
-          types = set(json.load(open("/tmp/degraded.json"))["type_counts"])
-          assert "Mesh" in types and "Texture2D" in types, sorted(types)
-          assert not {"GameObject", "Material", "Shader"} & types, (
-              f"the prefab lane must be absent without a usable compiler, got {sorted(types)}"
-          )
-          print("OK: degraded to a bare Mesh, with the caveat printed:", sorted(types))
-          CHECK
+          shamway inspect --deep --json Resources/mymod.unity3d > "$RUNNER_TEMP/degraded.json"
+          # The prefab group must be absent: packing a prefab with no usable
+          # compiler ships something that loads and draws nothing.
+          python "$check" check-classes "$RUNNER_TEMP/degraded.json" \
+            --require Mesh Texture2D --forbid GameObject Material Shader
 
       # ---- the shader lane, whole: a vkd3d new enough to read HLSL ----
       - name: Cache the vkd3d build
@@ -218,28 +207,17 @@ jobs:
           export PATH="/opt/vkd3d/bin:$PATH"
           export LD_LIBRARY_PATH="/opt/vkd3d/lib:${LD_LIBRARY_PATH:-}"
           vkd3d-compiler --version
-          cd /tmp/MyMod
-          shamway capabilities --json > /tmp/caps-new.json
-          python - <<'CHECK'
-          import json
-          lane = [c for c in json.load(open("/tmp/caps-new.json")) if c["name"] == "vkd3d-compiler"][0]
-          assert lane["available"], f"expected a usable vkd3d, got {lane['unusable_reason']}"
-          print("OK: usable shader lane at", lane["path"])
-          CHECK
+          check="$GITHUB_WORKSPACE/scripts/ci_scaffold.py"
+          cd "$MOD_DIR"
+          shamway capabilities --json > "$RUNNER_TEMP/caps-new.json"
+          python "$check" check-vkd3d "$RUNNER_TEMP/caps-new.json" --expect usable
           shamway build
           shamway validate
-          shamway inspect --deep --json Resources/mymod.unity3d > /tmp/deep.json
-          python - <<'CHECK'
-          import json
-          types = json.load(open("/tmp/deep.json"))["type_counts"]
-          required = {
-              "AssetBundle", "GameObject", "Transform", "MeshFilter",
-              "MeshRenderer", "Mesh", "Material", "Shader", "Texture2D",
-          }
-          missing = sorted(required - set(types))
-          assert not missing, f"editorless bundle is missing {missing}; got {sorted(types)}"
-          print("OK: every class the game resolves, written with no editor:", sorted(types))
-          CHECK
+          shamway inspect --deep --json Resources/mymod.unity3d > "$RUNNER_TEMP/deep.json"
+          # Every class the game resolves, written with no editor.
+          python "$check" check-classes "$RUNNER_TEMP/deep.json" \
+            --require AssetBundle GameObject Transform MeshFilter MeshRenderer \
+                      Mesh Material Shader Texture2D
 
   coverage-badge:
     # Publishes the line-coverage badge to the badges branch, which
@@ -278,8 +256,7 @@ jobs:
             git init -q -b badges badge-repo
             # Only the fresh-init path needs the remote: clone already has it,
             # and adding a duplicate fails the step under set -e.
-            git -C badge-repo remote remove origin 2>/dev/null || true
-          git -C badge-repo remote add origin "$url"
+            git -C badge-repo remote add origin "$url"
           fi
           cp "$RUNNER_TEMP/coverage.svg" badge-repo/
           cd badge-repo

@@ -24,6 +24,12 @@
 # It exits when the suite writes DONE, or at --timeout.
 set -euo pipefail
 
+# Resolves the sibling helpers in both layouts: from a checkout this is the
+# repository root, and from the installed package (`shamway script
+# playtest-capture`) it is the package directory, whose scripts/ holds the
+# same files.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
 LABEL="staged"
 TIMEOUT=900
 MARKER="scene staged"
@@ -60,9 +66,10 @@ if [[ -z "$CASE" ]]; then
     exit 2
 fi
 
+# The field selection is a sibling script, so this file stays one language.
 where="$(shamway client where --json)"
-logs="$(printf '%s' "$where" | python3 -c 'import json,sys; print(json.load(sys.stdin)["log_dir"])')"
-shots_dir="$(printf '%s' "$where" | python3 -c 'import json,sys; print(json.load(sys.stdin)["user_data"])')/playtest-shots"
+logs="$(printf '%s' "$where" | python3 "$ROOT/scripts/json_field.py" log_dir)"
+shots_dir="$(printf '%s' "$where" | python3 "$ROOT/scripts/json_field.py" user_data)/playtest-shots"
 started="$(date +%s)"
 seen=""
 # The orchestrator writes this when its poll loop ends (done / timeout /

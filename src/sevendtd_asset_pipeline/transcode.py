@@ -22,12 +22,12 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 from .errors import PipelineError
+from .workdir import scratch_dir
 
 # What FFmpeg is asked to read. WAV is absent deliberately: the standard
 # library already reads it, and routing it through a subprocess would make a
@@ -74,8 +74,8 @@ def as_wav(source: Path, rate: int | None = None) -> Iterator[Path]:
             "installed. Install it (shamway script install-tools --with-authoring), "
             "or convert the file to 16-bit PCM WAV first."
         )
-    with tempfile.TemporaryDirectory(prefix="shamway-audio-") as directory:
-        decoded = Path(directory) / f"{source.stem}.wav"
+    with scratch_dir("audio-") as directory:
+        decoded = directory / f"{source.stem}.wav"
         command = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(source)]
         if rate is not None:
             command += ["-ar", str(rate)]
@@ -105,8 +105,8 @@ def as_png(source: Path, density: int = 384) -> Iterator[Path]:
             "Install it (shamway script install-tools --with-authoring), or export "
             "the source to PNG first."
         )
-    with tempfile.TemporaryDirectory(prefix="shamway-image-") as directory:
-        rendered = Path(directory) / f"{source.stem}.png"
+    with scratch_dir("image-") as directory:
+        rendered = directory / f"{source.stem}.png"
         command = [magick]
         if source.suffix.lower() == ".svg":
             command += ["-background", "none", "-density", str(density)]

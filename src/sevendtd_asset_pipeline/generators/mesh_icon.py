@@ -37,10 +37,10 @@ import argparse
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 from .. import atomic
+from ..workdir import scratch_dir
 
 MINIMUM_COVERAGE = 0.02
 
@@ -203,10 +203,10 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: an atlas cell is a .png", file=sys.stderr)
         return 1
 
-    with tempfile.TemporaryDirectory() as directory:
-        script = Path(directory) / "render.py"
+    with scratch_dir("mesh-icon-") as directory:
+        script = directory / "render.py"
         script.write_text(BLENDER_SCRIPT, encoding="utf-8")
-        rendered = Path(directory) / "icon.png"
+        rendered = directory / "icon.png"
         try:
             result = subprocess.run(
                 [

@@ -11,6 +11,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# The editor archive staged through mktemp below is several gigabytes, and
+# mktemp follows TMPDIR, whose default /tmp is tmpfs on most Linux hosts: that
+# download would land in RAM. Keep it on disk unless the caller chose already.
+: "${TMPDIR:=${XDG_CACHE_HOME:-$HOME/.cache}/shamway/tmp}"
+mkdir -p "$TMPDIR"
+export TMPDIR
+
 HUB_APP_ID="com.unity.UnityHub"
 VERSION=""
 PROJECT=""
@@ -93,9 +101,9 @@ if [[ -d "$ROOT/src/sevendtd_asset_pipeline" ]]; then
 else
 	RELEASE_JSON="$(shamway unity-release --version "$VERSION" --json)"
 fi
+# The field selection is a sibling script, so this file stays one language.
 read_field() {
-	printf '%s' "$RELEASE_JSON" | python3 -c \
-		'import json,sys; print(json.load(sys.stdin)[sys.argv[1]] or "")' "$1"
+	printf '%s' "$RELEASE_JSON" | python3 "$ROOT/scripts/json_field.py" "$1"
 }
 EDITOR_URL="$(read_field editor_url)"
 EDITOR_MD5="$(read_field editor_md5)"

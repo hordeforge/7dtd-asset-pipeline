@@ -44,13 +44,13 @@ class build_py(_build_py):  # type: ignore[misc]  # noqa: N801 - setuptools requ
         if SOURCE_SCRIPTS.is_dir():
             shutil.rmtree(staged_scripts, ignore_errors=True)
             staged_scripts.mkdir(parents=True, exist_ok=True)
-            for script in sorted(SOURCE_SCRIPTS.glob("*.sh")):
-                shutil.copy2(script, staged_scripts / script.name)
-            # install-tools.sh resolves its GitHub release URLs through this
-            # sibling; a staged installer without it could resolve nothing.
-            helper = SOURCE_SCRIPTS / "github_asset_url.py"
-            if helper.is_file():
-                shutil.copy2(helper, staged_scripts / helper.name)
+            # Both suffixes, by glob rather than by name: the shell scripts
+            # keep their JSON and import probes in sibling .py files so each
+            # file stays one language, and a staged installer missing one
+            # resolves nothing. A hand-kept list is a list that forgets.
+            for pattern in ("*.sh", "*.py"):
+                for script in sorted(SOURCE_SCRIPTS.glob(pattern)):
+                    shutil.copy2(script, staged_scripts / script.name)
         # setuptools copies into build/lib but never deletes from it, so the
         # residue of an older layout would ride along in every rebuilt wheel:
         # after these directories were categorized into subdirectories, a

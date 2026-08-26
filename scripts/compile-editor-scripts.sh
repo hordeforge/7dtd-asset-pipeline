@@ -15,6 +15,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# mktemp follows TMPDIR, and its default /tmp is tmpfs on most Linux hosts,
+# so the compiler output below would be written to RAM. Keep it on disk unless
+# the caller already chose somewhere.
+: "${TMPDIR:=${XDG_CACHE_HOME:-$HOME/.cache}/shamway/tmp}"
+mkdir -p "$TMPDIR"
+export TMPDIR
+
 # From a checkout the template is under src/; from the installed package
 # (`shamway script compile-editor-scripts`) it sits beside this script's parent.
 TEMPLATE="$ROOT/src/sevendtd_asset_pipeline/templates/UnityProject"

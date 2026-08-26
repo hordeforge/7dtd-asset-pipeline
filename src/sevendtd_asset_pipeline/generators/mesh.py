@@ -43,8 +43,9 @@ import argparse
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
+
+from ..workdir import scratch_dir
 
 # A headless Blender that wedges (a broken userpref, a stuck GPU probe) must
 # fail this generator, not hang it: the same lane bounds gltfpack at 300s in
@@ -154,10 +155,10 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("ERROR: export target must be .glb")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as directory:
-        script = Path(directory) / "generate.py"
+    with scratch_dir("mesh-") as directory:
+        script = directory / "generate.py"
         script.write_text(BLENDER_SCRIPT, encoding="utf-8")
-        staged = Path(directory) / "out.glb"
+        staged = directory / "out.glb"
         try:
             result = subprocess.run(
                 [

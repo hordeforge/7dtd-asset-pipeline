@@ -4,7 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "7dtd-asset-pipeline"
-version = "0.1.0"
+# Single source of truth for the version is
+# sevendtd_asset_pipeline._version.__version__, read statically at build time.
+# It is declared in one place because it is reported in two: `shamway schema`
+# manifests and the review-evidence files embed tool_version, and a wheel that
+# disagrees with the code it carries is a mismatched artifact.
+dynamic = ["version"]
 description = "Write, gate and validate Unity asset bundles for 7 Days to Die mods, with no Unity editor"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -68,6 +73,9 @@ Issues = "https://github.com/hordeforge/7dtd-asset-pipeline/issues"
 [tool.setuptools]
 package-dir = {"" = "src"}
 include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { attr = "sevendtd_asset_pipeline._version.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

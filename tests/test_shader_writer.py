@@ -122,10 +122,21 @@ class CompileTests(unittest.TestCase):
         self.assertEqual(record[-8:], struct.pack("<ii", 0, 0))
 
     def test_a_record_without_its_channel_block_is_short(self) -> None:
-        """The omission that made a real runtime refuse the program."""
-        fragment = shader_blob.compile_hlsl(shader_blob.UNLIT_FRAGMENT_HLSL, "ps_4_0")
-        full = shader_blob.code_blob(shader_blob.DX11_PIXEL_SM40, fragment)
-        self.assertEqual(len(full) - len(full[:-8]), 8)
+        """The omission that made a real runtime refuse the program.
+
+        The block is pinned on a vertex record, whose table is non-empty:
+        a pixel record's empty table is indistinguishable from no table at
+        all in a length check.
+        """
+        vertex = shader_blob.compile_hlsl(shader_blob.UNLIT_VERTEX_HLSL, "vs_4_0")
+        record = shader_blob.code_blob(shader_blob.DX11_VERTEX_SM40, vertex)
+        block = shader_blob.bind_channels(vertex)
+        self.assertGreater(len(block), 8, "the fixture must bind channels to be evidence")
+        self.assertTrue(
+            record.endswith(block),
+            "the code blob ends with its channel table; dropping it is the "
+            "omission that made the runtime refuse the program",
+        )
 
 
 class CompileTimeoutTests(unittest.TestCase):
@@ -152,32 +163,40 @@ class CompileTimeoutTests(unittest.TestCase):
             ),
         ]
 
-    @staticmethod
-    def _recording_run(seen: dict[str, Any]) -> collections.abc.Callable[..., Any]:
-        def record(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            seen.update(kwargs)
-            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
-
-        return record
-
     def test_every_compile_runs_under_a_timeout(self) -> None:
+        """The bound reaches subprocess.run, proven on the success path.
+
+        The fake run writes a plausible artifact beside `-o`, so the action
+        completes instead of dying on a missing file: an unrelated failure
+        cannot mask whether the timeout kwarg was passed.
+        """
+
+        def successful_run(seen: dict[str, Any]) -> collections.abc.Callable[..., Any]:
+            def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                seen.update(kwargs)
+                out = Path(command[command.index("-o") + 1])
+                payload = b"DXBC" + b"\x00" * 64
+                if "spirv-binary" in command or "--target-env" in command:
+                    payload = struct.pack("<I", shader_blob.SPIRV_MAGIC) + b"\x00" * 64
+                out.write_bytes(payload)
+                return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+            return run
+
         for action, _tool in self.compile_calls():
             seen: dict[str, Any] = {}
             with (
                 mock.patch(
                     "sevendtd_asset_pipeline.shader_blob.shutil.which",
-                    return_value="/usr/bin/fake-tool",
+                    side_effect=lambda name: "/usr/bin/fake-tool",
                 ),
                 mock.patch(
                     "sevendtd_asset_pipeline.shader_blob.subprocess.run",
-                    side_effect=self._recording_run(seen),
+                    side_effect=successful_run(seen),
                 ),
-                # The fake output file never appears, so the caller refuses;
-                # what this asserts is the kwargs that reached subprocess.run.
-                self.assertRaises(PipelineError),
             ):
                 action()
-            self.assertEqual(seen.get("timeout"), shader_blob.SHADER_COMPILE_TIMEOUT)
+            self.assertEqual(shader_blob.SHADER_COMPILE_TIMEOUT, seen.get("timeout"))
 
     def test_a_wedged_compiler_is_killed_and_named(self) -> None:
         for action, tool in self.compile_calls():
@@ -428,12 +447,27 @@ class UvGuardTests(unittest.TestCase):
         """An untextured prop is a legitimate thing to ship."""
         import trimesh
 
-        from sevendtd_asset_pipeline.bundle_writer import prefab_objects
+        from sevendtd_asset_pipeline.bundle_writer import (
+            BOX_COLLIDER,
+            GAME_OBJECT,
+            MATERIAL,
+            MESH,
+            MESH_FILTER,
+            MESH_RENDERER,
+            TRANSFORM,
+            prefab_objects,
+        )
 
         with tempfile.TemporaryDirectory() as raw:
             work = Path(raw)
             trimesh.creation.box(extents=(1, 1, 1)).export(work / "prop.glb")
-            self.assertTrue(prefab_objects(work / "prop.glb", set()))
+            objects = prefab_objects(work / "prop.glb", set())
+            kinds = {o.class_id for o in objects}
+            self.assertEqual(
+                {GAME_OBJECT, TRANSFORM, MESH, MESH_FILTER, MESH_RENDERER, MATERIAL, BOX_COLLIDER},
+                kinds,
+                "an untextured mesh still ships a complete, collider-bearing prefab group",
+            )
 
 
 class DegradedLaneReportTests(unittest.TestCase):
@@ -812,7 +846,7 @@ class VulkanSubProgramTests(unittest.TestCase):
             vulkan.blob, uncompressed_size=vulkan.decompressed_size
         )
         count = struct.unpack_from("<I", raw, 0)[0]
-        assert count >= 1
+        self.assertGreaterEqual(count, 1, "the container declares at least one record")
         off, ln, _ = struct.unpack_from("<III", raw, 4)
         param = raw[off : off + ln]
         index = param.find(b"_MainTex")

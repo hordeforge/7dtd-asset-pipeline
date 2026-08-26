@@ -307,6 +307,24 @@ class RunReviewTests(_ReviewHarness):
         with self.assertRaisesRegex(PipelineError, "refused the review"):
             self._run(runner=refusing)
 
+    def test_a_gateway_that_never_answers_produces_no_verdict(self) -> None:
+        """The expiry path: killed by the bound, named, and verdict-free.
+
+        The translation from TimeoutExpired to a named error lives in the
+        default runner, so this wedges `subprocess.run` itself rather than
+        replacing the runner whose behaviour is under test.
+        """
+        import subprocess
+
+        def wedged(argv: object, **kwargs: object) -> object:
+            raise subprocess.TimeoutExpired("deadeye", 120)
+
+        with (
+            mock.patch("sevendtd_asset_pipeline.video_review.subprocess.run", side_effect=wedged),
+            self.assertRaisesRegex(PipelineError, "did not answer within"),
+        ):
+            self._run(runner=None)
+
     def test_evidence_names_the_source_hash_and_gateway_envelope(self) -> None:
         output = self.root / "evidence" / "review.json"
         report = self._run(output=output)

@@ -253,7 +253,7 @@ class LiveEndToEndTests(unittest.TestCase):
                 "NOTE: the model did not name the planted defect this run; "
                 "see the finding in PRD 0002 (model verdicts are advisory)."
             )
-        print(f"\nARTIFACTS (kept for inspection, under gitignored .local/):")
+        print("\nARTIFACTS (kept for inspection, under gitignored .local/):")
         print(f"  watch the reviewed video: {captured / 'clip.mp4'}")
         print(f"  source frames:            {captured}")
         print(f"  evidence document:        {evidence}")

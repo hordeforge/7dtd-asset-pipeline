@@ -42,6 +42,9 @@ needs_unitypy = unittest.skipUnless(
 needs_trimesh = unittest.skipUnless(
     has_capability("trimesh"), "the mesh lane reads interchange files through trimesh"
 )
+needs_vkd3d = unittest.skipUnless(
+    has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+)
 
 
 def write_wav(path: Path, *, rate: int = 44100, channels: int = 1, width: int = 2) -> Path:
@@ -591,10 +594,6 @@ class PrefabColliderTests(unittest.TestCase):
         self.assertEqual(len(game_object.fields["m_Component"]), 3)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ShaderRequirementTests(unittest.TestCase):
     """Every sub-program must carry the vertex-input requirement bit.
 
@@ -604,6 +603,7 @@ class ShaderRequirementTests(unittest.TestCase):
     vertex input state for the sub-program - a fault on the Vulkan draw.
     """
 
+    @needs_vkd3d
     def test_every_sub_program_declares_the_vertex_input_requirement(self) -> None:
         obj = bundle_writer.shader("Shamway/Test")
         pf = obj.fields["m_ParsedForm"]
@@ -620,3 +620,7 @@ class ShaderRequirementTests(unittest.TestCase):
                             )
                             seen += 1
         self.assertGreater(seen, 0, "the shader declares sub-programs to assert on")
+
+
+if __name__ == "__main__":
+    unittest.main()

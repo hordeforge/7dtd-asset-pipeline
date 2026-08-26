@@ -195,8 +195,12 @@ class RenderTests(unittest.TestCase):
             planned = acceptance.plan(config)
             first = acceptance.write(planned)
             second = acceptance.write(planned)
+            self.assertTrue(first, "write produced no files; idempotence over nothing")
             self.assertEqual(first, second)
             self.assertTrue(all(acceptance.PROVIDER_DIRECTORY in str(p) for p in first))
+            names = {p.name for p in first}
+            self.assertIn(f"{planned.assembly}.cs", names)
+            self.assertIn(f"{planned.assembly}.csproj", names)
 
 
 class InjectionTests(unittest.TestCase):
@@ -296,10 +300,6 @@ class RegistryTests(unittest.TestCase):
                 self.assertEqual(kind, acceptance.ASSET_CASES[suffix])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def _mod_with_motions(root: Path, assets: list[str], motions: dict[str, str]) -> PipelineConfig:
     """`_mod` plus an `[acceptance] motion_kinds` declaration."""
     from sevendtd_asset_pipeline.config import load_config
@@ -317,6 +317,9 @@ def _mod_with_motions(root: Path, assets: list[str], motions: dict[str, str]) ->
 class MotionKindTests(unittest.TestCase):
     """The `[acceptance] motion_kinds` field and the cases it generates."""
 
+    @unittest.skipUnless(
+        has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+    )
     def test_a_turntable_kind_generates_a_staged_clip_case(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -330,6 +333,9 @@ class MotionKindTests(unittest.TestCase):
             # The load case survives: a clip is motion evidence, not the load gate.
             self.assertIn("load_prop", source)
 
+    @unittest.skipUnless(
+        has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+    )
     def test_a_fixed_kind_generates_the_unchanged_look_case(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -349,6 +355,9 @@ class MotionKindTests(unittest.TestCase):
                 acceptance.render(acceptance.plan(declared)),
             )
 
+    @unittest.skipUnless(
+        has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+    )
     def test_a_walk_cycle_kind_equips_walks_and_records_the_player(self) -> None:
         """A walk cycle cannot be staged: the case equips the item on the
         player, drives a real walk, and records it with the on-demand clip
@@ -382,3 +391,7 @@ class MotionKindTests(unittest.TestCase):
             config = _mod_with_motions(root, ["prop.glb"], {"nope": "turntable"})
             with self.assertRaisesRegex(PipelineError, "not a bundle member"):
                 acceptance.plan(config)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -126,6 +126,27 @@ class DeployTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp, self.assertRaises(PipelineError):
             client.deploy_mod(Path(temp), Path(temp) / "Mods", "X")
 
+    def test_refuses_to_deploy_a_mod_onto_itself(self) -> None:
+        """The destination resolving to the mod root must die before the rmtree.
+
+        Deploy writes `Mods/<name>` and deletes whatever is there first; a
+        caller who points the deployment at the authoring tree itself would
+        otherwise have that tree deleted by its own deploy. The guard sits
+        between the existence check and the rmtree, so this pins its place.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mod = root / "MyMod"
+            (mod / "Config").mkdir(parents=True)
+            (mod / "Config/items.xml").write_text("<configs/>")
+            (mod / "ModInfo.xml").write_text("<xml/>")
+            # Deploying "into" a Mods directory whose MyMod entry *is* the
+            # authoring tree: the destination resolves to the mod root.
+            with self.assertRaisesRegex(PipelineError, "is the mod root itself"):
+                client.deploy_mod(mod, root, "MyMod")
+            self.assertTrue((mod / "ModInfo.xml").is_file(), "the authoring tree survived")
+            self.assertTrue((mod / "Config/items.xml").is_file())
+
     def test_a_failed_copy_leaves_the_previous_deployment_intact(self) -> None:
         """The destination is replaced only after every entry has been staged.
 
@@ -309,6 +330,65 @@ class LatestLogTests(unittest.TestCase):
     def test_no_logs_is_an_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp, self.assertRaises(PipelineError):
             client.latest_client_log(Path(temp))
+
+    def test_waiting_polls_until_a_fresh_log_appears(self) -> None:
+        """`wait_seconds` exists because launching returns before the log does.
+
+        Time is injected so the poll loop is driven deterministically: a log
+        that appears after two polls is found rather than read as "predates
+        this launch", and the deadline ends the wait instead of looping.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            logs = Path(temp)
+            old = logs / "output_log_client__2026-08-22__10-00-00.txt"
+            old.write_text("old")
+            past = time.time() - 3600
+            os.utime(old, (past, past))
+
+            now = time.monotonic()
+            sleeps: list[float] = []
+            fresh = logs / "output_log_client__2026-08-23__10-00-00.txt"
+
+            def fake_sleep(seconds: float) -> None:
+                nonlocal now
+                sleeps.append(seconds)
+                now += seconds
+                if len(sleeps) == 2:
+                    fresh.write_text("new")
+                    recent = time.time()
+                    os.utime(fresh, (recent, recent))
+
+            with (
+                mock.patch(
+                    "sevendtd_asset_pipeline.client.time.monotonic", side_effect=lambda: now
+                ),
+                mock.patch("sevendtd_asset_pipeline.client.time.sleep", side_effect=fake_sleep),
+            ):
+                found = client.latest_client_log(
+                    logs, written_after=time.time() - 60, wait_seconds=10
+                )
+            self.assertEqual(fresh, found)
+            self.assertEqual([1.0, 1.0], sleeps)
+
+    def test_the_wait_expires_and_names_the_stale_log(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            logs = Path(temp)
+            old = logs / "output_log_client__2026-08-22__10-00-00.txt"
+            old.write_text("old")
+            past = time.time() - 3600
+            os.utime(old, (past, past))
+            now = time.monotonic()
+            with (
+                # Each clock read advances a simulated second, so the wait
+                # expires without three real seconds of busy-looping.
+                mock.patch(
+                    "sevendtd_asset_pipeline.client.time.monotonic",
+                    side_effect=lambda: now + 1,
+                ),
+                mock.patch("sevendtd_asset_pipeline.client.time.sleep"),
+                self.assertRaisesRegex(PipelineError, "after waiting 5s"),
+            ):
+                client.latest_client_log(logs, written_after=time.time() - 60, wait_seconds=5)
 
 
 class ProcessAndAudioTests(unittest.TestCase):
@@ -779,7 +859,15 @@ class CliTests(unittest.TestCase):
             code = client.main(["where", "--json"])
         self.assertEqual(code, 0)
         data = json.loads(out.getvalue())
-        self.assertIn("launch", data)
+        # Every path is derived from the game directory; with none given (and
+        # none in the environment) each derivation reports None rather than a
+        # wrong guess, and only the launch line stays derivable.
+        self.assertIsNone(data["game_dir"])
+        for field in ("compatdata", "user_data", "mods_dir", "log_dir"):
+            self.assertIsNone(data[field], f"{field} must be null without a game dir")
+        launch = data["launch"]
+        self.assertIsInstance(launch, list)
+        self.assertTrue(launch, "the launch line is derivable with no game dir")
 
 
 class FreshClientRunTests(unittest.TestCase):

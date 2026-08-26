@@ -115,9 +115,13 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual("wayland", entry.session)
         self.assertIsNone(entry.verdict)
         self.assertEqual(len(b"fake png data"), entry.bytes)
-        self.assertTrue((self.evidence / "held-nuke.png").is_file())
+        frame = self.evidence / "held-nuke.png"
+        self.assertTrue(frame.is_file())
         recorded = read_manifest(self.evidence)[0]
-        self.assertEqual(entry.sha256, recorded["sha256"])
+        # The digest must describe the bytes on disk, not merely agree with
+        # the in-memory entry: a grabber that staged corrupt bytes would
+        # otherwise pass by round-tripping its own value back.
+        self.assertEqual(hashlib.sha256(frame.read_bytes()).hexdigest(), recorded["sha256"])
 
     def test_a_tool_that_exits_zero_without_an_image_is_refused(self) -> None:
         self._tool("grim", "exit 0")
@@ -136,6 +140,22 @@ class CaptureTests(unittest.TestCase):
     def test_an_empty_label_is_rejected_before_anything_runs(self) -> None:
         with self.assertRaisesRegex(PipelineError, "needs a label"):
             capture("  ", root=self.evidence, env={})
+
+    def test_a_traversal_label_cannot_escape_the_evidence_root(self) -> None:
+        """A label is untrusted CLI/API input at a filesystem boundary.
+
+        `../../secrets` must become a flattened name inside the evidence
+        directory, never a path outside it; the same holds for an absolute
+        label, which would otherwise write over whatever the stem names.
+        """
+        self._tool("grim", 'printf "fake png data" > "$1"')
+        for hostile in ("../../secrets", "/etc/hosts", "a/b"):
+            with self.subTest(label=hostile):
+                entry = capture(hostile, root=self.evidence, env={"XDG_SESSION_TYPE": "wayland"})
+                written = self.evidence / entry.file
+                self.assertEqual(self.evidence.resolve(), written.parent.resolve())
+                self.assertNotIn("/", written.name)
+                self.assertTrue(written.is_file())
 
     def test_a_failed_grab_keeps_the_previous_frame_and_no_temporary(self) -> None:
         """The grabber aims at a staged name, so a failed shot cannot take the
@@ -306,10 +326,6 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(["held-nuke"], [e["label"] for e in read_manifest(self.evidence)])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ClipAdoptionTests(unittest.TestCase):
     """`client capture --clip`: adopting an external clip directory one level up."""
 
@@ -385,3 +401,7 @@ class ClipAdoptionTests(unittest.TestCase):
         # Re-adopt the adopted directory itself: no copy, no wipe, just re-record.
         entry = record_existing_clip(adopted, "thing", "", self.capture_root)
         self.assertEqual(before, {item.name for item in entry.files})
+
+
+if __name__ == "__main__":
+    unittest.main()

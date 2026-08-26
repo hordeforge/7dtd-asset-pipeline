@@ -77,12 +77,21 @@ extending the claim.
 
 ## Releases
 
-Releases are tag-driven, like the rest of hordeforge: bump `version` in
-[pyproject.toml](pyproject.toml), land that on `main`, then push a matching
-`vX.Y.Z` tag. The release workflow re-runs the suite on the tagged tree and
-publishes a GitHub Release carrying the sdist and wheel built from exactly
-that tree. A tag that disagrees with `pyproject.toml` fails the release
-instead of publishing a mismatched artifact.
+Releases are tag-driven, like the rest of hordeforge: bump `__version__` in
+[src/sevendtd_asset_pipeline/_version.py](src/sevendtd_asset_pipeline/_version.py)
+(the version's single source; [pyproject.toml](pyproject.toml) reads it
+dynamically and holds no second copy), move
+[CHANGELOG.md](CHANGELOG.md)'s `[Unreleased]` entries under a `## [X.Y.Z] -
+date` heading, land both on `main`, then push a matching `vX.Y.Z` tag. The
+release workflow re-runs the suite on the tagged tree, fails if the tag does
+not equal `__version__`, and publishes a GitHub Release carrying the sdist,
+wheel, and SBOM built from exactly that tree — with that changelog section as
+the notes, so a tag without its changelog entry cannot ship.
+
+This project is 0.x: per SemVer, minor bumps may break, and the changelog's
+`Changed`/`Removed` entries are where such breaks are declared. The Python API
+surface beyond `__all__` in `sevendtd_asset_pipeline/__init__.py` is internal
+and may change without notice.
 
 Agent-facing rules live in [AGENTS.md](AGENTS.md) and apply to human
 contributors too.

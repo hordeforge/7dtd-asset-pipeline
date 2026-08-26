@@ -117,9 +117,6 @@ jobs:
       # Pinned so a vkd3d release cannot change what this job proves. Matches
       # the version the writer was developed against.
       VKD3D_VERSION: "1.19"
-      # RUNNER_TEMP rather than /tmp: it is disk-backed and cleaned per job,
-      # and it is where this repository's own scripts point TMPDIR.
-      MOD_DIR: ${{ runner.temp }}/MyMod
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -130,6 +127,12 @@ jobs:
       # time.
       - run: uv sync --locked --no-dev --all-extras
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      # RUNNER_TEMP rather than /tmp: it is disk-backed and cleaned per job,
+      # and it is where this repository's own scripts point TMPDIR. Exported
+      # through GITHUB_ENV because the `runner` context is not available in a
+      # job-level `env:` block, only inside a step.
+      - run: echo "MOD_DIR=$RUNNER_TEMP/MyMod" >> "$GITHUB_ENV"
 
       - name: Scaffold a modlet with no flags, and prove the default is editorless
         run: |

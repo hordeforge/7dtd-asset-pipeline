@@ -77,9 +77,11 @@ jobs:
           set -euo pipefail
           unzip -q -o dist/*.whl -d "$RUNNER_TEMP/wheel"
           staged="$RUNNER_TEMP/wheel/sevendtd_asset_pipeline"
+          scripts=0
           for file in "$staged"/scripts/*; do
             cmp -s "$file" "scripts/$(basename "$file")" ||
               { echo "ERROR: wheel's $(basename "$file") differs from scripts/" >&2; exit 1; }
+            scripts=$((scripts + 1))
           done
           count=0
           while IFS= read -r page; do
@@ -88,7 +90,7 @@ jobs:
             count=$((count + 1))
           done < <(cd "$staged/docs" && find . -name '*.md' -printf '%P\n')
           test "$count" -gt 0 || { echo "ERROR: the wheel carries no documentation" >&2; exit 1; }
-          echo "OK: wheel carries $count documentation pages and $(ls "$staged"/scripts | wc -l) scripts, all matching the tree"
+          echo "OK: wheel carries $count documentation pages and $scripts scripts, all matching the tree"
 
       # A CycloneDX 1.5 inventory of exactly what the committed uv.lock
       # resolves to for the released wheel: every optional extra, no dev

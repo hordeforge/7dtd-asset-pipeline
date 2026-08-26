@@ -11,6 +11,13 @@ PYTHON := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project pyt
 
 all: check test
 
+# actionlint is the workflow half of the shellcheck contract, and it checks the
+# thing nothing else can: a workflow is only exercised by pushing it. It caught
+# `${{ runner.temp }}` in a job-level `env:`, where that context does not
+# resolve, which GitHub reports only as "a workflow file issue" after a push.
+# Not a CI hard-fail like ruff and mypy, because CI proves its own workflows by
+# running them; this is here so a person does not learn it from a red push.
+#
 # Every shell script the repo tracks, not a hand-kept list: playtest-capture.sh
 # and playtest-synthesized.sh shipped unlinted for three commits because this
 # line named only their older siblings. The wildcard cannot forget one.
@@ -28,6 +35,11 @@ check: lint typecheck locked
 		echo "note: shellcheck not installed; skipped shell linting"; \
 	fi
 	scripts/compile-editor-scripts.sh --quiet-missing
+	@if command -v actionlint >/dev/null 2>&1; then \
+		actionlint .github/workflows/*.yml; \
+	else \
+		echo "note: actionlint not installed; skipped workflow linting"; \
+	fi
 
 # Python analysis, mirroring the shellcheck contract: run when the tool is on
 # PATH, hard-fail in CI, and say so plainly when skipped on a dev host.

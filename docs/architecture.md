@@ -71,6 +71,19 @@ an OS audio-layer operation on the process's sink input, never a game
 setting. It proves loadability and hands over to a person; it makes no
 claim about what an asset looks or sounds like.
 
+### Where scratch work lands
+
+The lanes that shell out stage real payloads: a WAV decoded by FFmpeg, a sheet
+rasterized by ImageMagick, a Blender render, a shader compiled by
+vkd3d-compiler or glslangValidator, and, in `install-unity-editor.sh`, a
+multi-gigabyte editor archive. All of it goes under `$XDG_CACHE_HOME/shamway`
+(`~/.cache/shamway` by default), through `workdir.scratch_dir` in Python and a
+`TMPDIR` default in the shell scripts. A `TMPDIR` the caller already exported
+is respected.
+
+Not `/tmp`: it is tmpfs on most Linux hosts, so that default charges every one
+of those payloads against RAM. Each scratch directory is removed on exit.
+
 The UnityFS reader is intentionally not a general Unity deserializer. A small
 auditable parser has a narrower attack and maintenance surface for the two
 facts the gate needs. UnityPy and AssetsTools.NET remain optional independent

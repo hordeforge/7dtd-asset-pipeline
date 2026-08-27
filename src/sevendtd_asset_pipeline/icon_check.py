@@ -140,11 +140,11 @@ def _alpha_coverage(path: Path) -> float | None:
     except ImportError:
         return None
     with Image.open(path) as image:
-        rgba = image.convert("RGBA")
-        # histogram() rather than getdata(): stable across Pillow versions, and
-        # a 256-bin sum instead of a pass over every pixel.
-        counts = rgba.getchannel("A").histogram()
-    total = rgba.width * rgba.height
+        with image.convert("RGBA") as rgba:
+            # histogram() rather than getdata(): stable across Pillow versions, and
+            # a 256-bin sum instead of a pass over every pixel.
+            counts = rgba.getchannel("A").histogram()
+            total = rgba.width * rgba.height
     return sum(counts[9:]) / float(total) if total else 0.0
 
 

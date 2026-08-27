@@ -36,6 +36,7 @@ class BundleEntry:
     asset_stem: str
     object_count: int = 1
     components: dict[str, int] = field(default_factory=dict)
+    partial: bool = False
 
 
 @dataclass
@@ -44,6 +45,7 @@ class DeepReport:
     object_count: int
     type_counts: dict[str, int]
     entries: list[BundleEntry]
+    skipped_children: int = 0
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -51,6 +53,7 @@ class DeepReport:
             "object_count": self.object_count,
             "type_counts": self.type_counts,
             "entries": [asdict(entry) for entry in self.entries],
+            "skipped_children": self.skipped_children,
         }
 
 
@@ -62,16 +65,21 @@ def _load_unitypy() -> ModuleType:
     return cast(ModuleType, UnityPy)
 
 
-def _walk(game_object: Any, depth: int = 0) -> tuple[Counter[str], int]:
+def _walk(game_object: Any, depth: int = 0) -> tuple[Counter[str], int, int]:
     """Count components across a prefab's whole hierarchy.
 
     A prefab root usually carries only a Transform; the components that matter
     hang off its children, so a root-only census answers nothing.
+
+    Returns ``(counts, total, skipped)`` where *skipped* is the number of
+    child objects that could not be read (corrupt pointer, missing object,
+    or depth limit).
     """
     counts: Counter[str] = Counter()
     total = 1
+    skipped = 0
     if depth > 64:  # A malformed hierarchy must not become infinite recursion.
-        return counts, total
+        return counts, total, skipped
     transform = None
     for reference in getattr(game_object, "m_Component", []) or []:
         pointer = getattr(reference, "component", reference)
@@ -83,20 +91,22 @@ def _walk(game_object: Any, depth: int = 0) -> tuple[Counter[str], int]:
         if type_name == "Transform":
             transform = pointer
     if transform is None:
-        return counts, total
+        return counts, total, skipped
     try:
         children = getattr(transform.read(), "m_Children", []) or []
     except Exception:  # noqa: BLE001 - a child we cannot read must not abort the report
-        return counts, total
+        return counts, total, skipped
     for child in children:
         try:
             child_object = child.read().m_GameObject.read()
         except Exception:  # noqa: BLE001, S112 - an unreadable child must not abort the walk
+            skipped += 1
             continue
-        child_counts, child_total = _walk(child_object, depth + 1)
+        child_counts, child_total, child_skipped = _walk(child_object, depth + 1)
         counts += child_counts
         total += child_total
-    return counts, total
+        skipped += child_skipped
+    return counts, total, skipped
 
 
 def deep_inspect(path: Path) -> DeepReport:
@@ -120,19 +130,25 @@ def deep_inspect(path: Path) -> DeepReport:
         raise PipelineError(f"UnityPy could not read {path}: {exc}") from exc
 
     entries: list[BundleEntry] = []
+    skipped_children = 0
     for container_path, obj in sorted(container.items()):
         type_name = getattr(obj.type, "name", "Unknown")
         components: dict[str, int] = {}
         object_count = 1
         object_name = ""
+        entry_partial = False
         try:
             data = obj.read()
             object_name = getattr(data, "m_Name", "") or ""
             if type_name == "GameObject":
-                counts, object_count = _walk(data)
+                counts, object_count, entry_skipped = _walk(data)
                 components = dict(sorted(counts.items()))
+                skipped_children += entry_skipped
+                if entry_skipped:
+                    entry_partial = True
         except Exception:  # noqa: BLE001 - report the entry even if it cannot be read
             object_name = ""
+            entry_partial = True
         entries.append(
             BundleEntry(
                 container_path=container_path,
@@ -143,6 +159,7 @@ def deep_inspect(path: Path) -> DeepReport:
                 asset_stem=Path(container_path).stem,
                 object_count=object_count,
                 components=components,
+                partial=entry_partial,
             )
         )
 
@@ -155,4 +172,5 @@ def deep_inspect(path: Path) -> DeepReport:
             sorted(Counter(getattr(o.type, "name", "Unknown") for o in objects).items())
         ),
         entries=entries,
+        skipped_children=skipped_children,
     )

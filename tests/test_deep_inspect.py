@@ -129,21 +129,22 @@ class WalkCensusTests(unittest.TestCase):
         leaf = _game_object("ParticleSystem", "Renderer", transform=_Transform())
         middle = _game_object("AudioSource", transform=_Transform(children=[_child_link(leaf)]))
         root = _game_object(transform=_Transform(children=[_child_link(middle)]))
-        counts, total = _walk(root)
+        counts, total, skipped = _walk(root)
         self.assertEqual(3, total)
+        self.assertEqual(0, skipped)
         self.assertEqual(
             {"Transform": 3, "ParticleSystem": 1, "Renderer": 1, "AudioSource": 1},
             dict(counts),
         )
 
     def test_a_root_without_a_transform_counts_itself_only(self) -> None:
-        counts, total = _walk(_game_object("MonoBehaviour"))
-        self.assertEqual(({"MonoBehaviour": 1}, 1), (dict(counts), total))
+        counts, total, skipped = _walk(_game_object("MonoBehaviour"))
+        self.assertEqual(({"MonoBehaviour": 1}, 1, 0), (dict(counts), total, skipped))
 
     def test_a_component_that_cannot_be_read_is_skipped_not_fatal(self) -> None:
         game_object = SimpleNamespace(m_Component=[object()])  # no .component attribute
-        counts, total = _walk(game_object)
-        self.assertEqual(({}, 1), (dict(counts), total))
+        counts, total, skipped = _walk(game_object)
+        self.assertEqual(({}, 1, 0), (dict(counts), total, skipped))
 
     def test_an_unreadable_child_is_skipped_and_its_siblings_still_count(self) -> None:
         good = _game_object("Light", transform=_Transform())
@@ -153,8 +154,9 @@ class WalkCensusTests(unittest.TestCase):
                 raise RuntimeError("torn object")
 
         root = _game_object(transform=_Transform(children=[_TornChild(), _child_link(good)]))
-        counts, total = _walk(root)
+        counts, total, skipped = _walk(root)
         self.assertEqual(2, total, "root plus only the readable child")
+        self.assertEqual(1, skipped, "the torn child must be counted as skipped")
         self.assertEqual({"Transform": 2, "Light": 1}, dict(counts))
 
     def test_a_deep_chain_terminates_instead_of_recurring_forever(self) -> None:
@@ -163,7 +165,7 @@ class WalkCensusTests(unittest.TestCase):
         root = leaf = _game_object(transform=_Transform())
         for _ in range(depth - 1):
             leaf = _game_object(transform=_Transform(children=[_child_link(leaf)]))
-        counts, total = _walk(root)
+        counts, total, skipped = _walk(root)
         # Terminated, and stopped well short of walking all `depth` levels.
         self.assertLess(counts.get("Transform", 0), depth)
         self.assertLess(total, depth)

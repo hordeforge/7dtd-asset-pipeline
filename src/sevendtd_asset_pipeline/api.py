@@ -425,6 +425,7 @@ class Pipeline:
         unity_version: str | None = None,
         game_dir: Path | str | None = None,
         manifest: Path | str | None = None,
+        compress_textures: bool = False,
     ) -> dict[str, Any]:
         """Synthesize a bundle from a directory of assets, with no editor."""
         return _pack(
@@ -434,6 +435,7 @@ class Pipeline:
                 "unity_version": unity_version,
                 "game_dir": str(game_dir) if game_dir else None,
                 "manifest": str(manifest) if manifest else None,
+                "compress_textures": compress_textures,
             },
             self.config.game_dir,
         )
@@ -675,12 +677,12 @@ def _sound_params(params: dict[str, Any]) -> dict[str, Any]:
 
 def _review_params(params: dict[str, Any]) -> dict[str, Any]:
     return {
-        "clip": params["clip"],
-        "intent": params.get("intent"),
+        "clip": Path(params["clip"]),
+        "intent": Path(params["intent"]) if params.get("intent") else None,
         "intent_text": params.get("intent_text"),
         "provider": params["provider"],
         "model": params.get("model"),
-        "output": params.get("output"),
+        "output": Path(params["output"]) if params.get("output") else None,
         "allow_network": params["allow_network"],
         "keep_raw_response": params["keep_raw_response"],
         "force": params["force"],
@@ -706,7 +708,9 @@ def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
             "pack needs 'unity_version' or 'game_dir': a bundle carries the revision it "
             "claims to be for, and the installed game is what has to load it"
         )
-    bundle, manifest_text = pack_directory(source, output.name, version)
+    bundle, manifest_text = pack_directory(
+        source, output.name, version, compress_textures=params.get("compress_textures", False)
+    )
     # Published through the package's one staged-write pattern: a body written
     # straight to the destination that dies midway (disk full, Ctrl+C) leaves a
     # truncated bundle at the final path, indistinguishable from a complete one

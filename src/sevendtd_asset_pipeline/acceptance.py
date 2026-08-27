@@ -502,12 +502,15 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
     project = _template("AcceptanceProvider.csproj.in").format(
         MOD_NAME=_comment_text(plan_.mod_name), ASSEMBLY_NAME=plan_.assembly
     )
+    _description = (
+        "Generated 7dtd-playtest scenario provider: loads every "
+        "bundle member through the game's own DataLoader."
+    )
     mod_info = (
         '<?xml version="1.0" encoding="UTF-8" ?>\n<xml>\n'
         f'\t<Name value="{_xml_attr(plan_.assembly)}" />\n'
         f'\t<DisplayName value="{_xml_attr(plan_.mod_name + " bundle acceptance")}" />\n'
-        '\t<Description value="Generated 7dtd-playtest scenario provider: loads every '
-        "bundle member through the game's own DataLoader.\" />\n"
+        f'\t<Description value="{_xml_attr(_description)}" />\n'
         '\t<Author value="shamway" />\n\t<Version value="1.0.0" />\n</xml>\n'
     )
     return {

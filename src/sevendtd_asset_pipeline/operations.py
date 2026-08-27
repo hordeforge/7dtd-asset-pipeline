@@ -434,6 +434,11 @@ _DEFINITIONS: tuple[Operation, ...] = (
                 "unity_version": {"type": "string", "description": "revision to stamp"},
                 "game_dir": {**PATH_PARAM, "description": "read the revision from a game install"},
                 "manifest": {**PATH_PARAM, "description": "default: OUTPUT.manifest"},
+                "compress_textures": {
+                    "type": "boolean",
+                    "description": "block-compress textures to DXT1/DXT5 (8x/4x smaller, lossy); "
+                    "both sides must be a multiple of 4",
+                },
             },
             required=["source", "output"],
         ),

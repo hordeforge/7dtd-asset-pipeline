@@ -13,6 +13,7 @@ both icon downscales) so the next writer copies it rather than the drift.
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
 from typing import TYPE_CHECKING
 
@@ -179,6 +180,37 @@ class WriteArtifactTests(unittest.TestCase):
         write(self.root / "manifest.txt", "Assets:\n")
         self.assertEqual("Assets:\n", (self.root / "manifest.txt").read_text(encoding="utf-8"))
         self.assertEqual([], dotfiles(self.root) + dotfiles(self.root / "nested"))
+
+    def test_write_new_has_one_winner_when_two_writers_publish_together(self) -> None:
+        """A no-overwrite promise needs an atomic create, not exists-then-write."""
+        from sevendtd_asset_pipeline.atomic import write_new
+
+        destination = self.root / "review.json"
+        start = threading.Barrier(2)
+        successes: list[str] = []
+        failures: list[BaseException] = []
+
+        def publish(payload: str) -> None:
+            try:
+                start.wait()
+                write_new(destination, payload)
+                successes.append(payload)
+            except BaseException as exc:  # noqa: BLE001 - asserted after both writers finish
+                failures.append(exc)
+
+        threads = [
+            threading.Thread(target=publish, args=(payload,)) for payload in ("first", "second")
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+
+        self.assertEqual(1, len(successes))
+        self.assertEqual(1, len(failures))
+        self.assertIsInstance(failures[0], FileExistsError)
+        self.assertEqual(successes[0], destination.read_text(encoding="utf-8"))
+        self.assertEqual([], dotfiles(self.root))
 
     def test_replacing_an_existing_artifact_keeps_one_copy(self) -> None:
         from sevendtd_asset_pipeline.atomic import write

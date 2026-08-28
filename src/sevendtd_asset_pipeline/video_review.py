@@ -693,7 +693,16 @@ def run_review(
                 "overwrites one by default; compare the documents, or pass --force"
             )
         payload = json.dumps(document, indent=2, sort_keys=True)
-        atomic.write(output, payload)
+        try:
+            if force:
+                atomic.write(output, payload)
+            else:
+                atomic.write_new(output, payload)
+        except FileExistsError as exc:
+            raise PipelineError(
+                f"{output} already holds an earlier review and a later review never "
+                "overwrites one by default; compare the documents, or pass --force"
+            ) from exc
         evidence = {"path": str(output), "sha256": sha256_bytes(payload.encode("utf-8"))}
     document["evidence"] = evidence
 

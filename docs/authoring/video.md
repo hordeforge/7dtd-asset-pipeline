@@ -134,7 +134,9 @@ review kinds reads one shape.
   are not yet recorded by this pipeline, so the source hash is the comparable
   address between revisions — never a guess), the sampling record, provider
   and model, rubric and prompt versions, and the full gateway envelope. A
-  later review never overwrites an earlier document.
+  later review never overwrites an earlier document. Concurrent reviews use an
+  atomic create at that output path: one publishes, and the other refuses
+  without replacing the first document.
 
 ### The provider capability
 

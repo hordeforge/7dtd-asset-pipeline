@@ -44,3 +44,23 @@ def write(path: Path, payload: bytes | str) -> None:
     data = payload.encode("utf-8") if isinstance(payload, str) else payload
     with staged_write(path) as staged:
         staged.write_bytes(data)
+
+
+def write_new(path: Path, payload: bytes | str) -> None:
+    """Atomically create ``path`` with ``payload``, refusing an existing path.
+
+    A separate ``path.exists()`` check followed by :func:`write` is not an
+    exclusive create: two reviewers can both observe an absent evidence file,
+    then each publish one and silently lose the first verdict.  The staged
+    file is linked into its final name instead.  ``link`` is an atomic
+    create-if-absent operation because both names are in the same directory;
+    it raises :class:`FileExistsError` without changing the earlier file.
+    """
+    data = payload.encode("utf-8") if isinstance(payload, str) else payload
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
+    try:
+        temporary.write_bytes(data)
+        os.link(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)

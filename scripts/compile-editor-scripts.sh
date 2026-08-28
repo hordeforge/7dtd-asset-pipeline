@@ -11,7 +11,8 @@
 #
 # Needs: mcs (Mono), and an installed editor — UNITY_EDITOR, or the Hub layout
 # (~/Unity/Hub/Editor on Linux, /Applications/Unity/Hub/Editor on macOS) for
-# the revision in the template's ProjectVersion.txt.
+# the revision in the template's ProjectVersion.txt. The assembly root is
+# probed: …/Editor/Data on Linux and Windows, …/Unity.app/Contents on macOS.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -43,8 +44,9 @@ OPTIONS
                       mod's own Editor folder, together with --with DIR
   --with DIR          A second folder of .cs files compiled in the same unit
                       (a mod's generators need the vendored scripts)
-  --editor-data DIR   The editor's Data/ directory (…/Editor/Data). Defaults
-                      to UNITY_EDITOR's, then the newest 2022.3 editor under
+  --editor-data DIR   The editor's assembly root (…/Editor/Data on Linux and
+                      Windows, …/Unity.app/Contents on macOS). Defaults to
+                      UNITY_EDITOR's, then the newest 2022.3 editor under
                       Hub's install root (~/Unity/Hub/Editor, or
                       /Applications/Unity/Hub/Editor on macOS) for the
                       template's ProjectVersion.txt revision
@@ -83,9 +85,41 @@ skip() {
 
 command -v mcs >/dev/null 2>&1 || skip "mcs (Mono) is not installed"
 
+# The editor's assembly root, probed from the binary rather than from the OS
+# name. Linux/Windows Hub: …/Editor/Unity → …/Editor/Data. macOS Hub:
+# …/Unity.app/Contents/MacOS/Unity → …/Unity.app/Contents.
+editor_data_from_binary() {
+	local parent data contents
+	parent="$(dirname -- "$1")"
+	data="$parent/Data"
+	if [[ -d "$data" ]]; then
+		printf '%s\n' "$data"
+		return
+	fi
+	contents="$(dirname -- "$parent")"
+	if [[ "$(basename -- "$parent")" == "MacOS" && -d "$contents/Managed" ]]; then
+		printf '%s\n' "$contents"
+		return
+	fi
+	printf '%s\n' "$data"
+}
+
+# Hub layout next to a version directory: Editor/Data (Linux/Windows) or the
+# application-bundle Contents directory (macOS). Empty when neither exists.
+editor_data_from_hub() {
+	local hub_root="$1" revision="$2"
+	local linux="$hub_root/$revision/Editor/Data"
+	local macos="$hub_root/$revision/Unity.app/Contents"
+	if [[ -d "$linux" ]]; then
+		printf '%s\n' "$linux"
+	elif [[ -d "$macos" ]]; then
+		printf '%s\n' "$macos"
+	fi
+}
+
 if [[ -z "$EDITOR_DATA" ]]; then
 	if [[ -n "${UNITY_EDITOR:-}" && -x "$UNITY_EDITOR" ]]; then
-		EDITOR_DATA="$(dirname "$UNITY_EDITOR")/Data"
+		EDITOR_DATA="$(editor_data_from_binary "$UNITY_EDITOR")"
 	else
 		# The template carries a placeholder revision that `init` replaces with
 		# the installed game's. Without UNITY_EDITOR, take the newest 2022.3
@@ -98,8 +132,10 @@ if [[ -z "$EDITOR_DATA" ]]; then
 		hub_root=""
 		if [[ -n "$revision" ]]; then
 			for candidate_root in "${hub_roots[@]}"; do
-				if [[ -d "$candidate_root/$revision" ]]; then
+				found="$(editor_data_from_hub "$candidate_root" "$revision")"
+				if [[ -n "$found" ]]; then
 					hub_root="$candidate_root"
+					EDITOR_DATA="$found"
 					break
 				fi
 			done
@@ -115,14 +151,18 @@ if [[ -z "$EDITOR_DATA" ]]; then
 					[[ -d "$editor" ]] && basename "$editor"
 				done | sort -V | tail -n1)" || true
 				if [[ -n "$newest" ]]; then
-					revision="$newest"
-					hub_root="$candidate_root"
-					break
+					found="$(editor_data_from_hub "$candidate_root" "$newest")"
+					if [[ -n "$found" ]]; then
+						revision="$newest"
+						hub_root="$candidate_root"
+						EDITOR_DATA="$found"
+						break
+					fi
 				fi
 			done
 		fi
 		[[ -n "$hub_root" ]] || skip "no Unity 2022.3 editor under ${hub_roots[*]} and no UNITY_EDITOR"
-		EDITOR_DATA="$hub_root/$revision/Editor/Data"
+		[[ -n "$EDITOR_DATA" ]] || EDITOR_DATA="$(editor_data_from_hub "$hub_root" "$revision")"
 	fi
 fi
 [[ -d "$EDITOR_DATA/Managed/UnityEngine" ]] || skip "no editor assemblies at $EDITOR_DATA/Managed/UnityEngine"

@@ -12,6 +12,18 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Fixed
+
+- `doctor` and `build` locate Windows Build Support from the editor binary's
+  real assembly root (`Editor/Data` on Linux and Windows, `Unity.app/Contents`
+  on macOS) instead of always looking next to the executable.
+- Scratch directories honour the host cache directory (`~/Library/Caches` on
+  macOS, `%LOCALAPPDATA%` on Windows) when `XDG_CACHE_HOME` is unset.
+- The zmol-v search and `install-tools.sh` copy the shared library Zig actually
+  emits (`.so` / `.dylib` / `.dll`), not only `libzmolv.so`.
+- `render-icon` passes `-force-glcore` only on Linux, where Xvfb needs it;
+  macOS and Windows editors keep Metal and D3D11.
+
 ## [0.2.0] - 2026-08-26
 
 ### Added

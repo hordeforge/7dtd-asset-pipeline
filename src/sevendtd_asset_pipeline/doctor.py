@@ -16,6 +16,7 @@ from .config import BUNDLE_SOURCES, PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .references import read_mod_name
+from .unity_process import windows_standalone_support
 
 REQUIRED_MODULES = ("com.unity.modules.assetbundle",)
 RECOMMENDED_MODULES = (
@@ -310,9 +311,7 @@ def _editor_checks(config: PipelineConfig) -> list[Check]:
         return []
     if not editor.is_file() or not os.access(editor, os.X_OK):
         return [Check("FAIL", "Unity editor", f"Unity editor is not executable: {editor}")]
-    windows = editor.parent / (
-        "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
-    )
+    windows = windows_standalone_support(editor)
     if config.target == "StandaloneWindows64" and not windows.is_file():
         return [
             Check("FAIL", "Windows support", f"Windows Build Support (Mono) is missing: {windows}")

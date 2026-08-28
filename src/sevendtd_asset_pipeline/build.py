@@ -23,7 +23,7 @@ from .config import PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .references import manifest_assets
-from .unity_process import run_unity
+from .unity_process import run_unity, windows_standalone_support
 from .validation import reject_ambiguous_stems, validate_bundle
 
 DISABLED_MODULE_TEXT = "is not supported because the module"
@@ -129,9 +129,7 @@ def run_build(config: PipelineConfig, probe: bool = False) -> Path:
             f"Unity project is {project_version}; installed game uses {expected_version}. "
             "Upgrade the project and editor before building."
         )
-    windows_module = config.unity_editor.parent / (
-        "Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
-    )
+    windows_module = windows_standalone_support(config.unity_editor)
     if config.target == "StandaloneWindows64" and not windows_module.is_file():
         raise PipelineError(f"Unity Windows Build Support (Mono) is missing: {windows_module}")
 

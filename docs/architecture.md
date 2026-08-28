@@ -77,9 +77,11 @@ The lanes that shell out stage real payloads: a WAV decoded by FFmpeg, a sheet
 rasterized by ImageMagick, a Blender render, a shader compiled by
 vkd3d-compiler or glslangValidator, and, in `install-unity-editor.sh`, a
 multi-gigabyte editor archive. All of it goes under `$XDG_CACHE_HOME/shamway`
-(`~/.cache/shamway` by default), through `workdir.scratch_dir` in Python and a
-`TMPDIR` default in the shell scripts. A `TMPDIR` the caller already exported
-is respected.
+when that is set, otherwise the host's usual user-cache directory
+(`~/.cache/shamway` on Linux, `~/Library/Caches/shamway` on macOS,
+`%LOCALAPPDATA%\shamway` on Windows), through `workdir.scratch_dir` in Python
+and a `TMPDIR` default in the shell scripts. A `TMPDIR` the caller already
+exported is respected.
 
 Not `/tmp`: it is tmpfs on most Linux hosts, so that default charges every one
 of those payloads against RAM. Each scratch directory is removed on exit.

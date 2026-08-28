@@ -11,6 +11,7 @@ docs/research/research-provenance.md and docs/status/blockers.md.
 
 from __future__ import annotations
 
+import importlib.util
 import struct
 import tempfile
 import unittest
@@ -44,6 +45,10 @@ needs_trimesh = unittest.skipUnless(
 )
 needs_vkd3d = unittest.skipUnless(
     has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+)
+needs_lz4 = unittest.skipUnless(
+    importlib.util.find_spec("lz4") is not None,
+    "shader blob compression needs the lz4 extra (declared with UnityPy)",
 )
 
 
@@ -604,6 +609,7 @@ class ShaderRequirementTests(unittest.TestCase):
     """
 
     @needs_vkd3d
+    @needs_lz4
     def test_every_sub_program_declares_the_vertex_input_requirement(self) -> None:
         obj = bundle_writer.shader("Shamway/Test")
         pf = obj.fields["m_ParsedForm"]

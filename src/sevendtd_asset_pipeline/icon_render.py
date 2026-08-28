@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -45,6 +46,19 @@ DEFAULT_ATLAS = "ItemIconAtlas"
 DEFAULT_YAW = 208.0
 DEFAULT_PITCH = 8.0
 DEFAULT_PADDING = 1.22
+
+
+def _graphics_device_args() -> list[str]:
+    """Ask the editor for a real device without pinning a Linux-only API.
+
+    `-force-glcore` is load-bearing under Xvfb: Vulkan has nothing to present
+    to there. macOS and Windows editors use Metal and D3D11; forcing GLCore
+    on those hosts either fails the launch or is ignored. This process is the
+    editor's host, so `sys.platform` is the right probe.
+    """
+    if sys.platform.startswith("linux"):
+        return ["-force-glcore"]
+    return []
 
 
 @dataclass(frozen=True)
@@ -136,9 +150,9 @@ def render_icon(
         str(config.unity_editor),
         "-batchmode",
         "-quit",
-        # No -nographics: see this module's docstring. -force-glcore asks for a
-        # GL context, which is what a Linux editor gets on a normal desktop.
-        "-force-glcore",
+        # No -nographics: see this module's docstring. A Linux editor under
+        # Xvfb needs -force-glcore; other hosts pick Metal or D3D11 themselves.
+        *_graphics_device_args(),
         "-projectPath",
         str(config.unity_project),
         "-executeMethod",

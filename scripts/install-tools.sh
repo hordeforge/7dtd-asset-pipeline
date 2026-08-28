@@ -791,13 +791,17 @@ install_zmolv() {
 	# treats as a default; ZMOLV_LIBRARY still overrides. Without the library
 	# a synthesized shader carries no Vulkan sub-program and a -force-vulkan
 	# client draws it magenta - and that degradation was once silent.
-	local root lib clone
+	# Zig names the artifact per host (.so / .dylib / .dll); copy whichever
+	# one the build produced rather than assuming Linux.
+	local root lib clone built dest
 	root="$(cd "$(dirname "$0")/.." && pwd)"
-	lib="$root/.local/lib/libzmolv.so"
-	if [[ -f "$lib" ]]; then
-		echo "OK: libzmolv is already installed ($lib)"
-		return
-	fi
+	for lib in "$root/.local/lib"/libzmolv.so "$root/.local/lib"/libzmolv.dylib \
+		"$root/.local/lib"/zmolv.dll "$root/.local/lib"/libzmolv.dll; do
+		if [[ -f "$lib" ]]; then
+			echo "OK: libzmolv is already installed ($lib)"
+			return
+		fi
+	done
 	if ! have zig || ! have git; then
 		echo "note: zig or git missing; skipped libzmolv (the shader's Vulkan lane stays off)"
 		return
@@ -807,9 +811,24 @@ install_zmolv() {
 	if git clone --quiet "$ZMOLV_REPO" "$clone/zmol-v" &&
 		git -C "$clone/zmol-v" checkout --quiet "$ZMOLV_PINNED_COMMIT" &&
 		(cd "$clone/zmol-v" && zig build -Doptimize=ReleaseFast); then
-		mkdir -p "$root/.local/lib"
-		cp "$clone/zmol-v/zig-out/lib/libzmolv.so" "$lib"
-		echo "OK: installed $lib"
+		built=""
+		for lib in "$clone/zmol-v/zig-out/lib"/libzmolv.so \
+			"$clone/zmol-v/zig-out/lib"/libzmolv.dylib \
+			"$clone/zmol-v/zig-out/lib"/zmolv.dll \
+			"$clone/zmol-v/zig-out/lib"/libzmolv.dll; do
+			if [[ -f "$lib" ]]; then
+				built="$lib"
+				break
+			fi
+		done
+		if [[ -n "$built" ]]; then
+			mkdir -p "$root/.local/lib"
+			dest="$root/.local/lib/$(basename -- "$built")"
+			cp "$built" "$dest"
+			echo "OK: installed $dest"
+		else
+			echo "note: zmol-v built but produced no shared library; skipped libzmolv"
+		fi
 	else
 		echo "note: zmol-v build failed; skipped libzmolv (the shader's Vulkan lane stays off)"
 	fi

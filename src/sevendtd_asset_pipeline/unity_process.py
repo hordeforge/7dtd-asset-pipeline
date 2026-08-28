@@ -69,6 +69,41 @@ ABORT_SIGNATURE = "ToFileDescriptor"
 # SIGABRT, as subprocess reports it.
 ABORTED = -6
 
+# Relative to `editor_data_dir`: the Windows standalone module `doctor` and
+# `build` refuse a missing copy of. Pathlib accepts the POSIX spelling on
+# every host the CLI claims.
+WINDOWS_STANDALONE_SUPPORT = Path(
+    "PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll"
+)
+
+
+def editor_data_dir(editor: Path) -> Path:
+    """The editor's assembly root, probed from the binary's parent.
+
+    Linux and Windows Hub installs keep assemblies at ``…/Editor/Data``. A
+    macOS Hub install keeps them at ``…/Unity.app/Contents``, with the
+    executable one level deeper at ``Contents/MacOS/Unity``. Walking
+    ``editor.parent / "Data"`` on that layout looks for Windows Build Support
+    next to ``MacOS/``, which is never where it lives.
+
+    Presence of ``Data/`` or ``Contents/Managed/`` decides, not the OS name:
+    the same `UNITY_EDITOR` path is what a person exported, and a wrong
+    default here makes `doctor` and `build` fail a working editor.
+    """
+    parent = Path(editor).parent
+    data = parent / "Data"
+    if data.is_dir():
+        return data
+    contents = parent.parent
+    if parent.name == "MacOS" and (contents / "Managed").is_dir():
+        return contents
+    return data
+
+
+def windows_standalone_support(editor: Path) -> Path:
+    """The Windows Build Support (Mono) assembly this editor must carry."""
+    return editor_data_dir(editor) / WINDOWS_STANDALONE_SUPPORT
+
 
 def run_unity(
     command: Sequence[str],

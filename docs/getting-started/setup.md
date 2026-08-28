@@ -235,8 +235,11 @@ export UNITY_EDITOR="/absolute/path/to/Unity/Hub/Editor/2022.3.62f2/Editor/Unity
 ```
 
 On Windows, `UNITY_EDITOR` ends in `Editor/Unity.exe`. On macOS it points at
-the executable inside the editor application bundle. Do not commit either
-path. The pipeline reads these two variables, `SHAMWAY_BUNDLE_SOURCE`, and the
+the executable inside the application bundle
+(`/Applications/Unity/Hub/Editor/<revision>/Unity.app/Contents/MacOS/Unity`).
+`doctor` and `build` probe the assembly root from that binary — `Editor/Data`
+on Linux and Windows, `Contents/` on macOS — so Windows Build Support is
+found on every host the CLI claims. Do not commit either path. The pipeline reads these two variables, `SHAMWAY_BUNDLE_SOURCE`, and the
 two `shamway client` overrides in [configuration.md](../configuration.md); it
 reads no `.local.env` or other dotenv file, so a mod that keeps one must export
 it itself.

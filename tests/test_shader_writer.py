@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import collections
 import ctypes
+import importlib.util
 import shutil
 import struct
 import subprocess
@@ -40,6 +41,10 @@ needs_unitypy = unittest.skipUnless(
 )
 needs_vkd3d = unittest.skipUnless(
     has_capability("vkd3d-compiler"), "the shader lane compiles HLSL with vkd3d-compiler"
+)
+needs_lz4 = unittest.skipUnless(
+    importlib.util.find_spec("lz4") is not None,
+    "shader blob compression needs the lz4 extra (declared with UnityPy)",
 )
 
 
@@ -768,6 +773,7 @@ class VulkanSubProgramTests(unittest.TestCase):
             "targets are the vertex-input declaration slots + 13, the stock convention",
         )
 
+    @needs_lz4
     def test_the_platform_is_absent_without_the_encoder(self) -> None:
         """A host without the codec builds what it always did, rather than failing."""
         if not has_capability("vkd3d-compiler"):
@@ -831,6 +837,7 @@ class VulkanSubProgramTests(unittest.TestCase):
             "no bare sampler variable: the split form is what a live client's draw killed",
         )
 
+    @needs_lz4
     def test_the_vulkan_texture_entry_uses_the_stock_index(self) -> None:
         """The material binder keys on the texture entry's index, and stock
         records encode it as `(fragment stage << 24) | slot` = 0x08000000 for
@@ -856,6 +863,7 @@ class VulkanSubProgramTests(unittest.TestCase):
         self.assertEqual(entry[1], 0x08000000, "fragment stage, slot 0 - the measured stock value")
         self.assertEqual(entry[2], 0xFFFFFFFF, "no separate sampler, as stock declares")
 
+    @needs_lz4
     def test_the_vulkan_cbuffer_entry_uses_the_stock_index(self) -> None:
         """The vertex program binds its globals buffer through the entry index,
         which stock encodes as `(vertex stage << 24) | kind | slot` = 0x04010000
@@ -919,20 +927,34 @@ class LibraryDiscoveryTests(unittest.TestCase):
         ):
             candidates = shader_blob._library_candidates()
         checkout = Path(shader_blob.__file__).resolve().parents[2]
-        self.assertEqual(candidates[0], checkout / ".local" / "lib" / "libzmolv.so")
+        native = shader_blob._shared_library_filenames()[0]
+        self.assertEqual(candidates[0], checkout / ".local" / "lib" / native)
 
-    def test_the_linux_directories_are_the_final_fallback(self) -> None:
+    def test_the_system_directories_include_this_host_library_name(self) -> None:
         with (
             mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),
             mock.patch.object(ctypes.util, "find_library", return_value=None),
         ):
             candidates = shader_blob._library_candidates()
-        self.assertEqual(
-            candidates[-2:],
-            [Path("/usr/local/lib/libzmolv.so"), Path("/usr/lib/libzmolv.so")],
-        )
-        # No discovery route may sit behind the fallback it is meant to beat.
+        native = shader_blob._shared_library_filenames()[0]
+        checkout = Path(shader_blob.__file__).resolve().parents[2] / ".local" / "lib" / native
+        system = Path("/usr/local/lib") / native
+        self.assertIn(system, candidates)
+        self.assertIn(Path("/usr/lib") / native, candidates)
+        self.assertLess(candidates.index(checkout), candidates.index(system))
         self.assertNotIn(None, candidates)
+
+    def test_every_host_library_name_is_a_candidate(self) -> None:
+        """A copied .dylib or .dll must not be invisible on a Linux authoring host."""
+        with (
+            mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),
+            mock.patch.object(ctypes.util, "find_library", return_value=None),
+        ):
+            candidates = shader_blob._library_candidates()
+        names = {path.name for path in candidates}
+        self.assertIn("libzmolv.so", names)
+        self.assertIn("libzmolv.dylib", names)
+        self.assertTrue({"zmolv.dll", "libzmolv.dll"} & names)
 
 
 class DescriptorSetTests(unittest.TestCase):

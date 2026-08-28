@@ -22,6 +22,7 @@ import os
 import shutil
 import struct
 import subprocess
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -600,6 +601,25 @@ def compress_smolv(spirv: bytes) -> bytes:
     return encoded
 
 
+def _shared_library_filenames() -> tuple[str, ...]:
+    """The names a zmol-v build lands as, this host first.
+
+    Zig emits `libzmolv.so` on Linux, `libzmolv.dylib` on macOS, and
+    `zmolv.dll` / `libzmolv.dll` on Windows. Search this host's names first so
+    a checkout `.local/lib` build is found, then the others so a copied
+    artifact is not invisible.
+    """
+    if sys.platform == "darwin":
+        preferred = ("libzmolv.dylib",)
+    elif sys.platform == "win32":
+        preferred = ("zmolv.dll", "libzmolv.dll")
+    else:
+        preferred = ("libzmolv.so",)
+    all_names = ("libzmolv.so", "libzmolv.dylib", "zmolv.dll", "libzmolv.dll")
+    rest = tuple(name for name in all_names if name not in preferred)
+    return preferred + rest
+
+
 def _library_candidates() -> list[Path]:
     """Where to look for the zmol-v shared library, most explicit first.
 
@@ -607,15 +627,15 @@ def _library_candidates() -> list[Path]:
     (`ctypes.util.find_library`, which resolves `libzmolv.so`, `libzmolv.dylib`
     and `zmolv.dll` per host), then this checkout's own gitignored
     `.local/lib` — where `scripts/install-tools.sh` builds the pinned zmol-v —
-    then the two directories a plain `zig build -p /usr/local` install lands
-    in on Linux. The explicit legs are fallbacks rather than the only route
-    because find_library reads the linker cache, which a freshly copied
-    library is absent from. A session-local build under /tmp is deliberately
-    not a candidate: it evaporates on reboot, and a default that sometimes
-    exists is how the Vulkan lane silently degraded on 2026-08-25. The
-    checkout leg resolves from this file (src layout), so it exists only when
-    the pipeline runs from a checkout; a wheel install relies on the other
-    legs.
+    then the directories a plain `zig build -p /usr/local` install lands in,
+    plus Homebrew's `/opt/homebrew/lib` when that directory exists. The
+    explicit legs are fallbacks rather than the only route because
+    find_library reads the linker cache, which a freshly copied library is
+    absent from. A session-local build under /tmp is deliberately not a
+    candidate: it evaporates on reboot, and a default that sometimes exists
+    is how the Vulkan lane silently degraded on 2026-08-25. The checkout leg
+    resolves from this file (src layout), so it exists only when the pipeline
+    runs from a checkout; a wheel install relies on the other legs.
     """
     candidates: list[Path] = []
     override = os.environ.get("ZMOLV_LIBRARY")
@@ -624,10 +644,15 @@ def _library_candidates() -> list[Path]:
     found = ctypes.util.find_library("zmolv")
     if found:
         candidates.append(Path(found))
-    checkout = Path(__file__).resolve().parents[2]
-    candidates.append(checkout / ".local" / "lib" / "libzmolv.so")
-    for directory in ("/usr/local/lib", "/usr/lib"):
-        candidates.append(Path(directory) / "libzmolv.so")
+    names = _shared_library_filenames()
+    checkout_lib = Path(__file__).resolve().parents[2] / ".local" / "lib"
+    candidates.extend(checkout_lib / name for name in names)
+    search_dirs = [Path("/usr/local/lib"), Path("/usr/lib")]
+    homebrew = Path("/opt/homebrew/lib")
+    if homebrew.is_dir():
+        search_dirs.append(homebrew)
+    for directory in search_dirs:
+        candidates.extend(directory / name for name in names)
     return candidates
 
 

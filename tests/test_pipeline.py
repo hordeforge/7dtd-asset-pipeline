@@ -375,6 +375,37 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("Windows support", names)
         self.assertTrue(any(check.status == "FAIL" for check in checks))
 
+    def test_doctor_finds_windows_support_under_a_macos_app_bundle(self) -> None:
+        """The macOS Hub layout keeps assemblies in Contents/, not MacOS/Data."""
+        import os
+
+        from sevendtd_asset_pipeline.doctor import run_doctor
+
+        initialize(self.root, None, "example.unity3d", "2022.3.62f2", bundle_source="unity")
+        contents = self.root / "Unity.app" / "Contents"
+        macos = contents / "MacOS"
+        macos.mkdir(parents=True)
+        (contents / "Managed").mkdir()
+        support = (
+            contents
+            / "PlaybackEngines"
+            / "WindowsStandaloneSupport"
+            / "UnityEditor.WindowsStandalone.Extensions.dll"
+        )
+        support.parent.mkdir(parents=True)
+        support.write_bytes(b"")
+        editor = macos / "Unity"
+        editor.write_text("#!/bin/sh\necho 2022.3.62f2\n", encoding="utf-8")
+        editor.chmod(0o755)
+        os.environ["UNITY_EDITOR"] = str(editor)
+        try:
+            checks = run_doctor(load_config(self.root / CONFIG_NAME))
+        finally:
+            os.environ.pop("UNITY_EDITOR", None)
+        windows = next(check for check in checks if check.name == "Windows support")
+        self.assertEqual("OK", windows.status)
+        self.assertEqual(str(support), windows.detail)
+
     def test_doctor_reports_the_synthesized_build_readiness(self) -> None:
         """The editorless writer answers three questions: revision, sources, UnityPy.
 

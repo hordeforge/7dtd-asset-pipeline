@@ -24,11 +24,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from sevendtd_asset_pipeline.icon_render import _graphics_device_args
 from sevendtd_asset_pipeline.unity_process import (
     ABORT_SIGNATURE,
     ABORTED,
     MAX_ATTEMPTS,
+    editor_data_dir,
     run_unity,
+    windows_standalone_support,
 )
 
 COMMAND = ["unity", "-batchmode"]
@@ -144,6 +147,66 @@ class BoundedKillTests(unittest.TestCase):
                 time.sleep(0.05)
             for pid in pids:
                 self.assertFalse(_alive(pid), f"pid {pid} survived the timeout")
+
+
+class EditorDataDirTests(unittest.TestCase):
+    """UNITY_EDITOR's assembly root is probed from the binary, not the OS name.
+
+    `doctor` and `build` look for Windows Build Support under this directory.
+    A macOS Hub install puts the binary at Contents/MacOS/Unity and the
+    assemblies at Contents/, so dirname/Data is the wrong tree.
+    """
+
+    def test_linux_and_windows_layout_is_editor_slash_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            data = root / "Editor" / "Data"
+            (data / "Managed").mkdir(parents=True)
+            editor = root / "Editor" / "Unity"
+            editor.write_text("", encoding="utf-8")
+            self.assertEqual(editor_data_dir(editor), data)
+            self.assertEqual(
+                windows_standalone_support(editor),
+                data
+                / "PlaybackEngines"
+                / "WindowsStandaloneSupport"
+                / "UnityEditor.WindowsStandalone.Extensions.dll",
+            )
+
+    def test_macos_app_bundle_layout_is_contents_not_macos_slash_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            contents = Path(temp) / "Unity.app" / "Contents"
+            macos = contents / "MacOS"
+            macos.mkdir(parents=True)
+            (contents / "Managed").mkdir()
+            editor = macos / "Unity"
+            editor.write_text("", encoding="utf-8")
+            self.assertEqual(editor_data_dir(editor), contents)
+            self.assertEqual(
+                windows_standalone_support(editor),
+                contents
+                / "PlaybackEngines"
+                / "WindowsStandaloneSupport"
+                / "UnityEditor.WindowsStandalone.Extensions.dll",
+            )
+
+    def test_a_missing_tree_still_reports_the_linux_spelling(self) -> None:
+        editor = Path("Editor") / "Unity"
+        self.assertEqual(editor_data_dir(editor), Path("Editor") / "Data")
+
+
+class GraphicsDeviceArgsTests(unittest.TestCase):
+    """render-icon must not pin GLCore on hosts whose editor is Metal or D3D11."""
+
+    def test_linux_asks_for_glcore(self) -> None:
+        with mock.patch("sevendtd_asset_pipeline.icon_render.sys.platform", "linux"):
+            self.assertEqual(_graphics_device_args(), ["-force-glcore"])
+
+    def test_macos_and_windows_leave_the_editor_to_pick(self) -> None:
+        with mock.patch("sevendtd_asset_pipeline.icon_render.sys.platform", "darwin"):
+            self.assertEqual(_graphics_device_args(), [])
+        with mock.patch("sevendtd_asset_pipeline.icon_render.sys.platform", "win32"):
+            self.assertEqual(_graphics_device_args(), [])
 
 
 if __name__ == "__main__":

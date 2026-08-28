@@ -12,6 +12,15 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Changed
+
+- `client deploy` and clip adoption refuse symlinks, so a copied tree cannot
+  follow a link out of the modlet or capture directory.
+- GitHub release-asset URLs, Unity editor download URLs, and Gemini model
+  identifiers are restricted to their expected hosts and path-segment shape
+  before anything is fetched.
+- Host installers follow HTTPS-only redirects, including after a 3xx.
+
 ## [0.3.0] - 2026-09-05
 
 ### Changed

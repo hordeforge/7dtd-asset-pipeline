@@ -10,6 +10,12 @@
 # for.
 set -euo pipefail
 
+# HTTPS only, including after a 3xx: --location would otherwise follow a
+# redirect onto file:// or http://.
+curl() {
+	command curl --proto '=https' --proto-redir '=https' "$@"
+}
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Every mktemp below follows TMPDIR, and the default /tmp is tmpfs on most

@@ -348,6 +348,23 @@ class ClipCapture:
 _CLIP_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm", ".mov")
 
 
+def _reject_symlinks(path: Path, *, role: str) -> None:
+    """Refuse a tree `copytree`/`copy2` would follow out of the source.
+
+    Adoption copies an untrusted directory into the evidence tree. A symlink
+    inside it would publish whatever that link currently points at, hashed
+    and cited as if it had been captured.
+    """
+    if path.is_symlink():
+        raise PipelineError(
+            f"refusing to adopt {role}: it is a symlink, and adoption copies "
+            "the captured files, not whatever the link currently points at"
+        )
+    if path.is_dir():
+        for child in path.iterdir():
+            _reject_symlinks(child, role=str(child))
+
+
 def record_existing_clip(
     source_dir: Path | str,
     label: str,
@@ -368,6 +385,7 @@ def record_existing_clip(
         raise PipelineError("a clip adoption needs a label; it is how the clip is cited later")
     if not source.is_dir():
         raise PipelineError(f"no such clip directory: {source}")
+    _reject_symlinks(source, role=str(source))
     if not _looks_like_a_clip(source):
         raise PipelineError(
             f"{source} does not look like a clip: it holds neither frame images "
@@ -453,6 +471,11 @@ def record_existing(
     source = Path(file)
     if not source.is_file():
         raise PipelineError(f"no such image: {source}")
+    if source.is_symlink():
+        raise PipelineError(
+            f"refusing to adopt {source}: it is a symlink, and adoption copies "
+            "the captured file, not whatever the link currently points at"
+        )
     directory = Path(root)
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / f"{_safe_stem(label.strip())}{source.suffix or '.png'}"

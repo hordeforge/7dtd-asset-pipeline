@@ -433,7 +433,9 @@ What each of those knows:
   at its real `Mods/`; backup or overhaul folders such as `Mods.DF/` are not
   loaded and are not evidence. `deploy` copies only `ModInfo.xml`, `Config/`,
   `Resources/`, `UIAtlases/`, `Prefabs/`, `UI/` and root DLLs, replacing the
-  previous deployment, so nothing stale survives beside the new bundle.
+  previous deployment, so nothing stale survives beside the new bundle. A
+  symlink anywhere in that tree is refused: `copytree` would follow it and
+  publish a host file into the shared Mods folder.
 - **What "fresh" means.** A bundle is cached for the life of the process
   under its path, so a reused client proves nothing about a rebuild. `launch`
   refuses while a `7DaysToDie.exe` or `7DaysToDie_EAC.exe` is running

@@ -48,7 +48,7 @@ version = "2022.3.62f2"
 | `mod_name` | Exact `ModInfo.xml` `<Name value>` and `@modfolder(...)` id. |
 | `bundle_name` | Lowercase staged file name ending in `.unity3d`. Must be empty when `bundle_source = "none"`. |
 | `bundle_source` | Where the bundle comes from: `"synthesized"` (this tool writes it directly, no editor), `"none"` (the mod ships no bundle), `"external"` (an editor elsewhere builds it and `shamway stage` gates it here), or `"unity"` (a local editor builds it). **Default `"synthesized"`** — an absent key means no editor, because Unity is opt-in. `shamway init --adopt PROJECT` is the one place an unstated source means `"unity"`, since pointing at a project the mod already has *is* the opt-in. See [no-unity.md](bundles/no-unity.md). |
-| `unity_project` | Non-deployed Unity project owned by the mod. Only `bundle_source = "unity"` reads it; the other three sources leave it empty. |
+| `unity_project` | Non-deployed Unity project owned by the mod. `init` creates it for the `"external"` and `"unity"` sources so the editor build has committed source and settings. Only the effective `bundle_source = "unity"` uses it on this machine; an `"external"` host stages an artifact built elsewhere. It is empty for `"synthesized"` and `"none"`. |
 | `source_root` | The folder whose files become bundle members. With `bundle_source = "unity"` it is a Unity `AssetDatabase` path *inside the project*; with `"synthesized"` there is no project, so it is read against the mod root (scaffolded as `assets-src/bundle`). |
 | `build_dir` | Ignored raw output and Unity log directory. |
 | `manifest_dir` | Tracked copy of Unity's per-bundle manifest. |

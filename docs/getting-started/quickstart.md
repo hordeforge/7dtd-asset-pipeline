@@ -105,8 +105,10 @@ MyMod/
 No Unity project, because none is needed: `.shamway.toml` says
 `bundle_source = "synthesized"` and `shamway build` writes the `.unity3d`
 itself. `--bundle-source none`, `external` or `unity` scaffold the other three
-cases; only `unity` adds a Unity project, and the tree it adds is in
-[no-unity.md](../bundles/no-unity.md).
+cases. `external` and `unity` both add a Unity project so its source and
+settings can be committed; only `unity` opens that project on this machine.
+The `external` host receives the artifact through `shamway stage`. See
+[no-unity.md](../bundles/no-unity.md) for the four source modes.
 
 It refuses to overwrite any of those if they already exist. Every path is
 configurable — see [Configuration](../configuration.md).

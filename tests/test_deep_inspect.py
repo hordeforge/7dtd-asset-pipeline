@@ -113,7 +113,6 @@ def _child_link(child_object: SimpleNamespace) -> SimpleNamespace:
     return SimpleNamespace(read=read)
 
 
-@unittest.skipUnless(has_capability("UnityPy"), "the census mirrors UnityPy object shapes")
 class WalkCensusTests(unittest.TestCase):
     """The per-prefab component census, against duck-typed stand-ins.
 
@@ -162,13 +161,16 @@ class WalkCensusTests(unittest.TestCase):
     def test_a_deep_chain_terminates_instead_of_recurring_forever(self) -> None:
         """A malformed hierarchy must not become infinite recursion."""
         depth = 200
-        root = leaf = _game_object(transform=_Transform())
+        leaf = _game_object(transform=_Transform())
         for _ in range(depth - 1):
             leaf = _game_object(transform=_Transform(children=[_child_link(leaf)]))
+        root = leaf
         counts, total, skipped = _walk(root)
-        # Terminated, and stopped well short of walking all `depth` levels.
-        self.assertLess(counts.get("Transform", 0), depth)
-        self.assertLess(total, depth)
+        # The guard counts components through depth 64, then stops at depth 65.
+        # The total still records that bounded final visit.
+        self.assertEqual(65, counts.get("Transform", 0))
+        self.assertEqual(66, total)
+        self.assertEqual(0, skipped)
 
 
 if __name__ == "__main__":

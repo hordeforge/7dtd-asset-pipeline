@@ -99,7 +99,7 @@ def _walk(game_object: Any, depth: int = 0) -> tuple[Counter[str], int, int]:
     for child in children:
         try:
             child_object = child.read().m_GameObject.read()
-        except Exception:  # noqa: BLE001, S112 - an unreadable child must not abort the walk
+        except Exception:  # noqa: BLE001 - an unreadable child must not abort the walk
             skipped += 1
             continue
         child_counts, child_total, child_skipped = _walk(child_object, depth + 1)

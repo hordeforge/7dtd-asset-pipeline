@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import math
 import os
 import re
 import secrets
@@ -214,6 +215,38 @@ def _stale_seconds(env: Mapping[str, str] | None = None) -> float:
         return DEFAULT_LOCK_STALE_SECONDS
 
 
+def _parse_lock_timestamp(value: str) -> datetime | None:
+    """A lock `heartbeat`/`acquired` stamp as an aware UTC datetime.
+
+    The protocol writes `<UTC ISO8601 Z>`, and that is what this repository
+    stamps. The owner (`7dtd-playtest`) also accepts a unix-epoch number and
+    an offset-less stamp, reading the latter as UTC so a host in
+    `America/New_York` during EDT cannot shift staleness by four hours. This
+    parser matches that contract: a format we reject while `running=yes` is
+    how a live claim gets overwritten.
+    """
+    stamp = value.strip()
+    if not stamp:
+        return None
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", stamp):
+        try:
+            epoch = float(stamp)
+        except ValueError:
+            return None
+        if not math.isfinite(epoch):
+            return None
+        return datetime.fromtimestamp(epoch, UTC)
+    if stamp.endswith("Z"):
+        stamp = stamp[:-1] + "+00:00"
+    try:
+        moment = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return moment
+
+
 def lock_holder(
     path: Path | None = None,
     env: Mapping[str, str] | None = None,
@@ -224,6 +257,8 @@ def lock_holder(
     Held means `running=yes` with a heartbeat inside the stale window. A stale
     holder reads as free, because taking one over is the documented reclaim
     path; the live-process check is what still refuses in that case.
+    `running=yes` with a stamp this parser cannot read is still held: treating
+    it as free is the overwrite path.
     """
     fields = read_lock(path if path is not None else lock_path(env))
     if fields.get("running") != "yes":
@@ -232,12 +267,9 @@ def lock_holder(
     stamp = fields.get("heartbeat") or fields.get("acquired")
     if not stamp:
         return None
-    try:
-        heartbeat = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if heartbeat.tzinfo is None:
-        heartbeat = heartbeat.replace(tzinfo=UTC)
+    heartbeat = _parse_lock_timestamp(stamp)
+    if heartbeat is None:
+        return session
     moment = datetime.now(UTC) if now is None else datetime.fromtimestamp(now, UTC)
     age = (moment - heartbeat).total_seconds()
     return session if age <= _stale_seconds(env) else None
@@ -978,13 +1010,18 @@ def latest_client_log(
     """
     if not log_dir.is_dir():
         raise PipelineError(f"client log directory does not exist: {log_dir}")
+    # Whole seconds: the client often lives on a filesystem that stores mtime
+    # at 1 s resolution (exFAT Steam libraries, some NFS). `time.time()` is a
+    # float, so a log written in the launch second reports `floor(started_at)`
+    # and `mtime >= started_at` rejects the file the client just wrote. The
+    # sibling capture script compares `stat -c %Y` against `date +%s`, both
+    # integers; floor is the same cutoff.
+    cutoff = None if written_after is None else math.floor(written_after)
     deadline = time.monotonic() + max(0.0, wait_seconds)
     while True:
         logs = sorted(log_dir.glob(LOG_GLOB), key=lambda path: path.stat().st_mtime)
         newest = logs[-1] if logs else None
-        if newest is not None and (
-            written_after is None or newest.stat().st_mtime >= written_after
-        ):
+        if newest is not None and (cutoff is None or newest.stat().st_mtime >= cutoff):
             return newest
         if time.monotonic() >= deadline:
             break

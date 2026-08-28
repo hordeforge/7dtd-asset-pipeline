@@ -43,6 +43,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -163,6 +164,16 @@ def _digest(path: Path) -> str:
         for block in iter(lambda: handle.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _utc_mtime(mtime: float) -> str:
+    """A file mtime as `<UTC ISO8601 Z>`, independent of the host timezone.
+
+    Built from an aware UTC datetime, not `time.gmtime` + a literal `Z`. The
+    stamp is the file's own modification instant; a host in `America/New_York`
+    during EDT must not emit `12:00Z` for a file written at 16:00 UTC.
+    """
+    return datetime.fromtimestamp(mtime, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def read_manifest(root: Path) -> list[dict[str, object]]:
@@ -377,9 +388,8 @@ def record_existing_clip(
             shutil.rmtree(staged, ignore_errors=True)
             raise PipelineError(f"cannot copy clip {source} into evidence: {exc}") from exc
 
-    captured_at = time.strftime(
-        "%Y-%m-%dT%H:%M:%SZ",
-        time.gmtime(max(source.stat().st_mtime, destination.stat().st_mtime if in_place else 0)),
+    captured_at = _utc_mtime(
+        max(source.stat().st_mtime, destination.stat().st_mtime if in_place else 0)
     )
     try:
         with _manifest_lock(directory):
@@ -500,7 +510,7 @@ def _record(
         session=session,
         bytes=stat.st_size,
         sha256=_digest(staged),
-        captured_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stat.st_mtime)),
+        captured_at=_utc_mtime(stat.st_mtime),
         notes=[] if observable else ["no observable recorded; a frame without one proves nothing"],
     )
     try:

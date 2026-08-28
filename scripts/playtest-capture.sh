@@ -71,6 +71,10 @@ where="$(shamway client where --json)"
 logs="$(printf '%s' "$where" | python3 "$ROOT/scripts/json_field.py" log_dir)"
 shots_dir="$(printf '%s' "$where" | python3 "$ROOT/scripts/json_field.py" user_data)/playtest-shots"
 started="$(date +%s)"
+# Wall clock for mtime comparisons (mtime is an instant); monotonic uptime
+# for the timeout. An NTP step during the default 900s wait otherwise fires
+# immediately (clock jumped forward) or stalls until the clock catches up.
+timeout_start="$(cut -d' ' -f1 /proc/uptime 2>/dev/null || true)"
 seen=""
 # The orchestrator writes this when its poll loop ends (done / timeout /
 # client_exit) - the deterministic end of the run. Its directory mirrors the
@@ -90,9 +94,19 @@ newest_log() {
     printf '%s\n' "$candidate"
 }
 
+elapsed_over_timeout() {
+    if [[ -n "$timeout_start" && -r /proc/uptime ]]; then
+        awk -v now="$(cut -d' ' -f1 /proc/uptime)" -v start="$timeout_start" -v t="$TIMEOUT" \
+            'BEGIN { exit !(now - start > t) }'
+    else
+        local now
+        now="$(date +%s)"
+        ((now - started > TIMEOUT))
+    fi
+}
+
 while true; do
-    now="$(date +%s)"
-    if ((now - started > TIMEOUT)); then
+    if elapsed_over_timeout; then
         echo "playtest-capture.sh: no staged frame within ${TIMEOUT}s" >&2
         exit 1
     fi

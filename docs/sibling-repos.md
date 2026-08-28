@@ -73,8 +73,8 @@ that same file rather than defining a second one:
 |---|---|
 | `running` | `yes` while held, `no` when free |
 | `session` | the holder's id, `<agent>-<UTC YYYYMMDD-HHMMSS>-<hex>` |
-| `acquired` | UTC ISO8601 when the hold started |
-| `heartbeat` | UTC ISO8601, refreshed about every 30 s while the holder lives |
+| `acquired` | UTC ISO8601 when the hold started (`…Z`; a unix-epoch number and an offset-less stamp are also read, the latter as UTC) |
+| `heartbeat` | UTC ISO8601, refreshed about every 30 s while the holder lives (same parse as `acquired`) |
 
 `PLAYTEST_LOCK_FILE` overrides the path and `PLAYTEST_SESSION_ID` names the
 holder; `PLAYTEST_LOCK_STALE_SEC` (default 120) is how old a heartbeat may get
@@ -105,6 +105,9 @@ What `shamway` does with it:
 - Both still refuse when a client process is up, whatever the file says. The
   lock covers the gap between runs; the process check covers a lock nobody
   wrote.
+- A `running=yes` record whose heartbeat cannot be parsed is treated as held,
+  not free. The owner also accepts a numeric unix epoch; this repository now
+  does too, so a format mismatch cannot look like an abandoned lock.
 
 Set `PLAYTEST_SESSION_ID` to the holder's session when a `shamway` command is
 deliberately part of a run someone else already holds; that is the only case in

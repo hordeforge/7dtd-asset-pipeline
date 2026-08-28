@@ -327,6 +327,21 @@ class LatestLogTests(unittest.TestCase):
             new.write_text("new")
             self.assertEqual(client.latest_client_log(logs, written_after=time.time() - 60), new)
 
+    def test_a_log_written_in_the_launch_second_counts_as_this_run(self) -> None:
+        """Whole-second mtimes must not lose the log the client just wrote.
+
+        exFAT Steam libraries and some NFS mounts store mtime at 1 s. Launch
+        samples `time.time()` as a float in that same second, so comparing
+        `mtime >= started_at` rejects `floor(started_at)` — the file on disk.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            logs = Path(temp)
+            new = logs / "output_log_client__2026-08-23__10-00-00.txt"
+            new.write_text("new")
+            started = 1_700_000_000.7
+            os.utime(new, (1_700_000_000.0, 1_700_000_000.0))
+            self.assertEqual(client.latest_client_log(logs, written_after=started), new)
+
     def test_no_logs_is_an_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp, self.assertRaises(PipelineError):
             client.latest_client_log(Path(temp))
@@ -510,6 +525,78 @@ class LockTests(unittest.TestCase):
                 heartbeat=self._stamp(600),
             )
             self.assertIsNone(client.lock_holder(path))
+
+    def test_an_offset_heartbeat_is_compared_at_the_instant(self) -> None:
+        """14:00 CEST is 12:00 UTC; dropping the offset would shift staleness by 2h.
+
+        Europe/Warsaw is CEST (+02:00) on 4 July. A parser that kept the wall
+        digits and compared them to UTC `now` would call a 30-second-old hold
+        two hours stale, and `held_lock` would overwrite a live playtest claim.
+        """
+        from datetime import UTC, datetime
+
+        heartbeat = "2026-07-04T14:00:00+02:00"
+        now = datetime(2026, 7, 4, 12, 0, 30, tzinfo=UTC).timestamp()
+        later = datetime(2026, 7, 4, 12, 3, 0, tzinfo=UTC).timestamp()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp),
+                running="yes",
+                session="other-20260704-120000-abc",
+                heartbeat=heartbeat,
+            )
+            self.assertEqual(client.lock_holder(path, now=now), "other-20260704-120000-abc")
+            self.assertIsNone(client.lock_holder(path, now=later))
+
+    def test_a_naive_heartbeat_is_utc_not_the_host_zone(self) -> None:
+        """Offset-less stamps are UTC in this protocol, matching 7dtd-playtest.
+
+        Interpreting `2026-07-04T12:00:00` as America/New_York during EDT
+        would treat it as 16:00 UTC and report a just-written hold as free.
+        """
+        from datetime import UTC, datetime
+
+        now = datetime(2026, 7, 4, 12, 0, 30, tzinfo=UTC).timestamp()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp),
+                running="yes",
+                session="other-20260704-120000-abc",
+                heartbeat="2026-07-04T12:00:00",
+            )
+            self.assertEqual(client.lock_holder(path, now=now), "other-20260704-120000-abc")
+
+    def test_a_unix_epoch_heartbeat_is_read_as_seconds(self) -> None:
+        """7dtd-playtest accepts a numeric epoch; refusing it reads a live hold as free."""
+        now = 1_700_000_000.0
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "stale").mkdir()
+            fresh = self._lock(
+                root,
+                running="yes",
+                session="other-20260823-120000-abc",
+                heartbeat=str(now - 5),
+            )
+            stale = self._lock(
+                root / "stale",
+                running="yes",
+                session="other-20260823-120000-abc",
+                heartbeat=str(now - 600),
+            )
+            self.assertEqual(client.lock_holder(fresh, now=now), "other-20260823-120000-abc")
+            self.assertIsNone(client.lock_holder(stale, now=now))
+
+    def test_an_unreadable_heartbeat_on_a_running_lock_is_still_held(self) -> None:
+        """Garbage while `running=yes` must not read free: that overwrites the claim."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp),
+                running="yes",
+                session="other-20260823-120000-abc",
+                heartbeat="not-a-timestamp",
+            )
+            self.assertEqual(client.lock_holder(path), "other-20260823-120000-abc")
 
     def test_running_no_and_a_missing_file_both_read_free(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

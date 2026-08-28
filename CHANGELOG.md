@@ -23,6 +23,16 @@ tag has no changelog section.
 
 ### Fixed
 
+- Shared-client lock heartbeats are parsed the way `7dtd-playtest` writes
+  them (Z, numeric epoch, offset, naive-as-UTC). A `running=yes` record whose
+  stamp cannot be read stays held, so a live claim is not overwritten.
+- `latest_client_log` accepts a log whose mtime falls in the launch's whole
+  second, so a 1-second-resolution filesystem no longer reports "the client
+  did not start" for a client that did.
+- Capture `captured_at` is the file mtime in UTC regardless of the host
+  timezone, including during EDT in `America/New_York`.
+- `playtest-capture.sh` times its wait against `/proc/uptime`, so an NTP
+  step cannot fire or stall the 900s timeout.
 - `doctor` and `build` locate Windows Build Support from the editor binary's
   real assembly root (`Editor/Data` on Linux and Windows, `Unity.app/Contents`
   on macOS) instead of always looking next to the executable.

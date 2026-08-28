@@ -6,6 +6,7 @@ import os
 import stat
 import tempfile
 import threading
+import time
 import unittest
 from importlib.util import find_spec
 from pathlib import Path
@@ -196,6 +197,27 @@ class ManifestTests(unittest.TestCase):
         self.assertIsNone(entry.verdict)
         self.assertEqual(entry.bytes, self.image.stat().st_size)
         self.assertTrue((self.evidence / "held-nuke.png").is_file())
+
+    def test_captured_at_is_the_file_mtime_in_utc_not_the_host_zone(self) -> None:
+        """4 July 16:00 UTC is 12:00 EDT; a Z stamp from localtime would lie by 4h."""
+        if not hasattr(time, "tzset"):
+            self.skipTest("time.tzset is Unix-only")
+        from datetime import UTC, datetime
+
+        moment = datetime(2024, 7, 4, 16, 0, 0, tzinfo=UTC)
+        os.utime(self.image, (moment.timestamp(), moment.timestamp()))
+        previous = os.environ.get("TZ")
+        os.environ["TZ"] = "America/New_York"
+        time.tzset()
+        try:
+            entry = record_existing(self.image, "held-nuke", "upright", self.evidence)
+        finally:
+            if previous is None:
+                del os.environ["TZ"]
+            else:
+                os.environ["TZ"] = previous
+            time.tzset()
+        self.assertEqual(entry.captured_at, "2024-07-04T16:00:00Z")
 
     def test_a_frame_without_an_observable_says_so(self) -> None:
         entry = record_existing(self.image, "dropped-nuke", "", self.evidence)

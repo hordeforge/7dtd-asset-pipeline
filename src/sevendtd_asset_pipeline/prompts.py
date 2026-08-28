@@ -376,9 +376,10 @@ def render(
         _wrap("Palette", (palette or shape.palette_default).strip()),
         _wrap("Readability", shape.readability),
     ]
+    key_hex = ""
     if chosen:
-        hex_value, _why = KEYS[chosen]
-        lines.append(_wrap("Background", f"exactly flat {hex_value}"))
+        key_hex, _why = KEYS[chosen]
+        lines.append(_wrap("Background", f"exactly flat {key_hex}"))
     lines.append(_wrap("Constraints", "no " + ", ".join(negatives) + "."))
 
     lane = [command.format(stem=stem) for command in shape.lane]
@@ -386,7 +387,7 @@ def render(
         "kind": kind,
         "subject": subject.strip(),
         "key": chosen,
-        "key_hex": hex_value if chosen else "",
+        "key_hex": key_hex,
         "prompt": "\n".join(lines),
         "next": lane,
         "notes": list(shape.notes),

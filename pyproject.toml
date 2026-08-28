@@ -110,6 +110,21 @@ select = [
   "RUF",  # ruff-specific: unused-noqa hygiene, sorted __all__
   "C4",   # comprehensions over manual accumulation
   "I",    # import sorting
+  "T10",  # flake8-debugger: pdb / breakpoint leftovers
+  "A",    # flake8-builtins: shadowing list/id/type
+  "DTZ",  # flake8-datetimez: naive datetime construction
+  "PGH",  # pygrep-hooks: blanket noqa / type: ignore
+  "PIE",  # flake8-pie: useless pass and no-op constructs
+  "RET",  # flake8-return: dead else after return/raise
+  "RSE",  # flake8-raise: needless exception wrapping
+  "YTT",  # flake8-2020: sys.version comparisons that break on 3.10+
+  "FA",   # flake8-future-annotations
+  "LOG",  # flake8-logging: extra= and exc_info mistakes
+  "G",    # flake8-logging-format: eager f-strings in log calls
+  "SLOT", # flake8-slots
+  "INT",  # flake8-gettext
+  "INP",  # flake8-no-pep420: implicit namespace packages
+  "ASYNC", # flake8-async
 ]
 ignore = [
   # Function-scope imports are deliberate architecture: optional capabilities
@@ -154,6 +169,27 @@ follow_imports_for_stubs = true
 # explicit-package-bases keeps each file mapped under exactly one module name.
 mypy_path = ["src", "tests"]
 explicit_package_bases = true
+# --strict does not include these; the tree already passes them.
+strict_bytes = true
+strict_equality_for_none = true
+# Off by default even under --strict. ignore-without-code is the type-ignore
+# equivalent of RUF100: a bare `# type: ignore` cannot land. truthy-bool and
+# truthy-iterable catch `if maybe_none` and `if some_list` that hide bugs.
+# The rest are extra correctness codes the tree is already clean for.
+enable_error_code = [
+  "ignore-without-code",
+  "unused-ignore",
+  "truthy-bool",
+  "truthy-iterable",
+  "redundant-expr",
+  "redundant-self",
+  "deprecated",
+  "exhaustive-match",
+  "mutable-override",
+  "unimported-reveal",
+  "unused-awaitable",
+  "possibly-undefined",
+]
 
 [[tool.mypy.overrides]]
 # Optional capabilities: absent on most hosts, untyped or version-fragile when

@@ -72,9 +72,12 @@ def parse_colour(value: str) -> tuple[int, int, int]:
     if len(text) != 6:
         raise SystemExit(f"ERROR: --key must be a #rrggbb colour, got {value!r}")
     try:
-        return tuple(int(text[index : index + 2], 16) for index in (0, 2, 4))  # type: ignore[return-value]
+        red = int(text[0:2], 16)
+        green = int(text[2:4], 16)
+        blue = int(text[4:6], 16)
     except ValueError:
         raise SystemExit(f"ERROR: --key is not hexadecimal: {value!r}") from None
+    return red, green, blue
 
 
 def border_key(image: Image.Image, inset: int = 2) -> tuple[int, int, int]:

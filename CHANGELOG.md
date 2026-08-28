@@ -12,6 +12,15 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Changed
+
+- `make check` enables the ruff rule groups the tree already passed
+  (debugger leftovers, builtin shadowing, naive datetimes, blanket
+  ignores, and the pie/return/raise/logging/version-compare sets) and
+  extra mypy codes (bare `# type: ignore`, truthy-bool, possibly-undefined,
+  exhaustive-match, and related) plus `strict_bytes` and
+  `strict_equality_for_none`.
+
 ### Fixed
 
 - `doctor` and `build` locate Windows Build Support from the editor binary's

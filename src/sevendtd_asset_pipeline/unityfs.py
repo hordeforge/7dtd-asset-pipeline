@@ -258,12 +258,15 @@ def inspect_bundle(path: Path) -> BundleInfo:
             while True:
                 prefix_limit = min(needed, node_offset + window)
                 try:
-                    class_ids = _class_ids(read_payload(prefix_limit))
-                    break
+                    return BundleInfo(
+                        path,
+                        unity_version,
+                        archive_format,
+                        _class_ids(read_payload(prefix_limit)),
+                    )
                 except PipelineError:
                     if prefix_limit >= needed:
                         raise
                     window = needed if window >= TYPE_TABLE_MAX else min(window * 4, TYPE_TABLE_MAX)
     except OSError as exc:
         raise PipelineError(f"cannot read bundle {path}: {exc}") from exc
-    return BundleInfo(path, unity_version, archive_format, class_ids)

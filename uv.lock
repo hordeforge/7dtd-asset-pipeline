@@ -60,8 +60,8 @@ requires-dist = [
     { name = "texture2ddecoder", marker = "extra == 'inspect'", specifier = ">=1" },
     { name = "trimesh", marker = "extra == 'all'", specifier = ">=4" },
     { name = "trimesh", marker = "extra == 'mesh'", specifier = ">=4" },
-    { name = "unitypy", marker = "extra == 'all'", specifier = ">=1.20,<2" },
-    { name = "unitypy", marker = "extra == 'inspect'", specifier = ">=1.20,<2" },
+    { name = "unitypy", marker = "extra == 'all'", specifier = "==1.25.3" },
+    { name = "unitypy", marker = "extra == 'inspect'", specifier = "==1.25.3" },
 ]
 provides-extras = ["inspect", "authoring", "mesh", "audio", "all"]
 

@@ -26,8 +26,8 @@ classifiers = [
 
 [project.optional-dependencies]
 # Deep bundle inspection: proves which objects and components actually
-# survived serialization. Pin the minor version; UnityPy documents that minor
-# releases may break its API.
+# survived serialization. Pin the resolved release; UnityPy documents that
+# minor releases may break its API.
 #
 # lz4 and texture2ddecoder are imported directly by this repository
 # (shader_blob.py compresses every shader blob with lz4.block; the suite's
@@ -36,7 +36,7 @@ classifiers = [
 # the extra self-contained if UnityPy ever swaps one out: without a
 # declaration that swap would silently break shader writing and silently stop
 # running the cross-check, both discovered at build time instead of install time.
-inspect = ["UnityPy>=1.20,<2", "lz4>=1", "texture2ddecoder>=1"]
+inspect = ["UnityPy==1.25.3", "lz4>=1", "texture2ddecoder>=1"]
 # The Python authoring lanes in src/sevendtd_asset_pipeline/generators/.
 authoring = ["pillow>=10", "numpy>=1.24"]
 # Pre-Unity mesh checks for the Blender/OpenSCAD lane.
@@ -46,7 +46,7 @@ mesh = ["trimesh>=4"]
 # by the code that wrote it.
 audio = ["fsb5>=1"]
 all = [
-  "UnityPy>=1.20,<2",
+  "UnityPy==1.25.3",
   "lz4>=1",
   "texture2ddecoder>=1",
   "pillow>=10",

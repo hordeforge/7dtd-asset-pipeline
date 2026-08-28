@@ -33,10 +33,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
+import signal
 import subprocess
 import uuid
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -448,20 +451,37 @@ Runner = Callable[["Sequence[str]", float], "subprocess.CompletedProcess[str]"]
 
 
 def _default_runner(argv: Sequence[str], timeout: float) -> subprocess.CompletedProcess[str]:
+    """Run the gateway in an isolated session and reap it on expiry.
+
+    A gateway may start upload or model-worker children.  ``subprocess.run``
+    only kills its direct child at a timeout, leaving those descendants alive
+    after the request that owned them has already failed.  On POSIX, a fresh
+    session gives this invocation one process group to terminate; Windows has
+    no equivalent here, so retains the direct-child kill it already had.
+    """
     try:
-        return subprocess.run(
+        process = subprocess.Popen(
             list(argv),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
-            check=False,
+            start_new_session=os.name == "posix",
         )
-    except subprocess.TimeoutExpired as exc:
-        raise PipelineError(
-            f"the {GATEWAY} gateway did not answer within {timeout:g}s; no verdict was produced"
-        ) from exc
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            if os.name == "posix":
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+            else:  # pragma: no cover - exercised on Windows
+                process.kill()
+            process.communicate()
+            raise PipelineError(
+                f"the {GATEWAY} gateway did not answer within {timeout:g}s; no verdict was produced"
+            ) from exc
     except OSError as exc:
         raise PipelineError(f"could not run the {GATEWAY} gateway: {exc}") from exc
+    return subprocess.CompletedProcess(list(argv), process.returncode, stdout, stderr)
 
 
 def _adopted_clip_record(clip: Path, capture_root: Path) -> dict[str, Any] | None:

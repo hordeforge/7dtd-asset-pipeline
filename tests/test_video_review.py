@@ -8,8 +8,11 @@ credential, so the offline suite never spends money and never sends bytes.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from typing import Any, cast
@@ -310,20 +313,38 @@ class RunReviewTests(_ReviewHarness):
     def test_a_gateway_that_never_answers_produces_no_verdict(self) -> None:
         """The expiry path: killed by the bound, named, and verdict-free.
 
-        The translation from TimeoutExpired to a named error lives in the
-        default runner, so this wedges `subprocess.run` itself rather than
-        replacing the runner whose behaviour is under test.
+        The translation from a real timed-out child to a named error lives in
+        the default runner, so this uses a short-lived local interpreter
+        rather than replacing the runner whose behaviour is under test.
         """
-        import subprocess
+        with self.assertRaisesRegex(PipelineError, "did not answer within"):
+            video_review._default_runner(
+                [sys.executable, "-c", "import time; time.sleep(60)"], 0.01
+            )
 
-        def wedged(argv: object, **kwargs: object) -> object:
-            raise subprocess.TimeoutExpired("deadeye", 120)
-
-        with (
-            mock.patch("sevendtd_asset_pipeline.video_review.subprocess.run", side_effect=wedged),
-            self.assertRaisesRegex(PipelineError, "did not answer within"),
-        ):
-            self._run(runner=None)
+    @unittest.skipUnless(os.name == "posix", "process groups are POSIX")
+    def test_a_timed_out_gateway_reaps_its_worker_group(self) -> None:
+        """A gateway timeout must not leave a worker alive behind its request."""
+        with tempfile.TemporaryDirectory() as directory:
+            pid_file = Path(directory) / "worker.pid"
+            program = (
+                "import pathlib, subprocess, sys, time; "
+                "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+                "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(60)"
+            )
+            with self.assertRaisesRegex(PipelineError, "did not answer within"):
+                video_review._default_runner([sys.executable, "-c", program, str(pid_file)], 0.1)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if pid_file.is_file():
+                    pid = int(pid_file.read_text())
+                    try:
+                        os.kill(pid, 0)
+                    except ProcessLookupError:
+                        break
+                time.sleep(0.05)
+            else:
+                self.fail("the gateway worker survived its timed-out process group")
 
     def test_evidence_names_the_source_hash_and_gateway_envelope(self) -> None:
         output = self.root / "evidence" / "review.json"

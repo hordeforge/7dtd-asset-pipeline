@@ -1,20 +1,4 @@
-# 🏭 Shamway (7DTD Asset Pipeline)
-
-> **Part of [HordeForge](https://github.com/hordeforge)**: High-Performance Systems Engineering for 7 Days to Die.
-
-![CI](https://github.com/hordeforge/7dtd-asset-pipeline/actions/workflows/ci.yml/badge.svg)
-![coverage](https://raw.githubusercontent.com/hordeforge/7dtd-asset-pipeline/badges/coverage.svg)
-![license](https://img.shields.io/github/license/hordeforge/7dtd-asset-pipeline)
-![last commit](https://img.shields.io/github/last-commit/hordeforge/7dtd-asset-pipeline)
-![languages](https://img.shields.io/github/languages/count/hordeforge/7dtd-asset-pipeline)
-![top language](https://img.shields.io/github/languages/top/hordeforge/7dtd-asset-pipeline)
-
-`shamway` gets a **7 Days to Die** modlet from source assets to a staged,
-validated `Resources/*.unity3d`, and fails loudly on the silent-corruption
-modes a successful Unity build does not catch. **Unity is opt-in, not
-required**: by default a bundle of textures, sounds, text files, meshes,
-materials, shaders and prefabs is written by this tool directly, in
-milliseconds, with no editor anywhere.
+# Shamway (7DTD Asset Pipeline)
 
 ## Quick start
 
@@ -61,6 +45,13 @@ shamway validate
 
 That is the whole loop, and none of it needed Unity. Everything below is
 detail.
+
+`shamway` gets a **7 Days to Die** modlet from source assets to a staged,
+validated `Resources/*.unity3d`, and fails loudly on the silent-corruption
+modes a successful Unity build does not catch. **Unity is opt-in, not
+required**: by default a bundle of textures, sounds, text files, meshes,
+materials, shaders and prefabs is written by this tool directly, in
+milliseconds, with no editor anywhere.
 
 ## Do you need Unity at all?
 

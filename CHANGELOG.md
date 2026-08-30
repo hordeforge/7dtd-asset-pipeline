@@ -38,6 +38,24 @@ tag has no changelog section.
 
 ### Fixed
 
+- Bone-name hashes are CRC-32 of the slash-separated Transform path starting
+  at `Origin` (`Origin/Hips` is 1722913273, matching nomad.bundle
+  `bodyCloth`), not of the leaf GameObject name.
+- `pack_directory` no longer swallows a glTF parse error and flatten a
+  broken skin to MeshRenderer. A skin whose joints are out of range fails
+  the pack.
+- `playtest-synthesized.sh` asserts the self-test mesh at its authored
+  1 × 1 × 1 m bounds, and runs `shamwayselftest_block_model` so the prop is
+  `SetBlockRpc`'d onto a grounded voxel and looked at there (AtomicDoomsday's
+  placed bomb/detonator pattern). The previous look case instantiated the
+  prefab 1.2 m in front of the camera, and the block-model suite then yanked
+  the ModelEntity into the same spot.
+- Generated prefab look cases are their own suite (`<mod>_look`), 3.5 m off
+  the camera. `<mod>_bundle` is loads only. Mixing `*_look` with `*_block_*`
+  in one `PLAYTEST_SUITE` is refused by `playtest-acceptance.sh`, by
+  `reject_mixed_visual_suites`, and by the generated provider. A ModelEntity
+  block is judged by placing it.
+
 - Shared-client lock heartbeats are parsed the way `7dtd-playtest` writes
   them (Z, numeric epoch, offset, naive-as-UTC). A `running=yes` record whose
   stamp cannot be read stays held, so a live claim is not overwritten.

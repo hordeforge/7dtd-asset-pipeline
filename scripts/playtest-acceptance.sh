@@ -182,6 +182,24 @@ SUITE="${SUITE:-$GENERATED_SUITE}"
 echo "  suite          $SUITE"
 echo
 
+# A prefab hanging in front of the camera (*_look) and a block sitting on a
+# voxel (*_block_*) are different pictures. Mixing them in one PLAYTEST_SUITE
+# list is how the self-test rendered a texture mid-air AND a placed block in
+# the same session, repeatedly. Refuse the comma-list here, before the client
+# starts; the generated provider throws the same refusal if this is bypassed.
+_look=0
+_block=0
+IFS=',; ' read -ra _suite_tokens <<< "$SUITE"
+for _tok in "${_suite_tokens[@]}"; do
+	[[ -z "$_tok" ]] && continue
+	[[ "$_tok" == *_look ]] && _look=1
+	[[ "$_tok" == *_block_* ]] && _block=1
+done
+if ((_look && _block)); then
+	die "refusing mixed visual suites: '$SUITE' contains both a prefab-look suite (*_look) and a block-placement suite (*_block_*). They are different pictures. Run them as separate playtest invocations, never in one PLAYTEST_SUITE list."
+fi
+unset _look _block _tok _suite_tokens
+
 echo "DEPLOY (client Proton Mods)"
 mkdir -p "$MODS_DIR"
 (cd "$MOD_ROOT" && "$SHAMWAY" client deploy .)

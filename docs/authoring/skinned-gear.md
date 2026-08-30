@@ -25,7 +25,11 @@ this page marks something *inferred*, nobody has run it.
 contains a skin (joints, inverse bind matrices, `JOINTS_0`, `WEIGHTS_0`)
 is synthesized as `SkinnedMeshRenderer` plus the named bone hierarchy —
 bind poses, bone weights, bone-name hashes, root bone, no MeshRenderer
-fallback. That is the editorless deformation graph.
+fallback. That is the editorless deformation graph. The hashes Unity
+stores on the Mesh are CRC-32 of the slash-separated Transform path
+starting at `Origin` (`Origin/Hips`, not the leaf `Hips`); a skin that
+cannot be encoded (out-of-range joints, missing names) is refused rather
+than flattened to MeshRenderer.
 
 Two SDCS extras still want an editor:
 

@@ -25,6 +25,7 @@ from sevendtd_asset_pipeline.bundle_writer import (
     SKINNED_MESH_RENDERER,
     TRANSFORM,
     bone_name_hash,
+    bone_transform_path,
     build_bundle,
     mesh_source_objects,
     shader,
@@ -233,14 +234,21 @@ class EntityBundleTests(unittest.TestCase):
         self.assertEqual(len(mesh_tree["m_BindPose"]), 20)
         self.assertEqual(len(mesh_tree["m_BoneNameHashes"]), 20)
 
-    def test_bones_bind_by_the_hash_of_their_authored_names(self) -> None:
+    def test_bones_bind_by_the_hash_of_their_transform_paths(self) -> None:
         out = self.root / "creature.glb"
         self.assertEqual(run("entity", [str(out)]), 0)
         _payload, trees = self.pack(out)
         mesh_tree = trees[MESH][0]
-        rig = load_rig("humanoid")
-        expected = [bone_name_hash(bone.name) for bone in rig.bones]
+        scene = parse_gltf(out)
+        expected = [
+            bone_name_hash(bone_transform_path(scene, joint)) for joint in scene.skins[0].joints
+        ]
         self.assertEqual(list(mesh_tree["m_BoneNameHashes"]), expected)
+        # Leaf names are not what Unity stores: Hips is Root/Hips on this rig
+        # (there is no Origin node; the path is the authored ancestor chain).
+        self.assertEqual(bone_name_hash("Root"), mesh_tree["m_BoneNameHashes"][0])
+        self.assertEqual(bone_name_hash("Root/Hips"), mesh_tree["m_BoneNameHashes"][1])
+        self.assertNotEqual(bone_name_hash("Hips"), mesh_tree["m_BoneNameHashes"][1])
 
     def test_joint_game_objects_keep_their_names_and_tree(self) -> None:
         out = self.root / "creature.glb"

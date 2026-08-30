@@ -59,7 +59,7 @@ usage() {
 		  SEVEN_DAYS_TO_DIE_SERVER_DIR  the dedicated server install (required)
 
 		EXIT
-		  0  the game loaded the prefab, its mesh, its material and its texture
+		  0  the game loaded the prefab and placed the block on a voxel
 		  1  a case failed, or an assertion below did
 
 		This proves the engine READ the bundle. It says nothing about whether
@@ -122,6 +122,24 @@ if ! (cd "$MOD" && "$SHAMWAY" inspect --deep "Resources/$BUNDLE" | grep -q "Game
 fi
 
 echo "LIVE CLIENT (hordeforge/7dtd-playtest)"
+# The generated bundle suite proves DataLoader.LoadAsset. The block-model
+# suite is how the prop is supposed to be seen: SetBlockRpc onto a grounded
+# voxel, wait for the ModelEntity, LookAt the voxel — the same pattern as
+# AtomicDoomsday's placed bomb/detonator. Never add *_look to this list:
+# that suite instantiates the prefab in front of the camera, and mixing it
+# with a block suite is how a texture floated mid-air in the same session
+# as a placed block. playtest-acceptance.sh will refuse the mix.
+SUITE_ARGS=()
+has_suite=0
+for arg in "${EXTRA[@]+"${EXTRA[@]}"}"; do
+	if [[ "$arg" == "--suite" ]]; then
+		has_suite=1
+		break
+	fi
+done
+if (( ! has_suite )); then
+	SUITE_ARGS=(--suite "shamwayselftest_bundle,shamwayselftest_block_model")
+fi
 LOG="$MOD/.selftest-acceptance.log"
 # The client launcher writes the same log path every run, so an assertion that
 # matched a *previous* run's lines would pass without this run proving
@@ -129,7 +147,7 @@ LOG="$MOD/.selftest-acceptance.log"
 # `not run:` lines exist for. Everything asserted below has to post-date this.
 STARTED_AT="$(date +%s)"
 set +e
-"$ACCEPT" --mod-root "$MOD" "${EXTRA[@]}" 2>&1 | tee "$LOG"
+"$ACCEPT" --mod-root "$MOD" "${SUITE_ARGS[@]}" "${EXTRA[@]}" 2>&1 | tee "$LOG"
 STATUS="${PIPESTATUS[0]}"
 set -e
 echo
@@ -161,12 +179,16 @@ grep -qE "SUMMARY pass=[0-9]+ fail=0 " "$LOG" || fail "a case failed (see the su
 # gate still passed, so they are asserted by value rather than by case name.
 grep -qE "$STEM: $STEM .*renderers=1" "$CLIENT_LOG" ||
 	fail "the prefab did not come back with its renderer: an empty GameObject draws nothing"
-grep -qE "${STEM}_mesh: .*bounds=\(0\.30, 0\.50, 0\.20\)" "$CLIENT_LOG" ||
+grep -qE "${STEM}_mesh: .*bounds=\(1\.00, 1\.00, 1\.00\)" "$CLIENT_LOG" ||
 	fail "the mesh bounds are not what was authored: the vertex stream or the Y-up conversion moved"
 grep -qE "${STEM}_mat: .*shader=Shamway/Unlit" "$CLIENT_LOG" ||
 	fail "the material does not name the synthesized shader: the PPtr chain broke"
 grep -qE "${STEM}_albedo: .*256x256" "$CLIENT_LOG" ||
 	fail "the texture did not come back at its authored size"
+grep -qE "PASS shamwayselftest_block_model/place_${STEM}Block" "$CLIENT_LOG" ||
+	fail "the block was not placed on a voxel (SetBlockRpc + ModelEntity spawn)"
+grep -qE "${STEM}Block: .*looking at voxel" "$CLIENT_LOG" ||
+	fail "the look case did not aim at the placed voxel; the model was not left in the world"
 
 if ((FAILED)); then
 	echo
@@ -178,10 +200,11 @@ cat <<EOF
   OK   the mesh bounds are what was authored
   OK   the material names the synthesized shader
   OK   the texture loaded at its authored size
+  OK   the block sits on a voxel and the camera looks at it
 
-The game READ the bundle. Nobody has LOOKED at it: every assertion above
-passes on a prop drawn mirrored, face-down, or nowhere. Place ${STEM}Block in a
-client and judge it, then file the frame:
+The game READ the bundle and placed ${STEM}Block. Nobody has LOOKED at it:
+every assertion above passes on a prop drawn mirrored, face-down, or
+nowhere. Judge the placed block, then file the frame:
 
   shamway client capture ${STEM} --observable "upright, R not mirrored, arrow up"
 EOF

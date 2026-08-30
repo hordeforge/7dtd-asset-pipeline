@@ -7,6 +7,7 @@ with UnityPy, which parses Unity's format with none of this repository's code.
 from __future__ import annotations
 
 import json
+import os
 import struct
 import tempfile
 import unittest
@@ -25,12 +26,14 @@ from sevendtd_asset_pipeline.bundle_writer import (
     SKINNED_MESH_RENDERER,
     TRANSFORM,
     bone_name_hash,
+    bone_transform_path,
     build_bundle,
     mesh,
     mesh_prefab,
     mesh_source_objects,
     pack_directory,
     shader,
+    synthesized_members,
     vfx_prefab_objects,
 )
 from sevendtd_asset_pipeline.capabilities import has_capability
@@ -135,7 +138,10 @@ def write_hierarchy_glb(path: Path) -> Path:
 
 
 def write_skinned_glb(
-    path: Path, *, weights: list[tuple[float, float, float, float]] | None = None
+    path: Path,
+    *,
+    weights: list[tuple[float, float, float, float]] | None = None,
+    origin: bool = False,
 ) -> Path:
     # Four vertices, two bones (hips, spine).
     positions = struct.pack(
@@ -180,11 +186,20 @@ def write_skinned_glb(
         "asset": {"version": "2.0"},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
-        "nodes": [
-            {"name": "hips", "children": [1, 2], "translation": [0, 0, 0]},
-            {"name": "spine", "translation": [0, 1, 0]},
-            {"name": "body", "mesh": 0, "skin": 0},
-        ],
+        "nodes": (
+            [
+                {"name": "Origin", "children": [1]},
+                {"name": "Hips", "children": [2, 3], "translation": [0, 0, 0]},
+                {"name": "Spine", "translation": [0, 1, 0]},
+                {"name": "body", "mesh": 0, "skin": 0},
+            ]
+            if origin
+            else [
+                {"name": "hips", "children": [1, 2], "translation": [0, 0, 0]},
+                {"name": "spine", "translation": [0, 1, 0]},
+                {"name": "body", "mesh": 0, "skin": 0},
+            ]
+        ),
         "meshes": [
             {
                 "primitives": [
@@ -201,7 +216,13 @@ def write_skinned_glb(
                 ]
             }
         ],
-        "skins": [{"joints": [0, 1], "skeleton": 0, "inverseBindMatrices": 6}],
+        "skins": [
+            {
+                "joints": [1, 2] if origin else [0, 1],
+                "skeleton": 1 if origin else 0,
+                "inverseBindMatrices": 6,
+            }
+        ],
         "buffers": [{"byteLength": len(blob)}],
         "bufferViews": views,
         "accessors": [
@@ -498,7 +519,15 @@ class SkinnedTests(unittest.TestCase):
         self.assertNotIn(MESH_FILTER, trees)
         mesh_tree = trees[MESH][0]
         self.assertEqual(2, len(mesh_tree["m_BindPose"]))
-        self.assertEqual(2, len(mesh_tree["m_BoneNameHashes"]))
+        hashes = mesh_tree["m_BoneNameHashes"]
+        self.assertEqual(2, len(hashes))
+        self.assertEqual(bone_name_hash("hips"), hashes[0])
+        self.assertEqual(bone_name_hash("hips/spine"), hashes[1])
+        self.assertNotEqual(
+            bone_name_hash("spine"),
+            hashes[1],
+            "the spine hash is the slash-separated path, not the leaf name",
+        )
         self.assertEqual(bone_name_hash("hips"), mesh_tree["m_RootBoneNameHash"])
         channels = mesh_tree["m_VertexData"]["m_Channels"]
         self.assertEqual(4, channels[12]["dimension"])
@@ -577,6 +606,86 @@ class SkinnedTests(unittest.TestCase):
         write_glb(source, document, blob)
         with self.assertRaisesRegex(PipelineError, "singular"):
             mesh_source_objects(source, set())
+
+    @needs_vkd3d
+    @needs_lz4
+    def test_pack_directory_writes_the_origin_hips_hash(self) -> None:
+        write_skinned_glb(self.root / "gear.glb", origin=True)
+        payload, _manifest = pack_directory(self.root, "skin.unity3d", REVISION)
+        written = self.root / "skin.unity3d"
+        written.write_bytes(payload)
+        mesh_tree = read_objects(written)[MESH][0]
+        self.assertEqual(1722913273, mesh_tree["m_RootBoneNameHash"])
+        self.assertEqual(bone_name_hash("Origin/Hips"), mesh_tree["m_BoneNameHashes"][0])
+        self.assertEqual(bone_name_hash("Origin/Hips/Spine"), mesh_tree["m_BoneNameHashes"][1])
+
+    def test_nomad_bodycloth_root_hash_is_origin_hips(self) -> None:
+        bundle = _nomad_gear_bundle()
+        if bundle is None:
+            self.skipTest("installed game nomad.bundle is not present")
+        import UnityPy
+
+        for obj in UnityPy.load(str(bundle)).objects:
+            if int(obj.type.value) != MESH:
+                continue
+            tree = obj.read_typetree()
+            if tree.get("m_Name") != "bodyCloth":
+                continue
+            self.assertEqual(1722913273, tree["m_RootBoneNameHash"])
+            return
+        self.fail("nomad.bundle has no Mesh named bodyCloth")
+
+
+def _nomad_gear_bundle() -> Path | None:
+    game = os.environ.get("SEVEN_DAYS_TO_DIE_DIR")
+    if not game:
+        return None
+    path = (
+        Path(game)
+        / "Data/Addressables/Standalone/player_assets_entities/player/female/gear/nomad.bundle"
+    )
+    return path if path.is_file() else None
+
+
+class BoneHashTests(unittest.TestCase):
+    """CRC of the Transform path, and pack-time refusal, independent of UnityPy."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_origin_hips_crc_is_the_harvested_nomad_value(self) -> None:
+        self.assertEqual(1722913273, bone_name_hash("Origin/Hips"))
+        self.assertNotEqual(1722913273, bone_name_hash("Hips"))
+        self.assertNotEqual(1722913273, bone_name_hash("hips"))
+        self.assertNotEqual(1722913273, bone_name_hash("gearFemaleNomadPrefab/Origin/Hips"))
+
+    def test_origin_hips_path_is_the_hashed_string(self) -> None:
+        source = write_skinned_glb(self.root / "gear.glb", origin=True)
+        scene = parse_gltf(source)
+        hips, spine = scene.skins[0].joints
+        self.assertEqual("Origin/Hips", bone_transform_path(scene, hips))
+        self.assertEqual("Origin/Hips/Spine", bone_transform_path(scene, spine))
+        self.assertEqual(1722913273, bone_name_hash(bone_transform_path(scene, hips)))
+
+    def test_pack_directory_rejects_a_skin_with_out_of_range_joints(self) -> None:
+        source = write_skinned_glb(self.root / "gear.glb")
+        document, blob = _glb_parts(source)
+        document["skins"][0]["joints"] = [0, 99]
+        write_glb(source, document, blob)
+        with self.assertRaisesRegex(PipelineError, "joint"):
+            pack_directory(self.root, "bad.unity3d", REVISION)
+
+    def test_synthesized_members_does_not_invent_a_static_prefab_for_a_broken_skin(self) -> None:
+        source = write_skinned_glb(self.root / "gear.glb")
+        document, blob = _glb_parts(source)
+        document["skins"][0]["joints"] = [0, 99]
+        write_glb(source, document, blob)
+        with self.assertRaisesRegex(PipelineError, "joint"):
+            synthesized_members(self.root)
 
 
 def _glb_parts(path: Path) -> tuple[dict[str, Any], bytes]:

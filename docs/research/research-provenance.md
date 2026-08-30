@@ -1689,9 +1689,13 @@ as PPtr array, `m_RootBone`, `m_AABB`, `m_DirtyAABB: False`. Mesh
 `bodyCloth`: channel 12 BlendWeight stream 2 offset 0 format 0 dim 4;
 channel 13 BlendIndices stream 2 offset 16 format 10 (UInt32) dim 4;
 179 bind poses; 179 `m_BoneNameHashes`; `m_RootBoneNameHash` 1722913273
-for GameObject `Hips`. Transform `m_Father`/`m_Children` from the same
-bundle and from AtomicDoomsday `atomicDoomsdayNukeTimedHeld.prefab` (child
-`armedLamp`).
+which is `zlib.crc32` of UTF-8 `Origin/Hips`, not of the leaf `Hips`
+(3738240529) and not of the prefab-rooted path
+`gearFemaleNomadPrefab/Origin/Hips` (3321112063). Every hash in that
+179-bone table is the slash-separated Transform path starting at
+`Origin` inclusive; the prefab root is not in the path. Transform
+`m_Father`/`m_Children` from the same bundle and from AtomicDoomsday
+`atomicDoomsdayNukeTimedHeld.prefab` (child `armedLamp`).
 
 **Box shape type.** Unity `ParticleSystemShapeType.Box = 5` (docs.unity3d.com
 2022.3 ScriptReference). lab.bundle had no type-5 system; the field layout

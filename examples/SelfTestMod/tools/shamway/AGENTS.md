@@ -335,13 +335,17 @@ no behaviour case above it means anything.
 
 **This mod's own behaviour suite** is
 `tools/shamway/acceptance/ShamwaySelfTestBlockAcceptance.cs`, with two suite
-ids: `shamwayselftest_block_model` (the placed block's ModelEntity model
-renders) and `shamwayselftest_block_place` (the character places the block
-through the `PlaceAsBlock` item action). It uses the 7dtd-playtest
-`Helpers.Blocks` (`BlockEntityDataAt`, `ActivateBlockEntityModel`,
-`FindGroundedAir`, `AimBlockPlacement`, `CloseDebugConsole`) rather than
-hand-rolling the same mechanics. Run a suite with
-`shamway script playtest-acceptance --suite <id>`.
+ids: `shamwayselftest_block_model` (the block is `SetBlockRpc`'d onto a
+grounded voxel and the camera `LookAt`s it — the AtomicDoomsday
+bomb/detonator pattern, not a prefab hanging in front of the player) and
+`shamwayselftest_block_place` (the character places the block through the
+`PlaceAsBlock` item action). `shamway script playtest-synthesized` runs
+`shamwayselftest_bundle` (loads) and `shamwayselftest_block_model` (placed
+block). It does **not** run `shamwayselftest_look`. That suite instantiates
+the prefab in front of the camera; mixing it with the block suite is how a
+texture floated mid-air in the same session as a placed block. The scripts
+and the generated provider refuse that mix. Run `_look` alone if you need
+it: `shamway script playtest-acceptance --suite shamwayselftest_look`.
 
 And the last step is still a person. A suite that passes every case above
 proves the game read your bytes and ran your logic; it does not prove the art

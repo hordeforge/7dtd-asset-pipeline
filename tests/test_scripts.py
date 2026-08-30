@@ -73,6 +73,14 @@ class ScriptRegistryTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "install-tools"):
             path("no-such-script")
 
+    def test_playtest_acceptance_refuses_mixed_visual_suites(self) -> None:
+        """Load, prefab-look, and block-place must not share one PLAYTEST_SUITE."""
+        source = Path(__file__).resolve().parents[1] / "scripts" / "playtest-acceptance.sh"
+        text = source.read_text(encoding="utf-8")
+        self.assertIn("refusing mixed visual suites", text)
+        self.assertIn("*_look", text)
+        self.assertIn("*_block_*", text)
+
     def test_the_listing_names_every_registered_script(self) -> None:
         out = io.StringIO()
         with contextlib.redirect_stdout(out):

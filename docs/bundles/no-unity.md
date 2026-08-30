@@ -247,10 +247,13 @@ that loads perfectly and looks broken:
   That is an exporter setting and no amount of geometry inspection reveals it —
   set it in Blender's export dialog or `--python` call.
 
-What the mesh lane does not write: tangents, vertex colours, blend shapes,
-skinning, and more than one submesh. One mesh file is one material's worth of
-geometry, and a normal-mapped material would find no tangents. Both are
-consequences of the paragraph below rather than of effort.
+What the static mesh lane does not write: tangents, vertex colours, blend
+shapes, and more than one submesh. A glTF that actually contains a skin is
+a different lane (`SkinnedMeshRenderer`, bind poses, weights, bone-name
+hashes as CRC-32 of the `Origin/…` Transform path) and is refused rather
+than flattened if it cannot be encoded. One static mesh file is one
+material's worth of geometry, and a normal-mapped material would find no
+tangents. Both are consequences of the paragraph below rather than of effort.
 
 A `Mesh` is a mesh, not a model. 7DTD's `Meshfile` and block `Model` resolve
 through `DataLoader.LoadAsset<GameObject>` — a **prefab**, which needs a

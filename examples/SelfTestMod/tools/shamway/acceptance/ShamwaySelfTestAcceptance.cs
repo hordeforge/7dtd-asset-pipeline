@@ -23,12 +23,66 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
 
     public IEnumerable<string> SuiteIds
     {
-        get { yield return "shamwayselftest_bundle"; }
+        get
+        {
+            yield return "shamwayselftest_bundle";
+            yield return "shamwayselftest_look";
+        }
     }
 
     public void AppendSuite(List<CaseDef> queue, string suite, int lap)
     {
+        RejectMixedVisualSuites();
         string label = lap > 0 ? suite + "@" + lap : suite;
+        if (suite == "shamwayselftest_look")
+        {
+
+        GameObject shamwaySelfTestPropStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestProp", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestProp");
+                if (prefab == null)
+                {
+                    Report.Info("shamwaySelfTestProp: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "shamwaySelfTestProp: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                shamwaySelfTestPropStaged = UnityEngine.Object.Instantiate(prefab);
+                shamwaySelfTestPropStaged.transform.position = camera.position + ahead * 3.5f;
+                // Face the camera, and keep the prop's own up axis upright so
+                // the orientation card is readable rather than lying on edge.
+                shamwaySelfTestPropStaged.transform.rotation =
+                    Quaternion.LookRotation(-ahead, Vector3.up);
+                var renderers = shamwaySelfTestPropStaged.GetComponentsInChildren<Renderer>(true);
+                Report.Info("shamwaySelfTestProp: staged at " + shamwaySelfTestPropStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", with " + renderers.Length + " renderer(s)");
+                // A prefab with no renderer cannot be photographed into evidence.
+                return renderers.Length > 0;
+            },
+            holdSeconds: 12f,
+            fail: "could not stage shamwaySelfTestProp in front of the camera"));
+            return;
+        }
+
 
         GameObject shamwaySelfTestPropLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestProp", new[] { "bundle" },
@@ -98,50 +152,6 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             fail: "the game did not load shamwaySelfTestProp_albedo from the staged bundle"));
 
-        GameObject shamwaySelfTestPropStaged = null;
-        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestProp", new[] { "capture", "bundle" },
-            stage: ctx =>
-            {
-                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestProp");
-                if (prefab == null)
-                {
-                    Report.Info("shamwaySelfTestProp: LoadAsset<GameObject> returned null; nothing to stage");
-                    return false;
-                }
-                var player = ctx == null ? null : ctx.Player;
-                if (player == null)
-                {
-                    Report.Info(
-                        "shamwaySelfTestProp: no local player, so there is no camera to stage in front of");
-                    return false;
-                }
-                // In front of the *camera*, not the player's feet. An
-                // EntityPlayerLocal's `position` is its ground position and its
-                // own transform faces its body, so a prop placed from those
-                // lands under the camera and out of frame - which is exactly
-                // what the first staged capture photographed: an empty scene
-                // that still passed, because the case only asks whether a
-                // renderer exists.
-                var camera = player.playerCamera != null
-                    ? player.playerCamera.transform
-                    : player.transform;
-                var ahead = camera.forward;
-                shamwaySelfTestPropStaged = UnityEngine.Object.Instantiate(prefab);
-                shamwaySelfTestPropStaged.transform.position = camera.position + ahead * 1.2f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                shamwaySelfTestPropStaged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
-                var renderers = shamwaySelfTestPropStaged.GetComponentsInChildren<Renderer>(true);
-                Report.Info("shamwaySelfTestProp: staged at " + shamwaySelfTestPropStaged.transform.position
-                    + ", camera at " + camera.position
-                    + ", with " + renderers.Length + " renderer(s)");
-                // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;
-            },
-            holdSeconds: 12f,
-            fail: "could not stage shamwaySelfTestProp in front of the camera"));
-
         // A stem the bundle does not contain must still come back null, so a
         // pass above cannot be a loader that answers every request.
         Object absent = null;
@@ -153,5 +163,29 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             assert: ctx => absent == null,
             fail: "a stem the bundle does not contain resolved to an object"));
+    }
+
+    // A prefab hanging in front of the camera (*_look) and a block sitting on
+    // a voxel (*_block_*) are different pictures. Mixing them in one
+    // PLAYTEST_SUITE list is how a self-test rendered a texture mid-air AND a
+    // placed block in the same session. Refuse it here, not after someone has
+    // already watched both.
+    static void RejectMixedVisualSuites()
+    {
+        var raw = System.Environment.GetEnvironmentVariable("PLAYTEST_SUITE") ?? "";
+        bool look = false, block = false;
+        foreach (var token in raw.Split(new char[] { ',', ';', ' ', '\t' },
+                     System.StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (token.EndsWith("_look")) look = true;
+            if (token.IndexOf("_block_", System.StringComparison.Ordinal) >= 0) block = true;
+        }
+        if (look && block)
+        {
+            throw new System.InvalidOperationException(
+                "PLAYTEST_SUITE mixes a prefab-look suite (*_look) and a "
+                + "block-placement suite (*_block_*); they are different pictures. "
+                + "Run them as separate playtest invocations.");
+        }
     }
 }

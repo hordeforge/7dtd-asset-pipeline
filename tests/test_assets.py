@@ -1054,6 +1054,32 @@ class SelfTestFixtureTests(unittest.TestCase):
         info = inspect_bundle(self.FIXTURE / "Resources" / "shamwayselftest.unity3d")
         self.assertTrue(info.has_assetbundle_object, "no class-142 object")
 
+    def test_the_block_suite_leaves_the_model_on_the_voxel(self) -> None:
+        """A ModelEntity is judged by placing it, not by dragging it to the camera.
+
+        AtomicDoomsday's placed bomb/detonator cases SetBlockRpc then LookAt
+        the voxel. A previous fixture assigned bed.transform.position 1.5 m
+        ahead of the camera, which is how the self-test rendered a texture
+        mid-air.
+        """
+        source = (
+            self.FIXTURE / "tools/shamway/acceptance/ShamwaySelfTestBlockAcceptance.cs"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("bed.transform.position", source)
+        self.assertIn("Helpers.LookAt", source)
+        self.assertIn("Helpers.SetBlockRpc", source)
+
+    def test_playtest_synthesized_runs_the_block_model_suite(self) -> None:
+        script = Path(__file__).resolve().parents[1] / "scripts" / "playtest-synthesized.sh"
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("shamwayselftest_block_model", text)
+        self.assertIn("looking at voxel", text)
+        self.assertNotIn("shamwayselftest_look", text)
+        default = "shamwayselftest_bundle,shamwayselftest_block_model"
+        self.assertIn(default, text)
+        self.assertNotIn(f"{default},shamwayselftest_look", text)
+        self.assertNotIn(f"shamwayselftest_look,{default}", text)
+
 
 class AssetsSourceTreeTests(unittest.TestCase):
     def test_readme_names_every_lane_and_resolves_placeholders(self) -> None:

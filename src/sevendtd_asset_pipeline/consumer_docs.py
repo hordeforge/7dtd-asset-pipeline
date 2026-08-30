@@ -297,6 +297,21 @@ shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
 shamway script playtest-acceptance
 ```
 
+The generated provider is **three suites, not one picture**:
+
+| Suite | What it does |
+|---|---|
+| `<mod>_bundle` | `LoadAsset<T>` every member. Default of `playtest-acceptance`. |
+| `<mod>_look` | instantiates the prefab in front of the camera. Opt-in. |
+| your own `<mod>_block_*` | `SetBlockRpc` (or the player) onto a voxel, then `LookAt` it |
+
+**Never comma-list `*_look` with `*_block_*` in one `PLAYTEST_SUITE`.** They
+are different pictures. A prefab hanging in mid-air is not a placed block.
+`playtest-acceptance` refuses that mix; the generated provider throws if the
+script is bypassed. Run `_look` as its own invocation if you need it. Do not
+drag a block-entity transform into the camera "so there is something to
+photograph".
+
 That is the boundary. The pipeline knows what is *in* the bundle, so it can
 prove the engine reads every member. It has no idea what any of it is *for* —
 so every generated case passes on a texture that loads upside down, a clip at

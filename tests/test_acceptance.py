@@ -11,6 +11,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import static_triangle_glb
+
 from sevendtd_asset_pipeline import acceptance
 from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.config import PipelineConfig
@@ -46,12 +48,17 @@ def _mod(
     manifest.write_text(body + "Dependencies: []\n", encoding="utf-8")
     # A synthesized provider is derived from the source folder, not from the
     # manifest, because only the writer knows that `prop.glb` becomes a prefab
-    # named `prop` plus `prop_mesh` and `prop_mat`. The files need only exist
-    # and carry the right suffix; nothing here reads their contents.
+    # named `prop` plus `prop_mesh` and `prop_mat`. Non-mesh files need only
+    # exist and carry the right suffix. A `.glb` is parsed for hierarchy/skin,
+    # so the dummy has to be a real static triangle, not empty bytes.
     source_dir = root / "assets-src" / "bundle"
     source_dir.mkdir(parents=True, exist_ok=True)
     for asset in assets:
-        (source_dir / asset).write_bytes(b"")
+        dest = source_dir / asset
+        if dest.suffix.lower() in {".glb", ".gltf"}:
+            static_triangle_glb(dest)
+        else:
+            dest.write_bytes(b"")
     return load_config(root / ".shamway.toml")
 
 
@@ -158,6 +165,25 @@ class SynthesizedNamingTests(unittest.TestCase):
         self.assertEqual({"beep": "AudioClip", "notes": "TextAsset", "panel": "Texture2D"}, cases)
 
 
+class MixedVisualSuiteTests(unittest.TestCase):
+    """Prefab-look and block-place are different pictures. Never one list."""
+
+    def test_look_plus_block_is_mixed(self) -> None:
+        self.assertTrue(acceptance.mixed_visual_suites("mod_look,mod_block_model"))
+        self.assertTrue(acceptance.mixed_visual_suites("mod_block_place; mod_look"))
+        self.assertTrue(acceptance.mixed_visual_suites("a_look a_block_model"))
+
+    def test_load_plus_block_is_not_mixed(self) -> None:
+        self.assertFalse(acceptance.mixed_visual_suites("mod_bundle,mod_block_model"))
+        self.assertFalse(acceptance.mixed_visual_suites("mod_look"))
+        self.assertFalse(acceptance.mixed_visual_suites("mod_block_model"))
+        self.assertFalse(acceptance.mixed_visual_suites(""))
+
+    def test_a_mixed_list_is_refused_by_name(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "different pictures"):
+            acceptance.reject_mixed_visual_suites("self_look,self_block_model")
+
+
 class RenderTests(unittest.TestCase):
     def test_the_rendered_source_carries_the_uri_the_engine_resolves(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -172,6 +198,8 @@ class RenderTests(unittest.TestCase):
             self.assertIn('DataLoader.LoadAsset<AudioClip>(Bundle + "?blast")', source)
             self.assertIn("IScenarioProvider", source)
             self.assertIn('yield return "examplemod_bundle"', source)
+            self.assertNotIn("examplemod_look", source)
+            self.assertNotIn("Instantiate", source)
 
     def test_an_absent_stem_case_is_always_present(self) -> None:
         """Without it, a loader answering every request would read as a pass."""
@@ -344,6 +372,16 @@ class MotionKindTests(unittest.TestCase):
             source = acceptance.render(plan_)[f"{plan_.assembly}.cs"]
             self.assertNotIn("CaseDef.StagedClip", source)
             self.assertIn('CaseDef.Staged(label, "look_prop"', source)
+            self.assertIn("ahead * 3.5f", source)
+            self.assertNotIn("ahead * 1.2f", source)
+            self.assertIn('yield return "examplemod_look"', source)
+            self.assertIn('if (suite == "examplemod_look")', source)
+            self.assertLess(
+                source.index('if (suite == "examplemod_look")'),
+                source.index("Instantiate"),
+            )
+            self.assertIn("RejectMixedVisualSuites", source)
+            self.assertIn("different pictures", source)
 
     def test_absent_motion_kinds_leave_generation_byte_identical(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

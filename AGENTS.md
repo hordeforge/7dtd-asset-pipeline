@@ -239,6 +239,34 @@ every one of those cases passes on a texture that loads upside down and a clip
 at the wrong pitch. **A load is not a look.** Report a green suite as "the game
 read it", never as "it works", and say plainly when nobody has yet looked.
 
+### One visual mode per playtest run. Never mix them.
+
+This has a scar. The self-test was asked to prove a **placed block**. The
+generated provider also instantiates the prefab in front of the camera, so
+a comma-listed `PLAYTEST_SUITE` showed a texture hanging in mid-air *and* a
+block on a voxel in the same session. That mix was not a look. It kept
+happening because load, prefab-look, and block-place lived in one suite.
+
+They are three suites, and they stay three suites:
+
+| Suite | What it is | What it is not |
+|---|---|---|
+| `<mod>_bundle` | `LoadAsset<T>` every member, plus an absent stem | not a picture of anything |
+| `<mod>_look` | instantiate the prefab in front of the camera | not a placed block |
+| `<mod>_block_model` / `_block_place` | `SetBlockRpc` (or the player) onto a voxel, then `LookAt` that voxel | not a prefab floating in the player's face |
+
+**Never comma-list `*_look` with `*_block_*` in one `PLAYTEST_SUITE`.** They
+are different pictures. `playtest-acceptance.sh` dies if you do; the generated
+provider throws if that script is bypassed; `reject_mixed_visual_suites` is
+the same rule in Python. `playtest-synthesized` runs `_bundle` and
+`_block_model` only — never `_look`.
+
+If you need the floating prefab (shader-draws, no block in the mod), run
+`_look` **as its own playtest invocation**, not as a tag-along on the block
+suite. Do not "just add it to the list". Do not put `Object.Instantiate` into
+a block-model case "so there is something to photograph". Do not drag a
+`BlockEntityData.transform` into the camera. Point the camera at the voxel.
+
 The first synthesized bundle to go all the way through makes the point: the
 suite reported `pass=3 fail=0`, and what the reviewer added on top was that the
 ring was *centred and circular* and the beeps were *clean*. Stretched art and a
@@ -378,7 +406,7 @@ Machine-readable output for agents and CI:
 | `shamway prompt --list` | the house-style image prompts, rendered with the lane that consumes them |
 | `shamway docs [TOPIC]` | this repository's documentation, served from the package |
 | `shamway script NAME` | the host scripts (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized), served from the package |
-| `shamway script playtest-synthesized` | the editorless writer's own live-client regression: builds a throwaway modlet and asserts the game loaded its prefab, mesh, material and texture |
+| `shamway script playtest-synthesized` | the editorless writer's live-client regression: load every member, then `SetBlockRpc` the self-test block onto a voxel and look at it. Never runs the floating prefab-look suite |
 | `shamway client where --json` | the client's per-user `Mods/` and `logs/` paths |
 | `shamway client deploy MOD` | copy the deployable modlet there, holding the shared lock across the write (writes outside the install only) |
 | `shamway client hold -- CMD` | run any other `Mods/` write behind the same lock, so a raw `cp` cannot land in a live session's run |

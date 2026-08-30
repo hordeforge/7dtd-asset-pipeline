@@ -13,8 +13,10 @@ shamway script playtest-synthesized
 ```
 
 That builds this modlet, deploys it, runs it through a live client, and asserts
-the game loaded every object the writer emitted. `docs/validation.md` lists
-what each assertion catches.
+the game loaded every object the writer emitted **and** placed
+`shamwaySelfTestPropBlock` on a voxel (`SetBlockRpc`, then `LookAt` the
+voxel — not a prefab hanging in front of the camera). `docs/validation.md`
+lists what each assertion catches.
 
 ## What is here, and why each piece
 

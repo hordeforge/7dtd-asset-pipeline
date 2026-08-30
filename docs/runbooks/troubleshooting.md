@@ -325,11 +325,12 @@ floating off to the side and above the block. Measured 2026-08-25 against a
   many seconds to reach. The `BlockEntityData` stub exists immediately; its
   `transform` appears only when the pass reaches it. A render check must wait
   for the transform, not for the voxel.
-- The pass positions the model at a chunk-local offset under the origin
-  parent, which can land it off to the side and above the block; a capture
-  fixture repositions it explicitly into the camera's space.
 - The pass can leave the model's renderers disabled (the collision-only mesh
-  path); switch them on before asserting a renderer.
+  path); switch them on before asserting a renderer (`ActivateBlockEntityModel`).
+  To photograph it, `Helpers.LookAt` the voxel centre — the same pattern as
+  AtomicDoomsday's placed bomb/detonator (`SetBlockRpc`, then look at the
+  block). Do not drag the model transform into the camera; that is not a
+  placement, and a 1 m cube then fills the lens.
 
 The 7dtd-playtest `Helpers.Blocks` (`BlockEntityDataAt`,
 `ActivateBlockEntityModel`, `FindGroundedAir`, `AimBlockPlacement`,

@@ -22,7 +22,10 @@ component with synthesized clips and `AvatarController =
 GameObjectAnimalAnimation` (see "Making it move"), proven live by the
 self-test creature's signed-off turntable clip. `--atlas` gives each part
 its own UV cell so a `generate hide --atlas` can paint the paws apart from
-the body (see "The skin is a sibling albedo").
+the body (see "The skin is a sibling albedo"). Grounding ships too: the
+writer emits the `Physics` child node (with a feet-aligned `CapsuleCollider`)
+the engine reads to settle the creature on the ground (see "What the engine
+requires of the model").
 
 ## The two ways in
 
@@ -158,6 +161,18 @@ Verified from `il/full-v3.1.0/_global/EntityClass.il.txt` and
   `None`/`Console`/`Menu`). The generator emits `UserSpawnType="Menu"` so
   the creature is listable; `Console` is the alternative for a class that
   should only come from code or a spawn file.
+- **To be grounded, the model needs a `Physics` child node.** The engine
+  grounds an entity by its CharacterController capsule, and it reads that
+  capsule off a **`Physics` child** of the model root —
+  `Entity::PhysicsInit` does `Transform.Find("Physics")`, then
+  `AddCharacterController` reads that node's `CapsuleCollider` centre/height
+  and calls `SetSize` (verified from `Entity.il.txt`; recorded in
+  research-provenance). Without a `Physics` node no CharacterController is
+  created and a spawned creature settles wherever the physics body leaves it.
+  The writer emits the `Physics` node on every generated entity, sized so the
+  capsule's bottom (`center.y - height/2`) is at the mesh's feet, which is
+  exactly how the game's own animals (`animalDeerStag`, and the rest) are
+  authored.
 
 So the minimal wiring for a generated entity is exactly what
 `shamway generate entity --xml` writes:
@@ -179,8 +194,10 @@ mod's own XML, exactly like the properties a prop or item needs. With
 animal**: `Class` names a concrete C# entity type (`EntityAnimalStag`, the
 game's wandering animal — or a mod's own type via `--entity-class`), and
 `IsAnimalEntity`/`Faction` let the game's spawner and AI treat it as one.
-(`PhysicsBody="Stag"` is emitted too, but it does **not** ground a
-procedurally-skinned creature — see "What is still unbuilt".) A bare
+(`PhysicsBody="Stag"` does not align with a procedural rig's bone paths, so
+it contributes no collider; the grounding comes from the `Physics` node the
+writer emits instead — see "What the engine requires of the model" and "What
+is still unbuilt".) A bare
 `Prefab+Mesh` class is *not* a spawnable `EntityAlive` — without a
 `Class` it loads but `EntityFactory.CreateEntity` returns nothing, so it
 could never walk in-game. `--minimal-entity` opts back out and emits the
@@ -341,20 +358,24 @@ that clients see nothing.
 - **Mecanim / complex locomotion.** `Animator` + controller + compiled
   clips remain the hard lane; the legacy path covers an animal that idles,
   walks and attacks by name.
-- **Physics bodies and collision — grounded walking is the hard limit.** A
-  generated creature does spawn as a real `EntityAlive` and animates (its
-  Walk clip plays and it travels), and `--anim` emits a real animal class
-  with `Class`/`PhysicsBody`/`IsAnimalEntity`. But **grounding a
-  procedurally-skinned creature is measured closed via config**: reusing
-  `PhysicsBody="Stag"` gives no collider (stag bone paths don't match our
-  rig), and a mod-side body with `Detail`, `Root/`-prefixed `Detail`, or
-  `Normal` colliders all float in the treeline — `EnumColliderType` is only
-  `None`/`Normal`/`Detail`/`All`, so `physicsbodies.xml` cannot express an
-  explicit grounding box/capsule (recorded in research-provenance). The
-  remaining route is a **mod-side C# physics body** (a custom component that
-  adds a grounding collider at the model root) — a C# mod, not a pipeline
-  output. Until then a generated creature animates in place and travels when
-  driven, but the game does not settle it on the ground on its own.
+- **Physics bodies and collision.** A generated creature does spawn as a real
+  `EntityAlive` and animates (its Walk clip plays and it travels), and
+  `--anim` emits a real animal class with `Class`/`PhysicsBody`/
+  `IsAnimalEntity`. The engine grounds an entity by its CharacterController
+  capsule, and it reads that capsule off a **`Physics` child node** of the
+  model root (`Entity::PhysicsInit` does `Transform.Find("Physics")`, then
+  `AddCharacterController` reads that node's `CapsuleCollider` centre/height
+  and calls `SetSize` — recorded in research-provenance). The writer now emits
+  that `Physics` child (a `CapsuleCollider` whose bottom is at the mesh's
+  feet, derived from the model bounds) on every generated entity, so the game
+  settles it on the ground instead of on its torso. `physicsbodies.xml`
+  per-bone bodies (`Detail`/`Normal`) remain closed for a procedural skinned
+  mesh — they build bone-centred colliders that do not reach the feet, and
+  `EnumColliderType` is only `None`/`Normal`/`Detail`/`All` — but the
+  `Physics` node is the non-per-bone capsule body those three values cannot
+  express. The grounding caps the acceptance at a fresh client: **the game
+  reads and grounds it; whether the feet line up in the animated pose is the
+  live look that remains.**
 - **SDCS extras** (`GearBoneMap`, `Morphable`) — the editor bakes those; see
   [skinned-gear.md](skinned-gear.md).
 

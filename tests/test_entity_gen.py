@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from sevendtd_asset_pipeline.bundle_writer import (
+    CAPSULE_COLLIDER,
     GAME_OBJECT,
     MESH,
     MESH_FILTER,
@@ -404,9 +405,10 @@ class EntityBundleTests(unittest.TestCase):
         self.assertIn("RightFoot", gos)
         self.assertIn("body", gos)  # the skinned mesh node
         self.assertIn("creature", gos)  # the prefab root the engine resolves by stem
+        self.assertIn("Physics", gos)  # the grounding-capsule node the engine reads
         transforms = trees[TRANSFORM]
-        # 20 joints + the skinned mesh node + the prefab root.
-        self.assertEqual(len(transforms), 22)
+        # 20 joints + the skinned mesh node + the prefab root + the Physics node.
+        self.assertEqual(len(transforms), 23)
 
     def test_vertex_data_carries_joints_and_weights_channels(self) -> None:
         out = self.root / "creature.glb"
@@ -418,6 +420,99 @@ class EntityBundleTests(unittest.TestCase):
         self.assertEqual(0, channels[12]["format"])
         self.assertEqual(4, channels[13]["dimension"])  # WEIGHTS
         self.assertEqual(10, channels[13]["format"])
+
+    def test_grounding_capsule_bottom_sits_at_the_feet(self) -> None:
+        """The engine grounds an entity by its CharacterController capsule, and
+        reads it off a `Physics` child of the model root: `Entity::PhysicsInit`
+        does `RootTransform.Find("Physics")`, then `AddCharacterController`
+        reads that node's CapsuleCollider and calls `SetSize`. So the generated
+        prefab must carry a `Physics` child, direct under the prefab root, whose
+        capsule's bottom (`center.y - height/2`) is at the mesh's lowest point —
+        that is what stops the `the legs clip into the ground` settle-onto-the-
+        torso read."""
+        out = self.root / "creature.glb"
+        self.assertEqual(run("entity", [str(out)]), 0)
+        _payload, trees = self.pack(out)
+
+        def hierarchy(bundle: Path) -> dict[str, dict[str, Any]]:
+            """Map each GO name to its world transform, by UnityPy path_id.
+
+            Inside one bundle, a Transform's `m_GameObject.m_PathID` equals its
+            owning GameObject's own path_id, and a GameObject's
+            `m_Component[*].component.m_PathID` equals that component's path_id
+            — the two agree only via UnityPy's path_id, not the re-indexed
+            typetree, so the correlation has to be done on the parsed objects.
+            """
+            import UnityPy
+
+            names: dict[int, str] = {}
+            transforms: dict[int, dict[str, Any]] = {}
+            for obj in UnityPy.load(str(bundle)).objects:
+                tree = obj.read_typetree()
+                if int(obj.type.value) == GAME_OBJECT:
+                    names[obj.path_id] = tree["m_Name"]
+                elif int(obj.type.value) == TRANSFORM:
+                    transforms[obj.path_id] = tree
+            out: dict[str, dict[str, Any]] = {}
+            for go_id, name in names.items():
+                matched = next(
+                    (
+                        (tid, t)
+                        for tid, t in transforms.items()
+                        if t["m_GameObject"]["m_PathID"] == go_id
+                    ),
+                    (None, None),
+                )
+                out[name] = {"transform": matched[1], "transform_id": matched[0]}
+            return out
+
+        bundle = self.root / "entity.unity3d"
+        hier = hierarchy(bundle)
+        physics_transform = hier["Physics"]["transform"]
+        root_transform = hier["creature"]["transform"]
+        assert physics_transform is not None
+        assert root_transform is not None
+        # Physics is a direct child of the prefab root, as the real animals have
+        # it, so the engine's `RootTransform.Find("Physics")` resolves it.
+        # `m_Father.m_PathID` is the parent Transform's component id.
+        self.assertEqual(
+            physics_transform["m_Father"]["m_PathID"], hier["creature"]["transform_id"]
+        )
+        self.assertEqual(physics_transform["m_LocalPosition"]["y"], 0.0)
+        # The prefab root directly lists the Physics node as a child, so the
+        # engine's `RootTransform.Find("Physics")` resolves it.
+        root_child_paths = {c["m_PathID"] for c in root_transform["m_Children"]}
+        self.assertIn(hier["Physics"]["transform_id"], root_child_paths)
+
+        # The capsule bottom is at the mesh's feet (min y of the authored mesh).
+        capsules = trees[CAPSULE_COLLIDER]
+        self.assertEqual(len(capsules), 1)
+        cap = capsules[0]
+        self.assertEqual(cap["m_Direction"], 1)
+        bottom = cap["m_Center"]["y"] - cap["m_Height"] / 2.0
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        feet_y = min(point[1] for point in primitive.positions)
+        self.assertAlmostEqual(bottom, feet_y, places=3)
+
+        # An animated entity keeps the Physics node under the root, not swept
+        # into the figure the animation wraps the model bones in.
+        animated = self.root / "animated.glb"
+        self.assertEqual(run("entity", [str(animated), "--anim", "idle,walk"]), 0)
+        self.pack(animated)
+        hier2 = hierarchy(bundle)
+        # The animated prefab root is the GLB stem (`animated`), not `creature`.
+        self.assertEqual(
+            hier2["Physics"]["transform"]["m_Father"]["m_PathID"],
+            hier2["animated"]["transform_id"],
+        )
+        # The animated root keeps both the figure (the animation carrier) and
+        # the Physics node as direct children — the Physics node is not swept
+        # under the figure, which it would be if the figure wrap re-parented it.
+        root2 = hier2["animated"]["transform"]
+        root2_child_paths = {c["m_PathID"] for c in root2["m_Children"]}
+        self.assertIn(hier2["figure"]["transform_id"], root2_child_paths)
+        self.assertIn(hier2["Physics"]["transform_id"], root2_child_paths)
 
 
 if __name__ == "__main__":

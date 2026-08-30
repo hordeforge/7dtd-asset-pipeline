@@ -36,6 +36,7 @@ STEM="shamwaySelfTestProp"
 MOD_NAME="ShamwaySelfTest"
 FIXTURE=""
 LOOK=0
+LOOK_STEM=""
 EXTRA=()
 
 usage() {
@@ -49,8 +50,12 @@ usage() {
 		OPTIONS
 		  --fixture DIR     the modlet to build   (default: examples/SelfTestMod)
 		  --stem NAME       asset stem it carries (default: shamwaySelfTestProp)
-		  --look            run shamwayselftest_burst_look only (the looping
-		                    VFX prefab, alone). One prefab, one invocation.
+		  --look [STEM]     run that prefab's look suite (<mod>_<stem>_look) alone:
+		                    one camera-staged instance, one invocation. Without
+		                    STEM, runs shamwayselftest_burst_look (the looping VFX
+		                    prefab). The generated rigs each get their own look
+		                    suite — shamwayselftest_shamwaySelfTestCreature_look,
+		                    _Bird_look, _Arachnid_look, _Dino_look.
 		  -h, --help        this text
 
 		Anything after -- is passed to playtest-acceptance.sh, so --listen (and
@@ -73,12 +78,14 @@ usage() {
 	EOF
 }
 
-LOOK=0
 while (($#)); do
 	case "$1" in
 		--fixture) FIXTURE="${2:-}"; shift 2 ;;
 		--stem) STEM="${2:-}"; shift 2 ;;
-		--look) LOOK=1; shift ;;
+		--look) LOOK=1; shift
+			if (($#)) && [[ "$1" != -* ]]; then
+				LOOK_STEM="$1"; shift
+			fi ;;
 		-h|--help) usage; exit 0 ;;
 		--) shift; EXTRA=("$@"); break ;;
 		*) die "unknown option: $1 (try --help)" ;;
@@ -146,9 +153,16 @@ for arg in "${EXTRA[@]+"${EXTRA[@]}"}"; do
 done
 if (( LOOK )); then
 	if (( has_suite )); then
-		die "--look already selects shamwayselftest_burst_look; do not also pass --suite"
+		die "--look already selects a <mod>_<stem>_look suite; do not also pass --suite"
 	fi
-	SUITE_ARGS=(--suite "shamwayselftest_burst_look")
+	if [[ -n "$LOOK_STEM" ]]; then
+		# Suite ids are lowercased by the orchestrator (playtest_run.py
+		# splits `suite.lower()`), and the generated provider compares
+		# case-sensitively, so the stem must arrive lowercase too.
+		SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_look")
+	else
+		SUITE_ARGS=(--suite "shamwayselftest_burst_look")
+	fi
 elif (( ! has_suite )); then
 	SUITE_ARGS=(--suite "shamwayselftest_bundle,shamwayselftest_block_model,shamwayselftest_editorless")
 	# One concern: the synthesized bundle loads and the block sits on a
@@ -192,10 +206,15 @@ grep -qE "SUMMARY pass=[0-9]+ fail=0 " "$LOG" || fail "a case failed (see the su
 
 CREATURE="shamwaySelfTestCreature"
 if (( LOOK )); then
-	grep -qE "scene staged look_burst" "$CLIENT_LOG" ||
-		fail "look_burst was not staged in front of the camera"
-	grep -qE "burst: staged at" "$CLIENT_LOG" ||
-		fail "the looping VFX prefab was not held in front of the camera"
+	if [[ -n "$LOOK_STEM" ]]; then
+		grep -qE "$LOOK_STEM: staged at .*with [1-9][0-9]* renderer" "$CLIENT_LOG" ||
+			fail "the $LOOK_STEM prefab was not staged in front of the camera with a renderer"
+	else
+		grep -qE "scene staged look_burst" "$CLIENT_LOG" ||
+			fail "look_burst was not staged in front of the camera"
+		grep -qE "burst: staged at" "$CLIENT_LOG" ||
+			fail "the looping VFX prefab was not held in front of the camera"
+	fi
 else
 	# Each of these is a distinct way the writer could be wrong while every
 	# offline gate still passed, so they are asserted by value rather than
@@ -240,7 +259,17 @@ if ((FAILED)); then
 fi
 
 if (( LOOK )); then
-	cat <<EOF
+	if [[ -n "$LOOK_STEM" ]]; then
+		cat <<EOF
+  OK   the $LOOK_STEM prefab staged in front of the camera, with a renderer
+
+The game instantiated the generated rig. What it looked like is in the
+captured frames — judge them, then file the sign-off:
+
+  shamway client capture $LOOK_STEM --observable "reads as its rig: proportions, facing, not mirrored"
+EOF
+	else
+		cat <<EOF
   OK   look_burst was held in front of the camera
 
 The game STAGED the looping VFX prefab (gold flash, grey haze, falling
@@ -249,6 +278,7 @@ then file a frame. This is not a placed block:
 
   shamway client capture burst --observable "looping gold flash, grey haze, falling streaks"
 EOF
+	fi
 else
 	cat <<EOF
   OK   the prefab loaded, with its renderer

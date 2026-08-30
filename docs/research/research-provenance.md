@@ -1772,3 +1772,23 @@ brfalse.s IL_010C` — `ConsoleCmdSpawnEntity.il.txt`), so a class without
 therefore emits `UserSpawnType="Menu"` in its `entityclasses.xml` patch;
 `Console` is the alternative for a class that should only come from code or
 a spawn file.
+
+## Animal movement: GameObjectAnimalAnimation drives a legacy Animation by clip name (2026-08-30)
+
+`GameObjectAnimalAnimation : AvatarController` (dedi V3.1.0 IL,
+`GameObjectAnimalAnimation.il.txt`) is how animals move: the entity class
+sets `AvatarController = GameObjectAnimalAnimation`, its `Awake` finds the
+model, grabs the figure GameObject's legacy `UnityEngine.Animation`
+component, and `Animation.Play(name)` clips by conventional names —
+`Idle1`, `Idle2`, `Attack1`, `Attack2`, `Pain`, `Jump`, `Death`, `Run`,
+`Walk`, `Swim` (the `cAnim*` fields + `get_Item("Idle1")` /
+`Play("Idle1")` at IL_006A–IL_0086). A state machine switches idle vs
+run/walk on `lastAbsMotion`, attack/pain/jump/death on entity state.
+
+So a synthesized animal needs, beyond the skinned prefab: a legacy
+`Animation` component carrying looping clips under those names, and
+`AvatarController = GameObjectAnimalAnimation` on the entity class. The
+runtime plays `m_Clip` (the compiled stream), not `m_EditorCurves`, so a
+clip without a valid `m_Clip` block loads but never plays. Not checked
+yet: whether the writer can emit a minimal `m_Clip` (UnityPy parses the
+format — a parser is a spec — but nothing here writes one).

@@ -1,8 +1,30 @@
 <configs>
-	<append xpath="/entity_classes">
+<append xpath="/entity_classes">
 		<entity_class name="shamwaySelfTestCreature">
 			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCreature"/>
 			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCreature"/>
+			<property name="UserSpawnType" value="Menu"/>
+		</entity_class>
+	</append>
+<append xpath="/entity_classes">
+		<entity_class name="shamwaySelfTestBird">
+			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestBird"/>
+			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestBird"/>
+			<property name="UserSpawnType" value="Menu"/>
+		</entity_class>
+	</append>
+<append xpath="/entity_classes">
+		<entity_class name="shamwaySelfTestArachnid">
+			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestArachnid"/>
+			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestArachnid"/>
+			<property name="UserSpawnType" value="Menu"/>
+		</entity_class>
+	</append>
+<append xpath="/entity_classes">
+		<entity_class name="shamwaySelfTestDino">
+			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestDino"/>
+			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestDino"/>
+			<property name="UserSpawnType" value="Menu"/>
 		</entity_class>
 	</append>
 </configs>

@@ -1119,6 +1119,12 @@ class SelfTestFixtureTests(unittest.TestCase):
         prop and timedNuke at the same 3.5 m offset is the overlay this gate
         exists to refuse. The regenerator already emits per-stem *_look;
         this asserts the committed file is that output.
+
+        The suite ids are lowercase even for mixed-case stems: the
+        orchestrator lowercases suite tokens (playtest_run.py splits
+        `suite.lower()`), and the provider compares case-sensitively — an
+        original-case id would never match, and the look run would fall
+        through to the load cases and stage nothing.
         """
         source = (self.FIXTURE / "tools/shamway/acceptance/ShamwaySelfTestAcceptance.cs").read_text(
             encoding="utf-8"
@@ -1129,9 +1135,9 @@ class SelfTestFixtureTests(unittest.TestCase):
         for stem in (
             "burst",
             "gear",
-            "shamwaySelfTestCreature",
-            "shamwaySelfTestProp",
-            "timedNuke",
+            "shamwayselftestcreature",
+            "shamwayselftestprop",
+            "timednuke",
         ):
             with self.subTest(stem=stem):
                 self.assertIn(f'yield return "shamwayselftest_{stem}_look"', source)
@@ -1176,13 +1182,18 @@ class SelfTestFixtureTests(unittest.TestCase):
         self.assertIn("looking at voxel", text)
         default = "shamwayselftest_bundle,shamwayselftest_block_model,shamwayselftest_editorless"
         self.assertIn(default, text)
-        # The look suite exists only as `--look`: a separate invocation that
+        # The look suites exist only as `--look`: a separate invocation that
         # replaces the default list, never an addition to it (a look run and
         # a block run paint different pictures and are refused in one list).
         self.assertNotIn(f"{default},shamwayselftest_look", text)
         self.assertNotIn(f"shamwayselftest_look,{default}", text)
         self.assertIn("--look", text)
         self.assertIn('SUITE_ARGS=(--suite "shamwayselftest_burst_look")', text)
+        # `--look STEM` picks that prefab's per-prefab look suite, so every
+        # generated rig can be looked at on its own run. The stem is
+        # lowercased with the mod name: the orchestrator lowercases suite
+        # tokens, and the provider compares case-sensitively.
+        self.assertIn('SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_look")', text)
         self.assertNotIn("stage_editorless_lineup", text)
         agents = (self.FIXTURE / "tools/shamway/AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("shamwayselftest_burst_look", agents)

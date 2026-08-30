@@ -2189,3 +2189,22 @@ layout and the modern animal layout differ.
   controllers cannot ship in a mod bundle — the game's bundles embed their
   assets same-file), so a mod would have to author its own
   `AnimatorController` — the hard lane the entity docs already call unbuilt.
+
+## The live client E2E boot-hangs on Steamworks init, not on the asset (2026-08-30)
+
+The walk-entity live runs (3 consecutive) all failed before the scenario
+armed: after `NET: LiteNetLib: Connected to server` the client sits in
+`[7dtd-fastconnect] boot hb ticks=… action=done` forever, and the
+7dtd-playtest mod logged `queue cases=1` but no `DONE` — the run ends
+`FAIL harness: no DONE from primary playtest mod`. The client log shows the
+cause at boot: `System.InvalidOperationException: Steamworks is not
+initialized.` So the client never finishes its ScenarioCoordinator handshake
+because the Steamworks API failed to init on this host. This is an
+environment/launch condition — the Steam client/Steamworks bridge — not the
+asset, the harness logic, or the bundle. When it is resolved, the run goes
+straight to the scenario (earlier identical runs completed in ~75 s).
+
+Recheck before re-diagnosing a grounded-walk "failure": if the client log has
+`Steamworks is not initialized` and the orchestrator says `no DONE from
+primary playtest mod`, the run did not reach the asset at all — do not treat a
+PASS/FAIL as evidence about the creature.

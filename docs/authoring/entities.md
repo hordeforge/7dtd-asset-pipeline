@@ -376,25 +376,30 @@ that clients see nothing.
   declaration already accepts any name the controller plays.
 - **Mecanim / complex locomotion.** `Animator` + controller + compiled
   clips remain the hard lane; the legacy path covers an animal that idles,
-  walks and attacks by name.
-- **Physics bodies and collision.** A generated creature does spawn as a real
-  `EntityAlive` and animates (its Walk clip plays and it travels), and
-  `--anim` emits a real animal class with `Class`/`PhysicsBody`/
-  `IsAnimalEntity`. The engine grounds an entity by its CharacterController
-  capsule, and it reads that capsule off a **`Physics` child node** of the
-  model root (`Entity::PhysicsInit` does `Transform.Find("Physics")`, then
-  `AddCharacterController` reads that node's `CapsuleCollider` centre/height
-  and calls `SetSize` — recorded in research-provenance). The writer now emits
-  that `Physics` child (a `CapsuleCollider` whose bottom is at the mesh's
-  feet, derived from the model bounds) on every generated entity, so the game
-  settles it on the ground instead of on its torso. `physicsbodies.xml`
-  per-bone bodies (`Detail`/`Normal`) remain closed for a procedural skinned
-  mesh — they build bone-centred colliders that do not reach the feet, and
-  `EnumColliderType` is only `None`/`Normal`/`Detail`/`All` — but the
-  `Physics` node is the non-per-bone capsule body those three values cannot
-  express. The grounding caps the acceptance at a fresh client: **the game
-  reads and grounds it; whether the feet line up in the animated pose is the
-  live look that remains.**
+  walks and attacks by name. In this engine revision the shipped animals use a
+  Mecanim **`Animator`** (type 95 on the model root, read from
+  `automatic_assets_entities/animals.bundle`), while `GameObjectAnimalAnimation`
+  (the `AvatarController` the generator wires) drives a **legacy** `Animation`
+  by clip name — a legacy-animal path.
+- **Grounding and the controller-init ordering.** A generated creature spawns
+  as a real `EntityAlive` (its own mod-owned class, not a borrowed stock one —
+  `Class` resolves via `Type.GetType`, and the mod DLL at the mod root names
+  the type). The engine grounds it by its CharacterController capsule, read off
+  an **inactive `Physics` child node** the writer emits (a `CapsuleCollider`
+  whose bottom is at the mesh's feet, radius ≈ the model's footprint) —
+  `Entity::AddCharacterController` reads that capsule and calls `SetSize`. The
+  legacy `Animation` (with the clips) sits on the model root's **first active
+  child** (the `figure`), which is the contract
+  `GameObjectAnimalAnimation.Awake` requires. The remaining engine-interop
+  piece is **init ordering**: the controller's `Awake` runs during
+  `createAvatarController` (via `AddComponent`) before the model hierarchy the
+  controller inspects is settled, so `anim` is null and `CreateEntity` NREs at
+  `anim["Idle1"]`. `physicsbodies.xml` per-bone bodies (`Detail`/`Normal`)
+  remain closed for a procedural skinned mesh — they build bone-centred
+  colliders that do not reach the feet. The grounding caps at a fresh client
+  that initializes Steamworks: a client boot-hang on `Steamworks is not
+  initialized` means a run never reached the asset, so a PASS/FAIL there says
+  nothing about the creature (recorded in research-provenance).
 - **SDCS extras** (`GearBoneMap`, `Morphable`) — the editor bakes those; see
   [skinned-gear.md](skinned-gear.md).
 

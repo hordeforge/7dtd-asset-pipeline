@@ -53,7 +53,10 @@ public sealed class {CLASS_NAME} : IScenarioProvider
     // a voxel (*_block_*) are different pictures. Mixing them in one
     // PLAYTEST_SUITE list is how a self-test rendered a texture mid-air AND a
     // placed block in the same session. Refuse it here, not after someone has
-    // already watched both.
+    // already watched both. The name is the picture: do not put a camera-staged
+    // instantiate on a suite that is not named *_look so it can ride with a
+    // block suite. A particle system that is already part of the staged prefab
+    // is not a second picture.
     static void RejectMixedVisualSuites()
     {{
         var raw = System.Environment.GetEnvironmentVariable("PLAYTEST_SUITE") ?? "";

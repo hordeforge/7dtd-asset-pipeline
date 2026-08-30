@@ -297,20 +297,24 @@ shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
 shamway script playtest-acceptance
 ```
 
-The generated provider is **three suites, not one picture**:
+The generated provider is **one load suite, plus one look suite per prefab**:
 
 | Suite | What it does |
 |---|---|
 | `<mod>_bundle` | `LoadAsset<T>` every member. Default of `playtest-acceptance`. |
-| `<mod>_look` | instantiates the prefab in front of the camera. Opt-in. |
+| `<mod>_<stem>_look` | instantiates **that one** prefab in front of the camera. Opt-in. One prefab per suite so they cannot overlay. |
 | your own `<mod>_block_*` | `SetBlockRpc` (or the player) onto a voxel, then `LookAt` it |
 
 **Never comma-list `*_look` with `*_block_*` in one `PLAYTEST_SUITE`.** They
 are different pictures. A prefab hanging in mid-air is not a placed block.
 `playtest-acceptance` refuses that mix; the generated provider throws if the
-script is bypassed. Run `_look` as its own invocation if you need it. Do not
-drag a block-entity transform into the camera "so there is something to
-photograph".
+script is bypassed; `7dtd-playtest`'s orchestrator refuses it too. The name
+**is** the picture: a suite that hangs a prefab in the player's face must
+end in `_look`, or the gate cannot see it. A particle system that is already
+part of the staged prefab is not a second picture; consecutive cases of one
+feature in one suite are not either. Run `_look` as its own invocation if
+you need it. Do not drag a block-entity transform into the camera "so there
+is something to photograph".
 
 That is the boundary. The pipeline knows what is *in* the bundle, so it can
 prove the engine reads every member. It has no idea what any of it is *for* —

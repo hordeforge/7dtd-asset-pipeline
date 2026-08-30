@@ -126,6 +126,12 @@ def mixed_visual_suites(suite_list: str) -> bool:
     (`*_look`) and `SetBlockRpc` onto a voxel (`*_block_*`) must never share a
     client session: the self-test rendered a texture mid-air AND a placed
     block in the same run, repeatedly, whenever they were comma-listed.
+
+    The name is the picture. This function only sees suite ids. Putting a
+    camera-staged instantiate on a suite that is not named `*_look` so it can
+    ride with `*_block_*` is the same mix, and this cannot catch it. Not a
+    mix: a particle system that is already a child of the staged prefab;
+    consecutive cases of one feature in one suite.
     """
     tokens = [token for token in _SUITE_SPLIT.split(suite_list.strip()) if token]
     look = any(token.endswith("_look") for token in tokens)
@@ -379,6 +385,7 @@ def _stage_body(stem: str) -> str:
                     : player.transform;
                 var ahead = camera.forward;
                 {variable}Staged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged({variable}Staged);
                 {variable}Staged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -501,38 +508,37 @@ def _walk_clip_case(prefab_stem: str) -> str:
 def render(plan_: ProviderPlan) -> dict[str, str]:
     """The provider's files, as `filename -> text`."""
     cases = "".join(_case(stem, kind) for stem, kind in plan_.stems)
-    # Prefab look is its own suite (`*_look`), never folded into `*_bundle`.
-    # Instantiating a mesh in front of the camera is not placing a block;
-    # mixing those pictures in one PLAYTEST_SUITE list is refused by
-    # `reject_mixed_visual_suites`. A prefab with a declared motion kind
-    # stages a turntable (turntable), a walk (walk-cycle), or a still look
-    # (fixed / absent) — still in `*_look`, never in the load suite.
+    # One look suite per prefab. Putting every mesh in one `*_look` suite
+    # instantiates them at the same camera offset, so a particle system, a
+    # skinned mesh and a cube pile up in one spot — that is mixing unrelated
+    # pictures, not a sign-off. Each GameObject gets `<mod>_<stem>_look`.
+    # Instantiating in front of the camera is not placing a block;
+    # `reject_mixed_visual_suites` refuses those two in one PLAYTEST_SUITE.
     motion_kinds = dict(plan_.motions)
-    staged: list[str] = []
+    prefix = (
+        plan_.suite_id[: -len("_bundle")]
+        if plan_.suite_id.endswith("_bundle")
+        else plan_.suite_id
+    )
+    look_yields_parts: list[str] = []
+    look_branch_parts: list[str] = []
     for stem, kind in plan_.stems:
         if kind != "GameObject":
             continue
         motion = motion_kinds.get(stem)
         if motion == "turntable":
-            staged.append(_staged_clip_case(stem))
+            body = _staged_clip_case(stem)
         elif motion == "walk-cycle":
-            staged.append(_walk_clip_case(stem))
+            body = _walk_clip_case(stem)
         else:
-            staged.append(_staged_case(stem))
-    look_id = (
-        plan_.suite_id[: -len("_bundle")] + "_look"
-        if plan_.suite_id.endswith("_bundle")
-        else plan_.suite_id + "_look"
-    )
-    if staged:
-        look_body = "".join(staged)
-        look_yields = f'yield return "{look_id}";'
-        look_branch = (
-            f'if (suite == "{look_id}")\n        {{\n{look_body}            return;\n        }}\n'
+            body = _staged_case(stem)
+        look_id = f"{prefix}_{_cs_body(stem)}_look"
+        look_yields_parts.append(f'yield return "{look_id}";')
+        look_branch_parts.append(
+            f'if (suite == "{look_id}")\n        {{\n{body}            return;\n        }}\n'
         )
-    else:
-        look_yields = ""
-        look_branch = ""
+    look_yields = "\n            ".join(look_yields_parts)
+    look_branch = "".join(look_branch_parts)
     mod_name = _cs_body(plan_.mod_name)
     source = _template("AcceptanceProvider.cs.in").format(
         MOD_NAME=mod_name,

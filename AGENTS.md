@@ -31,6 +31,30 @@ repositories and what each owns. Read it before running anything under
 commands take, and a deploy made while another session holds it lands in that
 session's next launch.
 
+### Python in this checkout is uv, this checkout's `.venv`
+
+The Python this repository runs is the interpreter **uv** puts in **this
+checkout's** `.venv`, resolved from the committed `uv.lock`. That is one
+environment. The system `python3`, a `PYTHONPATH=src python3 -m …` invocation,
+and another clone's `.venv` (the shared hordeforge checkout vs a worktree) are
+three different ones. They can all import a module named
+`sevendtd_asset_pipeline` and still run the wrong code or miss extras
+(trimesh, UnityPy, Pillow). A build that then asks you to `uv pip install`
+from GitHub is the symptom of having used the wrong one.
+
+```bash
+scripts/bootstrap
+uv run --project . shamway --help
+```
+
+After bootstrap, `.venv/bin/shamway` is the same entry point. Host scripts
+that take `SHAMWAY` get that path, not a `python3 -m` wrapper and not a
+sibling clone's binary.
+
+Do not add `pip`, `pipx`, `venv`, or `python -m pip` invocations to scripts,
+docs, or CI; `scripts/install-tools.sh` installs uv itself, from the
+distribution package or the official checksum-verified release.
+
 ### Fix it upstream, do not work around it here
 
 This repository is the generalized extraction of an asset pipeline that grew
@@ -154,11 +178,6 @@ scripts/bootstrap
 make check test
 ```
 
-Use **uv** for every Python step — environments, installs, and runs. Do not
-add `pip`, `pipx`, `venv`, or `python -m pip` invocations to scripts, docs, or
-CI; `scripts/install-tools.sh` installs uv itself, from the distribution
-package or the official checksum-verified release.
-
 `make check test` must pass before you hand work back. It needs no network,
 no Unity, and no game install.
 
@@ -239,33 +258,55 @@ every one of those cases passes on a texture that loads upside down and a clip
 at the wrong pitch. **A load is not a look.** Report a green suite as "the game
 read it", never as "it works", and say plainly when nobody has yet looked.
 
-### One visual mode per playtest run. Never mix them.
+### One concern per run. Do not mix tests.
+
+A playtest invocation proves **one concern**. Do not pile unrelated cases
+into one `PLAYTEST_SUITE` because the client is already up. A person
+watching cannot tell which picture they are signing off.
+
+Two things **are** one concern, and belong together:
+
+- consecutive actions of one feature (equip, then use, then capture)
+- a child that is already **part of** the built object (a particle system
+  on the entity prefab, not spawned as a second instantiate next to it)
+
+Two things that are **not** one concern:
+
+- a placed block on a voxel, and a prefab hanging in the player's face
+- mechanical loads, and a staged visual of a different asset "so there is
+  something to photograph"
 
 This has a scar. The self-test was asked to prove a **placed block**. The
 generated provider also instantiates the prefab in front of the camera, so
 a comma-listed `PLAYTEST_SUITE` showed a texture hanging in mid-air *and* a
 block on a voxel in the same session. That mix was not a look. It kept
-happening because load, prefab-look, and block-place lived in one suite.
+happening because load, prefab-look, and block-place lived in one suite —
+and it happened again when a camera-staged VFX lineup was folded into
+`_editorless` so it could ride with `_block_model`.
 
-They are three suites, and they stay three suites:
+They are named suites, and they stay named:
 
 | Suite | What it is | What it is not |
 |---|---|---|
 | `<mod>_bundle` | `LoadAsset<T>` every member, plus an absent stem | not a picture of anything |
-| `<mod>_look` | instantiate the prefab in front of the camera | not a placed block |
+| `<mod>_<stem>_look` | instantiate **that one** prefab in front of the camera | not every prefab at once, not a placed block |
 | `<mod>_block_model` / `_block_place` | `SetBlockRpc` (or the player) onto a voxel, then `LookAt` that voxel | not a prefab floating in the player's face |
+| `<mod>_editorless` | mechanical find/count/instantiate | not a `CaseDef.Staged` camera hold |
 
-**Never comma-list `*_look` with `*_block_*` in one `PLAYTEST_SUITE`.** They
-are different pictures. `playtest-acceptance.sh` dies if you do; the generated
-provider throws if that script is bypassed; `reject_mixed_visual_suites` is
-the same rule in Python. `playtest-synthesized` runs `_bundle` and
-`_block_model` only — never `_look`.
+Look-versus-block is the form the harness can gate by name.
+**Never comma-list `*_look` with `*_block_*` in one `PLAYTEST_SUITE`.**
+`playtest-acceptance.sh` dies if you do; the generated provider throws if
+that script is bypassed; `reject_mixed_visual_suites` is the same rule in
+Python; `7dtd-playtest`'s orchestrator refuses it too.
+`playtest-synthesized` runs `_bundle`, `_block_model`, and `_editorless`
+(mechanical loads) — never `_look`. Visual sign-off of a floating prefab
+is `playtest-synthesized.sh --look`, its own invocation.
 
-If you need the floating prefab (shader-draws, no block in the mod), run
-`_look` **as its own playtest invocation**, not as a tag-along on the block
-suite. Do not "just add it to the list". Do not put `Object.Instantiate` into
-a block-model case "so there is something to photograph". Do not drag a
-`BlockEntityData.transform` into the camera. Point the camera at the voxel.
+The general rule is not limited to those suffixes. Do not smuggle a second
+picture into a suite whose name does not say so. Do not put
+`Object.Instantiate` into a block-model case "so there is something to
+photograph". Do not drag a `BlockEntityData.transform` into the camera.
+Point the camera at the voxel.
 
 The first synthesized bundle to go all the way through makes the point: the
 suite reported `pass=3 fail=0`, and what the reviewer added on top was that the

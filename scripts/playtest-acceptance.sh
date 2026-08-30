@@ -238,10 +238,15 @@ fi
 echo "ORCH (7dtd-playtest playtest_run.py suite=$SUITE)"
 export GAME COMPAT CLIENT_PLATFORM CLIENT_MUTE
 export PLAYTEST_SESSION_ID="$SESSION"
+CONCERN_ARGS=()
+if [[ -n "${PLAYTEST_CONCERN_SUITES:-}" ]]; then
+	CONCERN_ARGS=(--concern-suites "$PLAYTEST_CONCERN_SUITES")
+fi
 set +e
 uv run --project "$PLAYTEST_ROOT" python "$PLAYTEST_ROOT/scripts/playtest_run.py" \
 	--server stock \
 	--suite "$SUITE" \
+	"${CONCERN_ARGS[@]}" \
 	--world-name "$WORLD_NAME" \
 	--game-name "$GAME_NAME" \
 	--game-srv "$SEVEN_DAYS_TO_DIE_SERVER_DIR" \

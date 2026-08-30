@@ -8,6 +8,7 @@ for a failure that is silent in game.
 from __future__ import annotations
 
 import array
+import json
 import math
 import struct
 import tempfile
@@ -972,6 +973,16 @@ class DocumentationTests(unittest.TestCase):
             with self.subTest(directory.name):
                 self.assertIn(f"{directory.name}/", index)
 
+    def test_one_concern_per_run_is_stated(self) -> None:
+        agents = Path(__file__).resolve().parents[1] / "AGENTS.md"
+        text = agents.read_text(encoding="utf-8")
+        self.assertIn("One concern per run", text)
+        self.assertIn("**part of** the built object", text)
+        self.assertIn("consecutive actions of one feature", text)
+        script = Path(__file__).resolve().parents[1] / "scripts" / "playtest-synthesized.sh"
+        sh = script.read_text(encoding="utf-8")
+        self.assertIn("PLAYTEST_CONCERN_SUITES", sh)
+
     def test_environment_effects_do_not_route_particles_to_unity(self) -> None:
         """The character layer is `.vfx` on synthesized, not a Unity opt-in."""
         from sevendtd_asset_pipeline.docs import read
@@ -1041,11 +1052,17 @@ class SelfTestFixtureTests(unittest.TestCase):
             "README.md",
             "assets-src/bundle/shamwaySelfTestProp.glb",
             "assets-src/bundle/shamwaySelfTestProp_albedo.png",
+            "assets-src/bundle/shamwaySelfTestCreature.glb",
+            "Config/entityclasses.xml",
             "assets-src/bundle/timedNuke.glb",
             "assets-src/bundle/gear.glb",
             "assets-src/bundle/burst.vfx",
             "assets-src/bundle/flashCard.png",
             "assets-src/bundle/smokeCard.png",
+            "assets-src/bundle/sparkCard.png",
+            "assets-src/vfx/flashCard.png",
+            "assets-src/vfx/smokeCard.png",
+            "assets-src/vfx/sparkCard.png",
             "tools/shamway/acceptance/ShamwaySelfTestEditorlessAcceptance.cs",
             "UIAtlases/ItemIconAtlas/shamwaySelfTestPropBlock.png",
             "Resources/shamwayselftest.unity3d",
@@ -1092,6 +1109,32 @@ class SelfTestFixtureTests(unittest.TestCase):
         self.assertIn("SkinnedMeshRenderer", source)
         self.assertIn("ParticleSystem", source)
         self.assertNotIn("Object.Instantiate(prefab)", source)
+        self.assertNotIn("queue.Add(CaseDef.Staged", source)
+
+    def test_the_editorless_suite_is_mechanical_not_a_look(self) -> None:
+        """A camera-staged instantiate on _editorless is the mix the gate cannot see."""
+        source = (
+            self.FIXTURE / "tools/shamway/acceptance/ShamwaySelfTestEditorlessAcceptance.cs"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("queue.Add(CaseDef.Staged", source)
+        self.assertNotIn("stage_editorless_lineup", source)
+        self.assertNotIn('yield return "shamwayselftest_look"', source)
+
+    def test_the_vfx_fixture_loops_and_uses_generated_cards(self) -> None:
+        vfx = json.loads((self.FIXTURE / "assets-src/bundle/burst.vfx").read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(vfx["systems"]), 3)
+        self.assertTrue(all(system.get("looping") for system in vfx["systems"]))
+        self.assertEqual(
+            {material["texture"] for material in vfx["materials"]},
+            {"flashCard", "smokeCard", "sparkCard"},
+        )
+        for relative in (
+            "assets-src/bundle/flashCard.png",
+            "assets-src/bundle/smokeCard.png",
+            "assets-src/bundle/sparkCard.png",
+        ):
+            with self.subTest(relative):
+                self.assertGreater((self.FIXTURE / relative).stat().st_size, 256)
 
     def test_playtest_synthesized_runs_the_block_model_suite(self) -> None:
         script = Path(__file__).resolve().parents[1] / "scripts" / "playtest-synthesized.sh"
@@ -1105,7 +1148,9 @@ class SelfTestFixtureTests(unittest.TestCase):
         # a block run paint different pictures and are refused in one list).
         self.assertNotIn(f"{default},shamwayselftest_look", text)
         self.assertNotIn(f"shamwayselftest_look,{default}", text)
-        self.assertIn('SUITE_ARGS=(--suite "shamwayselftest_look")', text)
+        self.assertIn("--look", text)
+        self.assertIn('SUITE_ARGS=(--suite "shamwayselftest_burst_look")', text)
+        self.assertNotIn("stage_editorless_lineup", text)
 
 
 class AssetsSourceTreeTests(unittest.TestCase):

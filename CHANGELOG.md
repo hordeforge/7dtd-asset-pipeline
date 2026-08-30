@@ -23,10 +23,13 @@ tag has no changelog section.
   run additionally asserts the creature's texture loads at its authored
   size.
 - `examples/SelfTestMod` ships a hierarchy (`timedNuke` / `armedLamp`), a
-  skinned `gear` prefab, and a `burst` VFX graph. `playtest-synthesized`
-  runs `shamwayselftest_editorless` and asserts the live client found the
-  named child, bound both skinned bones, and instantiated the particle
-  prefab.
+  skinned `gear` prefab, and a looping `burst` VFX graph whose cards come
+  from `shamway generate particle-card` (haze flash/smoke, streak sparks).
+  `playtest-synthesized` runs `shamwayselftest_editorless` and asserts the
+  live client found the named child, bound both skinned bones, and
+  instantiated the particle prefab. Visual sign-off of those prefabs is
+  `playtest-synthesized.sh --look` (`shamwayselftest_look`, its own
+  invocation — never comma-listed with `*_block_*`).
 - The entity lane: `shamway generate rig` emits a bone-structure template as
   a glTF armature (a shipped 20-bone `humanoid` rig, any custom spec, rigid
   validation), and `shamway generate entity` skins procedural primitives to a
@@ -53,6 +56,14 @@ tag has no changelog section.
 
 ### Changed
 
+- AGENTS.md and CONTRIBUTING.md state the uv rule as a run contract: bootstrap
+  **this** checkout, then `uv run --project . shamway` / `.venv/bin/shamway`.
+  A sibling clone's venv or the system interpreter is a different environment.
+- One concern per playtest run: `playtest-synthesized` declares its
+  default trio as `PLAYTEST_CONCERN_SUITES` so the harness can refuse an
+  undeclared comma-list of unrelated features. `--look` is a separate
+  invocation. A child that is part of a built prefab is not a second
+  suite.
 - `make check` enables the ruff rule groups the tree already passed
   (debugger leftovers, builtin shadowing, naive datetimes, blanket
   ignores, and the pie/return/raise/logging/version-compare sets) and
@@ -78,11 +89,13 @@ tag has no changelog section.
   placed bomb/detonator pattern). The previous look case instantiated the
   prefab 1.2 m in front of the camera, and the block-model suite then yanked
   the ModelEntity into the same spot.
-- Generated prefab look cases are their own suite (`<mod>_look`), 3.5 m off
-  the camera. `<mod>_bundle` is loads only. Mixing `*_look` with `*_block_*`
-  in one `PLAYTEST_SUITE` is refused by `playtest-acceptance.sh`, by
-  `reject_mixed_visual_suites`, and by the generated provider. A ModelEntity
-  block is judged by placing it.
+- Generated prefab look cases are **one suite per prefab**
+  (`<mod>_<stem>_look`), 3.5 m off the camera, and call
+  `CaseDef.RegisterStaged` so instances cannot overlay. Putting every mesh
+  in one `*_look` suite stacked a particle system, a skinned mesh and a cube
+  on the same point. `<mod>_bundle` is loads only. An undeclared comma-list
+  of suites is refused; `*_look` with `*_block_*` is refused even when
+  declared. A ModelEntity block is judged by placing it.
 
 - Shared-client lock heartbeats are parsed the way `7dtd-playtest` writes
   them (Z, numeric epoch, offset, naive-as-UTC). A `running=yes` record whose

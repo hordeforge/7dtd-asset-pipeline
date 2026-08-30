@@ -142,10 +142,11 @@ What the fragment leaves out for a bare creature — `MaxHealth`, `sounds`,
 mod's own XML, exactly like the properties a prop or item needs. With
 `--anim` the fragment now also makes the creature a **real spawnable
 animal**: `Class` names a concrete C# entity type (`EntityAnimalStag`, the
-game's wandering animal — or a mod's own type via `--entity-class`),
-`PhysicsBody="Stag"` gives it a collider to stand on, and
-`IsAnimalEntity`/`Faction` let the game's spawner and AI treat it as one. A
-bare `Prefab+Mesh` class is *not* a spawnable `EntityAlive` — without a
+game's wandering animal — or a mod's own type via `--entity-class`), and
+`IsAnimalEntity`/`Faction` let the game's spawner and AI treat it as one.
+(`PhysicsBody="Stag"` is emitted too, but it does **not** ground a
+procedurally-skinned creature — see "What is still unbuilt".) A bare
+`Prefab+Mesh` class is *not* a spawnable `EntityAlive` — without a
 `Class` it loads but `EntityFactory.CreateEntity` returns nothing, so it
 could never walk in-game. `--minimal-entity` opts back out and emits the
 bare stub for a special case.
@@ -305,8 +306,20 @@ that clients see nothing.
 - **Mecanim / complex locomotion.** `Animator` + controller + compiled
   clips remain the hard lane; the legacy path covers an animal that idles,
   walks and attacks by name.
-- **Physics bodies and collision.** The generated class has none; the mod
-  adds `PhysicsBody` and colliders per its own design.
+- **Physics bodies and collision — grounded walking is the hard limit.** A
+  generated creature does spawn as a real `EntityAlive` and animates (its
+  Walk clip plays and it travels), and `--anim` emits a real animal class
+  with `Class`/`PhysicsBody`/`IsAnimalEntity`. But **grounding a
+  procedurally-skinned creature is measured closed via config**: reusing
+  `PhysicsBody="Stag"` gives no collider (stag bone paths don't match our
+  rig), and a mod-side body with `Detail`, `Root/`-prefixed `Detail`, or
+  `Normal` colliders all float in the treeline — `EnumColliderType` is only
+  `None`/`Normal`/`Detail`/`All`, so `physicsbodies.xml` cannot express an
+  explicit grounding box/capsule (recorded in research-provenance). The
+  remaining route is a **mod-side C# physics body** (a custom component that
+  adds a grounding collider at the model root) — a C# mod, not a pipeline
+  output. Until then a generated creature animates in place and travels when
+  driven, but the game does not settle it on the ground on its own.
 - **SDCS extras** (`GearBoneMap`, `Morphable`) — the editor bakes those; see
   [skinned-gear.md](skinned-gear.md).
 

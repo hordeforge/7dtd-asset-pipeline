@@ -176,7 +176,9 @@ shamway generate sound bomb-whistle assets-src/audio/falling.wav --seed 7 --seco
 shamway generate mesh assets-src/bundle/myModThing.glb --shape cylinder --size 0.19 0.19 0.42
 shamway generate cutout key assets-src/icons/thing-src.png UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
 shamway generate rig armature.glb
+shamway generate rig bear.glb --rig quadruped-large
 shamway generate entity myCreature.glb --mod MyMod --bundle myMod --xml myCreature-entityclasses.xml
+shamway generate entity myRaptor.glb --rig dinosaur --scale 0.7 --mod MyMod --bundle myMod
 ```
 
 ```bash

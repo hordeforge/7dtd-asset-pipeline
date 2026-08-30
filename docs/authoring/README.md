@@ -19,9 +19,10 @@ classes whose runtime behaviour makes a correct build silent or invisible.
 - [skinned-gear.md](skinned-gear.md) — worn armor: SkinnedMeshRenderer from a
   glTF skin; SDCS extras still want an editor; bone names bind with no error
   on a miss.
-- [entities.md](entities.md) — custom entities: the rig template
-  (`generate rig`) and the fully generated lane (`generate entity`), the
-  mandatory `Prefab`/`Mesh` wiring, and the dedicated-server caveat.
+- [entities.md](entities.md) — custom entities: eight shipped rigs,
+  `generate rig`/`generate entity` (parts, `--scale`), the mandatory
+  `Prefab`/`Mesh`/`UserSpawnType` wiring, movement via legacy animation
+  clips, and the dedicated-server caveat.
 - [environment-effects.md](environment-effects.md) — weather, fog, and light:
   why a zone effect that ships only particles reads as a glitch, and the
   engine controls that make it weather.

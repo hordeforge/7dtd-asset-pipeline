@@ -447,7 +447,7 @@ Machine-readable output for agents and CI:
 | `shamway prompt --list` | the house-style image prompts, rendered with the lane that consumes them |
 | `shamway docs [TOPIC]` | this repository's documentation, served from the package |
 | `shamway script NAME` | the host scripts (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized), served from the package |
-| `shamway script playtest-synthesized` | the editorless writer's live-client regression: load every member, then `SetBlockRpc` the self-test block onto a voxel and look at it. `--look` instead runs `shamwayselftest_burst_look` only — the looping VFX prefab, one picture, not every prefab stacked at the same offset |
+| `shamway script playtest-synthesized` | the editorless writer's live-client regression: load every member, then `SetBlockRpc` the self-test block onto a voxel and look at it. `--look [STEM]` instead runs that prefab's look suite (`<mod>_<stem>_look`) alone — one camera-staged instance per picture — with `STEM` naming a generated rig (`shamwaySelfTestBird`, `_Arachnid`, `_Dino`, `_Creature`) or omitted for the looping VFX |
 | `shamway client where --json` | the client's per-user `Mods/` and `logs/` paths |
 | `shamway client deploy MOD` | copy the deployable modlet there, holding the shared lock across the write (writes outside the install only) |
 | `shamway client hold -- CMD` | run any other `Mods/` write behind the same lock, so a raw `cp` cannot land in a live session's run |

@@ -82,7 +82,8 @@ TOPICS: dict[str, tuple[str, str]] = {
     ),
     "entities": (
         "authoring/entities.md",
-        "custom entities: the rig template, generate rig/entity, and the entityclasses.xml wiring",
+        "custom entities: the rigs, generate rig/entity, the entityclasses.xml wiring,"
+        " movement, and the per-rig live sign-off",
     ),
     "environment-effects": (
         "authoring/environment-effects.md",

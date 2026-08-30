@@ -15,8 +15,11 @@ installed build's IL (recorded in
 `shamway generate entity`; the writer half is the skinned lane of
 [skinned-gear.md](skinned-gear.md).** A generated entity produces a bundle
 with a `SkinnedMeshRenderer` whose bones are named, bound, and weighted —
-proven by read-back through UnityPy in `tests/test_entity_gen.py`. What no
-offline gate can prove is in "What is still unbuilt" below.
+proven by read-back through UnityPy in `tests/test_entity_gen.py` — and
+every shipped rig has been staged in a live client (see "End-to-end
+confirmation"). Movement is being added: legacy `AnimationClip`s are
+synthesized by `anim.py` (see "Making it move"); wiring them onto the
+prefab and the live motion proof are the next pieces.
 
 ## The two ways in
 
@@ -134,10 +137,11 @@ Two cases where names stop being free, both recorded in
   no error. An entity that should wear armor must use the player rig's exact
   bone spellings, which are **not readable offline**: read them off a live
   client with `Helpers.RigBoneNames` (7dtd-playtest) and rename the rig.
-- **Animation clips** are keyed to the rig they were authored against, and
-  TFP's clips cannot ship in a mod bundle anyway — the game's bundles embed
-  their assets same-file. Matching TFP's rig names buys nothing until clips
-  are authorable at all.
+- **Animation clips are keyed to the rig they were authored against.** A
+  synthesized clip targets your rig's own bone paths, so the names in the
+  rig spec are the names the clip animates. TFP's clips still cannot ship in
+  a mod bundle — the game's bundles embed their assets same-file — so
+  matching TFP's rig names buys nothing.
 
 One *not checked*: `Mesh.m_BoneNameHashes` (the crc32 the writer stores for
 each joint name) does not equal the hash the game's own rig meshes carry
@@ -145,6 +149,40 @@ each joint name) does not equal the hash the game's own rig meshes carry
 uses a different digest). Nothing in the engine's binding path has been shown
 to read these hashes — SDCS binds by name — so the discrepancy is recorded,
 not acted on.
+
+## Making it move
+
+A generated entity stands still unless its prefab carries animation. How the
+engine moves an animal, verified from the dedicated-server IL
+(`GameObjectAnimalAnimation.il.txt`, recorded in research-provenance.md):
+
+- the entity class sets **`AvatarController = GameObjectAnimalAnimation`**
+  (the animal classes in the game's own `entityclasses.xml` do exactly
+  this);
+- the controller grabs the model's **legacy `Animation` component** and
+  plays clips **by name** — `Idle1`, `Idle2`, `Attack1/2`, `Pain`, `Jump`,
+  `Death`, `Run`, `Walk`, `Swim` — switching on motion state.
+
+So an animated animal is the skinned prefab plus a legacy `Animation`
+component carrying looping clips under those names, and
+`AvatarController = GameObjectAnimalAnimation` on the class. The generator
+does not emit that wiring yet; `anim.py` builds the pieces and proves them
+serializable:
+
+- a legacy clip is expressible through the type tree because **legacy
+  clips carry their curves directly** (`m_MuscleClipSize = 0`, measured
+  from the game's `animals.bundle` `_Take 001`) — no compiled `m_Clip`
+  stream, unlike Mecanim clips;
+- `anim.legacy_clip` / `anim.animation_component` / `anim.idle_bob_curves`
+  build those type-tree dicts, and `tests/test_anim.py` round-trips one
+  through `build_bundle` and back through UnityPy.
+
+What is left before an entity visibly moves is mechanical: attach the
+`Animation` component + `Idle1` clip to generated entity prefabs in the
+writer, add `AvatarController = GameObjectAnimalAnimation` to the generated
+`entityclasses.xml`, and prove the bob in a live clip capture. Mecanim
+(`Animator` + controller + compiled clips) remains unbuilt and is not
+needed for this path.
 
 ## The dedicated-server caveat
 
@@ -159,11 +197,13 @@ that clients see nothing.
 
 ## What is still unbuilt
 
-- **Animation clips / an Animator.** A generated entity stands in its
-  authored pose. Clips and controllers are the editor-owned lane
-  (`bundle_source = "unity"`), and an entity that must walk, attack, or die
-  needs them. The rig format and the skinned mesh are exactly the input that
-  lane consumes, so this is the next piece, not a redesign.
+- **The animation wiring itself.** `anim.py` synthesizes legacy clips and
+  proves they serialize, but the writer does not yet attach an `Animation`
+  component to generated entity prefabs, and the generated XML does not yet
+  set `AvatarController = GameObjectAnimalAnimation` — see "Making it move".
+- **Mecanim / complex locomotion.** `Animator` + controller + compiled
+  clips (walk cycles with foot plants, attack chains) remain the hard lane;
+  the legacy path covers an animal that idles, walks and attacks by name.
 - **Physics bodies and collision.** The generated class has none; the mod
   adds `PhysicsBody` and colliders per its own design.
 - **SDCS extras** (`GearBoneMap`, `Morphable`) — the editor bakes those; see
@@ -181,36 +221,37 @@ this repository's code — asserting a `SkinnedMeshRenderer` (never a
 `entityclasses.xml` is asserted for the mandatory `Prefab`, the `Mesh`, the
 `UserSpawnType`, and the bundle URI.
 
-The live half runs in two separate `playtest-synthesized` invocations,
-because a load run and a look run paint different pictures:
+The live half runs through `playtest-synthesized`, and each prefab has its
+**own per-prefab look suite** (`<mod>_<stem>_look`), because a suite that
+staged every prefab at the same camera offset stacks unrelated pictures:
 
-- the default run asserts the game **reads** the bundle: the creature prefab
-  comes back with its `SkinnedMeshRenderer`, its weighted mesh loads with
-  its vertex stream, and its albedo texture loads at its authored size
-  (`examples/SelfTestMod` carries a generated quadruped for exactly this);
-- the creature's own look suite asserts the game **instantiates** it, alone,
-  in front of the camera with a renderer, so there is a frame to judge.
-  `playtest-synthesized --look` is the looping VFX prefab only
-  (`shamwayselftest_burst_look`); do not stack the creature with other
-  prefabs in one invocation.
+- the default run asserts the game **reads** the bundle: every entity
+  prefab comes back with its `SkinnedMeshRenderer`, its weighted mesh with
+  its vertex stream, and its albedo texture at its authored size
+  (`examples/SelfTestMod` carries generated creatures from the quadruped,
+  bird, arachnid and dinosaur rigs for exactly this);
+- `playtest-synthesized --look STEM` runs that one prefab's look suite
+  (`<mod>_<stem>_look`) alone — the prefab instantiated in front of the
+  camera with a renderer, one picture, a frame to judge. Without `STEM` it
+  runs the looping VFX prefab's suite:
 
   ```bash
-  shamway script playtest-synthesized
-  shamway script playtest-acceptance --suite shamwayselftest_shamwaySelfTestCreature_look
+  shamway script playtest-synthesized --look shamwaySelfTestBird
   ```
 
-**A load is not a look, and a staged prefab is not a sign-off.** The creature
-look suite proves it renders *something*; that it reads as a creature is a
+**A load is not a look, and a staged prefab is not a sign-off.** A look
+suite proves the prefab renders *something*; that it reads as its rig is a
 person's judgement. File it, with the frame and the observable it was
-checked against, through `shamway client capture entity-look --observable
-"a quadruped, four legs, head forward, not mirrored"` — and the entity lane
-is not complete until that capture exists.
+checked against, through `shamway client capture <stem> --observable
+"reads as its rig: proportions, facing, not mirrored"` — and the lane is
+not complete until that capture exists.
 
 **Ran live on 2026-08-30** (client + dedicated server on the development
 host): the default run reported `SUMMARY pass=25 fail=0` — the engine
-loaded every bundle member through `DataLoader.LoadAsset<T>`, the generated
-creature's prefab, weighted mesh, material and albedo included. A later
-mixed `--look` that staged every prefab in one suite at the same offset is
-not the procedure; each prefab has its own `*_look` suite. The creature
-frame captured that day was **signed off**: four legs, head forward, not
-mirrored, textured.
+loaded every bundle member through `DataLoader.LoadAsset<T>`, all four
+generated entities' prefabs, meshes and textures included. Each rig's look
+suite staged its prefab with a renderer (`pass=1 fail=0` per run): the
+creature frame was **signed off** (four legs, head forward, not mirrored,
+textured); the bird, arachnid and dinosaur frames are at
+`/home/yannick/look_Bird.png`, `look_Arachnid.png`, `look_Dino.png`,
+awaiting sign-off.

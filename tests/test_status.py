@@ -95,6 +95,8 @@ class StatusTests(unittest.TestCase):
         self.assertIn("Never comma-list", text)
         self.assertIn("*_look", text)
         self.assertIn("*_block_*", text)
+        self.assertIn("part of the staged prefab", text)
+        self.assertIn("consecutive cases of one", text)
         # The guide carries JSON examples; rendering must not mangle their
         # braces or choke on them.
         self.assertIn('{"id":1,"op":"status"}', text)

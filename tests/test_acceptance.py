@@ -175,6 +175,9 @@ class MixedVisualSuiteTests(unittest.TestCase):
 
     def test_load_plus_block_is_not_mixed(self) -> None:
         self.assertFalse(acceptance.mixed_visual_suites("mod_bundle,mod_block_model"))
+        self.assertFalse(
+            acceptance.mixed_visual_suites("mod_bundle,mod_block_model,mod_editorless")
+        )
         self.assertFalse(acceptance.mixed_visual_suites("mod_look"))
         self.assertFalse(acceptance.mixed_visual_suites("mod_block_model"))
         self.assertFalse(acceptance.mixed_visual_suites(""))
@@ -376,14 +379,37 @@ class MotionKindTests(unittest.TestCase):
             self.assertIn('CaseDef.Staged(label, "look_prop"', source)
             self.assertIn("ahead * 3.5f", source)
             self.assertNotIn("ahead * 1.2f", source)
-            self.assertIn('yield return "examplemod_look"', source)
-            self.assertIn('if (suite == "examplemod_look")', source)
+            self.assertIn('yield return "examplemod_prop_look"', source)
+            self.assertIn('if (suite == "examplemod_prop_look")', source)
+            self.assertNotIn('yield return "examplemod_look"', source)
+            self.assertIn("CaseDef.RegisterStaged", source)
             self.assertLess(
-                source.index('if (suite == "examplemod_look")'),
+                source.index('if (suite == "examplemod_prop_look")'),
                 source.index("Instantiate"),
             )
             self.assertIn("RejectMixedVisualSuites", source)
             self.assertIn("different pictures", source)
+
+    @unittest.skipUnless(
+        has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+    )
+    def test_each_prefab_gets_its_own_look_suite(self) -> None:
+        """One camera-staged prefab per suite. Two meshes in one look suite
+        instantiate at the same offset and overlay — that is mixing, not a
+        sign-off.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mod(root, ["alpha.glb", "beta.glb"])
+            source = acceptance.render(acceptance.plan(config))["ExampleModAcceptance.cs"]
+            self.assertIn('yield return "examplemod_alpha_look"', source)
+            self.assertIn('yield return "examplemod_beta_look"', source)
+            self.assertNotIn('yield return "examplemod_look"', source)
+            alpha_at = source.index('if (suite == "examplemod_alpha_look")')
+            beta_at = source.index('if (suite == "examplemod_beta_look")')
+            alpha_block = source[alpha_at:beta_at] if alpha_at < beta_at else source[alpha_at:]
+            self.assertEqual(alpha_block.count("Object.Instantiate"), 1)
+            self.assertIn("CaseDef.RegisterStaged", alpha_block)
 
     def test_absent_motion_kinds_leave_generation_byte_identical(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

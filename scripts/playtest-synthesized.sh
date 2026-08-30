@@ -35,6 +35,7 @@ die() {
 STEM="shamwaySelfTestProp"
 MOD_NAME="ShamwaySelfTest"
 FIXTURE=""
+LOOK=0
 EXTRA=()
 
 usage() {
@@ -48,12 +49,8 @@ usage() {
 		OPTIONS
 		  --fixture DIR     the modlet to build   (default: examples/SelfTestMod)
 		  --stem NAME       asset stem it carries (default: shamwaySelfTestProp)
-		  --look            run the prefab-look suite (<mod>_look) instead: every
-		                    GameObject prefab is instantiated in front of the
-		                    camera, the generated creature included, and the
-		                    staged lines are asserted. A look run and a block
-		                    run paint different pictures and are refused in one
-		                    PLAYTEST_SUITE list, so this is a separate run.
+		  --look            run shamwayselftest_burst_look only (the looping
+		                    VFX prefab, alone). One prefab, one invocation.
 		  -h, --help        this text
 
 		Anything after -- is passed to playtest-acceptance.sh, so --listen (and
@@ -66,6 +63,7 @@ usage() {
 
 		EXIT
 		  0  the game loaded the prefab and placed the block on a voxel
+		     (--look: the look suite held the floating prefabs)
 		  1  a case failed, or an assertion below did
 
 		This proves the engine READ the bundle. It says nothing about whether
@@ -133,10 +131,11 @@ echo "LIVE CLIENT (hordeforge/7dtd-playtest)"
 # The generated bundle suite proves DataLoader.LoadAsset. The block-model
 # suite is how the prop is supposed to be seen: SetBlockRpc onto a grounded
 # voxel, wait for the ModelEntity, LookAt the voxel — the same pattern as
-# AtomicDoomsday's placed bomb/detonator. Never add *_look to this list:
-# that suite instantiates the prefab in front of the camera, and mixing it
-# with a block suite is how a texture floated mid-air in the same session
-# as a placed block. playtest-acceptance.sh will refuse the mix.
+# AtomicDoomsday's placed bomb/detonator. Never add *_look to this default
+# list: that suite instantiates the prefab in front of the camera, and
+# mixing it with a block suite is how a texture floated mid-air in the same
+# session as a placed block. --look is a separate invocation. Do not smuggle
+# a camera-staged instantiate into _editorless so it can ride with the block.
 SUITE_ARGS=()
 has_suite=0
 for arg in "${EXTRA[@]+"${EXTRA[@]}"}"; do
@@ -147,15 +146,14 @@ for arg in "${EXTRA[@]+"${EXTRA[@]}"}"; do
 done
 if (( LOOK )); then
 	if (( has_suite )); then
-		die "--look chooses the <mod>_look suite; do not also pass --suite"
+		die "--look already selects shamwayselftest_burst_look; do not also pass --suite"
 	fi
-	# The look suite is the entity lane's live picture: every GameObject
-	# prefab — the prop, the generated creature, the gear skin, the vfx —
-	# instantiated in front of the camera. It is never comma-listed with the
-	# block/load suites (they paint different pictures), so it runs alone.
-	SUITE_ARGS=(--suite "shamwayselftest_look")
+	SUITE_ARGS=(--suite "shamwayselftest_burst_look")
 elif (( ! has_suite )); then
 	SUITE_ARGS=(--suite "shamwayselftest_bundle,shamwayselftest_block_model,shamwayselftest_editorless")
+	# One concern: the synthesized bundle loads and the block sits on a
+	# voxel. Not a floating-prefab look; that is --look, a second invocation.
+	export PLAYTEST_CONCERN_SUITES="shamwayselftest_bundle,shamwayselftest_block_model,shamwayselftest_editorless"
 fi
 LOG="$MOD/.selftest-acceptance.log"
 # The client launcher writes the same log path every run, so an assertion that
@@ -194,17 +192,14 @@ grep -qE "SUMMARY pass=[0-9]+ fail=0 " "$LOG" || fail "a case failed (see the su
 
 CREATURE="shamwaySelfTestCreature"
 if (( LOOK )); then
-	# The look run is the entity lane's live picture: the generated creature
-	# and the prop must both instantiate in front of the camera with a
-	# renderer, or there is nothing to photograph and no sign-off possible.
-	grep -qE "$CREATURE: staged at .*with [1-9][0-9]* renderer" "$CLIENT_LOG" ||
-		fail "the entity prefab did not stage in front of the camera: nothing to look at"
-	grep -qE "$STEM: staged at .*with [1-9][0-9]* renderer" "$CLIENT_LOG" ||
-		fail "the prop did not stage in front of the camera"
+	grep -qE "scene staged look_burst" "$CLIENT_LOG" ||
+		fail "look_burst was not staged in front of the camera"
+	grep -qE "burst: staged at" "$CLIENT_LOG" ||
+		fail "the looping VFX prefab was not held in front of the camera"
 else
 	# Each of these is a distinct way the writer could be wrong while every
-	# offline gate still passed, so they are asserted by value rather than by
-	# case name.
+	# offline gate still passed, so they are asserted by value rather than
+	# by case name.
 	grep -qE "$STEM: $STEM .*renderers=1" "$CLIENT_LOG" ||
 		fail "the prefab did not come back with its renderer: an empty GameObject draws nothing"
 	grep -qE "${STEM}_mesh: .*bounds=\(1\.00, 1\.00, 1\.00\)" "$CLIENT_LOG" ||
@@ -216,8 +211,8 @@ else
 	# The entity lane: a generated creature rides the same bundle. Its prefab
 	# must come back with its SkinnedMeshRenderer (renderers=1) and its weighted
 	# mesh with the authored vertex count. Spawning it as an entity class is
-	# deliberately NOT asserted here: a custom entity class on a dedicated server
-	# gets a negative id and renders nothing on clients
+	# deliberately NOT asserted here: a custom entity class on a dedicated
+	# server gets a negative id and renders nothing on clients
 	# (docs/authoring/entities.md), and this run always uses one. The prefab
 	# load is the engine reading the bundle; the class wiring is the offline
 	# `validate` gate's job.
@@ -246,13 +241,13 @@ fi
 
 if (( LOOK )); then
 	cat <<EOF
-  OK   the entity prefab staged in front of the camera, with a renderer
-  OK   the prop staged in front of the camera
+  OK   look_burst was held in front of the camera
 
-The game instantiated the generated creature. What it looked like is in the
-captured frames — judge them, then file the sign-off:
+The game STAGED the looping VFX prefab (gold flash, grey haze, falling
+sparks — cards from shamway generate particle-card). Judge that picture,
+then file a frame. This is not a placed block:
 
-  shamway client capture entity-look --observable "a quadruped, four legs, head forward, not mirrored"
+  shamway client capture burst --observable "looping gold flash, grey haze, falling streaks"
 EOF
 else
 	cat <<EOF
@@ -268,9 +263,10 @@ else
   OK   the skinned renderer resolved both bones
   OK   the particle prefab instantiated without a load error
 
-The game READ the bundle and placed ${STEM}Block. Nobody has LOOKED at it:
-every assertion above passes on a prop drawn mirrored, face-down, or
-nowhere. Judge the placed block, then file the frame:
+The game READ the bundle and placed ${STEM}Block. Nobody has LOOKED at the
+floating prefabs in this run: that is a different picture
+(\`playtest-synthesized.sh --look\`). Judge the placed block, then file
+the frame:
 
   shamway client capture ${STEM} --observable "upright, R not mirrored, arrow up"
 EOF

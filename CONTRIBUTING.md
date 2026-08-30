@@ -8,10 +8,13 @@ scripts/bootstrap
 make check test
 ```
 
-Every Python step goes through uv. `make` uses `uv run` when uv is on PATH and
-falls back to the plain interpreter otherwise, because the core has no
-dependencies and the suite must pass without the optional capabilities — CI
-runs it both ways.
+Every Python step goes through uv, **in this checkout**. `scripts/bootstrap`
+creates `.venv` from `uv.lock`; then `uv run --project . shamway` or
+`.venv/bin/shamway`. A worktree bootstraps itself — do not borrow another
+clone's `.venv`, and do not run `python3 -m sevendtd_asset_pipeline` from the
+system interpreter. `make` uses `uv run` when uv is on PATH and falls back to
+the plain interpreter otherwise, because the core has no dependencies and the
+suite must pass without the optional capabilities — CI runs it both ways.
 
 `make check` compiles the package, syntax-checks every shell script, runs
 `shellcheck` when it is installed, and — when Mono's `mcs` and a Unity 2022.3

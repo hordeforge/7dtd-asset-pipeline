@@ -4,7 +4,14 @@ using ZdtdPlaytest;
 
 // Hierarchy, skin and VFX load cases beside the generated bundle provider.
 // Find armedLamp by name, count SkinnedMeshRenderer bones, instantiate the
-// particle prefab. Mechanical only: this is not a look.
+// particle prefab. Mechanical only: this suite is not a picture.
+//
+// The looping burst prefab is judged by eye in shamwayselftest_look (the
+// generated look_burst hold). That suite instantiates in front of the camera
+// and must never share a PLAYTEST_SUITE list with *_block_*. Do not put a
+// CaseDef.Staged instantiate here "so the VFX rides along with the block".
+// Particles that are part of a built prefab are one object; a floating
+// prefab next to a placed block is two pictures.
 public sealed class ShamwaySelfTestEditorlessAcceptanceProvider : IScenarioProvider
 {
     private const string Bundle =

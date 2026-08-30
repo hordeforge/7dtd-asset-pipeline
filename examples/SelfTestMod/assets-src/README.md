@@ -31,6 +31,9 @@ cannot be regenerated from what is written here is not finished.
 | `shamwaySelfTestCreature` | `shamway generate entity bundle/shamwaySelfTestCreature.glb --rig quadruped` | the quadruped rig, default parts, fully deterministic (no seed) | `bundle/shamwaySelfTestCreature.glb` | not yet — the `--look` run is the owed picture |
 | `shamwaySelfTestCreature_albedo` | PIL, one deterministic script (256×256: moss green, dorsal stripes, pale snout patch, eye marker) | re-run the recorded script byte-for-byte | `bundle/shamwaySelfTestCreature_albedo.png` | not yet — judged with the creature |
 | _example_ | `icons/nuke-v4.png` | image generation, prompt below; cut out with `shamway generate cutout key --size 160` | `UIAtlases/ItemIconAtlas/myModNuke.png` | not yet |
+| `flashCard.png` | `shamway generate particle-card haze --size 256 --seed 3 --lobes 7` | procedural haze, white RGB, shape in alpha | `assets-src/bundle/flashCard.png` | not yet |
+| `smokeCard.png` | `shamway generate particle-card haze --size 256 --seed 11 --lobes 9 --softness 7` | procedural haze, white RGB, shape in alpha | `assets-src/bundle/smokeCard.png` | not yet |
+| `sparkCard.png` | `shamway generate particle-card streak --size 64 --width 0.12 --length 0.88` | procedural streak, white RGB, shape in alpha | `assets-src/bundle/sparkCard.png` | not yet |
 
 For generated art, record the model or tool, the **exact prompt**, the
 references used, which candidate was selected and why, and the licence basis.

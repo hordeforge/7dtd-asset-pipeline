@@ -331,16 +331,20 @@ the same bundle.
 | the entity mesh loads with its vertex stream | the skin's joints/weights dropped out of the bundle |
 | the entity texture loads at its authored size | a `Texture2D` that decoded to something else |
 | `shamwayselftest_block_model` places the block and looks at the voxel | a prefab instantiated in the player's face, which is not a placement |
-| `--look`: the entity prefab stages with a renderer | a prefab that loads but draws nothing — nothing to photograph, no sign-off possible |
+| `armedLamp` is findable by name | a hierarchy flattened to a single GameObject |
+| skinned `gear` reports `bones=2 nulls=0 root=Hips` | a skin packed as MeshRenderer, or bone hashes that did not resolve |
+| `burst` instantiated with matching ParticleSystem graphs | a `.vfx` that loaded as an empty prefab |
 
-Those are **separate suites**. `<mod>_bundle` is loads only. `<mod>_look`
-instantiates the prefab in front of the camera and is opt-in. `<mod>_block_*`
-places a block on a voxel. Never comma-list `*_look` with `*_block_*` in one
-`PLAYTEST_SUITE`: `playtest-acceptance.sh` refuses it, and the generated
-provider throws if that script is bypassed. `playtest-synthesized` runs
-`_bundle` and `_block_model` by default; `playtest-synthesized --look` runs
-`<mod>_look` alone and asserts the generated creature — and every other
-prefab — staged in front of the camera with a renderer.
+Those are **separate suites**. `<mod>_bundle` is loads only. Each prefab
+gets its own `<mod>_<stem>_look` (one camera-staged instance, registered
+with `CaseDef.RegisterStaged` so the next hold cannot overlay it).
+`<mod>_block_*` places a block on a voxel. `<mod>_editorless` is
+mechanical. Never comma-list unrelated suites in one `PLAYTEST_SUITE`;
+never comma-list `*_look` with `*_block_*`. `playtest-synthesized` runs
+`_bundle`, `_block_model`, and `_editorless` as one declared concern.
+Visual sign-off of the looping VFX is `playtest-synthesized.sh --look`
+(`shamwayselftest_burst_look` only). The creature has its own
+`shamwayselftest_shamwaySelfTestCreature_look` invocation.
 
 It refuses to run its assertions when the bundle carries no prefab, because
 without a usable `vkd3d-compiler` the writer packs a bare `Mesh` **by design**

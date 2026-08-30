@@ -311,6 +311,23 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             fail: "the game did not load smokeMat from the staged bundle"));
 
+        Material sparkMatLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_sparkMat", new[] { "bundle" },
+            act: ctx =>
+            {
+                sparkMatLoaded = DataLoader.LoadAsset<Material>(Bundle + "?sparkMat");
+                var loaded = sparkMatLoaded;
+                Report.Info(loaded == null
+                    ? "sparkMat: LoadAsset<Material> returned null"
+                    : "sparkMat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = sparkMatLoaded;
+                return loaded != null && loaded.name == "sparkMat" && loaded.shader != null;
+            },
+            fail: "the game did not load sparkMat from the staged bundle"));
+
         Texture2D flashCardLoaded = null;
         queue.Add(CaseDef.Live(label, "load_flashCard", new[] { "bundle" },
             act: ctx =>
@@ -532,6 +549,23 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             fail: "the game did not load smokeCard from the staged bundle"));
 
+        Texture2D sparkCardLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_sparkCard", new[] { "bundle" },
+            act: ctx =>
+            {
+                sparkCardLoaded = DataLoader.LoadAsset<Texture2D>(Bundle + "?sparkCard");
+                var loaded = sparkCardLoaded;
+                Report.Info(loaded == null
+                    ? "sparkCard: LoadAsset<Texture2D> returned null"
+                    : "sparkCard: " + loaded.name + " " + loaded.width + "x" + loaded.height + " " + loaded.format);
+            },
+            assert: ctx =>
+            {
+                var loaded = sparkCardLoaded;
+                return loaded != null && loaded.name == "sparkCard" && loaded.width > 0 && loaded.height > 0;
+            },
+            fail: "the game did not load sparkCard from the staged bundle"));
+
         GameObject timedNukeLoaded = null;
         queue.Add(CaseDef.Live(label, "load_timedNuke", new[] { "bundle" },
             act: ctx =>
@@ -600,7 +634,10 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
     // a voxel (*_block_*) are different pictures. Mixing them in one
     // PLAYTEST_SUITE list is how a self-test rendered a texture mid-air AND a
     // placed block in the same session. Refuse it here, not after someone has
-    // already watched both.
+    // already watched both. The name is the picture: do not put a camera-staged
+    // instantiate on a suite that is not named *_look so it can ride with a
+    // block suite. A particle system that is already part of the staged prefab
+    // is not a second picture.
     static void RejectMixedVisualSuites()
     {
         var raw = System.Environment.GetEnvironmentVariable("PLAYTEST_SUITE") ?? "";

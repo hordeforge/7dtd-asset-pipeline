@@ -25,7 +25,8 @@ lists what each assertion catches.
 | `assets-src/bundle/shamwaySelfTestProp.glb` | the mesh, a full 1 × 1 × 1 m block so it fills the voxel it is placed into, carrying UV0 so a texture can map; orientation is carried by the albedo's arrows and markers |
 | `assets-src/bundle/timedNuke.glb` | named hierarchy with an `armedLamp` child |
 | `assets-src/bundle/gear.glb` | two-bone skinned mesh (`Origin/Hips`, `Origin/Hips/Spine`) |
-| `assets-src/bundle/burst.vfx` | two ParticleSystems (additive flash, alpha smoke) |
+| `assets-src/bundle/burst.vfx` | looping ParticleSystems a person can see: additive gold flash (haze card), alpha smoke (haze card), falling sparks (streak card) |
+| `assets-src/bundle/flashCard.png` / `smokeCard.png` / `sparkCard.png` | particle cards from `shamway generate particle-card` haze/streak |
 | `assets-src/bundle/shamwaySelfTestProp_albedo.png` | bound to the prefab's material by the `_albedo` convention; a large **R** and an up-arrow, so mirrored and upside-down each read wrong at a glance |
 | `assets-src/bundle/shamwaySelfTestCreature.glb` | a generated skinned entity (`shamway generate entity --rig quadruped`), so the entity lane's prefab — bones, weights, `SkinnedMeshRenderer` — is exercised by the same live client |
 | `assets-src/bundle/shamwaySelfTestCreature_albedo.png` | the creature's 256×256 albedo (moss green with dorsal stripes), bound by the same `_albedo` convention — "textures on top" proven live, and a look run reads proportions at a glance |
@@ -60,6 +61,13 @@ Commit the changed `Resources/` and manifest with whatever you changed in
 
 It means the game **read** the bundle: the prefab resolved by stem, carried its
 renderer, its mesh had the authored bounds, its material named the synthesized
-shader. It does **not** mean the prop draws correctly — every assertion passes
-on one rendered mirrored, face-down, or nowhere at all. That judgement is a
-person's, and `shamway client capture` is where it gets filed.
+shader. It does **not** mean those things look right. The placed block is
+judged on its voxel (`playtest-synthesized`). The looping `burst` VFX (and
+the other floating prefabs) are judged in a **separate** invocation:
+
+```bash
+scripts/playtest-synthesized.sh --look
+```
+
+Those are different pictures; do not comma-list them with `*_block_*`. File
+the frames with `shamway client capture`.

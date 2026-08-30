@@ -17,9 +17,10 @@ installed build's IL (recorded in
 with a `SkinnedMeshRenderer` whose bones are named, bound, and weighted —
 proven by read-back through UnityPy in `tests/test_entity_gen.py` — and
 every shipped rig has been staged in a live client (see "End-to-end
-confirmation"). Movement is being added: legacy `AnimationClip`s are
-synthesized by `anim.py` (see "Making it move"); wiring them onto the
-prefab and the live motion proof are the next pieces.
+confirmation"). Movement ships too: `--anim` wires a legacy `Animation`
+component with synthesized clips and `AvatarController =
+GameObjectAnimalAnimation` (see "Making it move"), proven live by the
+self-test creature's signed-off turntable clip.
 
 ## The two ways in
 
@@ -165,24 +166,61 @@ engine moves an animal, verified from the dedicated-server IL
 
 So an animated animal is the skinned prefab plus a legacy `Animation`
 component carrying looping clips under those names, and
-`AvatarController = GameObjectAnimalAnimation` on the class. The generator
-does not emit that wiring yet; `anim.py` builds the pieces and proves them
-serializable:
+`AvatarController = GameObjectAnimalAnimation` on the class. Both halves
+are synthesized:
 
-- a legacy clip is expressible through the type tree because **legacy
-  clips carry their curves directly** (`m_MuscleClipSize = 0`, measured
-  from the game's `animals.bundle` `_Take 001`) — no compiled `m_Clip`
-  stream, unlike Mecanim clips;
-- `anim.legacy_clip` / `anim.animation_component` / `anim.idle_bob_curves`
-  build those type-tree dicts, and `tests/test_anim.py` round-trips one
-  through `build_bundle` and back through UnityPy.
+```bash
+shamway generate entity myCreature.glb --rig quadruped --anim \
+    --mod MyMod --bundle myMod --xml myCreature-entityclasses.xml
+```
 
-What is left before an entity visibly moves is mechanical: attach the
-`Animation` component + `Idle1` clip to generated entity prefabs in the
-writer, add `AvatarController = GameObjectAnimalAnimation` to the generated
-`entityclasses.xml`, and prove the bob in a live clip capture. Mecanim
-(`Animator` + controller + compiled clips) remains unbuilt and is not
-needed for this path.
+`--anim` does three things:
+
+1. writes a **`{stem}.anim.json`** beside the GLB — a looping `Idle1` bob
+   (a 0.03 m position cycle on the rig's first bone, 1.5 s) — and the
+   writer's skinned lane picks up that sibling file and attaches the legacy
+   `Animation` component (class 111) with the declared clips (class 74,
+   `m_Legacy = true`, `m_MuscleClipSize = 0`) to the prefab root;
+2. adds **`AvatarController = GameObjectAnimalAnimation`** to the
+   `entityclasses.xml` patch;
+3. so the entity **moves in game**: the controller plays `Idle1` by name
+   and the whole creature bobs.
+
+The declaration is a small JSON you can extend — the clip names are the
+ones the controller plays, so a `Walk` or `Attack1` entry becomes a clip
+the controller plays when the animal moves or attacks:
+
+```json
+{
+  "clips": [
+    {"name": "Idle1", "kind": "bob", "bone": "Root/Pelvis",
+     "amplitude": 0.03, "seconds": 1.5}
+  ],
+  "play_automatically": true
+}
+```
+
+`kind` selects the curve builder; `bob` is the only kind today, and the
+`bone` path is the rig's own (slash-separated, as authored in the spec —
+`Root/Hips` on the humanoid). Why this works at all: **legacy clips carry
+their curves directly** (`m_MuscleClipSize = 0`, measured from the game's
+`animals.bundle` `_Take 001`) — no compiled `m_Clip` stream, unlike Mecanim
+clips. `anim.py` builds the type-tree dicts and `tests/test_anim.py`
+round-trips them through `build_bundle` and back through UnityPy.
+
+To prove motion in a live client, give the entity's look suite a motion
+kind in the mod's `.shamway.toml`, so the look run captures a frame
+sequence instead of one still:
+
+```toml
+[acceptance]
+motion_kinds = { shamwaySelfTestCreature = "turntable" }
+```
+
+The self-test's animated creature does exactly this, and its turntable
+clip — spinning while bobbing — was signed off on 2026-08-30. `turntable`
+is the staged-prefab motion kind; `walk-cycle` is for equipped items (see
+[`shamway docs video`](video.md)).
 
 ## The dedicated-server caveat
 
@@ -197,13 +235,13 @@ that clients see nothing.
 
 ## What is still unbuilt
 
-- **The animation wiring itself.** `anim.py` synthesizes legacy clips and
-  proves they serialize, but the writer does not yet attach an `Animation`
-  component to generated entity prefabs, and the generated XML does not yet
-  set `AvatarController = GameObjectAnimalAnimation` — see "Making it move".
+- **More clip kinds.** `bob` is the only curve builder; a walk cycle with
+  leg swing, attack chains and death poses are more curve sets, not a
+  format change — the declaration already accepts any name the controller
+  plays.
 - **Mecanim / complex locomotion.** `Animator` + controller + compiled
-  clips (walk cycles with foot plants, attack chains) remain the hard lane;
-  the legacy path covers an animal that idles, walks and attacks by name.
+  clips remain the hard lane; the legacy path covers an animal that idles,
+  walks and attacks by name.
 - **Physics bodies and collision.** The generated class has none; the mod
   adds `PhysicsBody` and colliders per its own design.
 - **SDCS extras** (`GearBoneMap`, `Morphable`) — the editor bakes those; see

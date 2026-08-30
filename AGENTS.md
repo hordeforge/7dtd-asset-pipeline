@@ -442,7 +442,7 @@ Machine-readable output for agents and CI:
 | `shamway render-icon STEM` | render a bundle prefab into its atlas cell, materials and all (needs an editor and a display) |
 | `shamway generate mesh-icon MESH PNG` | the same cell from a mesh file through headless Blender: no editor, no display, and a clay render rather than the in-game look |
 | `shamway generate rig OUT.glb` | a bone-structure template as a glTF armature to skin against in Blender, or as the rig for `generate entity`; `--rig` names one of the eight shipped rigs (humanoid, quadruped, quadruped-small/large, bird, dinosaur, arachnid, crocodile) or a spec file, `--scale` sizes it |
-| `shamway generate entity OUT.glb` | a skinned entity procedurally: primitives bound to a rig (its own default part set, or `--parts`), plus its `entityclasses.xml` patch (`--mod`/`--bundle`/`--xml`) |
+| `shamway generate entity OUT.glb` | a skinned entity procedurally: primitives bound to a rig (its own default part set, or `--parts`), plus its `entityclasses.xml` patch (`--mod`/`--bundle`/`--xml`); `--anim` also writes the `{stem}.anim.json` (a looping Idle1 bob) and sets `AvatarController=GameObjectAnimalAnimation` so the entity moves in game |
 | `shamway generate --list` | the packaged asset generators, callable from any mod |
 | `shamway prompt --list` | the house-style image prompts, rendered with the lane that consumes them |
 | `shamway docs [TOPIC]` | this repository's documentation, served from the package |

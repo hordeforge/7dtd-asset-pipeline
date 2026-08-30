@@ -14,6 +14,16 @@ tag has no changelog section.
 
 ### Added
 
+- Generated entities **move**: `generate entity --anim` writes a
+  `{stem}.anim.json` (a looping `Idle1` bob on the rig's first bone) and
+  sets `AvatarController=GameObjectAnimalAnimation` on the entity class;
+  the writer attaches a legacy `Animation` component with the declared
+  clips to the prefab root. Legacy clips serialize their curves directly
+  (`m_MuscleClipSize = 0`, measured from the game's animals.bundle), so
+  they are synthesized through the type tree with no editor. The self-test
+  creature is animated and its turntable look suite captures a motion clip;
+  the rig looks and the motion were signed off in a live client on
+  2026-08-30.
 - The generated entity is now spawnable and visibly textured:
   `generate entity --xml` emits `UserSpawnType="Menu"` (the console
   `spawnentity` command lists only non-`None` classes — verified from IL),

@@ -234,9 +234,10 @@ motion_kinds = { shamwaySelfTestCreature = "turntable" }
 
 The self-test's animated creature does exactly this (with `--anim
 idle,head,walk`), and its turntable clip — spinning while bobbing, turning
-its head and trotting — was signed off on 2026-08-30. `turntable` is the
-staged-prefab motion kind; `walk-cycle` is for equipped items (see
-[`shamway docs video`](video.md)).
+its head and trotting with the knee-bending gait — was signed off on
+2026-08-30 (the gait "can still be improved", signed off as a milestone).
+`turntable` is the staged-prefab motion kind; `walk-cycle` is for equipped
+items (see [`shamway docs video`](video.md)).
 
 ## The dedicated-server caveat
 

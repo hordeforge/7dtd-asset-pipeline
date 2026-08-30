@@ -1177,7 +1177,8 @@ class SelfTestFixtureTests(unittest.TestCase):
         }
 
         def _dist(left: tuple[float, ...], right: tuple[float, ...]) -> float:
-            return sum((a - b) ** 2 for a, b in zip(left, right, strict=True)) ** 0.5
+            squared = sum((a - b) ** 2 for a, b in zip(left, right, strict=True))
+            return math.sqrt(float(squared))
 
         # One prefab, three pictures: sitting on one origin hid the grey
         # haze inside the additive flash. shape.position is camera-local

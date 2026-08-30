@@ -107,7 +107,7 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--probe", action="store_true", help="build a throwaway cube bundle only")
     pack = commands.add_parser(
         "pack",
-        help="write a .unity3d from a directory of textures, clips, text files and meshes,"
+        help="write a .unity3d from textures, clips, text, meshes, glTF skins/hierarchies and .vfx,"
         " with no Unity",
     )
     pack.add_argument("source", type=Path, help="directory whose contents become the bundle")

@@ -12,6 +12,15 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Added
+
+- Editorless `bundle_source = "synthesized"` now writes named glTF prefab
+  hierarchies (including an `armedLamp` child), `SkinnedMeshRenderer` from a
+  glTF skin (bind poses, weights, bone-name hashes; never flattened to
+  MeshRenderer), and ParticleSystem / ParticleSystemRenderer graphs from a
+  versioned `.vfx` declaration, with transparent and additive particle
+  shaders that do not reuse the opaque `Shamway/Unlit` pass.
+
 ### Changed
 
 - `make check` enables the ruff rule groups the tree already passed

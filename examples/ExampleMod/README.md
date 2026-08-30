@@ -27,8 +27,9 @@ Put a mesh named `exampleModWorkbench.glb` in `assets-src/bundle/` and
 for, together with its mesh, material and shader. Build the real bundle before
 enabling the sample XML references in `Config/`.
 
-A mod that needs lit, transparent or normal-mapped shading, particles, or
-rigging opts into an editor with `shamway init --bundle-source unity`, which
+A mod that needs lit or normal-mapped shading, SDCS extras, or particle
+modules the `.vfx` schema does not encode opts into an editor with
+`shamway init --bundle-source unity`, which
 additionally creates `tools/shamway/UnityProject/`; the prefab is then imported
 there. See [Running without Unity](../../docs/bundles/no-unity.md).
 

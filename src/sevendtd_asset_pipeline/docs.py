@@ -44,7 +44,7 @@ TOPICS: dict[str, tuple[str, str]] = {
     ),
     "offline-bundle-builder": (
         "adrs/0001-synthesize-bundles-without-an-editor.md",
-        "the editorless writer: format research, what shipped, and what is still unbuilt",
+        "the editorless writer: format research, what shipped, and remaining shader variants",
     ),
     "mesh-icon": (
         "adrs/0006-render-icons-from-the-mesh-with-blender.md",
@@ -72,10 +72,13 @@ TOPICS: dict[str, tuple[str, str]] = {
         "authoring/video.md",
         "staged motion clips, the motion-kind declaration, and the deadeye review lane",
     ),
-    "vfx": ("authoring/vfx.md", "particle budgets, LOD tiers, and two silent material failures"),
+    "vfx": (
+        "authoring/vfx.md",
+        "`.vfx` ParticleSystem graphs, budgets, LOD tiers, and two silent material failures",
+    ),
     "skinned-gear": (
         "authoring/skinned-gear.md",
-        "worn armor: why it leaves the editorless lane, and the bone names it binds to",
+        "worn armor: SkinnedMeshRenderer from a glTF skin; SDCS extras still want an editor",
     ),
     "environment-effects": (
         "authoring/environment-effects.md",

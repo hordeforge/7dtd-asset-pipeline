@@ -125,11 +125,17 @@ Direct3D 11 after the constant-buffer layout fix recorded in
 [blockers.md](blockers.md). The remaining graphics-API gap is Vulkan's
 parameter records — [measured at the bottom of this page](#the-vulkan-sub-program-and-what-is-left-of-it).
 
-**What is deliberately not built.** The pass is unlit, textured, opaque and
-variant-free. Lit, shadowed, transparent, cut-out, normal-mapped, instanced
-and multi-pass shaders need keyword variants and constant buffers this writer
-does not declare; a mod that needs one wants `unity` or `external`. "Shaders
-work" would be a wider claim than the evidence supports.
+**Particle transparent/additive (2026-08-30).** `Shamway/Particles/Alpha` and
+`Shamway/Particles/Additive` are a second unlit pass: vertex COLOR0 ×
+`_MainTex`, SrcAlpha / OneMinusSrcAlpha or SrcAlpha / One, ZWrite 0, cull
+off, queue 3000. They do not reuse the opaque One/Zero mesh pass.
+
+**What is deliberately not built.** Lit, shadowed, cut-out, normal-mapped,
+instanced and multi-pass shaders need keyword variants and constant buffers
+this writer does not declare; a mod that needs one wants `unity` or
+`external`. Particle modules beyond the `.vfx` schema (trails, collision,
+noise, lights, sub-emitters, mesh particles) are the same. "Shaders work"
+would be a wider claim than the evidence supports.
 
 **Settled since this entry was written:**
 

@@ -6,25 +6,65 @@ render as flat orange polygons, or flood the client log with thousands of error
 lines a second, or drop a player's frame rate whenever two of them overlap.
 Each of those has happened; each has a specific, cheap preventative below.
 
-> **This lane needs a Unity editor.** The editorless writer emits no
-> `ParticleSystem` and no particle material, so a mod that ships particles sets
-> `bundle_source = "unity"` (a local editor) or `"external"` (one elsewhere).
-> Everything else in this pipeline works without one; this is the class that
-> does not. The card *textures* below are still generated with no editor, and
-> [environment-effects.md](environment-effects.md) is the page for the effects
-> no bundle can carry at all.
+> **The editorless writer emits ParticleSystem graphs from a `.vfx`
+> declaration.** Cards are PNG textures; emission, lifetime, curves, shape,
+> renderer mode and budgets live in that JSON file, which is the
+> authoritative source. `bundle_source = "synthesized"` is the path. Lit
+> Particles/Standard Unlit keyword variants and modules this writer does not
+> encode (trails, collision, noise, lights, sub-emitters, mesh particles)
+> still want an editor. [environment-effects.md](environment-effects.md) is
+> the page for effects no bundle can carry at all.
 
 ## Quick start
 
-- import the card, build the prefab with GeneratedAsset.ParticleMaterial(...)
+- write a `.vfx` declaration next to the card PNGs
 - `shamway inspect --deep Resources/mymod.unity3d` — did the systems survive?
 
 ```bash
 shamway generate cutout luma assets-src/vfx/smoke-mask.png \
-    assets-src/vfx/smoke-card.png --black-point 15
+    assets-src/bundle/smoke-card.png --black-point 15
 shamway build
 shamway inspect --deep Resources/mymod.unity3d
 ```
+
+A minimal declaration, saved as `assets-src/bundle/blast.vfx`:
+
+```json
+{
+  "format": "shamway.vfx",
+  "version": 1,
+  "budget": 32,
+  "materials": [
+    {"name": "blastMat", "blend": "additive", "texture": "smoke-card"}
+  ],
+  "systems": [
+    {
+      "name": "flash",
+      "duration": 0.4,
+      "max_particles": 16,
+      "start_lifetime": 0.35,
+      "start_size": 2,
+      "emission": {"rate": 0, "bursts": [{"time": 0, "count": 16}]},
+      "shape": {"type": "sphere", "radius": 0.5},
+      "renderer": {"mode": "billboard", "material": "blastMat"}
+    }
+  ]
+}
+```
+
+`blend` is `additive` (SrcAlpha/One) or `alpha` (SrcAlpha/OneMinusSrcAlpha).
+Both write ZWrite 0 and queue 3000. Do not reuse `Shamway/Unlit` for cards —
+that pass is opaque One/Zero.
+
+Supported modules: main (duration, looping, start delay, simulation space,
+scaling mode, start lifetime/speed/size/rotation/color, max particles),
+emission rate and bursts, shapes sphere/cone/circle/hemisphere/box,
+velocity over lifetime, limit velocity/damping, size/rotation/color over
+lifetime, renderer modes billboard / horizontal billboard / stretched
+billboard. Curves are a number, `[min, max]`, `{"curve": [[t, v], ...]}`,
+or two-curve form. Velocity axes must share one curve mode. The sum of
+`max_particles` must not exceed `budget` (cap 10000). Unknown modules fail
+the pack.
 
 Everything below is detail.
 

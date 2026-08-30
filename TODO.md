@@ -87,3 +87,9 @@ BC1/BC3 on 2026-08-24); and the writer's shader pass is **unlit, opaque and
 variant-free**, so lit, shadowed, transparent, normal-mapped and multi-pass
 shading is unbuilt with a known route, and a mod that needs it opts into
 `bundle_source = "unity"` or `"external"` today.
+
+The self-test burst `--look` shows flash and sparks; **grey haze is not
+visible**. That is [improvements.md §8](docs/status/improvements.md): packed
+and loaded, not a picture. Offset `shape.position` already; the card still
+disappears next to additive gold. Do not describe the smoke layer as signed
+off.

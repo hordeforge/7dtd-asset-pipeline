@@ -144,13 +144,21 @@ Full lane, with budgets, tiers, and the two silent material failures:
 
 1. Define presentation-only scope, duration, maximum live particles, LODs,
    distance culling, concurrency policy, and fallback.
-2. Generate cards/meshes and complete transparent material state.
+2. Generate cards with `shamway generate particle-card` (haze, streak) or
+   `shamway generate cutout`, and complete transparent material state.
+   `blend` is `additive` or `alpha` on the `.vfx` material; do not reuse
+   opaque `Shamway/Unlit`.
 3. Put hard caps in the prefab, not only in runtime selection code.
 4. Put the systems in a `.vfx` declaration next to the card PNGs and
-   `shamway build`. `inspect --deep` must show ParticleSystem counts.
-   Modules the schema does not encode still want an editor.
+   `shamway build`. One file is one prefab / one `*_look` suite. Offset
+   `shape.position` when layers must be judged apart. `inspect --deep`
+   must show ParticleSystem counts. Modules the schema does not encode
+   still want an editor.
 5. Test repeated effects for frame time, allocations, orphans, obstruction,
-   flicker, and accessibility.
+   flicker, and accessibility. Visual sign-off is
+   `playtest-synthesized.sh --look` or
+   `playtest-acceptance.sh --suite <mod>_<stem>_look`, never mixed with
+   `*_block_*`.
 
 ## Keep an asset inventory
 

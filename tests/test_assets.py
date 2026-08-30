@@ -1167,6 +1167,27 @@ class SelfTestFixtureTests(unittest.TestCase):
             {material["texture"] for material in vfx["materials"]},
             {"flashCard", "smokeCard", "sparkCard"},
         )
+        by_name = {system["name"]: system for system in vfx["systems"]}
+        for name in ("flash", "smoke", "sparks"):
+            with self.subTest(name):
+                self.assertIn(name, by_name)
+        positions = {
+            name: tuple(by_name[name]["shape"].get("position", [0, 0, 0]))
+            for name in ("flash", "smoke", "sparks")
+        }
+
+        def _dist(left: tuple[float, ...], right: tuple[float, ...]) -> float:
+            return sum((a - b) ** 2 for a, b in zip(left, right, strict=True)) ** 0.5
+
+        # One prefab, three pictures: sitting on one origin hid the grey
+        # haze inside the additive flash. shape.position is camera-local
+        # after the look stages the prefab facing the lens (smoke left,
+        # flash centre, sparks right).
+        self.assertGreater(_dist(positions["smoke"], positions["flash"]), 1.0)
+        self.assertGreater(_dist(positions["sparks"], positions["flash"]), 1.0)
+        self.assertGreater(_dist(positions["smoke"], positions["sparks"]), 1.0)
+        materials = {item["name"]: item for item in vfx["materials"]}
+        self.assertEqual(materials["smokeMat"]["blend"], "alpha")
         for relative in (
             "assets-src/bundle/flashCard.png",
             "assets-src/bundle/smokeCard.png",

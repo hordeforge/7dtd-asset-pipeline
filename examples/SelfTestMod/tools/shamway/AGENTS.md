@@ -347,7 +347,11 @@ they cannot overlay at the same world point. Mixing a look suite with the
 block suite is how a texture floated mid-air in the same session as a
 placed block. The scripts and the generated provider refuse that mix. For
 the looping VFX only: `playtest-synthesized.sh --look` (suite
-`shamwayselftest_burst_look`).
+`shamwayselftest_burst_look`). That prefab's three systems are offset in
+`burst.vfx` (`shape.position`: smoke left, flash centre, sparks right).
+Grey haze is still not a readable picture; do not treat smoke as signed
+off. Other mods use the same `.vfx` + `shamway generate particle-card`
+surface, not a copy of this fixture.
 
 And the last step is still a person. A suite that passes every case above
 proves the game read your bytes and ran your logic; it does not prove the art

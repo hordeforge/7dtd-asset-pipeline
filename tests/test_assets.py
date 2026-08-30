@@ -1143,13 +1143,16 @@ class SelfTestFixtureTests(unittest.TestCase):
         self.assertIn("looking at voxel", text)
         default = "shamwayselftest_bundle,shamwayselftest_block_model,shamwayselftest_editorless"
         self.assertIn(default, text)
-        # The look suite exists only as `--look`: a separate invocation that
+        # The look suites exist only as `--look`: a separate invocation that
         # replaces the default list, never an addition to it (a look run and
         # a block run paint different pictures and are refused in one list).
         self.assertNotIn(f"{default},shamwayselftest_look", text)
         self.assertNotIn(f"shamwayselftest_look,{default}", text)
         self.assertIn("--look", text)
         self.assertIn('SUITE_ARGS=(--suite "shamwayselftest_burst_look")', text)
+        # `--look STEM` picks that prefab's per-prefab look suite, so every
+        # generated rig can be looked at on its own run.
+        self.assertIn('SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM}_look")', text)
         self.assertNotIn("stage_editorless_lineup", text)
 
 

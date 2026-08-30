@@ -30,8 +30,9 @@ lists what each assertion catches.
 | `assets-src/bundle/shamwaySelfTestProp_albedo.png` | bound to the prefab's material by the `_albedo` convention; a large **R** and an up-arrow, so mirrored and upside-down each read wrong at a glance |
 | `assets-src/bundle/shamwaySelfTestCreature.glb` | a generated skinned entity (`shamway generate entity --rig quadruped`), so the entity lane's prefab — bones, weights, `SkinnedMeshRenderer` — is exercised by the same live client |
 | `assets-src/bundle/shamwaySelfTestCreature_albedo.png` | the creature's 256×256 albedo (moss green with dorsal stripes), bound by the same `_albedo` convention — "textures on top" proven live, and a look run reads proportions at a glance |
+| `assets-src/bundle/shamwaySelfTestBird.glb` / `_Arachnid.glb` / `_Dino.glb` | the other three shipped rigs (`--rig bird` / `arachnid` / `dinosaur`) as generated entities, so every rig shape — wings, eight legs, tail — gets its own live load case and its own per-prefab look suite |
 | `Config/blocks.xml` | one block, `Shape` + `Model` and nothing else — every extra property would be one more thing that could explain a failure |
-| `Config/entityclasses.xml` | the creature's entity class: the mandatory `Prefab` + `Mesh`, plus `UserSpawnType="Menu"` so the console `spawnentity` command lists it (`shamway generate entity --xml` wrote it) |
+| `Config/entityclasses.xml` | the four generated entity classes (creature, bird, arachnid, dino): mandatory `Prefab` + `Mesh`, plus `UserSpawnType="Menu"` so the console `spawnentity` command lists them (`shamway generate entity --xml` wrote each) |
 | `UIAtlases/ItemIconAtlas/` | the icon, from `shamway generate mesh-icon`: a clay render, not the in-game look |
 | `Resources/` + `tools/shamway/manifests/` | build outputs, committed together as one artifact, the way any consuming mod commits them |
 

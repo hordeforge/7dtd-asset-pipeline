@@ -26,7 +26,14 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
         get
         {
             yield return "shamwayselftest_bundle";
-            yield return "shamwayselftest_look";
+            yield return "shamwayselftest_burst_look";
+            yield return "shamwayselftest_gear_look";
+            yield return "shamwayselftest_shamwaySelfTestArachnid_look";
+            yield return "shamwayselftest_shamwaySelfTestBird_look";
+            yield return "shamwayselftest_shamwaySelfTestCreature_look";
+            yield return "shamwayselftest_shamwaySelfTestDino_look";
+            yield return "shamwayselftest_shamwaySelfTestProp_look";
+            yield return "shamwayselftest_timedNuke_look";
         }
     }
 
@@ -34,7 +41,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
     {
         RejectMixedVisualSuites();
         string label = lap > 0 ? suite + "@" + lap : suite;
-        if (suite == "shamwayselftest_look")
+        if (suite == "shamwayselftest_burst_look")
         {
 
         GameObject burstStaged = null;
@@ -66,6 +73,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 burstStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(burstStaged);
                 burstStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -80,6 +88,10 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             holdSeconds: 12f,
             fail: "could not stage burst in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_gear_look")
+        {
 
         GameObject gearStaged = null;
         queue.Add(CaseDef.Staged(label, "look_gear", new[] { "capture", "bundle" },
@@ -110,6 +122,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 gearStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(gearStaged);
                 gearStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -124,6 +137,108 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             holdSeconds: 12f,
             fail: "could not stage gear in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_shamwaySelfTestArachnid_look")
+        {
+
+        GameObject shamwaySelfTestArachnidStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestArachnid", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestArachnid");
+                if (prefab == null)
+                {
+                    Report.Info("shamwaySelfTestArachnid: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "shamwaySelfTestArachnid: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                shamwaySelfTestArachnidStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestArachnidStaged);
+                shamwaySelfTestArachnidStaged.transform.position = camera.position + ahead * 3.5f;
+                // Face the camera, and keep the prop's own up axis upright so
+                // the orientation card is readable rather than lying on edge.
+                shamwaySelfTestArachnidStaged.transform.rotation =
+                    Quaternion.LookRotation(-ahead, Vector3.up);
+                var renderers = shamwaySelfTestArachnidStaged.GetComponentsInChildren<Renderer>(true);
+                Report.Info("shamwaySelfTestArachnid: staged at " + shamwaySelfTestArachnidStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", with " + renderers.Length + " renderer(s)");
+                // A prefab with no renderer cannot be photographed into evidence.
+                return renderers.Length > 0;
+            },
+            holdSeconds: 12f,
+            fail: "could not stage shamwaySelfTestArachnid in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_shamwaySelfTestBird_look")
+        {
+
+        GameObject shamwaySelfTestBirdStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestBird", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestBird");
+                if (prefab == null)
+                {
+                    Report.Info("shamwaySelfTestBird: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "shamwaySelfTestBird: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                shamwaySelfTestBirdStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestBirdStaged);
+                shamwaySelfTestBirdStaged.transform.position = camera.position + ahead * 3.5f;
+                // Face the camera, and keep the prop's own up axis upright so
+                // the orientation card is readable rather than lying on edge.
+                shamwaySelfTestBirdStaged.transform.rotation =
+                    Quaternion.LookRotation(-ahead, Vector3.up);
+                var renderers = shamwaySelfTestBirdStaged.GetComponentsInChildren<Renderer>(true);
+                Report.Info("shamwaySelfTestBird: staged at " + shamwaySelfTestBirdStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", with " + renderers.Length + " renderer(s)");
+                // A prefab with no renderer cannot be photographed into evidence.
+                return renderers.Length > 0;
+            },
+            holdSeconds: 12f,
+            fail: "could not stage shamwaySelfTestBird in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_shamwaySelfTestCreature_look")
+        {
 
         GameObject shamwaySelfTestCreatureStaged = null;
         queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestCreature", new[] { "capture", "bundle" },
@@ -154,6 +269,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 shamwaySelfTestCreatureStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestCreatureStaged);
                 shamwaySelfTestCreatureStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -168,6 +284,59 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestCreature in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_shamwaySelfTestDino_look")
+        {
+
+        GameObject shamwaySelfTestDinoStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestDino", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestDino");
+                if (prefab == null)
+                {
+                    Report.Info("shamwaySelfTestDino: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "shamwaySelfTestDino: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                shamwaySelfTestDinoStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestDinoStaged);
+                shamwaySelfTestDinoStaged.transform.position = camera.position + ahead * 3.5f;
+                // Face the camera, and keep the prop's own up axis upright so
+                // the orientation card is readable rather than lying on edge.
+                shamwaySelfTestDinoStaged.transform.rotation =
+                    Quaternion.LookRotation(-ahead, Vector3.up);
+                var renderers = shamwaySelfTestDinoStaged.GetComponentsInChildren<Renderer>(true);
+                Report.Info("shamwaySelfTestDino: staged at " + shamwaySelfTestDinoStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", with " + renderers.Length + " renderer(s)");
+                // A prefab with no renderer cannot be photographed into evidence.
+                return renderers.Length > 0;
+            },
+            holdSeconds: 12f,
+            fail: "could not stage shamwaySelfTestDino in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_shamwaySelfTestProp_look")
+        {
 
         GameObject shamwaySelfTestPropStaged = null;
         queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestProp", new[] { "capture", "bundle" },
@@ -198,6 +367,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 shamwaySelfTestPropStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestPropStaged);
                 shamwaySelfTestPropStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -212,6 +382,10 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestProp in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_timedNuke_look")
+        {
 
         GameObject timedNukeStaged = null;
         queue.Add(CaseDef.Staged(label, "look_timedNuke", new[] { "capture", "bundle" },
@@ -242,6 +416,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 timedNukeStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(timedNukeStaged);
                 timedNukeStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -396,6 +571,108 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             fail: "the game did not load gear_mat from the staged bundle"));
 
+        GameObject shamwaySelfTestArachnidLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestArachnid", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestArachnidLoaded = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestArachnid");
+                var loaded = shamwaySelfTestArachnidLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestArachnid: LoadAsset<GameObject> returned null"
+                    : "shamwaySelfTestArachnid: " + loaded.name + " children=" + loaded.transform.childCount + " renderers=" + loaded.GetComponentsInChildren<Renderer>(true).Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestArachnidLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestArachnid" && loaded.transform != null;
+            },
+            fail: "the game did not load shamwaySelfTestArachnid from the staged bundle"));
+
+        Mesh shamwaySelfTestArachnid_meshLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestArachnid_mesh", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestArachnid_meshLoaded = DataLoader.LoadAsset<Mesh>(Bundle + "?shamwaySelfTestArachnid_mesh");
+                var loaded = shamwaySelfTestArachnid_meshLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestArachnid_mesh: LoadAsset<Mesh> returned null"
+                    : "shamwaySelfTestArachnid_mesh: " + loaded.name + " vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount + " bounds=" + loaded.bounds.size);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestArachnid_meshLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestArachnid_mesh" && loaded.vertexCount > 0 && loaded.triangles.Length > 0;
+            },
+            fail: "the game did not load shamwaySelfTestArachnid_mesh from the staged bundle"));
+
+        Material shamwaySelfTestArachnid_matLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestArachnid_mat", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestArachnid_matLoaded = DataLoader.LoadAsset<Material>(Bundle + "?shamwaySelfTestArachnid_mat");
+                var loaded = shamwaySelfTestArachnid_matLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestArachnid_mat: LoadAsset<Material> returned null"
+                    : "shamwaySelfTestArachnid_mat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestArachnid_matLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestArachnid_mat" && loaded.shader != null;
+            },
+            fail: "the game did not load shamwaySelfTestArachnid_mat from the staged bundle"));
+
+        GameObject shamwaySelfTestBirdLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestBird", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestBirdLoaded = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestBird");
+                var loaded = shamwaySelfTestBirdLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestBird: LoadAsset<GameObject> returned null"
+                    : "shamwaySelfTestBird: " + loaded.name + " children=" + loaded.transform.childCount + " renderers=" + loaded.GetComponentsInChildren<Renderer>(true).Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestBirdLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestBird" && loaded.transform != null;
+            },
+            fail: "the game did not load shamwaySelfTestBird from the staged bundle"));
+
+        Mesh shamwaySelfTestBird_meshLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestBird_mesh", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestBird_meshLoaded = DataLoader.LoadAsset<Mesh>(Bundle + "?shamwaySelfTestBird_mesh");
+                var loaded = shamwaySelfTestBird_meshLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestBird_mesh: LoadAsset<Mesh> returned null"
+                    : "shamwaySelfTestBird_mesh: " + loaded.name + " vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount + " bounds=" + loaded.bounds.size);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestBird_meshLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestBird_mesh" && loaded.vertexCount > 0 && loaded.triangles.Length > 0;
+            },
+            fail: "the game did not load shamwaySelfTestBird_mesh from the staged bundle"));
+
+        Material shamwaySelfTestBird_matLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestBird_mat", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestBird_matLoaded = DataLoader.LoadAsset<Material>(Bundle + "?shamwaySelfTestBird_mat");
+                var loaded = shamwaySelfTestBird_matLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestBird_mat: LoadAsset<Material> returned null"
+                    : "shamwaySelfTestBird_mat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestBird_matLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestBird_mat" && loaded.shader != null;
+            },
+            fail: "the game did not load shamwaySelfTestBird_mat from the staged bundle"));
+
         GameObject shamwaySelfTestCreatureLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCreature", new[] { "bundle" },
             act: ctx =>
@@ -463,6 +740,57 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                 return loaded != null && loaded.name == "shamwaySelfTestCreature_albedo" && loaded.width > 0 && loaded.height > 0;
             },
             fail: "the game did not load shamwaySelfTestCreature_albedo from the staged bundle"));
+
+        GameObject shamwaySelfTestDinoLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestDino", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestDinoLoaded = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestDino");
+                var loaded = shamwaySelfTestDinoLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestDino: LoadAsset<GameObject> returned null"
+                    : "shamwaySelfTestDino: " + loaded.name + " children=" + loaded.transform.childCount + " renderers=" + loaded.GetComponentsInChildren<Renderer>(true).Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestDinoLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestDino" && loaded.transform != null;
+            },
+            fail: "the game did not load shamwaySelfTestDino from the staged bundle"));
+
+        Mesh shamwaySelfTestDino_meshLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestDino_mesh", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestDino_meshLoaded = DataLoader.LoadAsset<Mesh>(Bundle + "?shamwaySelfTestDino_mesh");
+                var loaded = shamwaySelfTestDino_meshLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestDino_mesh: LoadAsset<Mesh> returned null"
+                    : "shamwaySelfTestDino_mesh: " + loaded.name + " vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount + " bounds=" + loaded.bounds.size);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestDino_meshLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestDino_mesh" && loaded.vertexCount > 0 && loaded.triangles.Length > 0;
+            },
+            fail: "the game did not load shamwaySelfTestDino_mesh from the staged bundle"));
+
+        Material shamwaySelfTestDino_matLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestDino_mat", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestDino_matLoaded = DataLoader.LoadAsset<Material>(Bundle + "?shamwaySelfTestDino_mat");
+                var loaded = shamwaySelfTestDino_matLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestDino_mat: LoadAsset<Material> returned null"
+                    : "shamwaySelfTestDino_mat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestDino_matLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestDino_mat" && loaded.shader != null;
+            },
+            fail: "the game did not load shamwaySelfTestDino_mat from the staged bundle"));
 
         GameObject shamwaySelfTestPropLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestProp", new[] { "bundle" },

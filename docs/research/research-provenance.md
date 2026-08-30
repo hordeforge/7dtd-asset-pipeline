@@ -1865,6 +1865,17 @@ the feet. The next route is a non-`Detail` body (an explicit box/capsule
 collider sized feet-to-shoulder at the model root, i.e. a grounding collider
 whose bottom is at the root), which is the unbuilt change.
 
+**(2) second attempt, also measured closed:** prefixing the collider paths
+with `Root/` (the creature's bones sit under a `Root` bone — the model is
+model → Root → Pelvis — unlike the stag's `Hips` which is directly under the
+model) did not ground it either; the creature still floated in the treeline.
+So the `Detail` collider type is not building a grounding collider for our
+procedural skinned mesh regardless of path. Route B (an explicit box/capsule
+body) remains unbuilt, and the whole grounded-walk is a dedicated
+engine-integration problem requiring either that or a mod-side C# physics
+body — a live-verified grounded walk is the outstanding acceptance, not yet
+achieved.
+
 ## Ground height: GetTerrainHeight is the voxel surface; GetHeightAt is not (2026-08-30)
 
 `ilspycmd -t World` on the installed `Assembly-CSharp.dll` (Unity 2022.3

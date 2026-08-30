@@ -328,6 +328,7 @@ class LimbAnimTests(unittest.TestCase):
         self.assertLess(min(ys), -0.01)
         self.assertAlmostEqual(ys[0], 0.0, places=6)
 
+    @needs_unitypy
     def test_same_name_entries_merge_into_one_clip(self) -> None:
         from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
 

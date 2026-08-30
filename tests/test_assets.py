@@ -10,6 +10,7 @@ from __future__ import annotations
 import array
 import json
 import math
+import re
 import struct
 import tempfile
 import unittest
@@ -1111,6 +1112,38 @@ class SelfTestFixtureTests(unittest.TestCase):
         self.assertNotIn("Object.Instantiate(prefab)", source)
         self.assertNotIn("queue.Add(CaseDef.Staged", source)
 
+    def test_the_committed_look_provider_is_one_prefab_per_suite(self) -> None:
+        """The on-disk generated provider must match the regenerator.
+
+        A single shamwayselftest_look that Instantiates burst, gear, creature,
+        prop and timedNuke at the same 3.5 m offset is the overlay this gate
+        exists to refuse. The regenerator already emits per-stem *_look;
+        this asserts the committed file is that output.
+        """
+        source = (self.FIXTURE / "tools/shamway/acceptance/ShamwaySelfTestAcceptance.cs").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn('yield return "shamwayselftest_look"', source)
+        self.assertNotIn('if (suite == "shamwayselftest_look")', source)
+        self.assertIn("CaseDef.RegisterStaged", source)
+        for stem in (
+            "burst",
+            "gear",
+            "shamwaySelfTestCreature",
+            "shamwaySelfTestProp",
+            "timedNuke",
+        ):
+            with self.subTest(stem=stem):
+                self.assertIn(f'yield return "shamwayselftest_{stem}_look"', source)
+        # One Instantiate per look branch: split on look-suite guards.
+        branches = re.split(r'if \(suite == "shamwayselftest_[^"]+_look"\)', source)
+        look_bodies = branches[1:]
+        self.assertGreaterEqual(len(look_bodies), 5)
+        for body in look_bodies:
+            with self.subTest(body=body[:80]):
+                self.assertEqual(body.count("Object.Instantiate"), 1)
+                self.assertIn("CaseDef.RegisterStaged", body)
+
     def test_the_editorless_suite_is_mechanical_not_a_look(self) -> None:
         """A camera-staged instantiate on _editorless is the mix the gate cannot see."""
         source = (
@@ -1156,6 +1189,9 @@ class SelfTestFixtureTests(unittest.TestCase):
         # tokens, and the provider compares case-sensitively.
         self.assertIn('SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_look")', text)
         self.assertNotIn("stage_editorless_lineup", text)
+        agents = (self.FIXTURE / "tools/shamway/AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("shamwayselftest_burst_look", agents)
+        self.assertNotIn("--suite shamwayselftest_look", agents)
 
 
 class AssetsSourceTreeTests(unittest.TestCase):

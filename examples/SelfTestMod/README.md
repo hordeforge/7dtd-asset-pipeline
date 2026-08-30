@@ -63,8 +63,9 @@ Commit the changed `Resources/` and manifest with whatever you changed in
 It means the game **read** the bundle: the prefab resolved by stem, carried its
 renderer, its mesh had the authored bounds, its material named the synthesized
 shader. It does **not** mean those things look right. The placed block is
-judged on its voxel (`playtest-synthesized`). The looping `burst` VFX (and
-the other floating prefabs) are judged in a **separate** invocation:
+judged on its voxel (`playtest-synthesized`). The looping `burst` VFX is
+judged in a **separate** invocation — that prefab only, not stacked with
+the cube or the creature:
 
 ```bash
 scripts/playtest-synthesized.sh --look

@@ -43,6 +43,10 @@ tag has no changelog section.
 
 ### Fixed
 
+- `docs/authoring/environment-effects.md` no longer tells a mod to set
+  `bundle_source = "unity"` for the particle character layer. That layer is a
+  `.vfx` declaration on the synthesized path; weather itself still needs no
+  bundle.
 - Bone-name hashes are CRC-32 of the slash-separated Transform path starting
   at `Origin` (`Origin/Hips` is 1722913273, matching nomad.bundle
   `bodyCloth`), not of the leaf GameObject name.

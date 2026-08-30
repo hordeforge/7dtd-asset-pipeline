@@ -329,14 +329,18 @@ the same bundle.
 | texture at its authored size | a `Texture2D` that decoded to something else |
 | the entity prefab returns with `renderers=1` | a skinned mesh flattened to a bare `Mesh`, or a `SkinnedMeshRenderer` that lost its renderer |
 | the entity mesh loads with its vertex stream | the skin's joints/weights dropped out of the bundle |
+| the entity texture loads at its authored size | a `Texture2D` that decoded to something else |
 | `shamwayselftest_block_model` places the block and looks at the voxel | a prefab instantiated in the player's face, which is not a placement |
+| `--look`: the entity prefab stages with a renderer | a prefab that loads but draws nothing — nothing to photograph, no sign-off possible |
 
 Those are **separate suites**. `<mod>_bundle` is loads only. `<mod>_look`
 instantiates the prefab in front of the camera and is opt-in. `<mod>_block_*`
 places a block on a voxel. Never comma-list `*_look` with `*_block_*` in one
 `PLAYTEST_SUITE`: `playtest-acceptance.sh` refuses it, and the generated
 provider throws if that script is bypassed. `playtest-synthesized` runs
-`_bundle` and `_block_model` only.
+`_bundle` and `_block_model` by default; `playtest-synthesized --look` runs
+`<mod>_look` alone and asserts the generated creature — and every other
+prefab — staged in front of the camera with a renderer.
 
 It refuses to run its assertions when the bundle carries no prefab, because
 without a usable `vkd3d-compiler` the writer packs a bare `Mesh` **by design**

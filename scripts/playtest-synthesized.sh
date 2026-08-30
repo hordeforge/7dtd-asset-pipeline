@@ -48,6 +48,12 @@ usage() {
 		OPTIONS
 		  --fixture DIR     the modlet to build   (default: examples/SelfTestMod)
 		  --stem NAME       asset stem it carries (default: shamwaySelfTestProp)
+		  --look            run the prefab-look suite (<mod>_look) instead: every
+		                    GameObject prefab is instantiated in front of the
+		                    camera, the generated creature included, and the
+		                    staged lines are asserted. A look run and a block
+		                    run paint different pictures and are refused in one
+		                    PLAYTEST_SUITE list, so this is a separate run.
 		  -h, --help        this text
 
 		Anything after -- is passed to playtest-acceptance.sh, so --listen (and
@@ -69,10 +75,12 @@ usage() {
 	EOF
 }
 
+LOOK=0
 while (($#)); do
 	case "$1" in
 		--fixture) FIXTURE="${2:-}"; shift 2 ;;
 		--stem) STEM="${2:-}"; shift 2 ;;
+		--look) LOOK=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		--) shift; EXTRA=("$@"); break ;;
 		*) die "unknown option: $1 (try --help)" ;;
@@ -137,7 +145,16 @@ for arg in "${EXTRA[@]+"${EXTRA[@]}"}"; do
 		break
 	fi
 done
-if (( ! has_suite )); then
+if (( LOOK )); then
+	if (( has_suite )); then
+		die "--look chooses the <mod>_look suite; do not also pass --suite"
+	fi
+	# The look suite is the entity lane's live picture: every GameObject
+	# prefab — the prop, the generated creature, the gear skin, the vfx —
+	# instantiated in front of the camera. It is never comma-listed with the
+	# block/load suites (they paint different pictures), so it runs alone.
+	SUITE_ARGS=(--suite "shamwayselftest_look")
+elif (( ! has_suite )); then
 	SUITE_ARGS=(--suite "shamwayselftest_bundle,shamwayselftest_block_model,shamwayselftest_editorless")
 fi
 LOG="$MOD/.selftest-acceptance.log"
@@ -175,51 +192,77 @@ CLIENT_LOG_AT="$(stat -c %Y "$CLIENT_LOG" 2>/dev/null || echo 0)"
 
 grep -qE "SUMMARY pass=[0-9]+ fail=0 " "$LOG" || fail "a case failed (see the summary above)"
 
-# Each of these is a distinct way the writer could be wrong while every offline
-# gate still passed, so they are asserted by value rather than by case name.
-grep -qE "$STEM: $STEM .*renderers=1" "$CLIENT_LOG" ||
-	fail "the prefab did not come back with its renderer: an empty GameObject draws nothing"
-grep -qE "${STEM}_mesh: .*bounds=\(1\.00, 1\.00, 1\.00\)" "$CLIENT_LOG" ||
-	fail "the mesh bounds are not what was authored: the vertex stream or the Y-up conversion moved"
-grep -qE "${STEM}_mat: .*shader=Shamway/Unlit" "$CLIENT_LOG" ||
-	fail "the material does not name the synthesized shader: the PPtr chain broke"
-grep -qE "${STEM}_albedo: .*256x256" "$CLIENT_LOG" ||
-	fail "the texture did not come back at its authored size"
-# The entity lane: a generated creature rides the same bundle. Its prefab
-# must come back with its SkinnedMeshRenderer (renderers=1) and its weighted
-# mesh with the authored vertex count. Spawning it as an entity class is
-# deliberately NOT asserted here: a custom entity class on a dedicated server
-# gets a negative id and renders nothing on clients (docs/authoring/entities.md),
-# and this run always uses one. The prefab load is the engine reading the
-# bundle; the class wiring is the offline `validate` gate's job.
 CREATURE="shamwaySelfTestCreature"
-grep -qE "$CREATURE: $CREATURE .*renderers=1" "$CLIENT_LOG" ||
-	fail "the entity prefab did not come back with its skinned renderer: an empty GameObject draws nothing"
-grep -qE "${CREATURE}_mesh: .*vertices=[0-9]+ submeshes=1" "$CLIENT_LOG" ||
-	fail "the entity mesh did not load with its vertex stream: the skin was flattened or dropped"
-grep -qE "PASS shamwayselftest_block_model/place_${STEM}Block" "$CLIENT_LOG" ||
-	fail "the block was not placed on a voxel (SetBlockRpc + ModelEntity spawn)"
-grep -qE "${STEM}Block: .*looking at voxel" "$CLIENT_LOG" ||
-	fail "the look case did not aim at the placed voxel; the model was not left in the world"
-grep -qE "timedNuke: armedLamp" "$CLIENT_LOG" ||
-	fail "the hierarchy prefab has no child named armedLamp"
-grep -qE "gear: bones=2 nulls=0 root=Hips" "$CLIENT_LOG" ||
-	fail "the skinned prefab did not resolve both bones and a Hips root"
-grep -qE "burst: systems=[0-9]+ renderers=[0-9]+ instantiated=True" "$CLIENT_LOG" ||
-	fail "the vfx prefab did not instantiate ParticleSystem graphs"
+if (( LOOK )); then
+	# The look run is the entity lane's live picture: the generated creature
+	# and the prop must both instantiate in front of the camera with a
+	# renderer, or there is nothing to photograph and no sign-off possible.
+	grep -qE "$CREATURE: staged at .*with [1-9][0-9]* renderer" "$CLIENT_LOG" ||
+		fail "the entity prefab did not stage in front of the camera: nothing to look at"
+	grep -qE "$STEM: staged at .*with [1-9][0-9]* renderer" "$CLIENT_LOG" ||
+		fail "the prop did not stage in front of the camera"
+else
+	# Each of these is a distinct way the writer could be wrong while every
+	# offline gate still passed, so they are asserted by value rather than by
+	# case name.
+	grep -qE "$STEM: $STEM .*renderers=1" "$CLIENT_LOG" ||
+		fail "the prefab did not come back with its renderer: an empty GameObject draws nothing"
+	grep -qE "${STEM}_mesh: .*bounds=\(1\.00, 1\.00, 1\.00\)" "$CLIENT_LOG" ||
+		fail "the mesh bounds are not what was authored: the vertex stream or the Y-up conversion moved"
+	grep -qE "${STEM}_mat: .*shader=Shamway/Unlit" "$CLIENT_LOG" ||
+		fail "the material does not name the synthesized shader: the PPtr chain broke"
+	grep -qE "${STEM}_albedo: .*256x256" "$CLIENT_LOG" ||
+		fail "the texture did not come back at its authored size"
+	# The entity lane: a generated creature rides the same bundle. Its prefab
+	# must come back with its SkinnedMeshRenderer (renderers=1) and its weighted
+	# mesh with the authored vertex count. Spawning it as an entity class is
+	# deliberately NOT asserted here: a custom entity class on a dedicated server
+	# gets a negative id and renders nothing on clients
+	# (docs/authoring/entities.md), and this run always uses one. The prefab
+	# load is the engine reading the bundle; the class wiring is the offline
+	# `validate` gate's job.
+	grep -qE "$CREATURE: $CREATURE .*renderers=1" "$CLIENT_LOG" ||
+		fail "the entity prefab did not come back with its skinned renderer: an empty GameObject draws nothing"
+	grep -qE "${CREATURE}_mesh: .*vertices=[0-9]+ submeshes=1" "$CLIENT_LOG" ||
+		fail "the entity mesh did not load with its vertex stream: the skin was flattened or dropped"
+	grep -qE "${CREATURE}_albedo: .*256x256" "$CLIENT_LOG" ||
+		fail "the entity texture did not come back at its authored size"
+	grep -qE "PASS shamwayselftest_block_model/place_${STEM}Block" "$CLIENT_LOG" ||
+		fail "the block was not placed on a voxel (SetBlockRpc + ModelEntity spawn)"
+	grep -qE "${STEM}Block: .*looking at voxel" "$CLIENT_LOG" ||
+		fail "the look case did not aim at the placed voxel; the model was not left in the world"
+	grep -qE "timedNuke: armedLamp" "$CLIENT_LOG" ||
+		fail "the hierarchy prefab has no child named armedLamp"
+	grep -qE "gear: bones=2 nulls=0 root=Hips" "$CLIENT_LOG" ||
+		fail "the skinned prefab did not resolve both bones and a Hips root"
+	grep -qE "burst: systems=[0-9]+ renderers=[0-9]+ instantiated=True" "$CLIENT_LOG" ||
+		fail "the vfx prefab did not instantiate ParticleSystem graphs"
+fi
 
 if ((FAILED)); then
 	echo
 	die "the live client did not read this bundle the way the writer wrote it"
 fi
 
-cat <<EOF
+if (( LOOK )); then
+	cat <<EOF
+  OK   the entity prefab staged in front of the camera, with a renderer
+  OK   the prop staged in front of the camera
+
+The game instantiated the generated creature. What it looked like is in the
+captured frames — judge them, then file the sign-off:
+
+  shamway client capture entity-look --observable "a quadruped, four legs, head forward, not mirrored"
+EOF
+else
+	cat <<EOF
   OK   the prefab loaded, with its renderer
   OK   the mesh bounds are what was authored
   OK   the material names the synthesized shader
   OK   the texture loaded at its authored size
   OK   the entity prefab loaded with its skinned renderer
   OK   the entity mesh loaded with its vertex stream
+  OK   the entity texture loaded at its authored size
   OK   the block sits on a voxel and the camera looks at it
   OK   armedLamp is findable by name
   OK   the skinned renderer resolved both bones
@@ -231,4 +274,5 @@ nowhere. Judge the placed block, then file the frame:
 
   shamway client capture ${STEM} --observable "upright, R not mirrored, arrow up"
 EOF
+fi
 exit "$STATUS"

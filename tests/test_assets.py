@@ -1098,11 +1098,14 @@ class SelfTestFixtureTests(unittest.TestCase):
         text = script.read_text(encoding="utf-8")
         self.assertIn("shamwayselftest_block_model", text)
         self.assertIn("looking at voxel", text)
-        self.assertNotIn("shamwayselftest_look", text)
         default = "shamwayselftest_bundle,shamwayselftest_block_model,shamwayselftest_editorless"
         self.assertIn(default, text)
+        # The look suite exists only as `--look`: a separate invocation that
+        # replaces the default list, never an addition to it (a look run and
+        # a block run paint different pictures and are refused in one list).
         self.assertNotIn(f"{default},shamwayselftest_look", text)
         self.assertNotIn(f"shamwayselftest_look,{default}", text)
+        self.assertIn('SUITE_ARGS=(--suite "shamwayselftest_look")', text)
 
 
 class AssetsSourceTreeTests(unittest.TestCase):

@@ -430,6 +430,23 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             fail: "the game did not load shamwaySelfTestCreature_mat from the staged bundle"));
 
+        Texture2D shamwaySelfTestCreature_albedoLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCreature_albedo", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCreature_albedoLoaded = DataLoader.LoadAsset<Texture2D>(Bundle + "?shamwaySelfTestCreature_albedo");
+                var loaded = shamwaySelfTestCreature_albedoLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCreature_albedo: LoadAsset<Texture2D> returned null"
+                    : "shamwaySelfTestCreature_albedo: " + loaded.name + " " + loaded.width + "x" + loaded.height + " " + loaded.format);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCreature_albedoLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCreature_albedo" && loaded.width > 0 && loaded.height > 0;
+            },
+            fail: "the game did not load shamwaySelfTestCreature_albedo from the staged bundle"));
+
         GameObject shamwaySelfTestPropLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestProp", new[] { "bundle" },
             act: ctx =>

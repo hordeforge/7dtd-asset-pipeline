@@ -389,13 +389,22 @@ def build_entity_glb(rig: Rig, parts: dict[str, dict[str, Any]], name: str) -> b
 
 
 def entity_xml(entity_name: str, mod: str, bundle: str, stem: str) -> str:
-    """The `entityclasses.xml` patch fragment for the generated entity."""
+    """The `entityclasses.xml` patch fragment for the generated entity.
+
+    `UserSpawnType` is included because it decides whether the class is
+    spawnable at all: the console `spawnentity` command lists only classes
+    whose `userSpawnType` is not None (verified from
+    `ConsoleCmdSpawnEntity.il.txt` — the enum is `None`/`Console`/`Menu`).
+    Without it a generated creature loads but cannot be spawned from the
+    console or the debug menu.
+    """
     uri = f"#@modfolder({mod}):Resources/{bundle}.unity3d?{stem}"
     return f"""<configs>
 \t<append xpath="/entity_classes">
 \t\t<entity_class name="{entity_name}">
 \t\t\t<property name="Prefab" value="{uri}"/>
 \t\t\t<property name="Mesh" value="{uri}"/>
+\t\t\t<property name="UserSpawnType" value="Menu"/>
 \t\t</entity_class>
 \t</append>
 </configs>

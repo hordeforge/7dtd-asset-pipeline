@@ -14,6 +14,14 @@ tag has no changelog section.
 
 ### Added
 
+- The generated entity is now spawnable and visibly textured:
+  `generate entity --xml` emits `UserSpawnType="Menu"` (the console
+  `spawnentity` command lists only non-`None` classes — verified from IL),
+  and the self-test creature ships a 256×256 albedo. `playtest-synthesized
+  --look` runs the `<mod>_look` suite alone and asserts the creature — and
+  every prefab — staged in front of the camera with a renderer; the default
+  run additionally asserts the creature's texture loads at its authored
+  size.
 - `examples/SelfTestMod` ships a hierarchy (`timedNuke` / `armedLamp`), a
   skinned `gear` prefab, and a `burst` VFX graph. `playtest-synthesized`
   runs `shamwayselftest_editorless` and asserts the live client found the

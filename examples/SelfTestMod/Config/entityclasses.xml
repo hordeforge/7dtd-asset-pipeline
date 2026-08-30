@@ -3,8 +3,13 @@
 		<entity_class name="shamwaySelfTestCreature">
 			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCreature"/>
 			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCreature"/>
-			<property name="AvatarController" value="GameObjectAnimalAnimation"/>
 			<property name="UserSpawnType" value="Menu"/>
+			<property name="AvatarController" value="GameObjectAnimalAnimation"/>
+			<property name="Class" value="EntityAnimalStag"/>
+			<property name="IsAnimalEntity" value="true"/>
+			<property name="PhysicsBody" value="Stag"/>
+			<property name="EntityFlags" value="animal"/>
+			<property name="Faction" value="animals"/>
 		</entity_class>
 	</append>
 <append xpath="/entity_classes">

@@ -386,14 +386,73 @@ def _stage_body(stem: str) -> str:
                 var ahead = camera.forward;
                 {variable}Staged = UnityEngine.Object.Instantiate(prefab);
                 CaseDef.RegisterStaged({variable}Staged);
-                {variable}Staged.transform.position = camera.position + ahead * 3.5f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                {variable}Staged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                {variable}Staged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
                 var renderers = {variable}Staged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                if (renderers.Length > 0)
+                {{
+                    var bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                        bounds.Encapsulate(renderers[i].bounds);
+                    lowest = bounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {{
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }}
+                }}
+                {variable}Staged.transform.position = placed;
                 Report.Info("{name}: staged at " + {variable}Staged.transform.position
                     + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;"""
@@ -505,6 +564,31 @@ def _walk_clip_case(prefab_stem: str) -> str:
 """
 
 
+def _walk_entity_case(prefab_stem: str) -> str:
+    """A case that spawns the stem as a real entity class and walks it.
+
+    The only motion kind that does not stage a prefab in front of the camera:
+    `CaseDef.WalkEntity` spawns the stem's entity class beside the player
+    (`EntityFactory.CreateEntity` + `SpawnEntityInWorld`), so the game grounds
+    the entity with its own physics and drives it forward along the ground —
+    the entity's motion makes the avatar controller play the walk gait. This
+    is how an entity lane's creature is proven to actually walk along the
+    ground rather than spin on a turntable at a camera-relative spot, and it
+    is how the game's own grounding (not a hand-measured terrain query) is
+    what places the feet.
+
+    The case asserts the entity spawned and travelled; the gait verdict is the
+    muxed clip and a person's.
+    """
+    name = _cs_body(prefab_stem)
+    return f"""
+        queue.Add(CaseDef.WalkEntity(
+            label, "motion_{name}", "{name}", new Vector3(1.5f, 3f, 1.5f),
+            holdSeconds: 12f, clipFps: 4f, speed: 0.8f,
+            fail: "could not spawn and walk the {{name}} entity class"));
+"""
+
+
 def render(plan_: ProviderPlan) -> dict[str, str]:
     """The provider's files, as `filename -> text`."""
     cases = "".join(_case(stem, kind) for stem, kind in plan_.stems)
@@ -532,6 +616,8 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
             body = _staged_clip_case(stem)
         elif motion == "walk-cycle":
             body = _walk_clip_case(stem)
+        elif motion == "walk-entity":
+            body = _walk_entity_case(stem)
         else:
             body = _staged_case(stem)
         look_id = f"{prefix}_{_cs_body(stem).lower()}_look"

@@ -479,4 +479,5 @@ integration. This table says which is which, so nobody has to guess — and so
 | particle card | Pillow/NumPy/Blender | alpha-edge montage | particle material state + live VFX |
 | sound | `shamway generate sound`, FFmpeg | `shamway check-sound` | sound group lookup + listening at range |
 | detail normal | `shamway generate texture-maps detail` | tiling seam check on a cylinder | in-game light sweep on the flat-colour part |
+| entity skin | `shamway generate hide` (seeded fur/hide albedo, no model) | colour spread + repeat check | the entity's own look suite, with a textured skin that shows the feet |
 | fresh client | `shamway client deploy` / `launch` | `shamway client log` | a person's look or listen, filed with `shamway client capture` |

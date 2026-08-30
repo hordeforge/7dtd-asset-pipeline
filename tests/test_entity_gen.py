@@ -179,6 +179,49 @@ class EntityGeneratorTests(unittest.TestCase):
         self.assertIn('name="UserSpawnType" value="Menu"', fragment)
         self.assertIn("</configs>", fragment)
 
+    def test_an_animated_creature_is_a_real_spawnable_animal(self) -> None:
+        """`--anim` makes the class a concrete EntityAlive, not a bare stub:
+        Class names the C# animal type, PhysicsBody gives it a collider, and
+        IsAnimalEntity/Faction let the game's spawner and AI treat it as one."""
+        fragment = entity_xml(
+            "myCreature",
+            "MyMod",
+            "myMod",
+            "creature",
+            avatar_controller="GameObjectAnimalAnimation",
+        )
+        self.assertIn('name="Class" value="EntityAnimalStag"', fragment)
+        self.assertIn('name="PhysicsBody" value="Stag"', fragment)
+        self.assertIn('name="IsAnimalEntity" value="true"', fragment)
+        self.assertIn('name="Faction" value="animals"', fragment)
+        self.assertIn('name="AvatarController" value="GameObjectAnimalAnimation"', fragment)
+
+    def test_entity_class_and_minimal_opt_out(self) -> None:
+        """`--entity-class` overrides the C# type; `--minimal-entity` emits the
+        bare stub (a class with no entity type is not spawnable, kept only for
+        special cases)."""
+        from sevendtd_asset_pipeline.generators.entity import entity_xml
+
+        custom = entity_xml(
+            "myCreature",
+            "M",
+            "b",
+            "creature",
+            avatar_controller="GameObjectAnimalAnimation",
+            entity_class="EntityAnimalRabbit",
+        )
+        self.assertIn('name="Class" value="EntityAnimalRabbit"', custom)
+        minimal = entity_xml(
+            "myCreature",
+            "M",
+            "b",
+            "creature",
+            avatar_controller="GameObjectAnimalAnimation",
+            minimal=True,
+        )
+        self.assertNotIn('name="Class"', minimal)
+        self.assertNotIn('name="PhysicsBody"', minimal)
+
     def test_xml_is_written_by_the_cli(self) -> None:
         xml = self.root / "creature-entityclasses.xml"
         out = self.root / "creature.glb"

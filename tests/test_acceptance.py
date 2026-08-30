@@ -312,10 +312,10 @@ class InjectionTests(unittest.TestCase):
             )
             planned = acceptance.plan(config)
             project = acceptance.render(planned)[f"{planned.assembly}.csproj"]
-        # Exactly the template's own two comment terminators; the name may
-        # not add a third, so injected markup can only ever sit inside a
-        # comment.
-        self.assertEqual(project.count("-->"), 2)
+        # Exactly the template's own three comment terminators (the header,
+        # the Addressables note, the PhysicsModule note); the name may not add
+        # a fourth, so injected markup can only ever sit inside a comment.
+        self.assertEqual(project.count("-->"), 3)
 
 
 class RegistryTests(unittest.TestCase):
@@ -383,6 +383,12 @@ class MotionKindTests(unittest.TestCase):
             self.assertIn('if (suite == "examplemod_prop_look")', source)
             self.assertNotIn('yield return "examplemod_look"', source)
             self.assertIn("CaseDef.RegisterStaged", source)
+            self.assertIn("Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg", source)
+            self.assertIn("Quaternion.Euler(0f, yaw, 0f)", source)
+            self.assertNotIn("Quaternion.LookRotation", source)
+            self.assertIn("ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f", source)
+            self.assertIn("placed.y = ground - Origin.position.y - lowest", source)
+            self.assertIn("bounds.Encapsulate(renderers[i].bounds)", source)
             self.assertLess(
                 source.index('if (suite == "examplemod_prop_look")'),
                 source.index("Instantiate"),
@@ -443,6 +449,27 @@ class MotionKindTests(unittest.TestCase):
             # A walk is the game's own animation; nothing here stages or spins.
             self.assertNotIn("CaseDef.StagedClip", source)
             self.assertNotIn("Rotate(0f, 360f", source)
+
+    @unittest.skipUnless(
+        has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+    )
+    def test_a_walk_entity_kind_spawns_the_stem_and_walks_it(self) -> None:
+        """The entity lane's proof: the game spawns the class and drives it
+        along the ground, rather than staging a prefab in front of the camera
+        where a hand-measured ground query decides where the feet go."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mod_with_motions(root, ["prop.glb"], {"prop": "walk-entity"})
+            plan_ = acceptance.plan(config)
+            self.assertEqual((("prop", "walk-entity"),), plan_.motions)
+            source = acceptance.render(plan_)[f"{plan_.assembly}.cs"]
+            self.assertIn("CaseDef.WalkEntity", source)
+            self.assertIn('"motion_prop"', source)
+            self.assertIn('"prop", new Vector3(1.5f, 3f, 1.5f)', source)
+            self.assertIn("speed: 0.8f", source)
+            # Never a prefab staged in the player's face.
+            self.assertNotIn("Object.Instantiate", source)
+            self.assertNotIn("CaseDef.StagedClip", source)
 
     def test_a_kind_on_a_non_prefab_member_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

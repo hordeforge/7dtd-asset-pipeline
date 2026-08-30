@@ -179,6 +179,7 @@ shamway generate rig armature.glb
 shamway generate rig bear.glb --rig quadruped-large
 shamway generate entity myCreature.glb --mod MyMod --bundle myMod --xml myCreature-entityclasses.xml
 shamway generate entity myRaptor.glb --rig dinosaur --scale 0.7 --mod MyMod --bundle myMod
+shamway generate entity myCreature.glb --rig quadruped --anim idle,head,walk --mod MyMod --bundle myMod
 ```
 
 ```bash

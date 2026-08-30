@@ -207,8 +207,16 @@ grep -qE "SUMMARY pass=[0-9]+ fail=0 " "$LOG" || fail "a case failed (see the su
 CREATURE="shamwaySelfTestCreature"
 if (( LOOK )); then
 	if [[ -n "$LOOK_STEM" ]]; then
-		grep -qE "$LOOK_STEM: staged at .*with [1-9][0-9]* renderer" "$CLIENT_LOG" ||
-			fail "the $LOOK_STEM prefab was not staged in front of the camera with a renderer"
+		# A walk-entity case spawns the class and drives it along the ground
+		# (the game grounds it), so the evidence is the spawn + travel line,
+		# not a staged prefab in front of the camera.
+		if grep -qE "$LOOK_STEM: spawned_id=[0-9]+ travelled=[0-9.]+m" "$CLIENT_LOG"; then
+			grep -qE "$LOOK_STEM: spawned_id=[0-9]+ travelled=[1-9][0-9.]*m" "$CLIENT_LOG" ||
+				fail "the $LOOK_STEM entity spawned but did not travel (walk-entity case)"
+		else
+			grep -qE "$LOOK_STEM: staged at .*with [1-9][0-9]* renderer" "$CLIENT_LOG" ||
+				fail "the $LOOK_STEM prefab was not staged in front of the camera with a renderer"
+		fi
 	else
 		grep -qE "scene staged look_burst" "$CLIENT_LOG" ||
 			fail "look_burst was not staged in front of the camera"

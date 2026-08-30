@@ -36,6 +36,12 @@
       <HintPath>$(GameManagedDir)/UnityEngine.AnimationModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- The grounded look case raycasts down from the staging point
+         (`Physics.Raycast`, UnityEngine.PhysicsModule). -->
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(GameManagedDir)/UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.ParticleSystemModule">
       <HintPath>$(GameManagedDir)/UnityEngine.ParticleSystemModule.dll</HintPath>
       <Private>false</Private>

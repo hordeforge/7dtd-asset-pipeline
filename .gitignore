@@ -39,3 +39,6 @@ src/sevendtd_asset_pipeline/scripts/
 
 *.ignore
 .local/
+
+# per-run playtest log
+.selftest-acceptance.log

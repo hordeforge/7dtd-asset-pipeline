@@ -514,6 +514,10 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
     # pictures, not a sign-off. Each GameObject gets `<mod>_<stem>_look`.
     # Instantiating in front of the camera is not placing a block;
     # `reject_mixed_visual_suites` refuses those two in one PLAYTEST_SUITE.
+    # The suite id is lowercased because the orchestrator lowercases suite
+    # tokens (playtest_run.py splits `suite.lower()`), and a provider that
+    # compares case-sensitively would never match a stem with uppercase — a
+    # look run then fell through to the load cases and staged nothing.
     motion_kinds = dict(plan_.motions)
     prefix = (
         plan_.suite_id[: -len("_bundle")] if plan_.suite_id.endswith("_bundle") else plan_.suite_id
@@ -530,7 +534,7 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
             body = _walk_clip_case(stem)
         else:
             body = _staged_case(stem)
-        look_id = f"{prefix}_{_cs_body(stem)}_look"
+        look_id = f"{prefix}_{_cs_body(stem).lower()}_look"
         look_yields_parts.append(f'yield return "{look_id}";')
         look_branch_parts.append(
             f'if (suite == "{look_id}")\n        {{\n{body}            return;\n        }}\n'

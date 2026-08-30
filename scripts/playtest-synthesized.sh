@@ -156,7 +156,10 @@ if (( LOOK )); then
 		die "--look already selects a <mod>_<stem>_look suite; do not also pass --suite"
 	fi
 	if [[ -n "$LOOK_STEM" ]]; then
-		SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM}_look")
+		# Suite ids are lowercased by the orchestrator (playtest_run.py
+		# splits `suite.lower()`), and the generated provider compares
+		# case-sensitively, so the stem must arrive lowercase too.
+		SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_look")
 	else
 		SUITE_ARGS=(--suite "shamwayselftest_burst_look")
 	fi

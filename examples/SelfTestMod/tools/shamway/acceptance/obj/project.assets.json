@@ -420,11 +420,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
+      "projectUniqueName": "/tmp/7dtd-asset-pipeline-rigs-live/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
       "projectName": "ShamwaySelfTestAcceptance",
-      "projectPath": "/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
+      "projectPath": "/tmp/7dtd-asset-pipeline-rigs-live/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
       "packagesPath": "/home/yannick/.nuget/packages/",
-      "outputPath": "/home/yannick/code/hordeforge/7dtd-asset-pipeline/examples/SelfTestMod/tools/shamway/acceptance/obj/",
+      "outputPath": "/tmp/7dtd-asset-pipeline-rigs-live/examples/SelfTestMod/tools/shamway/acceptance/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/home/yannick/.nuget/NuGet/NuGet.Config"

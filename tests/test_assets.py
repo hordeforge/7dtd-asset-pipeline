@@ -1151,8 +1151,10 @@ class SelfTestFixtureTests(unittest.TestCase):
         self.assertIn("--look", text)
         self.assertIn('SUITE_ARGS=(--suite "shamwayselftest_burst_look")', text)
         # `--look STEM` picks that prefab's per-prefab look suite, so every
-        # generated rig can be looked at on its own run.
-        self.assertIn('SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM}_look")', text)
+        # generated rig can be looked at on its own run. The stem is
+        # lowercased with the mod name: the orchestrator lowercases suite
+        # tokens, and the provider compares case-sensitively.
+        self.assertIn('SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_look")', text)
         self.assertNotIn("stage_editorless_lineup", text)
 
 

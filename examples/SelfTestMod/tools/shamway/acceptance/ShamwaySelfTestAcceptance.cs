@@ -28,12 +28,12 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             yield return "shamwayselftest_bundle";
             yield return "shamwayselftest_burst_look";
             yield return "shamwayselftest_gear_look";
-            yield return "shamwayselftest_shamwaySelfTestArachnid_look";
-            yield return "shamwayselftest_shamwaySelfTestBird_look";
-            yield return "shamwayselftest_shamwaySelfTestCreature_look";
-            yield return "shamwayselftest_shamwaySelfTestDino_look";
-            yield return "shamwayselftest_shamwaySelfTestProp_look";
-            yield return "shamwayselftest_timedNuke_look";
+            yield return "shamwayselftest_shamwayselftestarachnid_look";
+            yield return "shamwayselftest_shamwayselftestbird_look";
+            yield return "shamwayselftest_shamwayselftestcreature_look";
+            yield return "shamwayselftest_shamwayselftestdino_look";
+            yield return "shamwayselftest_shamwayselftestprop_look";
+            yield return "shamwayselftest_timednuke_look";
         }
     }
 
@@ -139,7 +139,7 @@ if (suite == "shamwayselftest_gear_look")
             fail: "could not stage gear in front of the camera"));
             return;
         }
-if (suite == "shamwayselftest_shamwaySelfTestArachnid_look")
+if (suite == "shamwayselftest_shamwayselftestarachnid_look")
         {
 
         GameObject shamwaySelfTestArachnidStaged = null;
@@ -188,7 +188,7 @@ if (suite == "shamwayselftest_shamwaySelfTestArachnid_look")
             fail: "could not stage shamwaySelfTestArachnid in front of the camera"));
             return;
         }
-if (suite == "shamwayselftest_shamwaySelfTestBird_look")
+if (suite == "shamwayselftest_shamwayselftestbird_look")
         {
 
         GameObject shamwaySelfTestBirdStaged = null;
@@ -237,7 +237,7 @@ if (suite == "shamwayselftest_shamwaySelfTestBird_look")
             fail: "could not stage shamwaySelfTestBird in front of the camera"));
             return;
         }
-if (suite == "shamwayselftest_shamwaySelfTestCreature_look")
+if (suite == "shamwayselftest_shamwayselftestcreature_look")
         {
 
         GameObject shamwaySelfTestCreatureStaged = null;
@@ -286,7 +286,7 @@ if (suite == "shamwayselftest_shamwaySelfTestCreature_look")
             fail: "could not stage shamwaySelfTestCreature in front of the camera"));
             return;
         }
-if (suite == "shamwayselftest_shamwaySelfTestDino_look")
+if (suite == "shamwayselftest_shamwayselftestdino_look")
         {
 
         GameObject shamwaySelfTestDinoStaged = null;
@@ -335,7 +335,7 @@ if (suite == "shamwayselftest_shamwaySelfTestDino_look")
             fail: "could not stage shamwaySelfTestDino in front of the camera"));
             return;
         }
-if (suite == "shamwayselftest_shamwaySelfTestProp_look")
+if (suite == "shamwayselftest_shamwayselftestprop_look")
         {
 
         GameObject shamwaySelfTestPropStaged = null;
@@ -384,7 +384,7 @@ if (suite == "shamwayselftest_shamwaySelfTestProp_look")
             fail: "could not stage shamwaySelfTestProp in front of the camera"));
             return;
         }
-if (suite == "shamwayselftest_timedNuke_look")
+if (suite == "shamwayselftest_timednuke_look")
         {
 
         GameObject timedNukeStaged = null;

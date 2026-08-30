@@ -450,6 +450,9 @@ class MotionKindTests(unittest.TestCase):
             self.assertNotIn("CaseDef.StagedClip", source)
             self.assertNotIn("Rotate(0f, 360f", source)
 
+    @unittest.skipUnless(
+        has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+    )
     def test_a_walk_entity_kind_spawns_the_stem_and_walks_it(self) -> None:
         """The entity lane's proof: the game spawns the class and drives it
         along the ground, rather than staging a prefab in front of the camera

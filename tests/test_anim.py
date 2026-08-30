@@ -540,3 +540,36 @@ class LimbAnimBundleTests(unittest.TestCase):
         out = self.root / "x.glb"
         with self.assertRaises(SystemExit):
             run("entity", [str(out), "--rig", "humanoid", "--anim", "gallop"])
+
+
+class BoneColliderTests(unittest.TestCase):
+    """A generated entity's bones carry colliders, so the game's physics body
+    builds real colliders (PhysicsBodyInstance.bindCollider finds a Box/Capsule/
+    Sphere collider on the referenced bone; absent one it creates a
+    PhysicsBodyNullCollider and the creature floats)."""
+
+    @needs_unitypy
+    def test_every_bone_has_a_collider_component(self) -> None:
+        from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
+
+        out = self.root / "creature.glb"
+        from sevendtd_asset_pipeline.generators import run
+
+        self.assertEqual(run("entity", [str(out), "--rig", "quadruped"]), 0)
+        objects = mesh_source_objects(out, set())
+        objects.append(shader("Shamway/Unlit"))
+        bundle = self.root / "bones.unity3d"
+        bundle.write_bytes(build_bundle(objects, REVISION, "bones.unity3d"))
+        trees = read_objects(bundle)
+        # Box/Capsule/Sphere colliders on the creature's bone GameObjects.
+        collider_kinds = {65}.intersection(trees)
+        self.assertIn(65, trees, "no BoxCollider components: bindCollider makes null colliders")
+
+    def setUp(self) -> None:
+        import tempfile
+
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()

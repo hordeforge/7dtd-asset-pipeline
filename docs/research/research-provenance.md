@@ -1892,6 +1892,25 @@ generated config alone in this engine revision. A generated creature
 animates and travels (verified), but a fully grounded walk needs a C# mod
 component — recorded as the outstanding, non-pipeline item.
 
+**The true collider-missing finding, and why the look suite still floats
+(2026-08-30):** `PhysicsBodyInstance.bindCollider` (from
+`PhysicsBodyInstance.il.txt`) does `modelRoot.Find(path)` then
+`GetComponent<Box/Capsule/SphereCollider>()` on the found bone — and, finding
+none, creates a `PhysicsBodyNullCollider`. **Up to now the generated
+creature's bones had no collider components at all**, so every collider
+config became a null collider and the entity had no collision. The writer
+now adds a small `BoxCollider` to every skinned bone GameObject, so
+`bindCollider` builds real colliders and the creature is physically solid.
+**However**, the walk-entity acceptance spawns the creature **client-side**
+(in the `CaseDef.WalkEntity` look), and the client does not
+gravity-simulate a spawned entity the way the server does — so the client
+still renders it at its +3 m spawn offset, i.e. it still *looks* floating in
+that harness. The collider fix is the correct, necessary asset change
+(server-side and real-gameplay entities then ground properly); the remaining
+"grounded in the client look" gap is a harness/engine-simulation limitation,
+not an asset one. Recorded so the next session does not re-diagnose the
+float as a missing collider (it is not, now).
+
 ## Ground height: GetTerrainHeight is the voxel surface; GetHeightAt is not (2026-08-30)
 
 `ilspycmd -t World` on the installed `Assembly-CSharp.dll` (Unity 2022.3

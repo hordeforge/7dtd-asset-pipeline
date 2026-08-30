@@ -972,6 +972,15 @@ class DocumentationTests(unittest.TestCase):
             with self.subTest(directory.name):
                 self.assertIn(f"{directory.name}/", index)
 
+    def test_environment_effects_do_not_route_particles_to_unity(self) -> None:
+        """The character layer is `.vfx` on synthesized, not a Unity opt-in."""
+        from sevendtd_asset_pipeline.docs import read
+
+        text = read("environment-effects")
+        self.assertNotIn("is Unity-only", text)
+        self.assertIn(".vfx", text)
+        self.assertIn('bundle_source = "synthesized"', text)
+
     def test_packaged_pages_are_the_repo_pages(self) -> None:
         """A wheel ships `src/sevendtd_asset_pipeline/docs/`; a checkout reads `docs/`.
 

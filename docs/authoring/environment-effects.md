@@ -23,10 +23,11 @@ Everything below is detail.
 **What needs an editor here, and what does not.** The engine controls below are
 C# in the mod's own DLL and need nothing from a bundle, so the effect itself
 works on `bundle_source = "none"` and on the default synthesized path alike.
-The cards above are textures, which the editorless writer packs. Only the
-*particle system* that carries them is Unity-only, the same as
-[vfx.md](vfx.md) — so a mod adds `bundle_source = "unity"` for the character
-layer, never for the weather.
+The cards above are textures, which the editorless writer packs. The particle
+system that carries them is a `.vfx` declaration on
+`bundle_source = "synthesized"` — see [vfx.md](vfx.md). Lit Particles/Standard
+Unlit keywords and modules that schema does not encode still want an editor.
+Weather itself never does.
 
 ## A particle prefab is not weather
 

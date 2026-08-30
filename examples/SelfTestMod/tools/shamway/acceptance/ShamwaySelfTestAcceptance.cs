@@ -37,6 +37,94 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
         if (suite == "shamwayselftest_look")
         {
 
+        GameObject burstStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_burst", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?burst");
+                if (prefab == null)
+                {
+                    Report.Info("burst: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "burst: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                burstStaged = UnityEngine.Object.Instantiate(prefab);
+                burstStaged.transform.position = camera.position + ahead * 3.5f;
+                // Face the camera, and keep the prop's own up axis upright so
+                // the orientation card is readable rather than lying on edge.
+                burstStaged.transform.rotation =
+                    Quaternion.LookRotation(-ahead, Vector3.up);
+                var renderers = burstStaged.GetComponentsInChildren<Renderer>(true);
+                Report.Info("burst: staged at " + burstStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", with " + renderers.Length + " renderer(s)");
+                // A prefab with no renderer cannot be photographed into evidence.
+                return renderers.Length > 0;
+            },
+            holdSeconds: 12f,
+            fail: "could not stage burst in front of the camera"));
+
+        GameObject gearStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_gear", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?gear");
+                if (prefab == null)
+                {
+                    Report.Info("gear: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "gear: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                gearStaged = UnityEngine.Object.Instantiate(prefab);
+                gearStaged.transform.position = camera.position + ahead * 3.5f;
+                // Face the camera, and keep the prop's own up axis upright so
+                // the orientation card is readable rather than lying on edge.
+                gearStaged.transform.rotation =
+                    Quaternion.LookRotation(-ahead, Vector3.up);
+                var renderers = gearStaged.GetComponentsInChildren<Renderer>(true);
+                Report.Info("gear: staged at " + gearStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", with " + renderers.Length + " renderer(s)");
+                // A prefab with no renderer cannot be photographed into evidence.
+                return renderers.Length > 0;
+            },
+            holdSeconds: 12f,
+            fail: "could not stage gear in front of the camera"));
+
         GameObject shamwaySelfTestPropStaged = null;
         queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestProp", new[] { "capture", "bundle" },
             stage: ctx =>
@@ -80,9 +168,172 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestProp in front of the camera"));
+
+        GameObject timedNukeStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_timedNuke", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?timedNuke");
+                if (prefab == null)
+                {
+                    Report.Info("timedNuke: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "timedNuke: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                timedNukeStaged = UnityEngine.Object.Instantiate(prefab);
+                timedNukeStaged.transform.position = camera.position + ahead * 3.5f;
+                // Face the camera, and keep the prop's own up axis upright so
+                // the orientation card is readable rather than lying on edge.
+                timedNukeStaged.transform.rotation =
+                    Quaternion.LookRotation(-ahead, Vector3.up);
+                var renderers = timedNukeStaged.GetComponentsInChildren<Renderer>(true);
+                Report.Info("timedNuke: staged at " + timedNukeStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", with " + renderers.Length + " renderer(s)");
+                // A prefab with no renderer cannot be photographed into evidence.
+                return renderers.Length > 0;
+            },
+            holdSeconds: 12f,
+            fail: "could not stage timedNuke in front of the camera"));
             return;
         }
 
+
+        GameObject burstLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_burst", new[] { "bundle" },
+            act: ctx =>
+            {
+                burstLoaded = DataLoader.LoadAsset<GameObject>(Bundle + "?burst");
+                var loaded = burstLoaded;
+                Report.Info(loaded == null
+                    ? "burst: LoadAsset<GameObject> returned null"
+                    : "burst: " + loaded.name + " children=" + loaded.transform.childCount + " renderers=" + loaded.GetComponentsInChildren<Renderer>(true).Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = burstLoaded;
+                return loaded != null && loaded.name == "burst" && loaded.transform != null;
+            },
+            fail: "the game did not load burst from the staged bundle"));
+
+        Material flashMatLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_flashMat", new[] { "bundle" },
+            act: ctx =>
+            {
+                flashMatLoaded = DataLoader.LoadAsset<Material>(Bundle + "?flashMat");
+                var loaded = flashMatLoaded;
+                Report.Info(loaded == null
+                    ? "flashMat: LoadAsset<Material> returned null"
+                    : "flashMat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = flashMatLoaded;
+                return loaded != null && loaded.name == "flashMat" && loaded.shader != null;
+            },
+            fail: "the game did not load flashMat from the staged bundle"));
+
+        Material smokeMatLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_smokeMat", new[] { "bundle" },
+            act: ctx =>
+            {
+                smokeMatLoaded = DataLoader.LoadAsset<Material>(Bundle + "?smokeMat");
+                var loaded = smokeMatLoaded;
+                Report.Info(loaded == null
+                    ? "smokeMat: LoadAsset<Material> returned null"
+                    : "smokeMat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = smokeMatLoaded;
+                return loaded != null && loaded.name == "smokeMat" && loaded.shader != null;
+            },
+            fail: "the game did not load smokeMat from the staged bundle"));
+
+        Texture2D flashCardLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_flashCard", new[] { "bundle" },
+            act: ctx =>
+            {
+                flashCardLoaded = DataLoader.LoadAsset<Texture2D>(Bundle + "?flashCard");
+                var loaded = flashCardLoaded;
+                Report.Info(loaded == null
+                    ? "flashCard: LoadAsset<Texture2D> returned null"
+                    : "flashCard: " + loaded.name + " " + loaded.width + "x" + loaded.height + " " + loaded.format);
+            },
+            assert: ctx =>
+            {
+                var loaded = flashCardLoaded;
+                return loaded != null && loaded.name == "flashCard" && loaded.width > 0 && loaded.height > 0;
+            },
+            fail: "the game did not load flashCard from the staged bundle"));
+
+        GameObject gearLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_gear", new[] { "bundle" },
+            act: ctx =>
+            {
+                gearLoaded = DataLoader.LoadAsset<GameObject>(Bundle + "?gear");
+                var loaded = gearLoaded;
+                Report.Info(loaded == null
+                    ? "gear: LoadAsset<GameObject> returned null"
+                    : "gear: " + loaded.name + " children=" + loaded.transform.childCount + " renderers=" + loaded.GetComponentsInChildren<Renderer>(true).Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = gearLoaded;
+                return loaded != null && loaded.name == "gear" && loaded.transform != null;
+            },
+            fail: "the game did not load gear from the staged bundle"));
+
+        Mesh gear_meshLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_gear_mesh", new[] { "bundle" },
+            act: ctx =>
+            {
+                gear_meshLoaded = DataLoader.LoadAsset<Mesh>(Bundle + "?gear_mesh");
+                var loaded = gear_meshLoaded;
+                Report.Info(loaded == null
+                    ? "gear_mesh: LoadAsset<Mesh> returned null"
+                    : "gear_mesh: " + loaded.name + " vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount + " bounds=" + loaded.bounds.size);
+            },
+            assert: ctx =>
+            {
+                var loaded = gear_meshLoaded;
+                return loaded != null && loaded.name == "gear_mesh" && loaded.vertexCount > 0 && loaded.triangles.Length > 0;
+            },
+            fail: "the game did not load gear_mesh from the staged bundle"));
+
+        Material gear_matLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_gear_mat", new[] { "bundle" },
+            act: ctx =>
+            {
+                gear_matLoaded = DataLoader.LoadAsset<Material>(Bundle + "?gear_mat");
+                var loaded = gear_matLoaded;
+                Report.Info(loaded == null
+                    ? "gear_mat: LoadAsset<Material> returned null"
+                    : "gear_mat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = gear_matLoaded;
+                return loaded != null && loaded.name == "gear_mat" && loaded.shader != null;
+            },
+            fail: "the game did not load gear_mat from the staged bundle"));
 
         GameObject shamwaySelfTestPropLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestProp", new[] { "bundle" },
@@ -151,6 +402,74 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                 return loaded != null && loaded.name == "shamwaySelfTestProp_albedo" && loaded.width > 0 && loaded.height > 0;
             },
             fail: "the game did not load shamwaySelfTestProp_albedo from the staged bundle"));
+
+        Texture2D smokeCardLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_smokeCard", new[] { "bundle" },
+            act: ctx =>
+            {
+                smokeCardLoaded = DataLoader.LoadAsset<Texture2D>(Bundle + "?smokeCard");
+                var loaded = smokeCardLoaded;
+                Report.Info(loaded == null
+                    ? "smokeCard: LoadAsset<Texture2D> returned null"
+                    : "smokeCard: " + loaded.name + " " + loaded.width + "x" + loaded.height + " " + loaded.format);
+            },
+            assert: ctx =>
+            {
+                var loaded = smokeCardLoaded;
+                return loaded != null && loaded.name == "smokeCard" && loaded.width > 0 && loaded.height > 0;
+            },
+            fail: "the game did not load smokeCard from the staged bundle"));
+
+        GameObject timedNukeLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_timedNuke", new[] { "bundle" },
+            act: ctx =>
+            {
+                timedNukeLoaded = DataLoader.LoadAsset<GameObject>(Bundle + "?timedNuke");
+                var loaded = timedNukeLoaded;
+                Report.Info(loaded == null
+                    ? "timedNuke: LoadAsset<GameObject> returned null"
+                    : "timedNuke: " + loaded.name + " children=" + loaded.transform.childCount + " renderers=" + loaded.GetComponentsInChildren<Renderer>(true).Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = timedNukeLoaded;
+                return loaded != null && loaded.name == "timedNuke" && loaded.transform != null;
+            },
+            fail: "the game did not load timedNuke from the staged bundle"));
+
+        Mesh timedNuke_meshLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_timedNuke_mesh", new[] { "bundle" },
+            act: ctx =>
+            {
+                timedNuke_meshLoaded = DataLoader.LoadAsset<Mesh>(Bundle + "?timedNuke_mesh");
+                var loaded = timedNuke_meshLoaded;
+                Report.Info(loaded == null
+                    ? "timedNuke_mesh: LoadAsset<Mesh> returned null"
+                    : "timedNuke_mesh: " + loaded.name + " vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount + " bounds=" + loaded.bounds.size);
+            },
+            assert: ctx =>
+            {
+                var loaded = timedNuke_meshLoaded;
+                return loaded != null && loaded.name == "timedNuke_mesh" && loaded.vertexCount > 0 && loaded.triangles.Length > 0;
+            },
+            fail: "the game did not load timedNuke_mesh from the staged bundle"));
+
+        Material timedNuke_matLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_timedNuke_mat", new[] { "bundle" },
+            act: ctx =>
+            {
+                timedNuke_matLoaded = DataLoader.LoadAsset<Material>(Bundle + "?timedNuke_mat");
+                var loaded = timedNuke_matLoaded;
+                Report.Info(loaded == null
+                    ? "timedNuke_mat: LoadAsset<Material> returned null"
+                    : "timedNuke_mat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = timedNuke_matLoaded;
+                return loaded != null && loaded.name == "timedNuke_mat" && loaded.shader != null;
+            },
+            fail: "the game did not load timedNuke_mat from the staged bundle"));
 
         // A stem the bundle does not contain must still come back null, so a
         // pass above cannot be a loader that answers every request.

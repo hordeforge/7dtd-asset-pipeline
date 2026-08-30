@@ -138,7 +138,7 @@ for arg in "${EXTRA[@]+"${EXTRA[@]}"}"; do
 	fi
 done
 if (( ! has_suite )); then
-	SUITE_ARGS=(--suite "shamwayselftest_bundle,shamwayselftest_block_model")
+	SUITE_ARGS=(--suite "shamwayselftest_bundle,shamwayselftest_block_model,shamwayselftest_editorless")
 fi
 LOG="$MOD/.selftest-acceptance.log"
 # The client launcher writes the same log path every run, so an assertion that
@@ -189,6 +189,12 @@ grep -qE "PASS shamwayselftest_block_model/place_${STEM}Block" "$CLIENT_LOG" ||
 	fail "the block was not placed on a voxel (SetBlockRpc + ModelEntity spawn)"
 grep -qE "${STEM}Block: .*looking at voxel" "$CLIENT_LOG" ||
 	fail "the look case did not aim at the placed voxel; the model was not left in the world"
+grep -qE "timedNuke: armedLamp" "$CLIENT_LOG" ||
+	fail "the hierarchy prefab has no child named armedLamp"
+grep -qE "gear: bones=2 nulls=0 root=Hips" "$CLIENT_LOG" ||
+	fail "the skinned prefab did not resolve both bones and a Hips root"
+grep -qE "burst: systems=[0-9]+ renderers=[0-9]+ instantiated=True" "$CLIENT_LOG" ||
+	fail "the vfx prefab did not instantiate ParticleSystem graphs"
 
 if ((FAILED)); then
 	echo
@@ -201,6 +207,9 @@ cat <<EOF
   OK   the material names the synthesized shader
   OK   the texture loaded at its authored size
   OK   the block sits on a voxel and the camera looks at it
+  OK   armedLamp is findable by name
+  OK   the skinned renderer resolved both bones
+  OK   the particle prefab instantiated without a load error
 
 The game READ the bundle and placed ${STEM}Block. Nobody has LOOKED at it:
 every assertion above passes on a prop drawn mirrored, face-down, or

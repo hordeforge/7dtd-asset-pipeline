@@ -80,6 +80,8 @@ class ScriptRegistryTests(unittest.TestCase):
         self.assertIn("refusing mixed visual suites", text)
         self.assertIn("*_look", text)
         self.assertIn("*_block_*", text)
+        synth = Path(__file__).resolve().parents[1] / "scripts" / "playtest-synthesized.sh"
+        self.assertIn("shamwayselftest_editorless", synth.read_text(encoding="utf-8"))
 
     def test_the_listing_names_every_registered_script(self) -> None:
         out = io.StringIO()

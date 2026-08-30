@@ -216,6 +216,8 @@ class RenderTests(unittest.TestCase):
             self.assertIn("$(PlaytestHarnessPath)", project)
             self.assertIn("$(GameManagedDir)/Assembly-CSharp.dll", project)
             self.assertIn("Unity.Addressables", project)
+            self.assertIn("UnityEngine.ParticleSystemModule", project)
+            self.assertIn("UnityEngine.AnimationModule", project)
 
     def test_writing_is_idempotent_and_lands_under_tools(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

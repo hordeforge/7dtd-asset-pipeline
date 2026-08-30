@@ -1032,6 +1032,12 @@ class SelfTestFixtureTests(unittest.TestCase):
             "README.md",
             "assets-src/bundle/shamwaySelfTestProp.glb",
             "assets-src/bundle/shamwaySelfTestProp_albedo.png",
+            "assets-src/bundle/timedNuke.glb",
+            "assets-src/bundle/gear.glb",
+            "assets-src/bundle/burst.vfx",
+            "assets-src/bundle/flashCard.png",
+            "assets-src/bundle/smokeCard.png",
+            "tools/shamway/acceptance/ShamwaySelfTestEditorlessAcceptance.cs",
             "UIAtlases/ItemIconAtlas/shamwaySelfTestPropBlock.png",
             "Resources/shamwayselftest.unity3d",
             "tools/shamway/manifests/shamwayselftest.unity3d.manifest",
@@ -1069,13 +1075,22 @@ class SelfTestFixtureTests(unittest.TestCase):
         self.assertIn("Helpers.LookAt", source)
         self.assertIn("Helpers.SetBlockRpc", source)
 
+    def test_the_editorless_suite_asks_for_hierarchy_skin_and_vfx(self) -> None:
+        source = (
+            self.FIXTURE / "tools/shamway/acceptance/ShamwaySelfTestEditorlessAcceptance.cs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("armedLamp", source)
+        self.assertIn("SkinnedMeshRenderer", source)
+        self.assertIn("ParticleSystem", source)
+        self.assertNotIn("Object.Instantiate(prefab)", source)
+
     def test_playtest_synthesized_runs_the_block_model_suite(self) -> None:
         script = Path(__file__).resolve().parents[1] / "scripts" / "playtest-synthesized.sh"
         text = script.read_text(encoding="utf-8")
         self.assertIn("shamwayselftest_block_model", text)
         self.assertIn("looking at voxel", text)
         self.assertNotIn("shamwayselftest_look", text)
-        default = "shamwayselftest_bundle,shamwayselftest_block_model"
+        default = "shamwayselftest_bundle,shamwayselftest_block_model,shamwayselftest_editorless"
         self.assertIn(default, text)
         self.assertNotIn(f"{default},shamwayselftest_look", text)
         self.assertNotIn(f"shamwayselftest_look,{default}", text)

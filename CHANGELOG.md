@@ -14,6 +14,11 @@ tag has no changelog section.
 
 ### Added
 
+- `examples/SelfTestMod` ships a hierarchy (`timedNuke` / `armedLamp`), a
+  skinned `gear` prefab, and a `burst` VFX graph. `playtest-synthesized`
+  runs `shamwayselftest_editorless` and asserts the live client found the
+  named child, bound both skinned bones, and instantiated the particle
+  prefab.
 - The entity lane: `shamway generate rig` emits a bone-structure template as
   a glTF armature (a shipped 20-bone `humanoid` rig, any custom spec, rigid
   validation), and `shamway generate entity` skins procedural primitives to a

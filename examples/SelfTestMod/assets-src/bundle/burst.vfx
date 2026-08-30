@@ -1,0 +1,142 @@
+{
+  "format": "shamway.vfx",
+  "version": 1,
+  "budget": 32,
+  "materials": [
+    {
+      "name": "flashMat",
+      "blend": "additive",
+      "texture": "flashCard"
+    },
+    {
+      "name": "smokeMat",
+      "blend": "alpha",
+      "texture": "smokeCard"
+    }
+  ],
+  "systems": [
+    {
+      "name": "flash",
+      "duration": 0.35,
+      "looping": false,
+      "start_delay": 0.0,
+      "simulation_space": "world",
+      "scaling_mode": "hierarchy",
+      "max_particles": 8,
+      "start_lifetime": 0.35,
+      "start_speed": 0.0,
+      "start_size": 2.0,
+      "start_rotation": 0.0,
+      "start_color": [
+        1,
+        0.8,
+        0.2,
+        1
+      ],
+      "emission": {
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 0,
+            "count": 8
+          }
+        ]
+      },
+      "shape": {
+        "type": "sphere",
+        "radius": 0.5
+      },
+      "color_over_lifetime": {
+        "gradient": [
+          {
+            "t": 0,
+            "color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "t": 1,
+            "color": [
+              1,
+              1,
+              1,
+              0
+            ]
+          }
+        ]
+      },
+      "renderer": {
+        "mode": "billboard",
+        "material": "flashMat"
+      }
+    },
+    {
+      "name": "smoke",
+      "duration": 2.0,
+      "looping": false,
+      "max_particles": 16,
+      "start_lifetime": [
+        0.8,
+        1.2
+      ],
+      "start_speed": 1.0,
+      "start_size": {
+        "curve": [
+          [
+            0,
+            0.2
+          ],
+          [
+            1,
+            1.0
+          ]
+        ]
+      },
+      "start_color": [
+        0.4,
+        0.4,
+        0.4,
+        1
+      ],
+      "emission": {
+        "rate": 8
+      },
+      "shape": {
+        "type": "cone",
+        "radius": 0.2,
+        "angle": 20
+      },
+      "velocity_over_lifetime": {
+        "x": 0,
+        "y": 1,
+        "z": 0,
+        "space": "local"
+      },
+      "limit_velocity": {
+        "dampen": 0.1,
+        "magnitude": 4
+      },
+      "size_over_lifetime": {
+        "curve": [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            0.2
+          ]
+        ]
+      },
+      "rotation_over_lifetime": 45,
+      "renderer": {
+        "mode": "stretched_billboard",
+        "material": "smokeMat",
+        "length_scale": 2.5
+      }
+    }
+  ]
+}

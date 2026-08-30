@@ -647,8 +647,14 @@ def _nomad_gear_bundle() -> Path | None:
     return path if path.is_file() else None
 
 
+@needs_trimesh
 class BoneHashTests(unittest.TestCase):
-    """CRC of the Transform path, and pack-time refusal, independent of UnityPy."""
+    """CRC of the Transform path, and pack-time refusal, independent of UnityPy.
+
+    The pack-time refusals run `pack_directory`, which reads the interchange
+    file through trimesh — gated, or a job without trimesh fails them with
+    the capability error instead of the refusal they test.
+    """
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()

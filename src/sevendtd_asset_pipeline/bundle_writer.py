@@ -67,6 +67,7 @@ TRANSFORM = 4
 MESH_FILTER = 33
 MESH_RENDERER = 23
 BOX_COLLIDER = 65
+CAPSULE_COLLIDER = 136
 SHADER = 48
 MATERIAL = 21
 SKINNED_MESH_RENDERER = 137
@@ -1922,7 +1923,110 @@ def skinned_prefab_objects(
                 components.append(collider_key)
                 obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
                 break
+    add_grounding_physics(stem, objects, f"{stem}:transform", geometry.fields["m_LocalAABB"])
     return objects
+
+
+def add_grounding_physics(
+    stem: str,
+    objects: list[BundleObject],
+    root_tr: str,
+    aabb: dict[str, Any],
+) -> None:
+    """Attach the engine's grounding capsule: a `Physics` child of the model root.
+
+    The engine grounds an entity by its CharacterController capsule, and it
+    reads that capsule off a **`Physics` child node** of the model root
+    (`Entity::PhysicsInit` does `Transform.Find("Physics")`, then
+    `AddCharacterController` reads that node's `CapsuleCollider` centre/height
+    and calls `SetSize` — verified from `Entity.il.txt`; recorded in
+    research-provenance). If no `Physics` node exists no CharacterController is
+    created at all, and a scripted spawn falls back to whatever platform the
+    physics body provides — for a procedurally-skinned creature that is the
+    bone-centred colliders, which settle it on the torso and leave the legs
+    clipping the ground (the long-standing "collision on the torso instead of
+    the feet" read).
+
+    The capsule bottom must sit at the mesh's feet. The CC grounds the capsule
+    bottom onto the terrain, so the feet meet the surface exactly when the
+    capsule bottom is at the model's feet. Real animal prefabs author exactly
+    this — `animalDeerStag` carries a `Physics` child at the root with a
+    `CapsuleCollider` (radius 0.22, height 1.20, center.y 0.60); the capsule's
+    bottom is at y=0 where the stag's feet are. The mesh's own bounds are the
+    model's proportions, so the capsule is derived from the mesh AABB.
+
+    The node is a direct child of the prefab root (`root_tr`), as the real
+    animals have it, so `Transform.Find("Physics")` resolves it. When the entity
+    is animated, `attach_anim_objects` wraps the model bones in a `figure` child
+    but deliberately leaves the `Physics` node as a direct root child rather
+    than sweeping it under the figure.
+
+    The mesh AABB is `m_Center` + `m_Extent` (Unity's half-size), so the full
+    height is `2 * m_Extent.y` and the feet sit at `m_Center.y - m_Extent.y`.
+    The capsule centre is the AABB centre and its bottom lands on the feet.
+    """
+    centre = aabb.get("m_Center", {})
+    extent = aabb.get("m_Extent", {})
+    half_h = max(0.05, float(extent.get("y", 0.9)))
+    height = 2.0 * half_h
+    radius = min(0.5, max(0.06, float(extent.get("z", extent.get("x", 0.15))) * 0.5))
+    feet = float(centre.get("y", 0.9)) - half_h
+    bottom = feet + height / 2.0
+
+    physics_go = f"{stem}:physics:go"
+    physics_tr = f"{stem}:physics:transform"
+    physics_collider = f"{stem}:physics:collider"
+    objects.append(
+        BundleObject(
+            GAME_OBJECT,
+            "Physics",
+            _game_object_fields("Physics", [physics_tr, physics_collider]),
+            key=physics_go,
+            in_container=False,
+        )
+    )
+    objects.append(
+        BundleObject(
+            TRANSFORM,
+            "",
+            {
+                "m_GameObject": Ref(physics_go),
+                "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                "m_LocalPosition": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "m_LocalScale": {"x": 1.0, "y": 1.0, "z": 1.0},
+                "m_Children": [],
+                "m_Father": Ref(root_tr),
+            },
+            key=physics_tr,
+            in_container=False,
+        )
+    )
+    objects.append(
+        BundleObject(
+            CAPSULE_COLLIDER,
+            "",
+            {
+                "m_GameObject": Ref(physics_go),
+                "m_Material": NULL_PPTR,
+                "m_IncludeLayers": {"m_Bits": 0},
+                "m_ExcludeLayers": {"m_Bits": 0},
+                "m_LayerOverridePriority": 0,
+                "m_IsTrigger": False,
+                "m_ProvidesContacts": False,
+                "m_Enabled": True,
+                "m_Radius": radius,
+                "m_Height": height,
+                "m_Direction": 1,
+                "m_Center": {"x": 0.0, "y": bottom, "z": 0.0},
+            },
+            key=physics_collider,
+            in_container=False,
+        )
+    )
+    for obj in objects:
+        if obj.key == root_tr:
+            obj.fields["m_Children"] = [*obj.fields["m_Children"], Ref(physics_tr)]
+            break
 
 
 def mesh_source_objects(path: Path, texture_stems: set[str]) -> list[BundleObject]:
@@ -1980,17 +2084,27 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
     # the figure.
     figure_go = f"{path.stem}:figure:go"
     figure_tr = f"{path.stem}:figure:transform"
+    physics_tr = f"{path.stem}:physics:transform"
     original_root_children: list[Ref] | None = None
     for obj in objects:
         if obj.key == root_tr:
             original_root_children = list(obj.fields["m_Children"])
-            obj.fields["m_Children"] = [Ref(figure_tr)]
+            # The root keeps the `figure` (the controller's animation carrier)
+            # and the `Physics` node (the grounding capsule the engine reads
+            # from `RootTransform.Find("Physics")`) as its direct children; the
+            # model bones and skinned body move under the figure below.
+            obj.fields["m_Children"] = [Ref(figure_tr), Ref(physics_tr)]
         elif obj.key == figure_tr:  # pragma: no cover - defensive
             raise PipelineError(f"{path.stem} has a node that would collide with the figure")
     if original_root_children is None:
         raise PipelineError(f"{path.stem} prefab has no root transform to wrap in a figure")
-    # Re-parent every former root child under the figure.
-    figure_children_keys = [child.key for child in original_root_children]
+    # Re-parent every former root child under the figure — except the `Physics`
+    # node, which must stay a direct child of the root so the engine's
+    # `RootTransform.Find("Physics")` (Entity::PhysicsInit, from Entity.il.txt)
+    # resolves it and `AddCharacterController` can build the grounding capsule.
+    figure_children_keys = [
+        child.key for child in original_root_children if child.key != physics_tr
+    ]
     for child_key in figure_children_keys:
         for obj in objects:
             if obj.key == child_key:
@@ -2016,7 +2130,7 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
                 "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
                 "m_LocalPosition": {"x": 0.0, "y": 0.0, "z": 0.0},
                 "m_LocalScale": {"x": 1.0, "y": 1.0, "z": 1.0},
-                "m_Children": original_root_children,
+                "m_Children": [Ref(key) for key in figure_children_keys],
                 "m_Father": Ref(root_tr),
             },
             key=figure_tr,

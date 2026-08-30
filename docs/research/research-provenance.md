@@ -1937,6 +1937,48 @@ spawn offset (player 61.08 + 3) — i.e. the client never pulls it
 down. A client-side spawn cannot demo grounding no matter the asset. Recorded so the next session does not re-diagnose the
 float as a missing collider (it is not, now).
 
+**The grounding mechanism the asset can control (2026-08-30): the CC capsule
+on a `Physics` child of the model root.** The bone-collider work above made
+the creature *physically solid* but could not ground it, because a
+procedurally-skinned creature's per-bone colliders are bone-centred and do
+not reach the feet, and `EnumColliderType` has no explicit box/capsule body
+type. The engine has a second, independent grounding path that *is*
+asset-controllable and that the prior work never touched. Verified from
+`Entity.il.txt` (the installed `Assembly-CSharp.dll`, decompiled):
+
+- `Entity::PhysicsInit` finds a transform named **`Physics`** under the
+  model root (`Transform.Find("Physics")`, `Entity.il.txt:1282`; the
+  first-choice `FindTagInChilds("Physics")` at :1238 is a Unity-**tag**
+  match, which the engine itself applies later — `Init` at :1149 does
+  `PhysicsTransform.gameObject.tag = "Physics"` — so the name-based
+  `Transform.Find` is the reliable authoring route). If no `Physics`
+  node exists, `PhysicsTransform` stays null and **no CharacterController
+  is created at all**.
+- `Entity::AddCharacterController` (Entity.il.txt:800) reads the `Physics`
+  GameObject's **`CapsuleCollider`** `center`/`height`/`radius`, wraps it in
+  `CharacterControllerUnity`, and calls `SetSize` (:1001). For a normal (non-
+  player, non-large-entity) entity the `physicsHeightScale` is 1.0, so the CC
+  capsule *is* that collider. If no `CapsuleCollider` exists it adds a
+  default (center.y=0.9, height=1.8, radius=0.3, :930-938).
+- The CC capsule bottom is `center.y - height/2`. Unity grounds the
+  `CharacterController` so that bottom rests on the terrain, and the model
+  hangs off the same root — so the feet meet the surface exactly when the
+  capsule bottom sits at the model's feet depth.
+
+Real animal prefabs author exactly this: `animalDeerStag` (from the shipped
+`automatic_assets_entities/animals.bundle`, read with UnityPy) has a
+`Physics` child of the prefab root at local (0,0,0) with a **CapsuleCollider
+radius 0.22, height 1.20, center.y 0.60** — capsule bottom at y=0, i.e. at
+the root, where the stag's feet are. Snake, deer, wolf, boar, bear, rabbit,
+chicken and the insects each carry the same `Physics` + CapsuleCollider
+pattern. **So the fix for a generated creature is an asset one after all:
+emit a `Physics` child node of the model root with a CapsuleCollider whose
+bottom = the mesh's feet**, and the engine grounds the entity on its feet —
+no C# mod, no `physicsbodies.xml` config. The prior "config route is
+measured closed" finding remains true for per-bone bodies; this is the
+non-per-bone capsule body that `EnumColliderType`'s three values cannot
+express.
+
 ## Ground height: GetTerrainHeight is the voxel surface; GetHeightAt is not (2026-08-30)
 
 `ilspycmd -t World` on the installed `Assembly-CSharp.dll` (Unity 2022.3

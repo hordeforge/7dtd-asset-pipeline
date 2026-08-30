@@ -562,7 +562,6 @@ class BoneColliderTests(unittest.TestCase):
         bundle.write_bytes(build_bundle(objects, REVISION, "bones.unity3d"))
         trees = read_objects(bundle)
         # Box/Capsule/Sphere colliders on the creature's bone GameObjects.
-        collider_kinds = {65}.intersection(trees)
         self.assertIn(65, trees, "no BoxCollider components: bindCollider makes null colliders")
 
     def setUp(self) -> None:

@@ -30,14 +30,14 @@
       "max_particles": 16,
       "start_lifetime": 0.7,
       "start_speed": 0.15,
-      "start_size": 1.8,
+      "start_size": 1.0,
       "start_rotation": 0.0,
       "start_color": [1, 0.75, 0.15, 1],
       "emission": {
         "rate": 0,
-        "bursts": [{"time": 0, "count": 10, "cycles": 1, "interval": 1.0}]
+        "bursts": [{"time": 0, "count": 6, "cycles": 1, "interval": 1.0}]
       },
-      "shape": {"type": "sphere", "radius": 0.35},
+      "shape": {"type": "sphere", "radius": 0.25, "position": [0, 0, 0]},
       "size_over_lifetime": {"curve": [[0, 0.4], [0.2, 1], [1, 0.15]]},
       "color_over_lifetime": {
         "gradient": [
@@ -54,10 +54,16 @@
       "max_particles": 24,
       "start_lifetime": [1.6, 2.4],
       "start_speed": 0.45,
-      "start_size": 1.6,
-      "start_color": [0.55, 0.55, 0.62, 0.9],
-      "emission": {"rate": 8},
-      "shape": {"type": "cone", "radius": 0.22, "angle": 22},
+      "start_size": 2.2,
+      "start_color": [0.42, 0.42, 0.48, 1],
+      "emission": {"rate": 14},
+      "shape": {
+        "type": "cone",
+        "radius": 0.35,
+        "angle": 28,
+        "position": [-1.35, 0.25, 0],
+        "rotation": [-90, 0, 0]
+      },
       "velocity_over_lifetime": {"x": 0, "y": 0.7, "z": 0, "space": "local"},
       "limit_velocity": {"dampen": 0.08, "magnitude": 3},
       "size_over_lifetime": {"curve": [[0, 0.5], [0.35, 1.2], [1, 0.35]]},
@@ -80,7 +86,12 @@
       "start_size": 0.4,
       "start_color": [1, 0.4, 0.08, 1],
       "emission": {"rate": 14},
-      "shape": {"type": "cone", "radius": 0.08, "angle": 16},
+      "shape": {
+        "type": "cone",
+        "radius": 0.08,
+        "angle": 16,
+        "position": [1.35, -0.2, 0]
+      },
       "velocity_over_lifetime": {"x": 0, "y": -1.4, "z": 0, "space": "world"},
       "renderer": {
         "mode": "stretched_billboard",

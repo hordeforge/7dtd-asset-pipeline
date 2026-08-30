@@ -528,7 +528,10 @@ sound, audio-conversion, cutout, particle-card, icon, texture, mesh,
 mesh-icon, and mesh-optimize lanes, and the
 scaffolded Unity project ships `GeneratedAsset.cs` for asset-as-code prefabs,
 materials, imports, particles, and audio, plus `IconRenderer.cs`. Extend those
-rather than starting a new pattern.
+rather than starting a new pattern. A consuming mod's particles are a
+`.vfx` next to card PNGs plus `shamway generate particle-card` — the same
+surface as `examples/SelfTestMod`; offset `shape.position` when layers
+must be judged apart. [docs/authoring/vfx.md](docs/authoring/vfx.md).
 
 `shamway prompt KIND --subject "..."` renders the art-direction contract as a
 ready image-generation prompt — the asset-type line, the key colour, the

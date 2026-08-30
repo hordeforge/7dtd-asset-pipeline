@@ -211,6 +211,29 @@ Each is optional, installable per mod, and belongs behind
 `shamway capabilities --json` when one becomes load-bearing for a command —
 never guessed at.
 
+## 8. Self-test burst haze is not visible at `--look`
+
+`examples/SelfTestMod` ships a looping `burst` prefab with three systems
+(flash, smoke, sparks) as children of one GameObject — the allowed
+together-case, not a mix-gate miss. A 2026-08-30 live
+`playtest-synthesized.sh --look` (suite `shamwayselftest_burst_look` only)
+showed the gold additive flash and the orange sparks. A person looking
+could not see grey smoke. Packing and `LoadAsset` of the ParticleSystem
+are proven; the haze as a picture is not.
+
+The systems now have distinct `shape.position` values (smoke left, flash
+centre, sparks right in camera-local space after the look stages the
+prefab facing the lens). That spread is the reusable `.vfx` surface
+(`shape.position` / `shape.rotation` in [vfx.md](../authoring/vfx.md)).
+It did not make the haze readable: a white `particle-card haze` on alpha
+blend, sitting near additive gold, still reads as nothing.
+
+**Close it with:** a `--look` a person can name as grey haze without
+being told where to look — likely a darker/denser smoke card, not
+another offset. File the frame with
+`shamway client capture burst --observable "grey haze left, gold flash centre, orange streaks right"`.
+Do not claim the smoke layer works until that capture exists.
+
 ## Ordering
 
 If picked up in one pass: **1** (patch dry-run) buys the most silence removed

@@ -17,12 +17,28 @@ Each of those has happened; each has a specific, cheap preventative below.
 
 ## Quick start
 
-- write a `.vfx` declaration next to the card PNGs
-- `shamway inspect --deep Resources/mymod.unity3d` — did the systems survive?
+Any synthesized mod uses the same surface. `examples/SelfTestMod` is the
+worked fixture, not a private path: drop a `.vfx` next to card PNGs in
+`assets-src/bundle/`, `shamway build`, inspect.
+
+Generate the cards (haze for flash/smoke, streak for sparks):
+
+```bash
+shamway generate particle-card haze assets-src/bundle/flashCard.png --size 256
+shamway generate particle-card haze assets-src/bundle/smokeCard.png --size 256
+shamway generate particle-card streak assets-src/bundle/sparkCard.png
+```
+
+Or cut a card out of an authored mask:
 
 ```bash
 shamway generate cutout luma assets-src/vfx/smoke-mask.png \
     assets-src/bundle/smoke-card.png --black-point 15
+```
+
+Build and confirm the systems survived:
+
+```bash
 shamway build
 shamway inspect --deep Resources/mymod.unity3d
 ```
@@ -58,13 +74,28 @@ that pass is opaque One/Zero.
 
 Supported modules: main (duration, looping, start delay, simulation space,
 scaling mode, start lifetime/speed/size/rotation/color, max particles),
-emission rate and bursts, shapes sphere/cone/circle/hemisphere/box,
+emission rate and bursts, shapes sphere/cone/circle/hemisphere/box
+(`shape.position` and `shape.rotation` in local metres / degrees),
 velocity over lifetime, limit velocity/damping, size/rotation/color over
 lifetime, renderer modes billboard / horizontal billboard / stretched
 billboard. Curves are a number, `[min, max]`, `{"curve": [[t, v], ...]}`,
 or two-curve form. Velocity axes must share one curve mode. The sum of
 `max_particles` must not exceed `budget` (cap 10000). Unknown modules fail
 the pack.
+
+**One `.vfx` file is one prefab.** Every `systems` entry becomes a named
+child with its own ParticleSystem. That is one look suite
+(`<mod>_<stem>_look`). The mix gates refuse two *prefabs* in one camera
+hold, not children of one built VFX. If a sign-off has to judge layers
+apart — flash versus haze versus sparks — offset each system's
+`shape.position`. After the look stages the prefab facing the camera,
+local −X is left of the lens, +X is right, +Y is up. Sitting every
+system on `[0, 0, 0]` stacks them on one world point; a 2026-08-30
+`--look` of the self-test burst showed the additive flash and the
+sparks, and no readable grey haze. The fixture now offsets those three
+(`examples/SelfTestMod/assets-src/bundle/burst.vfx`); making the haze
+itself visible is still open in
+[improvements.md](../status/improvements.md).
 
 Everything below is detail.
 

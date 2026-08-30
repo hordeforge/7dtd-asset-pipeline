@@ -306,6 +306,17 @@ shamway generate mesh assets-src/bundle/myModThing.glb --shape cylinder --size 0
 shamway generate mesh-icon assets-src/bundle/myModThing.glb UIAtlases/ItemIconAtlas/myModThing.png
 ```
 
+Particle cards and the `.vfx` graph are the same commands in a consuming
+mod, not a SelfTest-only path. Haze and streak cards:
+
+```bash
+shamway generate particle-card haze assets-src/bundle/flashCard.png --size 256
+shamway generate particle-card streak assets-src/bundle/sparkCard.png
+```
+
+The declaration, `shape.position`, and one-file-one-prefab rule live in
+[Visual effects](../authoring/vfx.md).
+
 `GeneratedAsset.cs`, `IconRenderer.cs` and `shamway render-icon` belong to the
 Unity lane and appear only in a mod that opted into it. `generate mesh` and
 `generate mesh-icon` are their editorless counterparts: the first writes
@@ -319,8 +330,8 @@ Read these before authoring:
   that produce an asset which looks native rather than merely clean;
 - [Sound](../authoring/audio.md) — synthesis, `sounds.xml`, and why a loaded clip can be
   silent;
-- [Visual effects](../authoring/vfx.md) — budgets, LOD tiers, and two silent material
-  failures;
+- [Visual effects](../authoring/vfx.md) — `.vfx` graphs, `particle-card`,
+  `shape.position`, budgets, and two silent material failures;
 - [Agent workflows](../authoring/agent-workflows.md) — the lane each asset type follows.
 
 ## When something fails

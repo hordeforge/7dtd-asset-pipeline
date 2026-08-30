@@ -1760,3 +1760,15 @@ the documented SphereII mod family pattern
 ([0-SCore docs, nexusmods.com/7daystodie/mods/6176](https://www.nexusmods.com/7daystodie/mods/6176?tab=docs)),
 and the `entity_class` element name is confirmed by the engine's own error
 message above.
+
+## UserSpawnType gates console spawning (2026-08-30)
+
+`EntityClass/UserSpawnType` is a three-value enum: `None`, `Console`, `Menu`
+(`il/full-v3.1.0/_global/EntityClass_UserSpawnType.il.txt`, dedi V3.1.0).
+`ConsoleCmdSpawnEntity.Execute` walks `EntityClass.list` and lists a class
+only when `userSpawnType` is non-zero (`IL_00D5: ldfld userSpawnType;
+brfalse.s IL_010C` — `ConsoleCmdSpawnEntity.il.txt`), so a class without
+`UserSpawnType` cannot be spawned from the console. The entity generator
+therefore emits `UserSpawnType="Menu"` in its `entityclasses.xml` patch;
+`Console` is the alternative for a class that should only come from code or
+a spawn file.

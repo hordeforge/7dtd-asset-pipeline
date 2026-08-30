@@ -28,7 +28,8 @@ cannot be regenerated from what is written here is not finished.
 | Asset | Source | How it was made | Deployed as | Reviewed |
 |---|---|---|---|---|
 | `shamwaySelfTestProp` | `shamway generate mesh` (see the prop's own history) | a full 1 × 1 × 1 m block, Y-up, UV0 | `bundle/shamwaySelfTestProp.glb` | yes — the playtest asserts it by value |
-| `shamwaySelfTestCreature` | `shamway generate entity bundle/shamwaySelfTestCreature.glb --rig quadruped` | the quadruped rig, default parts, fully deterministic (no seed) | `bundle/shamwaySelfTestCreature.glb` | not yet — the live look is owed |
+| `shamwaySelfTestCreature` | `shamway generate entity bundle/shamwaySelfTestCreature.glb --rig quadruped` | the quadruped rig, default parts, fully deterministic (no seed) | `bundle/shamwaySelfTestCreature.glb` | not yet — the `--look` run is the owed picture |
+| `shamwaySelfTestCreature_albedo` | PIL, one deterministic script (256×256: moss green, dorsal stripes, pale snout patch, eye marker) | re-run the recorded script byte-for-byte | `bundle/shamwaySelfTestCreature_albedo.png` | not yet — judged with the creature |
 | _example_ | `icons/nuke-v4.png` | image generation, prompt below; cut out with `shamway generate cutout key --size 160` | `UIAtlases/ItemIconAtlas/myModNuke.png` | not yet |
 
 For generated art, record the model or tool, the **exact prompt**, the

@@ -176,6 +176,7 @@ class EntityGeneratorTests(unittest.TestCase):
             'name="Mesh" value="#@modfolder(MyMod):Resources/myMod.unity3d?creature"',
             fragment,
         )
+        self.assertIn('name="UserSpawnType" value="Menu"', fragment)
         self.assertIn("</configs>", fragment)
 
     def test_xml_is_written_by_the_cli(self) -> None:

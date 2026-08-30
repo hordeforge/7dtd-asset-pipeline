@@ -93,6 +93,12 @@ Verified from `il/full-v3.1.0/_global/EntityClass.il.txt` and
   biped/head/neck transforms by name. The animator and animation lookups are
   **null-guarded**: a model with neither loads and renders, standing in its
   authored pose. It simply does not move.
+- **Without `UserSpawnType` the class cannot be spawned from the console.**
+  The `spawnentity` command lists only classes whose `userSpawnType` is not
+  `None` (verified from `ConsoleCmdSpawnEntity.il.txt`; the enum is
+  `None`/`Console`/`Menu`). The generator emits `UserSpawnType="Menu"` so
+  the creature is listable; `Console` is the alternative for a class that
+  should only come from code or a spawn file.
 
 So the minimal wiring for a generated entity is exactly what
 `shamway generate entity --xml` writes:
@@ -102,6 +108,7 @@ So the minimal wiring for a generated entity is exactly what
     <entity_class name="myCreature">
         <property name="Prefab" value="#@modfolder(MyMod):Resources/myMod.unity3d?myCreature"/>
         <property name="Mesh" value="#@modfolder(MyMod):Resources/myMod.unity3d?myCreature"/>
+        <property name="UserSpawnType" value="Menu"/>
     </entity_class>
 </append>
 ```
@@ -109,8 +116,8 @@ So the minimal wiring for a generated entity is exactly what
 What the fragment deliberately leaves out — `PhysicsBody`, `MaxHealth`,
 `sounds`, `MoveSpeed`, AI, loot — is mod-specific and belongs in the mod's
 own XML, exactly like the properties a prop or item needs. A class with only
-the two model properties loads and spawns (the debug spawn menu lists
-entity classes), and stands still.
+the three properties loads, lists in the console spawn menu, and stands
+still.
 
 ## Bone names are the mod's choice — with two exceptions
 
@@ -171,11 +178,27 @@ result is read back with UnityPy, which parses Unity's format with none of
 this repository's code — asserting a `SkinnedMeshRenderer` (never a
 `MeshRenderer` fallback), 20 named bone transforms, and a mesh whose
 `m_BoneNameHashes` match the authored joint names. The generated
-`entityclasses.xml` is asserted for the mandatory `Prefab`, the `Mesh`, and
-the bundle URI.
+`entityclasses.xml` is asserted for the mandatory `Prefab`, the `Mesh`, the
+`UserSpawnType`, and the bundle URI.
 
-The live half is the same as every lane: a fresh client, a spawn, and a look.
-**A load is not a look** — the suite proves the game can read the prefab; it
-does not prove the creature reads as a creature. The first live acceptance
-of a generated entity, with the frames and the client log, is owed exactly
-like the first prop's was.
+The live half runs in two separate `playtest-synthesized` invocations,
+because a load run and a look run paint different pictures:
+
+- the default run asserts the game **reads** the bundle: the creature prefab
+  comes back with its `SkinnedMeshRenderer`, its weighted mesh loads with
+  its vertex stream, and its albedo texture loads at its authored size
+  (`examples/SelfTestMod` carries a generated quadruped for exactly this);
+- the `--look` run asserts the game **instantiates** it: the creature stages
+  in front of the camera with a renderer, so there is a frame to judge:
+
+  ```bash
+  shamway script playtest-synthesized            # loads + block placement
+  shamway script playtest-synthesized --look     # prefabs staged in camera
+  ```
+
+**A load is not a look, and a staged prefab is not a sign-off.** The `--look`
+run proves the creature renders *something*; that it reads as a creature is
+a person's judgement. File it, with the frame and the observable it was
+checked against, through `shamway client capture entity-look --observable
+"a quadruped, four legs, head forward, not mirrored"` — and the entity lane
+is not complete until that capture exists.

@@ -32,6 +32,21 @@ The pattern is periodic by construction (the same FFT-shaping `texture-maps
 detail` uses), which a primitive's default UVs need — a seam where the noise
 wraps is invisible when the noise itself wraps.
 
+**Atlas mode.** A generated entity merges every part into one mesh where each
+part's vertices span the whole 0-1 UV box, so no single coat can reserve a
+colour for the feet — the paws and the body read as one object and the
+ground junction disappears. `shamway generate entity --atlas` instead gives
+each part its own cell of the texture and writes a manifest; pass that to
+`generate hide --atlas` and each cell is painted the role colour its part
+demands (paw dark, limb a shade, body the coat), with the gutters filled by
+`--outline` so every part's silhouette reads against the terrain. Each atlas
+cell draws its own periodic field at the cell's own pixel size, so a
+primitive's wrapping default UVs never seam inside its cell:
+
+    shamway generate entity myWolf.glb --atlas myWolf.atlas.json
+    shamway generate hide assets-src/bundle/myWolf_albedo.png \
+        --atlas myWolf.atlas.json --seed 7
+
 Needs Pillow and NumPy; `shamway capabilities --missing` prints the install
 command for this host.
 """
@@ -39,6 +54,8 @@ command for this host.
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import sys
 from pathlib import Path
 
@@ -132,6 +149,105 @@ def hide_rgb(
     return np.clip(np.clip(rgb, 0.0, 255.0).astype(np.uint8), 0, 255)
 
 
+# Whole-texture hide for a primitive whose UVs span [0, 1]. In atlas mode each
+# part's UVs are confined to a cell, so each cell draws its own periodic field
+# — a field across the whole texture would not wrap inside a cell and would
+# seam where a primitive's default UVs wrap.
+def _cell_field(
+    rng: np.random.Generator, cell_px: int, strength: float, fur_strength: float, grain: float
+) -> np.ndarray:
+    """A periodic fur field the size of one atlas cell, in `[0, 1]` per channel.
+
+    The cell is square (the entity atlas uses a square grid), so a field
+    generated at exactly `cell_px` tiles it with no seam — which is what a
+    primitive's default UVs need once they are confined to that cell. The three
+    noise layers and the clump-anisotropy match `hide_rgb`, so an atlased hide
+    and a whole-coat hide read as the same species.
+    """
+    patches = tileable_noise(cell_px, rng, exponent=-1.6, anisotropy=1.0)
+    clumps = tileable_noise(cell_px, rng, exponent=-1.1, anisotropy=2.6)
+    hair = tileable_noise(cell_px, rng, exponent=-0.35, anisotropy=1.0)
+    mottle = 1.0 + patches * strength
+    clump = np.clip(clumps * 0.5 + 0.5, 0.0, 1.0)
+    field = mottle * (1.0 + clump * fur_strength)  # one planar field, no colour yet
+    return field * (1.0 + hair * grain)
+
+
+def hide_atlas_rgb(
+    size: int,
+    seed: int,
+    grid: int,
+    cells: dict[str, tuple[float, float, float, float]],
+    roles: dict[str, str],
+    base: tuple[int, int, int],
+    fur: tuple[int, int, int],
+    paw: tuple[int, int, int],
+    limb: tuple[int, int, int],
+    outline: tuple[int, int, int],
+    strength: float,
+    fur_strength: float,
+    patch_strength: float,
+    grain: float,
+) -> np.ndarray:
+    """A (size, size, 3) albedo for an atlased entity: one field per cell.
+
+    Every part owns one cell of the atlas (set up by `shamway generate entity
+    --atlas`), so this generator paints each cell a role colour instead of one
+    whole-coat hue. That is the contrast a rendered creature needs: with every
+    part sampling the same texture no colour can be reserved for the feet, so
+    the paws and the body read as one object and the ground junction vanishes.
+    Here `paw` cells go dark (contact), `limb` cells a shade, and the rest the
+    base coat — so the legs, the body, and each hoof are distinguishable in a
+    single frame. The gutter between cells is painted `outline`, which is the
+    darker edging that makes each part's silhouette legible.
+
+    Each cell is drawn with its own periodic field (see `_cell_field`) so a
+    primitive's wrapping default UVs never show a seam inside the cell, and the
+    same seed gives the same bytes in the same cells. `patch_strength` is
+    accepted for signature parity with `hide_rgb` but does not shift the base
+    coat here — in atlas mode the role colour is the discrimination, and a spot
+    on a paw cell would dilute it.
+    """
+    cell_px = max(16, size // grid)
+    rng = np.random.default_rng(seed)
+
+    field = _cell_field(rng, cell_px, strength, fur_strength, grain)
+    base_array = np.asarray(base, dtype=np.float64)
+    fur_array = np.asarray(fur, dtype=np.float64)
+    paw_array = np.asarray(paw, dtype=np.float64)
+    limb_array = np.asarray(limb, dtype=np.float64)
+    outline_array = np.asarray(outline, dtype=np.float64)
+
+    out = np.empty((size, size, 3), dtype=np.uint8)
+    out[...] = outline_array[None, None, :]
+
+    for name, (u0, v0, u1, v1) in cells.items():
+        role = roles.get(name, "body")
+        if role == "paw":
+            fill = paw_array[None, None, :] * field[..., None]
+        elif role == "limb":
+            fill = limb_array[None, None, :] * field[..., None]
+        elif role == "head" or role == "tail":
+            fill = fur_array[None, None, :] * field[..., None]
+        else:
+            fill = base_array[None, None, :] * field[..., None]
+        fill = np.clip(fill, 0.0, 255.0).astype(np.uint8)
+
+        # Paste the cell field into the cell's pixel rect, least-remainder
+        # so the UV-inset the mesh applies never lands on a shared edge.
+        x0 = round(u0 * size)
+        x1 = round(u1 * size)
+        y0 = round((1.0 - v1) * size)
+        y1 = round((1.0 - v0) * size)
+        fh = y1 - y0
+        fw = x1 - x0
+        if fh <= 0 or fw <= 0:
+            continue
+        cell_field = np.resize(fill, (fh, fw, 3)) if (fh, fw) != (cell_px, cell_px) else fill
+        out[y0:y1, x0:x1] = cell_field
+    return out
+
+
 def save(image: np.ndarray, destination: Path) -> None:
     with atomic.staged_write(destination) as staged:
         Image.fromarray(image, "RGB").save(staged, "PNG", optimize=True)
@@ -209,6 +325,37 @@ def main(argv: list[str] | None = None) -> int:
         default=0.15,
         help="fine hair-grain luminance noise in [0, 1] (default 0.15)",
     )
+    parser.add_argument(
+        "--atlas",
+        default=None,
+        metavar="JSON",
+        help="a per-part UV atlas manifest written by `shamway generate entity"
+        " --atlas`. Each part then paints its own cell with its role colour —"
+        " paws dark, limbs a shade, body the coat — instead of one whole-coat"
+        " hue, and the gutters are filled with the --outline colour so each"
+        " part's silhouette reads. This is the mode a rendered creature needs;"
+        " without it every part shares the whole texture and one coat covers"
+        " the entire animal",
+    )
+    parser.add_argument(
+        "--paw",
+        default=None,
+        help="paw/hoof colour as R,G,B for --atlas mode; defaults to a dark"
+        " shade of --base. The feet stay distinct from the legs and the ground",
+    )
+    parser.add_argument(
+        "--limb",
+        default=None,
+        help="leg/arm colour as R,G,B for --atlas mode; defaults to a shade of"
+        " --base between the body and the paw",
+    )
+    parser.add_argument(
+        "--outline",
+        default=None,
+        help="the gutter colour between atlas cells as R,G,B; defaults to a"
+        " dark neutral. A darker edging is what makes a part's silhouette, and"
+        " the paw's contact with the ground, legible in a single frame",
+    )
     args = parser.parse_args(argv)
     require_imaging()
     if args.size < 16:
@@ -236,6 +383,70 @@ def main(argv: list[str] | None = None) -> int:
         if args.patch is not None
         else (max(0, int(base[0] * 0.45)), max(0, int(base[1] * 0.45)), max(0, int(base[2] * 0.45)))
     )
+
+    if args.atlas:
+        manifest = json.loads(Path(args.atlas).read_text(encoding="utf-8"))
+        cells = manifest.get("parts")
+        roles = manifest.get("roles")
+        grid = manifest.get("grid")
+        if not isinstance(cells, dict) or not cells:
+            raise SystemExit(f"ERROR: {args.atlas} has no per-part cells")
+        if not isinstance(roles, dict):
+            roles = {}
+        if not isinstance(grid, int) or grid < 1:
+            grid = math.ceil(math.sqrt(len(cells)))
+        paw = (
+            parse_colour(args.paw)
+            if args.paw is not None
+            else (
+                max(0, int(base[0] * 0.35)),
+                max(0, int(base[1] * 0.35)),
+                max(0, int(base[2] * 0.35)),
+            )
+        )
+        limb = (
+            parse_colour(args.limb)
+            if args.limb is not None
+            else (
+                int(max(base[0], fur[0]) * 0.7),
+                int(max(base[1], fur[1]) * 0.7),
+                int(max(base[2], fur[2]) * 0.7),
+            )
+        )
+        outline = (
+            parse_colour(args.outline)
+            if args.outline is not None
+            else (
+                max(0, int(base[0] * 0.2)),
+                max(0, int(base[1] * 0.2)),
+                max(0, int(base[2] * 0.2)),
+            )
+        )
+        rgb = hide_atlas_rgb(
+            args.size,
+            args.seed,
+            grid,
+            cells,
+            roles,
+            base,
+            fur,
+            paw,
+            limb,
+            outline,
+            args.strength,
+            args.fur_strength,
+            args.patch_strength,
+            args.grain,
+        )
+        save(rgb, args.output)
+        n_colours = len(np.unique(rgb.reshape(-1, 3), axis=0))
+        print(
+            f"wrote {args.output} ({args.size}x{args.size} atlased hide, seed"
+            f" {args.seed}, {len(cells)} cells, base {base}, paw {paw},"
+            f" outline {outline}, {n_colours} colours)"
+        )
+        return 0
+
     rgb = hide_rgb(
         args.size,
         args.seed,

@@ -83,6 +83,17 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
         "photograph a mesh file into an atlas cell through headless Blender, with no editor",
         ("blender", "pillow"),
     ),
+    "rig": (
+        "rig",
+        "emit a bone-structure template as a glTF armature to skin against, or as the"
+        " rig for generate entity",
+        (),
+    ),
+    "entity": (
+        "entity",
+        "generate a skinned entity: primitives bound to a rig, plus its entityclasses.xml patch",
+        (),
+    ),
 }
 
 

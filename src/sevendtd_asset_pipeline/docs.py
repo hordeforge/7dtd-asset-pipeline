@@ -80,6 +80,10 @@ TOPICS: dict[str, tuple[str, str]] = {
         "authoring/skinned-gear.md",
         "worn armor: SkinnedMeshRenderer from a glTF skin; SDCS extras still want an editor",
     ),
+    "entities": (
+        "authoring/entities.md",
+        "custom entities: the rig template, generate rig/entity, and the entityclasses.xml wiring",
+    ),
     "environment-effects": (
         "authoring/environment-effects.md",
         "weather, fog and light: the effect the bundle cannot carry",

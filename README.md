@@ -175,6 +175,8 @@ shamway generate sound nuclear-blast assets-src/audio/nuclear.wav --seed 7
 shamway generate sound bomb-whistle assets-src/audio/falling.wav --seed 7 --seconds 4
 shamway generate mesh assets-src/bundle/myModThing.glb --shape cylinder --size 0.19 0.19 0.42
 shamway generate cutout key assets-src/icons/thing-src.png UIAtlases/ItemIconAtlas/myModThing.png --size 160 --pad 0.9 --trim
+shamway generate rig armature.glb
+shamway generate entity myCreature.glb --mod MyMod --bundle myMod --xml myCreature-entityclasses.xml
 ```
 
 ```bash

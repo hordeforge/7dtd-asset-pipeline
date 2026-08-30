@@ -1892,6 +1892,28 @@ generated config alone in this engine revision. A generated creature
 animates and travels (verified), but a fully grounded walk needs a C# mod
 component — recorded as the outstanding, non-pipeline item.
 
+**RESOLVED (2026-08-30): the grounded walk works by spawning the creature
+non-remote.** The earlier "client does not gravity-simulate a client-spawned
+entity" measured limit had a concrete fix: the client DOES simulate an entity
+it considers local. `CaseDef.WalkEntity` now creates the creature then sets
+`Entity.isEntityRemote = false` (a settable field), so the client runs it
+like a local entity — it grounds, follows/climbs the terrain, and plays the
+gait. Live-verified: y = the ground surface (was +3 m before), it climbs
+elevation (its ground height follows the terrain), travels ~9.8 m along the
+ground, and is visible. A server-side `spawnentity` (barrier/telnet) is the
+equivalent non-remote route and was implemented but the simpler client-flag
+achieves the same without orchestrator plumbing.
+
+**Remaining: the legs clip into the ground.** With the creature grounded and
+moving, its *feet* do not touch the surface — the body/root sits at the
+surface and the legs render below it (the user read it as "collision on the
+torso instead of the feet"). The ground-contact point is above the mesh's
+feet, so the entity's feet-to-root offset does not match where the game
+places the root. The next fix: raise the spawn/ground so the mesh's *lowest
+rendered point* (the feet) meets the terrain — i.e. offset the entity by its
+measured feet-below-root amount, or ground by a feet-level collider. Not yet
+measured in the animated pose.
+
 **The true collider-missing finding, and why the look suite still floats
 (2026-08-30):** `PhysicsBodyInstance.bindCollider` (from
 `PhysicsBodyInstance.il.txt`) does `modelRoot.Find(path)` then

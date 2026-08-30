@@ -381,25 +381,39 @@ that clients see nothing.
   `automatic_assets_entities/animals.bundle`), while `GameObjectAnimalAnimation`
   (the `AvatarController` the generator wires) drives a **legacy** `Animation`
   by clip name — a legacy-animal path.
-- **Grounding and the controller-init ordering.** A generated creature spawns
-  as a real `EntityAlive` (its own mod-owned class, not a borrowed stock one —
-  `Class` resolves via `Type.GetType`, and the mod DLL at the mod root names
-  the type). The engine grounds it by its CharacterController capsule, read off
-  an **inactive `Physics` child node** the writer emits (a `CapsuleCollider`
-  whose bottom is at the mesh's feet, radius ≈ the model's footprint) —
-  `Entity::AddCharacterController` reads that capsule and calls `SetSize`. The
-  legacy `Animation` (with the clips) sits on the model root's **first active
-  child** (the `figure`), which is the contract
-  `GameObjectAnimalAnimation.Awake` requires. The remaining engine-interop
-  piece is **init ordering**: the controller's `Awake` runs during
-  `createAvatarController` (via `AddComponent`) before the model hierarchy the
-  controller inspects is settled, so `anim` is null and `CreateEntity` NREs at
-  `anim["Idle1"]`. `physicsbodies.xml` per-bone bodies (`Detail`/`Normal`)
+- **Grounding and the controller must be the mod's own.** A generated creature
+  spawns as a real `EntityAlive` (its own mod-owned class, not a borrowed stock
+  one — `Class` resolves via `Type.GetType`, and the mod DLL at the mod root
+  names the type). The engine grounds it by its CharacterController capsule,
+  read off an **active `Physics` child node** the writer emits (a
+  `CapsuleCollider` whose bottom is at the mesh's feet, radius ≈ the model's
+  footprint) — `Entity::AddCharacterController` reads that capsule, then does
+  `AddComponent<KinematicCharacterMotor>()` on the node and calls `SetSize`.
+  That motor binds its own `Capsule` field in **its** `Awake`, so the `Physics`
+  node **must be active**: an inactive node defers the motor's Awake forever
+  and `SetCapsuleDimensions` NREs on a null `Capsule` (the measured spawn-time
+  NRE before this fix). The stock `GameObjectAnimalAnimation` controller is
+  **incompatible** with that active `Physics` node — its `Awake` finds its
+  figure as the model root's first *active* child, which then collides with the
+  active `Physics` sibling and NREs at `anim["Idle1"]`. So a generated entity
+  must use a controller that finds the figure **by name** (the writer's
+  `figure` node), not by first-active-child — that is the mod-owned
+  `ShamwayAnimalController`, and the stock one cannot be used. This is the
+  reason the generator wires a mod-owned `AvatarController` and a mod-owned
+  `Class`; a borrowed stock `Class`/controller reintroduces a pre-authored
+  model, a stock AI wander, and a stock speed the walk case cannot contain
+  (measured: the stock `EntityAnimalSnake` class walked 292 m in a 12 s hold,
+  `moveSpeed=0.8` notwithstanding, with a 13 m Y-spread). `physicsbodies.xml`
   remain closed for a procedural skinned mesh — they build bone-centred
-  colliders that do not reach the feet. The grounding caps at a fresh client
-  that initializes Steamworks: a client boot-hang on `Steamworks is not
-  initialized` means a run never reached the asset, so a PASS/FAIL there says
-  nothing about the creature (recorded in research-provenance).
+  colliders that do not reach the feet. Two environment gates can stop a run
+  before the creature is judged, and neither is the asset (recorded in
+  research-provenance): (1) a **client/server game-version skew** — the client
+  refuses to authorize (`Game Version Mismatch: you have 'V 3.2.0' and server
+  has 'V 3.1.0'`) and idles at the menu, so align the dedicated server to the
+  client's version (`steamcmd +app_update 294420`); (2) a genuinely missing
+  Steam client. The `Steamworks is not initialized` exception near boot is
+  **caught and harmless** (the Analytics branch-name probe) — it must not be
+  read as "the run never reached the asset".
 - **SDCS extras** (`GearBoneMap`, `Morphable`) — the editor bakes those; see
   [skinned-gear.md](skinned-gear.md).
 

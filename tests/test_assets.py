@@ -1119,6 +1119,12 @@ class SelfTestFixtureTests(unittest.TestCase):
         prop and timedNuke at the same 3.5 m offset is the overlay this gate
         exists to refuse. The regenerator already emits per-stem *_look;
         this asserts the committed file is that output.
+
+        The suite ids are lowercase even for mixed-case stems: the
+        orchestrator lowercases suite tokens (playtest_run.py splits
+        `suite.lower()`), and the provider compares case-sensitively — an
+        original-case id would never match, and the look run would fall
+        through to the load cases and stage nothing.
         """
         source = (self.FIXTURE / "tools/shamway/acceptance/ShamwaySelfTestAcceptance.cs").read_text(
             encoding="utf-8"
@@ -1129,9 +1135,9 @@ class SelfTestFixtureTests(unittest.TestCase):
         for stem in (
             "burst",
             "gear",
-            "shamwaySelfTestCreature",
-            "shamwaySelfTestProp",
-            "timedNuke",
+            "shamwayselftestcreature",
+            "shamwayselftestprop",
+            "timednuke",
         ):
             with self.subTest(stem=stem):
                 self.assertIn(f'yield return "shamwayselftest_{stem}_look"', source)

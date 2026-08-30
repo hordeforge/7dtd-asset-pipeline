@@ -1914,6 +1914,29 @@ rendered point* (the feet) meets the terrain — i.e. offset the entity by its
 measured feet-below-root amount, or ground by a feet-level collider. Not yet
 measured in the animated pose.
 
+**The CC capsule grounds the *average*, not the animated feet (2026-08-30,
+live-confirmed):** the `Physics`-node capsule (#165) stops the creature
+floating at spawn and grounds it in the walk-entity look — but across the
+12 s clip it is still inconsistent, exactly as the user read it: legs clip
+into the ground, then float above it, and over a rise it rides too high before
+settling. The reason is structural, not a missing collider: the capsule is
+sized from the **static bind-pose** mesh AABB (feet at y=-0.02), while the
+`Idle1` bob and `Walk` trot move the pelvis and legs, so the visual lowest
+point oscillates around that fixed capsule bottom; and over terrain the
+capsule rides the collider surface while the animation phase swings the feet
+above/below it. A single static capsule cannot track an animated rig's feet.
+The remaining route is a per-frame ground offset (the model's posed feet-below
+root, re-measured each tick) or a proper animated ground clamp — the item
+recorded above, still open.
+
+**The hide contrast (2026-08-30, live-confirmed):** the atlased role-aware
+hide works mechanically, but the first palette (pale cream base ~205) washed
+out to a single pale blob under the client's daytime sun. Re-authoring the
+fixture hide with a dark warm palette (base 118,96,66, paw near-black
+22,16,12, limb 74,58,40, outline 12,10,8) made the legs and body separate and
+the paw tips read — so a rendered creature's hide needs mid-to-dark tones and
+strong value separation, not light pastel, to survive in-game lighting.
+
 **The true collider-missing finding, and why the look suite still floats
 (2026-08-30):** `PhysicsBodyInstance.bindCollider` (from
 `PhysicsBodyInstance.il.txt`) does `modelRoot.Find(path)` then

@@ -1850,6 +1850,21 @@ there were dozens per second. One NRE remains in `Awake` at spawn
 transient first-pass `FindModel` miss) — still open. **(2), the
 physics-body alignment, is the remaining blocker for a *grounded* walk.**
 
+**(2) experiment, measured closed for this route (2026-08-30):** the float is
+because `PhysicsBody="Stag"` binds colliders to stag bone paths
+(`Hips`, `LeftUpLeg`, …) that the generated quadruped does not have (it is
+`Pelvis`, `LeftFrontUpper`, …), so no collider builds and gravity never
+grounds it — it stays at its +3 m spawn offset. A mod-side
+`Config/physicsbodies.xml` body (`ShamwayCreature`) with `Detail` colliders
+on the creature's own bone paths (Pelvis + every leg bone + paw) was
+authored and tested live: it **did not ground** — the spawned creature still
+floated in the treeline, paws against foliage. The stock `Detail` colliders
+work for a real stag because its mesh/bones are authored to them; our
+procedural primitives' `Detail` colliders are bone-centered and do not reach
+the feet. The next route is a non-`Detail` body (an explicit box/capsule
+collider sized feet-to-shoulder at the model root, i.e. a grounding collider
+whose bottom is at the root), which is the unbuilt change.
+
 ## Ground height: GetTerrainHeight is the voxel surface; GetHeightAt is not (2026-08-30)
 
 `ilspycmd -t World` on the installed `Assembly-CSharp.dll` (Unity 2022.3

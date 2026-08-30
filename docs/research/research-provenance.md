@@ -1908,7 +1908,11 @@ still renders it at its +3 m spawn offset, i.e. it still *looks* floating in
 that harness. The collider fix is the correct, necessary asset change
 (server-side and real-gameplay entities then ground properly); the remaining
 "grounded in the client look" gap is a harness/engine-simulation limitation,
-not an asset one. Recorded so the next session does not re-diagnose the
+not an asset one. **Measured, not inferred:** the instrumented
+WalkEntity reports the spawned entity's Y each tick; with bone
+colliders present it ends the run at y=64.08 — exactly its +3 m
+spawn offset (player 61.08 + 3) — i.e. the client never pulls it
+down. A client-side spawn cannot demo grounding no matter the asset. Recorded so the next session does not re-diagnose the
 float as a missing collider (it is not, now).
 
 ## Ground height: GetTerrainHeight is the voxel surface; GetHeightAt is not (2026-08-30)

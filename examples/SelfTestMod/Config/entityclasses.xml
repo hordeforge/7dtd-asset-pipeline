@@ -5,11 +5,21 @@
 			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCreature"/>
 			<property name="UserSpawnType" value="Menu"/>
 			<property name="AvatarController" value="GameObjectAnimalAnimation"/>
-			<property name="Class" value="EntityAnimalStag"/>
+			<property name="Class" value="ShamwaySelfTest.ShamwaySelfTestCreature, ShamwaySelfTestCreature"/>
 			<property name="IsAnimalEntity" value="true"/>
-			<property name="PhysicsBody" value="Stag"/>
 			<property name="EntityFlags" value="animal"/>
 			<property name="Faction" value="animals"/>
+			<!-- The mod's OWN entity type (see tools/shamway/entityclass):
+			     Class names ShamwaySelfTest.ShamwaySelfTestCreature, a
+			     concrete EntityAlive subclass in this mod's own DLL — not a
+			     stock animal (EntityAnimalStag/Snake) whose C# class brings a
+			     pre-authored model, a stock physics body with bone paths the
+			     generated rig does not have, and a template AITask wander that
+			     roams. `Type.GetType` resolves the type from the loaded mod
+			     assembly. No `extends`, no stock PhysicsBody (grounding comes
+			     from the Physics-node capsule the writer emits), and an explicit
+			     slow MoveSpeed. -->
+			<property name="MoveSpeed" value="1.5"/>
 		</entity_class>
 	</append>
 <append xpath="/entity_classes">

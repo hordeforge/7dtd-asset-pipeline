@@ -191,17 +191,36 @@ What the fragment leaves out for a bare creature — `MaxHealth`, `sounds`,
 `MoveSpeed` tuning, AI behaviour, loot — is mod-specific and belongs in the
 mod's own XML, exactly like the properties a prop or item needs. With
 `--anim` the fragment now also makes the creature a **real spawnable
-animal**: `Class` names a concrete C# entity type (`EntityAnimalStag`, the
-game's wandering animal — or a mod's own type via `--entity-class`), and
+animal**: `Class` names a concrete C# entity type, and
 `IsAnimalEntity`/`Faction` let the game's spawner and AI treat it as one.
-(`PhysicsBody="Stag"` does not align with a procedural rig's bone paths, so
-it contributes no collider; the grounding comes from the `Physics` node the
-writer emits instead — see "What the engine requires of the model" and "What
-is still unbuilt".) A bare
+
+`Class` must be the **mod's own entity type, not a stock animal's** — the
+pipeline's whole point is that the mod owns the model, the clips and the C#
+class. `EntityClass` resolves `Class` through `Type.GetType(string)`
+(`EntityClass.il.txt:349`), which searches all loaded assemblies, so a mod
+DLL shipped at the mod root (`shamway client deploy` copies root-level
+`*.dll`) can name `Class="<ns>.<Type>, <Assembly>"` and the engine
+instantiates the mod's own `EntityAlive` subclass. Reusing `EntityAnimalStag`
+would borrow a type that binds a pre-authored model, a stock `PhysicsBody`
+with stag bone paths the rig does not have, and a template `AITask` wander
+that roams — none of which belongs to the generated asset. The default
+`EntityAnimalSnake` is a concrete `EntityAlive` sub-type the generator emits
+so a working class is produced out of the box; `--entity-class` names a mod's
+own type. No stock `PhysicsBody` is emitted (grounding comes from the
+`Physics`-node capsule the writer builds, below), and a slow `MoveSpeed` is
+emitted so a spawned creature walks at a visible pace. A bare
 `Prefab+Mesh` class is *not* a spawnable `EntityAlive` — without a
 `Class` it loads but `EntityFactory.CreateEntity` returns nothing, so it
 could never walk in-game. `--minimal-entity` opts back out and emits the
 bare stub for a special case.
+
+The generated prefab's animation and grounding are the mod's own too: the
+writer attaches a legacy `Animation` component (with the synthesized clips)
+to the model root's first active child, and adds an **inactive** `Physics`
+child carrying a `CapsuleCollider` whose bottom is at the mesh's feet —
+`Entity::AddCharacterController` reads that capsule and grounds the entity
+on its feet. See "What the engine requires of the model" and
+"Making it move".
 
 ## Bone names are the mod's choice — with two exceptions
 

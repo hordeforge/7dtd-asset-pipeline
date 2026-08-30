@@ -2082,3 +2082,110 @@ read that survived three ground-query iterations. The look case now
 grounds with `world.GetHeight((int)abs.x, (int)abs.z) + 1f` (absolute
 coordinates, `+ Origin.position` for the rebase), with a ground-mask
 raycast as the fallback when the chunk is not yet loaded.
+
+## A generated creature must own its entity class and clips, not borrow a stock one (2026-08-30)
+
+The walk acceptance kept returning a creature that "spawns, collides on the
+torso, speeds away" and an `NullReferenceException` during spawn. Root cause,
+pinned from the installed engine IL:
+
+- **Using `Class="EntityAnimalStag"` borrows a stock animal's C# type.** That
+  type brings a pre-authored model (`Mesh`/`Prefab` → the game's own
+  `Animals/...` assets), a stock `PhysicsBody` whose collider paths are stag
+  bone names the generated rig does not have (`Hips`, `LeftUpLeg`, …), and a
+  template `AITask` tree (Wander etc.) that roams — the "speeds away". Reusing
+  a stock class proves nothing about the pipeline and inherits expectations a
+  generated rig cannot meet. **The asset pipeline's goal is to author its own
+  assets, so the generated creature must declare its own class.**
+
+- **A mod DLL can define the entity class.** `EntityClass` resolves `Class`
+  via `Type.GetType(string)` (EntityClass.il.txt:349) and logs
+  `Could not instantiate class 'X' for entity_class Y` when it returns null.
+  `Type.GetType` searches **all loaded assemblies**, so a mod whose DLL ships
+  at the mod root (root-level `*.dll`; `shamway client deploy` copies exactly
+  those) can name `Class="<ns>.<Type>, <Assembly>"` and the engine
+  instantiates the mod's own `EntityAlive` subclass. Verified: the fixture's
+  `ShamwaySelfTestCreature.cs` (`public class ShamwaySelfTestCreature :
+  EntityAlive`) compiled to `ShamwaySelfTestCreature.dll`, loaded by the client
+  and server, resolved by `Class`, and `CreateEntity` proceeded past the class
+  lookup (the old "Could not instantiate class" is gone).
+
+- **The remaining spawn blocker is a controller-init NRE, not the class.**
+  `EntityFactory.CreateEntity` → `CreateEntityOperation.CompleteEntity` →
+  `EModelBase.createAvatarController` → `AddComponent<GameObjectAnimalAnimation>`
+  → its `Awake` NREs at `anim["Idle1"]` (GameObjectAnimalAnimation.il.txt:46,
+  offset 0x0064) because `anim == null`. `Awake` does
+  `figureT = parentT.GetChild(reverse-first-active)` then
+  `anim = figureT.GetComponent<Animation>()`. The controller is added to the
+  model GameObject during `createAvatarController`; at that moment the figure
+  child does not resolve to the one carrying the `Animation` (the model
+  hierarchy has not settled), so `anim` is null and `CreateEntity` aborts.
+  This matches the earlier recorded "one NRE remains in Awake at spawn —
+  likely a transient first-pass FindModel miss". **The controller's own
+  `[UnityEngine.Scripting.Preserve]`/init ordering is the open engine-interop
+  piece** (a `GameObjectAnimalAnimation.Awake` re-query / defer, or adding the
+  component after the model is attached).
+
+- **`GameObjectAnimalAnimation` reveals the figure-child contract.** `Awake`
+  reverses over the model root's children to find the first *active* one and
+  reads the `Animation` off it. So the prefab needs a `figure` child carrying
+  the `Animation`, as the **first active child** of the model root. A
+  `Physics` sibling added for grounding must be **inactive** (or the
+  reverse-iteration picks it, finds no Animation, and NREs) — verified: root
+  children `[figure(active), Physics(false)]` makes the reverse-iteration land
+  on `figure`.
+
+- **The grounding capsule must be as wide as the model's footprint.** A thin
+  capsule (radius 0.207) under a wide quadruped (depth extent 0.415) lets the
+  body drape past the collider and tip onto the torso. The `Physics` node's
+  `CapsuleCollider` radius should be ≈ the mesh's widest footprint half-extent
+  (0.415) and bottom at the feet (`center.y - height/2 == aabb.min.y`), so the
+  engine grounds the feet, not the torso.
+
+- **The clip recorder photographs the player's framebuffer.** `ClipRecorder`
+  uses `ScreenCapture.CaptureScreenshot` — whatever the client's camera shows.
+  To frame a spawned walking creature the player is not inside, detach the
+  camera with `EntityPlayerLocal.SetCameraAttachedToPlayer(false, false)`
+  (sets `cameraTransform.parent = null` — the game's own detached/debug camera,
+  EntityPlayerLocal.il.txt:2877) and position `playerCamera.transform` each
+  tick; `GameObjectAnimalAnimation`/the recorded framebuffer then show the
+  creature instead of the player's own first-person view. Re-attach with
+  `(true, false)` after the case.
+
+**Still open:** the `GameObjectAnimalAnimation.Awake` init-ordering NRE, which
+is what actually aborts spawn — the class, the Physics capsule, and the
+figure-first-active-child contract are all now correct offline; the runtime
+controller-init ordering is the remaining engine-interop blocker for a spawn
+that survives `CompleteEntity`.
+
+## Game animals use an Mecanim Animator, not a legacy Animation, in this revision (2026-08-30)
+
+Read the shipped `automatic_assets_entities/animals.bundle` with UnityPy: the
+modern animals (`animalDeerStag`, `animalRabbit`, `animalBoar`, `animalWolf`,
+`animalBirdChicken`, …) carry a Unity **`Animator` (type 95)** on the model
+root GameObject — a Mecanim `Animator` + controller — while the
+legacy `Animation` (type 111) appears only on a few old-style prefabs
+(`PIG`, `CHICKEN`, a `Model` node). `GameObjectAnimalAnimation` (the
+`AvatarController` the generator wires) drives a **legacy** `Animation`
+component by clip name (`Awake` → `figureT.GetComponent<Animation>()` →
+`anim["Idle1"]`). So pairing `AvatarController = GameObjectAnimalAnimation`
+with a prefab that carries a legacy `Animation` is a *legacy-animal* path that
+does not match how the current animals are authored (Mecanim), which is likely
+why the spawned creature's controller `Awake` NREs: the node it inspects for
+the legacy `Animation` does not carry one, because the generated prefab's
+layout and the modern animal layout differ.
+
+**Two distinct routes to a moving animal, both feasible:**
+- *Legacy-clip route (what the generator builds):* keep
+  `AvatarController = GameObjectAnimalAnimation` and ensure the legacy
+  `Animation` component (with the clips) is on **the exact node the
+  controller's `GetChild(first-active)` resolves** — the node `FindModel`
+  returns, whose first active child is the prefab root once the prefab is
+  `Instantiate`d under it (`EModelBase.createModel` does
+  `Instantiate(assets.Mesh, modelTransformParent)`). Placement of that
+  `Animation` is the contract that must match — see the controller-Awake NRE
+  note above.
+- *Mecanim route:* ship the model's own `Animator` + controller (TFP's
+  controllers cannot ship in a mod bundle — the game's bundles embed their
+  assets same-file), so a mod would have to author its own
+  `AnimatorController` — the hard lane the entity docs already call unbuilt.

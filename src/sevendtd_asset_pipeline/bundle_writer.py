@@ -1969,18 +1969,38 @@ def add_grounding_physics(
     extent = aabb.get("m_Extent", {})
     half_h = max(0.05, float(extent.get("y", 0.9)))
     height = 2.0 * half_h
-    radius = min(0.5, max(0.06, float(extent.get("z", extent.get("x", 0.15))) * 0.5))
+    # The capsule's cylindrical side must reach the model's outermost limbs, or
+    # a wide quadruped drapes its torso/legs beyond a thin stick and tips onto
+    # the torso when the engine grounds it. `extent.z` (the depth half-extent)
+    # is the widest footprint axis here; radius slightly under it keeps the
+    # side from poking outside the mesh, and `min` keeps a very long body from
+    # ballooning the collider. The bottom stays at the mesh's feet so the
+    # engine grounds the feet, not the torso.
+    radius = min(max(float(extent.get("z", extent.get("x", 0.15))), 0.2), 0.8)
     feet = float(centre.get("y", 0.9)) - half_h
     bottom = feet + height / 2.0
 
     physics_go = f"{stem}:physics:go"
     physics_tr = f"{stem}:physics:transform"
     physics_collider = f"{stem}:physics:collider"
+    # The Physics node must be INACTIVE so it is not the model root's first
+    # active child. GameObjectAnimalAnimation.Awake finds the figure by
+    # iterating the model root's children from the LAST down to the first
+    # ACTIVE one and reads the Animation off it — a Physics node sitting
+    # active as a root sibling gets picked first, has no Animation, and the
+    # controller NREs at `anim["Idle1"]` (a #165 regression: the grounding
+    # capsule broke the figure-first-active-child contract). The engine's
+    # PhysicsInit uses `RootTransform.Find("Physics")`, which finds inactive
+    # children, and AddCharacterController reads the capsule's values, so an
+    # inactive Physics node still grounds the entity while leaving the figure
+    # as the controller's animation carrier.
+    physics_fields = _game_object_fields("Physics", [physics_tr, physics_collider])
+    physics_fields["m_IsActive"] = False
     objects.append(
         BundleObject(
             GAME_OBJECT,
             "Physics",
-            _game_object_fields("Physics", [physics_tr, physics_collider]),
+            physics_fields,
             key=physics_go,
             in_container=False,
         )
@@ -2072,16 +2092,19 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
     animation_key = f"{path.stem}:animation"
     root_go = f"{path.stem}:go"
     root_tr = f"{path.stem}:transform"
-    # The engine's GameObjectAnimalAnimation reads the legacy Animation off
-    # the model root's *first active child* (the "figure"), not off the root:
-    # Awake does figureT = parentT.GetChild(...first active...); anim =
-    # figureT.GetComponent<Animation>(), then anim["Death"] on every Update.
-    # Our writer used to put the Animation on the prefab root, so a spawned
-    # entity's controller NRE'd every frame (recorded in research-provenance).
-    # Insert a figure GameObject between the root and its children and put the
-    # Animation on it — the clip paths (Root/..., authored relative to the
-    # Animation's own GameObject) then resolve because Root stays a child of
-    # the figure.
+    # The engine's GameObjectAnimalAnimation.Awake reads the legacy Animation
+    # off the model root's FIRST ACTIVE CHILD: `parentT = FindModel(transform)`
+    # (FindModel is `transform.Find("Graphics/Model")` or the transform), then
+    # `figureT = parentT.GetChild(reverse-first-active)`, then
+    # `anim = figureT.GetComponent<Animation>()`. The model root (the entity's
+    # model GameObject) therefore needs a single ACTIVE child carrying the
+    # legacy Animation. We insert a `figure` GameObject as the model root's
+    # active child and put the Animation on it, re-parenting the bones under it
+    # so the clip paths (`Root/...`) still resolve relative to the Animation's
+    # own GameObject. The `Physics` node is a sibling but INACTIVE, so the
+    # controller's `GetChild(reverse-first-active)` skips it and lands on the
+    # figure — a Physics node left ACTIVE would be picked first, carry no
+    # Animation, and NRE at `anim["Idle1"]` (the recorded spawn-time NRE).
     figure_go = f"{path.stem}:figure:go"
     figure_tr = f"{path.stem}:figure:transform"
     physics_tr = f"{path.stem}:physics:transform"
@@ -2089,19 +2112,17 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
     for obj in objects:
         if obj.key == root_tr:
             original_root_children = list(obj.fields["m_Children"])
-            # The root keeps the `figure` (the controller's animation carrier)
-            # and the `Physics` node (the grounding capsule the engine reads
-            # from `RootTransform.Find("Physics")`) as its direct children; the
-            # model bones and skinned body move under the figure below.
+            # The model root keeps the `figure` (active, the controller's
+            # animation carrier) and the `Physics` node (inactive, the
+            # grounding capsule) as its children.
             obj.fields["m_Children"] = [Ref(figure_tr), Ref(physics_tr)]
         elif obj.key == figure_tr:  # pragma: no cover - defensive
             raise PipelineError(f"{path.stem} has a node that would collide with the figure")
     if original_root_children is None:
         raise PipelineError(f"{path.stem} prefab has no root transform to wrap in a figure")
     # Re-parent every former root child under the figure — except the `Physics`
-    # node, which must stay a direct child of the root so the engine's
-    # `RootTransform.Find("Physics")` (Entity::PhysicsInit, from Entity.il.txt)
-    # resolves it and `AddCharacterController` can build the grounding capsule.
+    # node, which stays a direct (inactive) child of the root so the engine's
+    # `RootTransform.Find("Physics")` (Entity::PhysicsInit) resolves it.
     figure_children_keys = [
         child.key for child in original_root_children if child.key != physics_tr
     ]
@@ -2110,8 +2131,6 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
             if obj.key == child_key:
                 obj.fields["m_Father"] = Ref(figure_tr)
                 break
-    # The figure GameObject carries the Animation and sits as the model
-    # root's single child, so the controller's figure lookup succeeds.
     objects.append(
         BundleObject(
             GAME_OBJECT,

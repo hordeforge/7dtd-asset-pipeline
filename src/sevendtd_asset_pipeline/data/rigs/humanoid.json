@@ -1,0 +1,25 @@
+{
+  "name": "humanoid",
+  "bones": [
+    { "name": "Root", "parent": null, "pos": [0, 0, 0] },
+    { "name": "Hips", "parent": "Root", "pos": [0, 0.98, 0] },
+    { "name": "Spine", "parent": "Hips", "pos": [0, 0.15, 0] },
+    { "name": "Chest", "parent": "Spine", "pos": [0, 0.17, 0] },
+    { "name": "Neck", "parent": "Chest", "pos": [0, 0.19, 0] },
+    { "name": "Head", "parent": "Neck", "pos": [0, 0.1, 0] },
+    { "name": "LeftShoulder", "parent": "Chest", "pos": [-0.16, 0.17, 0] },
+    { "name": "LeftArm", "parent": "LeftShoulder", "pos": [-0.1, 0, 0] },
+    { "name": "LeftForearm", "parent": "LeftArm", "pos": [-0.23, 0, 0] },
+    { "name": "LeftHand", "parent": "LeftForearm", "pos": [-0.2, 0, 0] },
+    { "name": "RightShoulder", "parent": "Chest", "pos": [0.16, 0.17, 0] },
+    { "name": "RightArm", "parent": "RightShoulder", "pos": [0.1, 0, 0] },
+    { "name": "RightForearm", "parent": "RightArm", "pos": [0.23, 0, 0] },
+    { "name": "RightHand", "parent": "RightForearm", "pos": [0.2, 0, 0] },
+    { "name": "LeftThigh", "parent": "Hips", "pos": [-0.09, -0.12, 0] },
+    { "name": "LeftShin", "parent": "LeftThigh", "pos": [0, -0.4, 0] },
+    { "name": "LeftFoot", "parent": "LeftShin", "pos": [0, -0.4, 0] },
+    { "name": "RightThigh", "parent": "Hips", "pos": [0.09, -0.12, 0] },
+    { "name": "RightShin", "parent": "RightThigh", "pos": [0, -0.4, 0] },
+    { "name": "RightFoot", "parent": "RightShin", "pos": [0, -0.4, 0] }
+  ]
+}

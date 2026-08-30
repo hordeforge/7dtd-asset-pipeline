@@ -14,6 +14,12 @@ tag has no changelog section.
 
 ### Added
 
+- The entity lane: `shamway generate rig` emits a bone-structure template as
+  a glTF armature (a shipped 20-bone `humanoid` rig, any custom spec, rigid
+  validation), and `shamway generate entity` skins procedural primitives to a
+  rig and writes the `entityclasses.xml` patch (mandatory `Prefab` + `Mesh`
+  bundle URI). Both feed the writer's skinned lane, and the generated
+  prefab is proven by UnityPy read-back.
 - Editorless `bundle_source = "synthesized"` now writes named glTF prefab
   hierarchies (including an `armedLamp` child), `SkinnedMeshRenderer` from a
   glTF skin (bind poses, weights, bone-name hashes; never flattened to

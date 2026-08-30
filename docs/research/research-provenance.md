@@ -1697,3 +1697,62 @@ bundle and from AtomicDoomsday `atomicDoomsdayNukeTimedHeld.prefab` (child
 2022.3 ScriptReference). lab.bundle had no type-5 system; the field layout
 is the same ShapeModule as types 0/2/4/10 (UnityPy type tree), so box uses
 `m_Scale` / `boxThickness` already present on those harvested modules.
+
+## Entity-class model wiring, from the dedicated-server IL dump (2026-08-30)
+
+Facts for the custom-entity lane, read with `monodis` from
+`il/full-v3.1.0/_global/` in `hordeforge/7dtd-engine-research` (a
+dedicated-server build of V3.1.0). File and line references below are to
+that tree, `EntityClass.il.txt` unless stated otherwise.
+
+- **`Prefab` is mandatory.** `EntityClass` reads `Prefab` into `prefabPath`
+  and throws if absent or empty: `Mandatory property 'prefab' missing in
+  entity_class '<name>'` (IL_009D–IL_00D6).
+- **`Mesh` is optional on top** and becomes `meshPath` (IL_0157–IL_01D6);
+  both are `String` fields on `EntityClass` (field list line 3:
+  `PropPrefab`, `PropPrefabCombined`, `PropMesh`, `PropMeshFP`, `PropParent`,
+  `PropAvatarController`, `PropLocalAvatarController`, `PropSkinTexture`,
+  `PropRightHandJointName`, …).
+- **Both load as GameObjects.** `EntityInstanceAssets.Load` calls
+  `LoadManager.LoadAsset<GameObject>(prefabPath, …)`; `EModelInstanceAssets.Load`
+  does the same with `meshPath` (both files' `Load` methods). So the model is
+  a prefab, and the bundle-URI resolution is the same `DataLoader`
+  `#@modfolder(Mod):…?stem` chain recorded in the skinned-gear section above.
+- **`Entities/` is prefixed only for in-Resources paths.** `Mesh` values
+  pass `DataLoader.IsInResources`; only a true resources path gets
+  `"Entities/"` prepended (IL_01BC–IL_01CE), so a mod bundle URI is used
+  verbatim. Same for `Prefab` (resources paths get `Prefabs/prefabEntity`,
+  IL_0139–IL_0151).
+- **`ModelType` chooses the EModel class** (`EModel`/`EModelCustom`, IL
+  ~IL_0321–IL_036C); the default class is the base `EModelBase`, and
+  `EModelCustom` has only a constructor — the behaviour is the base's.
+- **`EModelBase` walks the loaded model.** `GetComponentsInChildren<Animator>`
+  (disabled on dedi when `AvatarController` is set, which also adds an
+  `AvatarControllerDummy`), `GetComponent<Animation>` (null-guarded in the
+  ragdoll paths, `EModelBase.il.txt` IL_00D5/IL_0121), `GetComponentInChildren
+  <CharacterGazeController>`, `GetComponentsInChildren<Rigidbody>`, and the
+  `bipedRootTransform` / `bipedPelvisTransform` / `headTransform` /
+  `neckTransform` / `neckParentTransform` fields — the hierarchy is walked,
+  not required by name.
+- **No `EntityClass.AddClass` in the dedi build.** `grep AddClass` finds it
+  in neither `EntityClass.il.txt` nor `EntityFactory.il.txt`. The
+  `7dtd-fps-bots` repo's `config/entityclasses.xml` documents the same
+  observation live: appended human classes get negative ids on a dedi and
+  render nothing on clients, so bots reuse `zombieSoldier` bodies (positive
+  id).
+- **`m_RootBoneNameHash` 1722913273 for `Hips` is not a standard digest.**
+  Measured 2026-08-30: crc32 of `Hips` = 3738240529, crc32 of `hips` =
+  2128849199, ×31 (`(h·31+c)&0xFFFFFFFF`) of `Hips` = 2249444 and of `hips`
+  = 3202756 — none equal 1722913273, so Unity's `StringToHash` differs from
+  all of them. The writer stores crc32 of each joint name as authored
+  (`bundle_writer.bone_name_hash`), which is self-consistent between the
+  mesh field and the bone GameObjects. Not checked: whether any engine path
+  compares these hashes — SDCS binding is string-keyed (see skinned-gear
+  section), and nothing else has been shown to read them.
+
+**The entityclasses.xml merge shape** the generator emits (`<append
+xpath="/entity_classes">` wrapping `<entity_class>` with `Prefab`/`Mesh`) is
+the documented SphereII mod family pattern
+([0-SCore docs, nexusmods.com/7daystodie/mods/6176](https://www.nexusmods.com/7daystodie/mods/6176?tab=docs)),
+and the `entity_class` element name is confirmed by the engine's own error
+message above.

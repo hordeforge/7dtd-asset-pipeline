@@ -68,6 +68,12 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
         "derive a normal map and a packed mask from an albedo",
         ("pillow", "numpy"),
     ),
+    "hide": (
+        "hide",
+        "draw a seeded fur/hide albedo for a generated entity: mottled patches,"
+        " anisotropic fur clumps, hair grain — no image model",
+        ("pillow", "numpy"),
+    ),
     "mesh": (
         "mesh",
         "author a parameterized mesh through headless Blender and export GLB",

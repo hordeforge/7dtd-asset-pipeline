@@ -19,3 +19,10 @@
 /tmp/7dtd-asset-pipeline-rigs-live/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.csproj.CoreCompileInputs.cache
 /tmp/7dtd-asset-pipeline-rigs-live/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.dll
 /tmp/7dtd-asset-pipeline-rigs-live/examples/SelfTestMod/.shamway/build/acceptance/ShamwaySelfTestAcceptance/ShamwaySelfTestAcceptance.dll
+/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/.shamway/build/acceptance/ShamwaySelfTestAcceptance/ShamwaySelfTestAcceptance.dll
+/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.csproj.AssemblyReference.cache
+/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.GeneratedMSBuildEditorConfig.editorconfig
+/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.AssemblyInfoInputs.cache
+/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.AssemblyInfo.cs
+/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.csproj.CoreCompileInputs.cache
+/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/obj/Release/net48/ShamwaySelfTestAcceptance.dll

@@ -1792,3 +1792,129 @@ runtime plays `m_Clip` (the compiled stream), not `m_EditorCurves`, so a
 clip without a valid `m_Clip` block loads but never plays. Not checked
 yet: whether the writer can emit a minimal `m_Clip` (UnityPy parses the
 format — a parser is a spec — but nothing here writes one).
+
+## The controller's prefab contract: Animation must be on an active *figure* child (2026-08-30)
+
+`ilspycmd -t GameObjectAnimalAnimation` on the installed
+`Assembly-CSharp.dll` shows the `Awake` contract a spawned animal prefab
+must meet — the reason a generated creature **floats and NREs every frame**
+when spawned as a real `EntityAnimalStag`:
+
+- `parentT = EModelBase.FindModel(base.transform)` finds the model root.
+- `figureT` = the first **active** child of that root
+  (`parentT.GetChild(num)` in reverse, keeping the first whose
+  `activeSelf`).
+- `anim = figureT.GetComponent<Animation>()` — the legacy `Animation`
+  component must be on **that child**, not the model root. If it is not,
+  `anim` is null.
+- `anim["Idle1"]` / `anim["Attack1"]` / `anim["Attack2"]` are indexed.
+
+`Update()` then dereferences `anim["Death"]` and `anim["Pain"]` on every
+frame. With `anim == null` this is the `NullReferenceException` at
+`GameObjectAnimalAnimation.Update [0x00360]` — the error the walking-entity
+run printed dozens of times.
+
+Our writer attaches the entity's `Animation` component to the **prefab
+root**, and the generated prefab's children are direct bone transforms
+(`Root`, `Pelvis`, …) — the first active child carries no `Animation`, so
+`anim` is null on a spawned entity. The staged-prefab path never hit this
+because it played clips via `playAutomatically` on the root without the
+controller.
+
+**Blocked, with the route measured closed for now:** making a generated
+creature run as a real game animal needs (1) the prefab restructured so the
+model root's first active child is a "figure" GameObject carrying the
+`Animation`, and (2) a `PhysicsBody` whose collider is authored to the
+*creature's* proportions (feet at the root), not "Stag" — the stag-shaped
+collider does not align with our mesh's feet, which is the "floating in the
+air" symptom. Both are concrete, engine-adjacent work; neither is a
+one-liner, and neither has been built yet.
+
+A generated creature that spawns as a real `EntityAlive` **does** work as
+far as the spawner is concerned: `EntityClass.FromString` + 
+`EntityFactory.CreateEntity` + `SpawnEntityInWorld` produce an entity that
+travels (verified: spawned_id=172, travelled 9.6 m over a 12 s hold when the
+harness drives its position forward). What does not work is the game
+grounding it (physics-body alignment) and the controller animating it
+(prefab structure), both recorded above.
+
+## Ground height: GetTerrainHeight is the voxel surface; GetHeightAt is not (2026-08-30)
+
+`ilspycmd -t World` on the installed `Assembly-CSharp.dll` (Unity 2022.3
+revision the game runs) shows two surface-height queries on `World`:
+
+- `public byte GetTerrainHeight(int worldX, int worldZ)` — the chunk's
+  height of the top terrain **block** (block-space byte, 0 for an empty
+  column); the **voxel surface**, i.e. where a thing actually stands.
+  World coordinates in, block coordinates resolved internally
+  (`toChunkXZ`/`toBlockXZ`), so no `worldToBlockPos` call is needed. The
+  block's top face in world units is `GetTerrainHeight + 1`.
+- `public float GetHeightAt(float worldX, float worldZ)` — the terrain
+  **generator's** heightmap (`GetTerrainGenerator().GetTerrainHeightAt`),
+  null-guarded to `0f`. This is the *uncarved* surface: it ignores voxel
+  edits, POI basements and dug ground.
+
+## Grounding a staged prefab: raycast to the surface; terrain-height APIs failed live (2026-08-30)
+
+The generated acceptance look cases ground their staged prefab by
+raycasting straight down from the staging point onto the game's own
+"traversable voxel surface" layer mask and placing the prefab's lowest
+renderer bounds point on the hit:
+
+```csharp
+Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992)
+```
+
+Mask `268500992` = layers 13+15+28 — the mask the game's own fall-point
+check raycasts with (`EntityAlive` fall detection:
+`Physics.Raycast(position - Origin.position, Vector3.down, out var hitInfo, 999f, 268500992)`,
+verified with `ilspycmd` on the installed `Assembly-CSharp.dll`, Unity
+2022.3 revision the game runs). Physics operates in the same (rebased)
+transform space as the camera, so no `Origin.position` arithmetic is
+needed, and the ray measures the *actual* collider surface at the column —
+slopes and carved pits included.
+
+The terrain-height APIs were tried first and both failed live, each in a
+distinct way that is worth recording so the next session does not re-try
+them:
+
+- `World.GetHeightAt(float, float)` is the terrain **generator's**
+  uncarved heightmap (`GetTerrainGenerator().GetTerrainHeightAt`), not the
+  voxel surface; it grounded a staged entity 60 m above the camera on a
+  column with carved ground beneath it.
+- `World.GetTerrainHeight(int, int)` (byte, top block) is the voxel
+  surface, but it takes **absolute** world coordinates while Unity
+  transforms are rebased by `Origin.position`
+  (`Entity.transform.position = position - Origin.position`), and it
+  returns 0 on an unloaded chunk. Querying with the raw rebased staging
+  point hit the map-origin column (wrong place) or returned 0 (grounding
+  skipped, the entity stayed hovering at the camera offset).
+
+Each failing run still passed its assertions (`renderers=1`), which is
+exactly why a look is a person's look, not an assertion: the run's own
+evidence could not say whether the entity was visible, in frame, or on the
+ground.
+
+A fourth failure is not the ground query at all but the staging rotation:
+`Quaternion.LookRotation(-ahead, up)` pitches the staged prefab by the
+camera's own pitch, and the look camera looks *down* at the staged entity
+(~25° in the playtest), so a quadruped leaned back head-up with its hind
+feet ~0.17 m below its front feet — grounding by the (unrotated) lowest
+bound point then sank the hind legs into the floor, which the user read as
+"clipped into the floor" even with the ground height correct. The staged
+prefab now faces the camera with yaw only
+(`Quaternion.Euler(0, Atan2(-ahead.x, -ahead.z), 0)`), which keeps every
+foot at one height, so the lowest bound point is the standing surface.
+
+**The ground itself: the game spawns entities at `chunk.GetHeight + 1`,
+not at `GetTerrainHeight`.** The definitive answer came from the game's own
+spawner: `World.FindRandomSpawnPointNearPosition` places ground entities
+at `chunk.GetHeight(blockX, blockZ) + 1`, and `World.GetHeight(worldX,
+worldZ)` resolves to that same `m_HeightMap` — the chunk's *actual* top
+block. `World.GetTerrainHeight` reads `m_TerrainHeight`, the terrain
+generator's cached height, which ignores voxel edits and sat a staged
+entity ~2 blocks under the visible surface — the "completely clipped"
+read that survived three ground-query iterations. The look case now
+grounds with `world.GetHeight((int)abs.x, (int)abs.z) + 1f` (absolute
+coordinates, `+ Origin.position` for the rebase), with a ground-mask
+raycast as the fallback when the chunk is not yet loaded.

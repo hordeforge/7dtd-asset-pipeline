@@ -14,6 +14,42 @@ tag has no changelog section.
 
 ### Added
 
+- **`shamway generate hide`** draws a seeded fur/hide albedo for a
+  generated entity — mottled patches, anisotropic fur clumps, hair grain
+  (periodic by construction, so a primitive's default UVs never show a
+  seam) — with no image model and no host packages beyond Pillow and
+  NumPy. Same seed, same bytes. `--patch` adds a second, darker tone
+  (spots), which is what keeps a creature readable against whatever the
+  biome is — a single flat hue disappears into the forest or the dirt.
+  The self-test creature's skin is the two-tone coat (`--base 192,180,152
+  --patch 70,55,40`), so the leg-boundary is judgeable in a look run.
+- Generated quadruped **paws are now chunky and visible**: the default
+  quadruped parts had 0.045 m-tall paw boxes that read as nothing at the
+  distance a look run photographs from — the creature looked legless and
+  "clipped into the floor". The front paws are now 0.10×0.15×0.09 m and
+  the rear 0.11×0.17×0.10 m, so the feet read at a glance.
+- Generated entities **attack, die and jump**: `--anim` grows `attack`,
+  `death` and `jump` — `Attack1` jabs the head forward and back (a
+  half-sine, never past rest — that overshoot is the nervous-bob look —
+  with a quarter body pitch), `Death` rolls the body over once and stays
+  down (`loop: false` → `m_WrapMode` 1), and `Jump` hops the body.
+  `parse_anim` accepts them plus `loop` and `body_bone`; `clip_fields`
+  picks the wrap mode from the entries. The self-test creature carries
+  all six kinds, and the attack and death clips were signed off in a live
+  client on 2026-08-30.
+- Staged look prefabs **sit on the ground**: the generated look case
+  grounds its prefab at `World.GetHeight` + 1 — the chunk's actual
+  top-block height map, the exact query the game's own spawner uses for
+  ground entities (`chunk.GetHeight(...) + 1`, reverse-engineered from
+  `World.FindRandomSpawnPointNearPosition`), rebased to absolute
+  coordinates with `Origin.position`. An animated entity now moves against
+  the terrain instead of hovering in front of the camera. (Three wrong
+  ground queries are recorded in research-provenance: `GetHeightAt` is the
+  uncarved generator heightmap, `GetTerrainHeight` is the generator's
+  cached height that ignores voxel edits — it sat the entity ~2 blocks
+  under the visible surface — and a raw rebased query hit the map-origin
+  column. The staging rotation also no longer pitches the prefab by the
+  camera's look angle.)
 - Generated entities **walk and look around**: `--anim idle,head,walk`
   writes legacy clips — `Idle1` (a body bob merged with a slow head yaw)
   and `Walk` (a trot: upper legs swing, knees bend the opposite way, the

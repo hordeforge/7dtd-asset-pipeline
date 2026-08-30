@@ -118,16 +118,16 @@ PARTS_BY_RIG: dict[str, dict[str, Any]] = {
         "Tail": {"shape": "cylinder", "radius": 0.025, "height": 0.16},
         "LeftFrontUpper": {"shape": "cylinder", "radius": 0.045, "height": 0.36},
         "LeftFrontLower": {"shape": "cylinder", "radius": 0.04, "height": 0.34},
-        "LeftFrontPaw": {"shape": "box", "width": 0.07, "depth": 0.1, "height": 0.045},
+        "LeftFrontPaw": {"shape": "box", "width": 0.10, "depth": 0.15, "height": 0.09},
         "RightFrontUpper": {"shape": "cylinder", "radius": 0.045, "height": 0.36},
         "RightFrontLower": {"shape": "cylinder", "radius": 0.04, "height": 0.34},
-        "RightFrontPaw": {"shape": "box", "width": 0.07, "depth": 0.1, "height": 0.045},
+        "RightFrontPaw": {"shape": "box", "width": 0.10, "depth": 0.15, "height": 0.09},
         "LeftRearUpper": {"shape": "cylinder", "radius": 0.055, "height": 0.28},
         "LeftRearLower": {"shape": "cylinder", "radius": 0.045, "height": 0.27},
-        "LeftRearPaw": {"shape": "box", "width": 0.08, "depth": 0.12, "height": 0.05},
+        "LeftRearPaw": {"shape": "box", "width": 0.11, "depth": 0.17, "height": 0.10},
         "RightRearUpper": {"shape": "cylinder", "radius": 0.055, "height": 0.28},
         "RightRearLower": {"shape": "cylinder", "radius": 0.045, "height": 0.27},
-        "RightRearPaw": {"shape": "box", "width": 0.08, "depth": 0.12, "height": 0.05},
+        "RightRearPaw": {"shape": "box", "width": 0.11, "depth": 0.17, "height": 0.10},
     },
     "bird": {
         "Pelvis": {"shape": "cylinder", "radius": 0.09, "height": 0.12},
@@ -389,7 +389,13 @@ def build_entity_glb(rig: Rig, parts: dict[str, dict[str, Any]], name: str) -> b
 
 
 def entity_xml(
-    entity_name: str, mod: str, bundle: str, stem: str, avatar_controller: str | None = None
+    entity_name: str,
+    mod: str,
+    bundle: str,
+    stem: str,
+    avatar_controller: str | None = None,
+    entity_class: str = "EntityAnimalStag",
+    minimal: bool = False,
 ) -> str:
     """The `entityclasses.xml` patch fragment for the generated entity.
 
@@ -399,17 +405,36 @@ def entity_xml(
     `ConsoleCmdSpawnEntity.il.txt` — the enum is `None`/`Console`/`Menu`).
     Without it a generated creature loads but cannot be spawned from the
     console or the debug menu.
+
+    An animated entity (`avatar_controller` set — i.e. `--anim`) becomes a
+    real, spawnable animal: `Class` names a concrete C# entity type (the
+    game's `EntityAnimalStag`, or a mod's own type via `--entity-class`),
+    `PhysicsBody` gives it a collider to stand on, and `IsAnimalEntity` +
+    `Faction` let the game's own spawner and AI treat it as an animal. A bare
+    `Prefab+Mesh` class is not a spawnable `EntityAlive` — it loads but
+    `EntityFactory.CreateEntity` returns nothing, which is why a generated
+    creature could not be walked until it had a real class. `--minimal-entity`
+    opts back out and emits the bare stub for a special case.
     """
     uri = f"#@modfolder({mod}):Resources/{bundle}.unity3d?{stem}"
     avatar = ""
     if avatar_controller:
         avatar = f'\n\t\t\t<property name="AvatarController" value="{avatar_controller}"/>'
+    animal = ""
+    if avatar_controller and not minimal:
+        animal = (
+            f'\n\t\t\t<property name="Class" value="{entity_class}"/>'
+            '\n\t\t\t<property name="IsAnimalEntity" value="true"/>'
+            '\n\t\t\t<property name="PhysicsBody" value="Stag"/>'
+            '\n\t\t\t<property name="EntityFlags" value="animal"/>'
+            '\n\t\t\t<property name="Faction" value="animals"/>'
+        )
     return f"""<configs>
 \t<append xpath="/entity_classes">
 \t\t<entity_class name="{entity_name}">
 \t\t\t<property name="Prefab" value="{uri}"/>
 \t\t\t<property name="Mesh" value="{uri}"/>
-\t\t\t<property name="UserSpawnType" value="Menu"/>{avatar}
+\t\t\t<property name="UserSpawnType" value="Menu"/>{avatar}{animal}
 \t\t</entity_class>
 \t</append>
 </configs>
@@ -721,6 +746,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--entity-name", default=None, help="entity_class name (default: stem)")
     parser.add_argument(
+        "--entity-class",
+        default="EntityAnimalStag",
+        help="the C# entity type emitted as Class for an animated creature"
+        " (default: EntityAnimalStag — the game's concrete wandering animal)."
+        " A mod's own entity type name works too",
+    )
+    parser.add_argument(
+        "--minimal-entity",
+        action="store_true",
+        help="emit a bare Prefab+Mesh class even for an animated creature: no"
+        " Class/PhysicsBody, so the entity is not a spawnable animal",
+    )
+    parser.add_argument(
         "--anim",
         nargs="?",
         const="idle",
@@ -802,14 +840,20 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
         if "attack" in kinds:
+            # Pitch the CHEST (above the pelvis), not the pelvis itself: the
+            # legs hang from the pelvis, so a pelvis rotation swings the feet
+            # ~7 cm into the ground on every lunge — the "clipped into the
+            # floor" read of the first live attack look. Rearing the chest
+            # keeps the feet planted while the head and torso lunge.
+            body = next((bone.name for bone in rig.bones if bone.name == "Chest"), first_child)
             clips.append(
                 {
                     "name": "Attack1",
                     "kind": "attack",
                     "bone": head_path,
-                    "body_bone": f"{rig.root().name}/{first_child}",
+                    "body_bone": _bone_path(rig, body),
                     "amplitude": 0.5,
-                    "seconds": 0.6,
+                    "seconds": 0.8,
                 }
             )
         if "death" in kinds:
@@ -863,7 +907,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.xml is not None:
         entity_name = args.entity_name or stem
         fragment = entity_xml(
-            entity_name, args.mod, args.bundle, stem, avatar_controller=avatar_controller
+            entity_name,
+            args.mod,
+            args.bundle,
+            stem,
+            avatar_controller=avatar_controller,
+            entity_class=args.entity_class,
+            minimal=args.minimal_entity,
         )
         write(Path(args.xml), fragment)
         print(

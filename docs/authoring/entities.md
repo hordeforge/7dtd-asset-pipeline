@@ -51,6 +51,26 @@ self-test creature's signed-off turntable clip.
    rigidly bound to one bone, and the generated GLB is a normal skinned mesh
    a mod can re-skin or replace later.
 
+   **The skin is a sibling albedo.** The writer binds `<stem>_albedo.png`
+   to the prefab's material when one sits beside the mesh, and a flat
+   colour fill reads as "a green mesh" — the leg-ground boundary vanishes
+   against terrain. Give the entity a hide:
+
+   ```bash
+   shamway generate hide assets-src/bundle/myCreature_albedo.png --seed 7
+   ```
+
+   `shamway generate hide` draws a seeded fur/hide albedo — mottled
+   patches, anisotropic fur clumps, hair grain — with no image model:
+   same arguments, same bytes. `--base R,G,B` and `--fur R,G,B` set the
+   coat colours, `--patch R,G,B` adds a second, darker tone (spots), which
+   is what keeps the creature readable against whatever the biome is — a
+   single flat hue disappears into the forest or the dirt, and the
+   leg-ground boundary with it. `--strength`/`--fur-strength`/
+   `--patch-strength`/`--grain` set the contrast, `--size` the resolution
+   (256 is plenty for an unlit textured material). The self-test
+   creature's skin is exactly this, seed 7: a cream coat with dark spots.
+
 The shipped rigs, all usable as `--rig NAME` with their own default part
 sets (forward is +Z; the humanoid is symmetric):
 
@@ -117,11 +137,18 @@ So the minimal wiring for a generated entity is exactly what
 </append>
 ```
 
-What the fragment deliberately leaves out — `PhysicsBody`, `MaxHealth`,
-`sounds`, `MoveSpeed`, AI, loot — is mod-specific and belongs in the mod's
-own XML, exactly like the properties a prop or item needs. A class with only
-the three properties loads, lists in the console spawn menu, and stands
-still.
+What the fragment leaves out for a bare creature — `MaxHealth`, `sounds`,
+`MoveSpeed` tuning, AI behaviour, loot — is mod-specific and belongs in the
+mod's own XML, exactly like the properties a prop or item needs. With
+`--anim` the fragment now also makes the creature a **real spawnable
+animal**: `Class` names a concrete C# entity type (`EntityAnimalStag`, the
+game's wandering animal — or a mod's own type via `--entity-class`),
+`PhysicsBody="Stag"` gives it a collider to stand on, and
+`IsAnimalEntity`/`Faction` let the game's spawner and AI treat it as one. A
+bare `Prefab+Mesh` class is *not* a spawnable `EntityAlive` — without a
+`Class` it loads but `EntityFactory.CreateEntity` returns nothing, so it
+could never walk in-game. `--minimal-entity` opts back out and emits the
+bare stub for a special case.
 
 ## Bone names are the mod's choice — with two exceptions
 
@@ -194,7 +221,7 @@ from the rig's own names):
 | `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma) |
 | `head` | merged into `Idle1` | a slow side-to-side yaw of the `Head` bone (≈20°, 4 s) |
 | `walk` | `Walk` | a trot: each upper leg (`Thigh`/`Upper` bones) swings about its local X, the knee (`Lower`/`Shin` child) bends the other way, and the body dips between steps; diagonal pairs move together (0.35 rad, 1.2 s) |
-| `attack` | `Attack1` | a bite: the `Head` snaps forward and back (0.5 rad, 0.6 s) while the body pitches with it |
+| `attack` | `Attack1` | a bite: the `Head` jabs forward and returns (0.5 rad at mid-clip, 0.8 s) while the `Chest` pitches a quarter as much — a half-sine, so it never swings past rest (that overshoot is the nervous-bob look). The pitch is on the chest, *not* the pelvis: the legs hang from the pelvis, so a pelvis rotation swings the feet into the ground on every lunge |
 | `death` | `Death` | the body rolls over about its own axis and stays down — `loop: false`, so the clip plays once rather than wrapping (1.2 s) |
 | `jump` | `Jump` | a hop: the body rises 0.2 m and lands (0.8 s) |
 
@@ -216,8 +243,8 @@ so an `Idle1` can combine a bob and a head turn:
      "amplitude": 0.35, "seconds": 1.2},
     {"name": "Attack1", "kind": "attack",
      "bone": "Root/Pelvis/Spine/Chest/Neck/Head",
-     "body_bone": "Root/Pelvis",
-     "amplitude": 0.5, "seconds": 0.6},
+     "body_bone": "Root/Pelvis/Spine/Chest",
+     "amplitude": 0.5, "seconds": 0.8},
     {"name": "Death", "kind": "death", "bone": "Root/Pelvis",
      "loop": false, "amplitude": 3.14159, "seconds": 1.2},
     {"name": "Jump", "kind": "jump", "bone": "Root/Pelvis",
@@ -251,10 +278,11 @@ sequence instead of one still:
 motion_kinds = { shamwaySelfTestCreature = "turntable" }
 ```
 
-The self-test's animated creature does exactly this (with `--anim
-idle,head,walk`), and its turntable clip — spinning while bobbing, turning
-its head and trotting with the knee-bending gait — was signed off on
-2026-08-30 (the gait "can still be improved", signed off as a milestone).
+The self-test's animated creature carries all six kinds — its
+`shamwaySelfTestCreature.anim.json` ships in the fixture — and its turntable
+clip (spinning while bobbing, turning its head and trotting with the
+knee-bending gait) was signed off on 2026-08-30 (the gait "can still be
+improved", signed off as a milestone).
 `turntable` is the staged-prefab motion kind; `walk-cycle` is for equipped
 items (see [`shamway docs video`](video.md)).
 

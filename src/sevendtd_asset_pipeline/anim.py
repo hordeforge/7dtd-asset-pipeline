@@ -325,19 +325,42 @@ def walk_curves(
     return curves
 
 
-def attack_curves(
-    head_bone: str, body_bone: str, lunge: float = 0.5, seconds: float = 0.6
-) -> list[dict[str, Any]]:
-    """A quick lunge: the head snaps forward and back over `seconds`.
+def _jab_keyframes(axis: str, amplitude: float, seconds: float) -> list[dict[str, Any]]:
+    """One forward jab and back: `amplitude·sin(πt/T)`, never past rest.
 
-    One sharp out-and-back sine burst on the head (a bite: `lunge` rad
-    forward, `0.6·lunge` back past rest) and a shallower body pitch on
-    `body_bone`. Short and fast — an attack, not an idle sway. The engine
-    plays `Attack1` when the animal attacks.
+    A half-sine starts and ends at rest and peaks mid-clip, so the bone
+    moves one way and returns. A full sine would swing past rest on the
+    way back — two movements per clip, which reads as a nervous bob
+    rather than a bite.
+    """
+    quat = _quat_x if axis == "x" else _quat_y
+    return [
+        {
+            "time": seconds * index / 8.0,
+            "value": quat(amplitude * math.sin(math.pi * index / 8.0)),
+            "inSlope": quat(0.0),
+            "outSlope": quat(0.0),
+            "weightedMode": 0,
+            "inWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+            "outWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+        }
+        for index in range(9)
+    ]
+
+
+def attack_curves(
+    head_bone: str, body_bone: str, lunge: float = 0.5, seconds: float = 0.8
+) -> list[dict[str, Any]]:
+    """A bite: the head lunges forward and returns over `seconds`.
+
+    One forward jab on the head (`lunge` rad at mid-clip, back to rest at
+    the end — never past rest, which reads as a nervous bob) and a
+    shallower body pitch on `body_bone` so the strike has weight. The
+    engine plays `Attack1` when the animal attacks.
     """
     curves = []
-    for bone, amplitude in ((head_bone, lunge), (body_bone, 0.4 * lunge)):
-        curves.append(rotation_curve(bone, _rotation_keyframes("x", amplitude, seconds, phase=0.0)))
+    for bone, amplitude in ((head_bone, lunge), (body_bone, 0.25 * lunge)):
+        curves.append(rotation_curve(bone, _jab_keyframes("x", amplitude, seconds)))
     return curves
 
 

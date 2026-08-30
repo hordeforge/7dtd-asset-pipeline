@@ -676,6 +676,111 @@ class GeneratorTests(unittest.TestCase):
             self.assertIn("ERROR:", str(raised.exception))
             self.assertFalse(out.exists())
 
+    @unittest.skipUnless(
+        has_capability("pillow") and has_capability("numpy"), "the hide lane needs Pillow + NumPy"
+    )
+    def test_hide_is_a_textured_not_a_flat_albedo(self) -> None:
+        """The point of the generator: a skin that reads as hide, not a colour fill.
+
+        The self-test creature's first albedo had five unique colours — a flat
+        mossy green that made the standing/sinking boundary invisible against
+        the forest. The hide lane's anti-flat guarantee is structural: mottle,
+        fur clumps and grain must produce a spread of colours.
+        """
+        from PIL import Image
+
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            out = Path(name) / "creature_albedo.png"
+            self.assertEqual(0, run("hide", [str(out), "--size", "64", "--seed", "7"]))
+            image = Image.open(out)
+            self.assertEqual((64, 64), image.size)
+            self.assertEqual("RGB", image.mode)
+            colours = image.convert("RGB").getcolors(maxcolors=4096)
+            self.assertGreater(len(colours), 32, "a hide is not a flat colour fill")
+            # And it stays in the mid range: no pure black or white, so an
+            # unlit material reads as coat rather than as stripes.
+            extrema = image.getextrema()
+            for minimum, maximum in extrema:
+                self.assertGreater(minimum, 16)
+                self.assertLess(maximum, 240)
+
+    @unittest.skipUnless(
+        has_capability("pillow") and has_capability("numpy"), "the hide lane needs Pillow + NumPy"
+    )
+    def test_hide_patch_colour_makes_a_two_tone_coat(self) -> None:
+        """`--patch` is the anti-camouflage switch: a second, high-contrast tone
+        so the creature reads against whatever the biome is — and so a colour
+        detector can separate it from the background."""
+        from PIL import Image
+
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            import numpy as np
+
+            root = Path(name)
+            plain = root / "plain.png"
+            spotted = root / "spotted.png"
+            run("hide", [str(plain), "--size", "64", "--seed", "7"])
+            run(
+                "hide",
+                [
+                    str(spotted),
+                    "--size",
+                    "64",
+                    "--seed",
+                    "7",
+                    "--base",
+                    "200,190,160",
+                    "--patch",
+                    "60,50,35",
+                    "--patch-strength",
+                    "1.0",
+                ],
+            )
+            b = np.asarray(Image.open(spotted).convert("RGB"))
+            # Two tones present: a bright base and dark spots, clearly apart.
+            self.assertGreater(int(b.max()) - int(b.min()), 100)
+            # The patch colour is approached by the darkest pixels (the spots
+            # are a blend, not a solid fill).
+            self.assertLess(int(np.percentile(b, 2)), 115, "no pixels approach the patch colour")
+
+    @unittest.skipUnless(
+        has_capability("pillow") and has_capability("numpy"), "the hide lane needs Pillow + NumPy"
+    )
+    def test_hide_is_reproducible_and_seed_sensitive(self) -> None:
+        """Same seed, same bytes — a regenerated skin is not a diff. A different
+        seed draws a different pattern."""
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            paths = [root / f"{i}.png" for i in range(4)]
+            for out in paths[:2]:
+                run("hide", [str(out), "--size", "64", "--seed", "42"])
+            for out in paths[2:]:
+                run("hide", [str(out), "--size", "64", "--seed", "43"])
+            self.assertEqual(paths[0].read_bytes(), paths[1].read_bytes())
+            self.assertEqual(paths[2].read_bytes(), paths[3].read_bytes())
+            self.assertNotEqual(paths[0].read_bytes(), paths[2].read_bytes())
+
+    @unittest.skipUnless(
+        has_capability("pillow") and has_capability("numpy"), "the hide lane needs Pillow + NumPy"
+    )
+    def test_hide_refuses_an_implausible_colour_or_contrast(self) -> None:
+        from sevendtd_asset_pipeline.generators import run
+
+        with tempfile.TemporaryDirectory() as name:
+            out = Path(name) / "x.png"
+            for args in (["--base", "300,0,0"], ["--strength", "2"], ["--size", "8"]):
+                with self.subTest(args):
+                    with self.assertRaises(SystemExit) as raised:
+                        run("hide", [str(out), *args])
+                    self.assertIn("ERROR:", str(raised.exception))
+                    self.assertFalse(out.exists())
+
     def test_an_unknown_generator_lists_the_known_ones(self) -> None:
         from sevendtd_asset_pipeline.generators import run
 
@@ -1147,8 +1252,15 @@ class SelfTestFixtureTests(unittest.TestCase):
         self.assertGreaterEqual(len(look_bodies), 5)
         for body in look_bodies:
             with self.subTest(body=body[:80]):
-                self.assertEqual(body.count("Object.Instantiate"), 1)
-                self.assertIn("CaseDef.RegisterStaged", body)
+                if "CaseDef.WalkEntity" in body:
+                    # The entity lane's proof does not stage a prefab: it spawns
+                    # the class and the game drives it along the ground. Still
+                    # one concern, no overlay.
+                    self.assertNotIn("Object.Instantiate", body)
+                    self.assertNotIn("CaseDef.RegisterStaged", body)
+                else:
+                    self.assertEqual(body.count("Object.Instantiate"), 1)
+                    self.assertIn("CaseDef.RegisterStaged", body)
 
     def test_the_editorless_suite_is_mechanical_not_a_look(self) -> None:
         """A camera-staged instantiate on _editorless is the mix the gate cannot see."""

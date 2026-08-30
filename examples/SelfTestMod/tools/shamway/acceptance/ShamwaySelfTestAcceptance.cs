@@ -74,14 +74,73 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                 var ahead = camera.forward;
                 burstStaged = UnityEngine.Object.Instantiate(prefab);
                 CaseDef.RegisterStaged(burstStaged);
-                burstStaged.transform.position = camera.position + ahead * 3.5f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                burstStaged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                burstStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
                 var renderers = burstStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                if (renderers.Length > 0)
+                {
+                    var bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                        bounds.Encapsulate(renderers[i].bounds);
+                    lowest = bounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                burstStaged.transform.position = placed;
                 Report.Info("burst: staged at " + burstStaged.transform.position
                     + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;
@@ -123,14 +182,73 @@ if (suite == "shamwayselftest_gear_look")
                 var ahead = camera.forward;
                 gearStaged = UnityEngine.Object.Instantiate(prefab);
                 CaseDef.RegisterStaged(gearStaged);
-                gearStaged.transform.position = camera.position + ahead * 3.5f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                gearStaged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                gearStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
                 var renderers = gearStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                if (renderers.Length > 0)
+                {
+                    var bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                        bounds.Encapsulate(renderers[i].bounds);
+                    lowest = bounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                gearStaged.transform.position = placed;
                 Report.Info("gear: staged at " + gearStaged.transform.position
                     + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;
@@ -172,14 +290,73 @@ if (suite == "shamwayselftest_shamwayselftestarachnid_look")
                 var ahead = camera.forward;
                 shamwaySelfTestArachnidStaged = UnityEngine.Object.Instantiate(prefab);
                 CaseDef.RegisterStaged(shamwaySelfTestArachnidStaged);
-                shamwaySelfTestArachnidStaged.transform.position = camera.position + ahead * 3.5f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                shamwaySelfTestArachnidStaged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                shamwaySelfTestArachnidStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
                 var renderers = shamwaySelfTestArachnidStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                if (renderers.Length > 0)
+                {
+                    var bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                        bounds.Encapsulate(renderers[i].bounds);
+                    lowest = bounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                shamwaySelfTestArachnidStaged.transform.position = placed;
                 Report.Info("shamwaySelfTestArachnid: staged at " + shamwaySelfTestArachnidStaged.transform.position
                     + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;
@@ -221,14 +398,73 @@ if (suite == "shamwayselftest_shamwayselftestbird_look")
                 var ahead = camera.forward;
                 shamwaySelfTestBirdStaged = UnityEngine.Object.Instantiate(prefab);
                 CaseDef.RegisterStaged(shamwaySelfTestBirdStaged);
-                shamwaySelfTestBirdStaged.transform.position = camera.position + ahead * 3.5f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                shamwaySelfTestBirdStaged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                shamwaySelfTestBirdStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
                 var renderers = shamwaySelfTestBirdStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                if (renderers.Length > 0)
+                {
+                    var bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                        bounds.Encapsulate(renderers[i].bounds);
+                    lowest = bounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                shamwaySelfTestBirdStaged.transform.position = placed;
                 Report.Info("shamwaySelfTestBird: staged at " + shamwaySelfTestBirdStaged.transform.position
                     + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;
@@ -271,14 +507,73 @@ if (suite == "shamwayselftest_shamwayselftestcreature_look")
                 var ahead = camera.forward;
                 shamwaySelfTestCreatureStaged = UnityEngine.Object.Instantiate(prefab);
                 CaseDef.RegisterStaged(shamwaySelfTestCreatureStaged);
-                shamwaySelfTestCreatureStaged.transform.position = camera.position + ahead * 3.5f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                shamwaySelfTestCreatureStaged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                shamwaySelfTestCreatureStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
                 var renderers = shamwaySelfTestCreatureStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                if (renderers.Length > 0)
+                {
+                    var bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                        bounds.Encapsulate(renderers[i].bounds);
+                    lowest = bounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                shamwaySelfTestCreatureStaged.transform.position = placed;
                 Report.Info("shamwaySelfTestCreature: staged at " + shamwaySelfTestCreatureStaged.transform.position
                     + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;
@@ -327,14 +622,73 @@ if (suite == "shamwayselftest_shamwayselftestdino_look")
                 var ahead = camera.forward;
                 shamwaySelfTestDinoStaged = UnityEngine.Object.Instantiate(prefab);
                 CaseDef.RegisterStaged(shamwaySelfTestDinoStaged);
-                shamwaySelfTestDinoStaged.transform.position = camera.position + ahead * 3.5f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                shamwaySelfTestDinoStaged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                shamwaySelfTestDinoStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
                 var renderers = shamwaySelfTestDinoStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                if (renderers.Length > 0)
+                {
+                    var bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                        bounds.Encapsulate(renderers[i].bounds);
+                    lowest = bounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                shamwaySelfTestDinoStaged.transform.position = placed;
                 Report.Info("shamwaySelfTestDino: staged at " + shamwaySelfTestDinoStaged.transform.position
                     + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;
@@ -376,14 +730,73 @@ if (suite == "shamwayselftest_shamwayselftestprop_look")
                 var ahead = camera.forward;
                 shamwaySelfTestPropStaged = UnityEngine.Object.Instantiate(prefab);
                 CaseDef.RegisterStaged(shamwaySelfTestPropStaged);
-                shamwaySelfTestPropStaged.transform.position = camera.position + ahead * 3.5f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                shamwaySelfTestPropStaged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                shamwaySelfTestPropStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
                 var renderers = shamwaySelfTestPropStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                if (renderers.Length > 0)
+                {
+                    var bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                        bounds.Encapsulate(renderers[i].bounds);
+                    lowest = bounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                shamwaySelfTestPropStaged.transform.position = placed;
                 Report.Info("shamwaySelfTestProp: staged at " + shamwaySelfTestPropStaged.transform.position
                     + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;
@@ -425,14 +838,73 @@ if (suite == "shamwayselftest_timednuke_look")
                 var ahead = camera.forward;
                 timedNukeStaged = UnityEngine.Object.Instantiate(prefab);
                 CaseDef.RegisterStaged(timedNukeStaged);
-                timedNukeStaged.transform.position = camera.position + ahead * 3.5f;
-                // Face the camera, and keep the prop's own up axis upright so
-                // the orientation card is readable rather than lying on edge.
-                timedNukeStaged.transform.rotation =
-                    Quaternion.LookRotation(-ahead, Vector3.up);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                timedNukeStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
                 var renderers = timedNukeStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                if (renderers.Length > 0)
+                {
+                    var bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                        bounds.Encapsulate(renderers[i].bounds);
+                    lowest = bounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                timedNukeStaged.transform.position = placed;
                 Report.Info("timedNuke: staged at " + timedNukeStaged.transform.position
                     + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;

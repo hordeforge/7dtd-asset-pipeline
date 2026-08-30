@@ -384,10 +384,10 @@ class CombatAnimTests(unittest.TestCase):
         self.assertEqual((death.kind, death.loop), ("death", False))
         self.assertEqual((jump.kind, jump.bone), ("jump", "Root/Pelvis"))
 
-    def test_attack_curves_lunge_head_and_pitch_body(self) -> None:
+    def test_attack_curves_jab_head_and_pitch_body(self) -> None:
         from sevendtd_asset_pipeline.anim import attack_curves
 
-        curves = attack_curves("Root/Neck/Head", "Root/Pelvis", lunge=0.5, seconds=0.6)
+        curves = attack_curves("Root/Neck/Head", "Root/Pelvis", lunge=0.5, seconds=0.8)
         self.assertEqual(len(curves), 2)
         self.assertEqual({c["path"] for c in curves}, {"Root/Neck/Head", "Root/Pelvis"})
         head = next(c for c in curves if c["path"] == "Root/Neck/Head")
@@ -395,11 +395,13 @@ class CombatAnimTests(unittest.TestCase):
         for curve in (head, body):
             keyframes = curve["curve"]["m_Curve"]
             self.assertEqual(len(keyframes), 9)
-            # A sine burst: starts and ends at rest.
+            # A jab: at rest, one forward excursion that never goes past rest
+            # (a backward overshoot is the nervous-bob look), back to rest.
             self.assertAlmostEqual(keyframes[0]["value"]["x"], 0.0, places=6)
             self.assertAlmostEqual(keyframes[-1]["value"]["x"], 0.0, places=6)
-        self.assertGreater(head["curve"]["m_Curve"][2]["value"]["x"], 0.15)
-        # The body pitches shallower than the head lunges.
+            self.assertGreaterEqual(min(kf["value"]["x"] for kf in keyframes), 0.0)
+        # The head peaks mid-clip (index 4) and more than the body pitches.
+        self.assertGreater(head["curve"]["m_Curve"][4]["value"]["x"], 0.15)
         head_peak = max(kf["value"]["x"] for kf in head["curve"]["m_Curve"])
         body_peak = max(kf["value"]["x"] for kf in body["curve"]["m_Curve"])
         self.assertGreater(head_peak, body_peak)
@@ -469,10 +471,11 @@ class LimbAnimBundleTests(unittest.TestCase):
         trees = read_objects(bundle)
         clips = {c["m_Name"]: c for c in trees[74]}
         self.assertEqual(set(clips), {"Attack1", "Death", "Jump"})
-        self.assertEqual(len(clips["Attack1"]["m_RotationCurves"]), 2)  # head + body
+        self.assertEqual(len(clips["Attack1"]["m_RotationCurves"]), 2)  # head + chest
         self.assertEqual(
             clips["Attack1"]["m_RotationCurves"][0]["path"], "Root/Pelvis/Spine/Chest/Neck/Head"
         )
+        self.assertEqual(clips["Attack1"]["m_RotationCurves"][1]["path"], "Root/Pelvis/Spine/Chest")
         self.assertEqual(len(clips["Death"]["m_RotationCurves"]), 1)
         self.assertEqual(clips["Death"]["m_WrapMode"], 1)  # plays once
         self.assertEqual(len(clips["Jump"]["m_PositionCurves"]), 1)

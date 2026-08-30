@@ -336,8 +336,14 @@ the same bundle.
 | `burst` instantiated with matching ParticleSystem graphs | a `.vfx` that loaded as an empty prefab |
 
 Those are **separate suites**. `<mod>_bundle` is loads only. Each prefab
-gets its own `<mod>_<stem>_look` (one camera-staged instance, registered
-with `CaseDef.RegisterStaged` so the next hold cannot overlay it).
+gets its own `<mod>_<stem>_look` (one camera-staged instance, grounded on
+the terrain at the staging column and registered with
+`CaseDef.RegisterStaged` so the next hold cannot overlay it — the staged
+prefab is placed at `World.GetHeight` + 1, the same top-block height the
+game's own spawner uses for ground entities, rebased to absolute
+coordinates with `Origin.position`; see research-provenance), so an
+animated entity moves against the terrain instead of hovering in empty
+sky).
 `<mod>_block_*` places a block on a voxel. `<mod>_editorless` is
 mechanical. Never comma-list unrelated suites in one `PLAYTEST_SUITE`;
 never comma-list `*_look` with `*_block_*`. `playtest-synthesized` runs

@@ -82,8 +82,10 @@ BUNDLE_SOURCE_ENV = "SHAMWAY_BUNDLE_SOURCE"
 # under `[acceptance] motion_kinds`; see docs/authoring/video.md for what each
 # generates. "fixed" opts out of a motion clip entirely (a world-fixed thing
 # has no motion worth capturing), which is why the fixture pins it to today's
-# unchanged generation.
-MOTION_KINDS = ("turntable", "walk-cycle", "fixed")
+# unchanged generation. "walk-entity" spawns the stem as a real entity class
+# and drives it walking along the ground — the only kind that grounds the
+# entity with the game's own spawner rather than staging a prefab.
+MOTION_KINDS = ("turntable", "walk-cycle", "walk-entity", "fixed")
 
 
 @dataclass(frozen=True)

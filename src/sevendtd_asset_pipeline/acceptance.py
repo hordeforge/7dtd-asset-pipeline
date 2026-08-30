@@ -516,9 +516,7 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
     # `reject_mixed_visual_suites` refuses those two in one PLAYTEST_SUITE.
     motion_kinds = dict(plan_.motions)
     prefix = (
-        plan_.suite_id[: -len("_bundle")]
-        if plan_.suite_id.endswith("_bundle")
-        else plan_.suite_id
+        plan_.suite_id[: -len("_bundle")] if plan_.suite_id.endswith("_bundle") else plan_.suite_id
     )
     look_yields_parts: list[str] = []
     look_branch_parts: list[str] = []

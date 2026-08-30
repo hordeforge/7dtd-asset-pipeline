@@ -1914,6 +1914,29 @@ rendered point* (the feet) meets the terrain — i.e. offset the entity by its
 measured feet-below-root amount, or ground by a feet-level collider. Not yet
 measured in the animated pose.
 
+**The CC capsule grounds the *average*, not the animated feet (2026-08-30,
+live-confirmed):** the `Physics`-node capsule (#165) stops the creature
+floating at spawn and grounds it in the walk-entity look — but across the
+12 s clip it is still inconsistent, exactly as the user read it: legs clip
+into the ground, then float above it, and over a rise it rides too high before
+settling. The reason is structural, not a missing collider: the capsule is
+sized from the **static bind-pose** mesh AABB (feet at y=-0.02), while the
+`Idle1` bob and `Walk` trot move the pelvis and legs, so the visual lowest
+point oscillates around that fixed capsule bottom; and over terrain the
+capsule rides the collider surface while the animation phase swings the feet
+above/below it. A single static capsule cannot track an animated rig's feet.
+The remaining route is a per-frame ground offset (the model's posed feet-below
+root, re-measured each tick) or a proper animated ground clamp — the item
+recorded above, still open.
+
+**The hide contrast (2026-08-30, live-confirmed):** the atlased role-aware
+hide works mechanically, but the first palette (pale cream base ~205) washed
+out to a single pale blob under the client's daytime sun. Re-authoring the
+fixture hide with a dark warm palette (base 118,96,66, paw near-black
+22,16,12, limb 74,58,40, outline 12,10,8) made the legs and body separate and
+the paw tips read — so a rendered creature's hide needs mid-to-dark tones and
+strong value separation, not light pastel, to survive in-game lighting.
+
 **The true collider-missing finding, and why the look suite still floats
 (2026-08-30):** `PhysicsBodyInstance.bindCollider` (from
 `PhysicsBodyInstance.il.txt`) does `modelRoot.Find(path)` then
@@ -2059,3 +2082,239 @@ read that survived three ground-query iterations. The look case now
 grounds with `world.GetHeight((int)abs.x, (int)abs.z) + 1f` (absolute
 coordinates, `+ Origin.position` for the rebase), with a ground-mask
 raycast as the fallback when the chunk is not yet loaded.
+
+## A generated creature must own its entity class and clips, not borrow a stock one (2026-08-30)
+
+The walk acceptance kept returning a creature that "spawns, collides on the
+torso, speeds away" and an `NullReferenceException` during spawn. Root cause,
+pinned from the installed engine IL:
+
+- **Using `Class="EntityAnimalStag"` borrows a stock animal's C# type.** That
+  type brings a pre-authored model (`Mesh`/`Prefab` → the game's own
+  `Animals/...` assets), a stock `PhysicsBody` whose collider paths are stag
+  bone names the generated rig does not have (`Hips`, `LeftUpLeg`, …), and a
+  template `AITask` tree (Wander etc.) that roams — the "speeds away". Reusing
+  a stock class proves nothing about the pipeline and inherits expectations a
+  generated rig cannot meet. **The asset pipeline's goal is to author its own
+  assets, so the generated creature must declare its own class.**
+
+- **A mod DLL can define the entity class.** `EntityClass` resolves `Class`
+  via `Type.GetType(string)` (EntityClass.il.txt:349) and logs
+  `Could not instantiate class 'X' for entity_class Y` when it returns null.
+  `Type.GetType` searches **all loaded assemblies**, so a mod whose DLL ships
+  at the mod root (root-level `*.dll`; `shamway client deploy` copies exactly
+  those) can name `Class="<ns>.<Type>, <Assembly>"` and the engine
+  instantiates the mod's own `EntityAlive` subclass. Verified: the fixture's
+  `ShamwaySelfTestCreature.cs` (`public class ShamwaySelfTestCreature :
+  EntityAlive`) compiled to `ShamwaySelfTestCreature.dll`, loaded by the client
+  and server, resolved by `Class`, and `CreateEntity` proceeded past the class
+  lookup (the old "Could not instantiate class" is gone).
+
+- **The remaining spawn blocker is a controller-init NRE, not the class.**
+  `EntityFactory.CreateEntity` → `CreateEntityOperation.CompleteEntity` →
+  `EModelBase.createAvatarController` → `AddComponent<GameObjectAnimalAnimation>`
+  → its `Awake` NREs at `anim["Idle1"]` (GameObjectAnimalAnimation.il.txt:46,
+  offset 0x0064) because `anim == null`. `Awake` does
+  `figureT = parentT.GetChild(reverse-first-active)` then
+  `anim = figureT.GetComponent<Animation>()`. The controller is added to the
+  model GameObject during `createAvatarController`; at that moment the figure
+  child does not resolve to the one carrying the `Animation` (the model
+  hierarchy has not settled), so `anim` is null and `CreateEntity` aborts.
+  This matches the earlier recorded "one NRE remains in Awake at spawn —
+  likely a transient first-pass FindModel miss". **The controller's own
+  `[UnityEngine.Scripting.Preserve]`/init ordering is the open engine-interop
+  piece** (a `GameObjectAnimalAnimation.Awake` re-query / defer, or adding the
+  component after the model is attached).
+
+- **`GameObjectAnimalAnimation` reveals the figure-child contract.** `Awake`
+  reverses over the model root's children to find the first *active* one and
+  reads the `Animation` off it. So the prefab needs a `figure` child carrying
+  the `Animation`, as the **first active child** of the model root. A
+  `Physics` sibling added for grounding must be **inactive** (or the
+  reverse-iteration picks it, finds no Animation, and NREs) — verified: root
+  children `[figure(active), Physics(false)]` makes the reverse-iteration land
+  on `figure`.
+
+- **The grounding capsule must be as wide as the model's footprint.** A thin
+  capsule (radius 0.207) under a wide quadruped (depth extent 0.415) lets the
+  body drape past the collider and tip onto the torso. The `Physics` node's
+  `CapsuleCollider` radius should be ≈ the mesh's widest footprint half-extent
+  (0.415) and bottom at the feet (`center.y - height/2 == aabb.min.y`), so the
+  engine grounds the feet, not the torso.
+
+- **The clip recorder photographs the player's framebuffer.** `ClipRecorder`
+  uses `ScreenCapture.CaptureScreenshot` — whatever the client's camera shows.
+  To frame a spawned walking creature the player is not inside, detach the
+  camera with `EntityPlayerLocal.SetCameraAttachedToPlayer(false, false)`
+  (sets `cameraTransform.parent = null` — the game's own detached/debug camera,
+  EntityPlayerLocal.il.txt:2877) and position `playerCamera.transform` each
+  tick; `GameObjectAnimalAnimation`/the recorded framebuffer then show the
+  creature instead of the player's own first-person view. Re-attach with
+  `(true, false)` after the case.
+
+**Still open:** the `GameObjectAnimalAnimation.Awake` init-ordering NRE, which
+is what actually aborts spawn — the class, the Physics capsule, and the
+figure-first-active-child contract are all now correct offline; the runtime
+controller-init ordering is the remaining engine-interop blocker for a spawn
+that survives `CompleteEntity`.
+
+## Game animals use an Mecanim Animator, not a legacy Animation, in this revision (2026-08-30)
+
+Read the shipped `automatic_assets_entities/animals.bundle` with UnityPy: the
+modern animals (`animalDeerStag`, `animalRabbit`, `animalBoar`, `animalWolf`,
+`animalBirdChicken`, …) carry a Unity **`Animator` (type 95)** on the model
+root GameObject — a Mecanim `Animator` + controller — while the
+legacy `Animation` (type 111) appears only on a few old-style prefabs
+(`PIG`, `CHICKEN`, a `Model` node). `GameObjectAnimalAnimation` (the
+`AvatarController` the generator wires) drives a **legacy** `Animation`
+component by clip name (`Awake` → `figureT.GetComponent<Animation>()` →
+`anim["Idle1"]`). So pairing `AvatarController = GameObjectAnimalAnimation`
+with a prefab that carries a legacy `Animation` is a *legacy-animal* path that
+does not match how the current animals are authored (Mecanim), which is likely
+why the spawned creature's controller `Awake` NREs: the node it inspects for
+the legacy `Animation` does not carry one, because the generated prefab's
+layout and the modern animal layout differ.
+
+**Two distinct routes to a moving animal, both feasible:**
+- *Legacy-clip route (what the generator builds):* keep
+  `AvatarController = GameObjectAnimalAnimation` and ensure the legacy
+  `Animation` component (with the clips) is on **the exact node the
+  controller's `GetChild(first-active)` resolves** — the node `FindModel`
+  returns, whose first active child is the prefab root once the prefab is
+  `Instantiate`d under it (`EModelBase.createModel` does
+  `Instantiate(assets.Mesh, modelTransformParent)`). Placement of that
+  `Animation` is the contract that must match — see the controller-Awake NRE
+  note above.
+- *Mecanim route:* ship the model's own `Animator` + controller (TFP's
+  controllers cannot ship in a mod bundle — the game's bundles embed their
+  assets same-file), so a mod would have to author its own
+  `AnimatorController` — the hard lane the entity docs already call unbuilt.
+
+## The live client E2E fails at AUTHORIZE: client/server game-version skew, not Steamworks (2026-08-31, corrected)
+
+The walk-entity live runs failed before the scenario armed: after
+`NET: LiteNetLib: Connected to server` the client sits in
+`[7dtd-fastconnect] boot hb ticks=… action=done` forever, and the
+7dtd-playtest mod logged `queue cases=1` but no `DONE` — the run ends
+`FAIL harness: no DONE from primary playtest mod`. The client log shows the
+**real** cause, at connect time, not boot:
+
+```
+Client failed to authorize server: Game Version Mismatch: you have 'V 3.2.0' and server has 'V 3.1.0'
+```
+
+The installed Steam client auto-updated to **V 3.2.0** (buildid 24911213;
+engine still Unity 2022.3.62f2, per `Initialize engine version: 2022.3.62f2`),
+while this host's dedicated server is **V 3.1.0** (the build the project's RE
+and `docs/research/research-provenance.md` were written against). The client
+refuses the version-authorization gate, never joins the world, and idles at
+the menu (`action=done`) until the harness times out. This is an environment
+skew, not the asset, the harness logic, or the bundle — and the engine/Unity
+revision is unchanged, so a 3.1.0-targeted bundle still loads in the 3.2.0
+client.
+
+**The `Steamworks is not initialized` exception is NOT the blocker.** It is
+`Steamworks.SteamApps.GetCurrentBetaName` from the Analytics boot path
+(`[Analytics] Failed to find current Steam Branch`), it is **caught**, and the
+client proceeds past it through mod load → `NET: LiteNetLib: Connected to
+server` → to the version check. A log that shows that exception and a
+`Game Version Mismatch` line must be read as "version skew", never as
+"Steamworks init" — prior runs misread it as a boot hang, which sent the
+diagnosis down a dead end.
+
+Fix is to align the dedicated server with the client's version via SteamCMD
+(appid 294420, `+login anonymous +app_update 294420 validate`), then point
+`SEVEN_DAYS_TO_DIE_SERVER_DIR` at the matching build.
+
+Recheck before re-diagnosing a grounded-walk "failure": if the client log has
+`Client failed to authorize server ... Game Version Mismatch` and
+`action=done` (or `no DONE from primary playtest mod`), the run did not reach
+the asset at all — do not treat a PASS/FAIL as evidence about the creature.
+Confirm `client V` equals `server V` first.
+
+## Generated creature spawns and walks once the controller and Physics node are the mod's own (2026-08-31)
+
+The walk-entity case was blocked in turn by three NREs, each fixed and each
+verified against the live client on V 3.2.0:
+
+1. **Stock controller NRE.** `GameObjectAnimalAnimation.Awake` NREs at
+   `anim["Idle1"]` (IL offset 0x64) because the controller is added during
+   `EModelBase.Init` (`createAvatarController` → `AddComponent`), before the
+   model hierarchy it inspects is settled, so its
+   `GetChild(reverse-first-active).GetComponent<Animation>()` returns null.
+   Fix: the mod-owned `ShamwayAnimalController` binds the figure's legacy
+   `Animation` lazily on the first `Update`, and finds the figure by **name**
+   (`transform.Find("figure")`).
+2. **Grounding NRE.** With the NRE fixed, the spawn moved to
+   `Entity.AddCharacterController`: it does
+   `PhysicsTransform.gameObject.AddComponent<KinematicCharacterMotor>()`, and
+   that motor binds its `Capsule` field in its own `Awake`
+   (`GetComponent<CapsuleCollider>()`). The writer's `Physics` node was
+   **inactive** (a #165 fix), which defers the motor's Awake forever, so
+   `SetCapsuleDimensions` NREs on a null `Capsule`. Fix: the `Physics` node is
+   **active** (the real-animal standard).
+3. **Incompatibility.** The stock `GameObjectAnimalAnimation` is fundamentally
+   incompatible with an active `Physics` node: active → the controller's
+   first-active-child lookup picks `Physics` and NREs at `anim["Idle1"]`;
+   inactive → the motor capsule is never bound and NREs at
+   `SetCapsuleDimensions`. So a generated entity **must** use a mod-owned
+   controller that finds the figure by name — this is why the generator wires a
+   mod-owned `AvatarController` and mod-owned `Class`.
+
+After both fixes the case passes: `spawned_id=172`, `travelled=…m`, a
+`SkinnedMeshRenderer`, and captured frames under
+`playtest-shots/clips/motion_shamwaySelfTestCreature/`. The rig still does not
+behave like a grounded animal: with the borrowed stock `EntityAnimalSnake`
+class the case measured `travelled=292 m` in a 12 s hold (the walk case sets
+`moveSpeed=0.8`) and `y[61.02..74.11]` — far too fast and a 13 m Y-spread,
+because the stock class drags a pre-authored AI/speed. The next slice is the
+walk behaviour: the walk case's motor-drive, the CharacterController capsule
+tuning, and the detached-camera framing (the captured frames still show the
+player's first-person view, not the creature).
+
+## The detached-camera frames: the player FP arm is not a toggleable renderer (2026-08-31)
+
+The walk-entity clip frames showed a first-person arm filling the view, so the
+creature was never visible. `EntityPlayerLocal.playerCamera` is the FP rig
+(`vp_FPController`/`vp_FPCamera`); hiding its renderers and the player's renderers
+did not remove the arm because it is part of the FP controller's rendered
+composite, not a child renderer. `ClipRecorder`/`CaptureClipFrame` uses
+`ScreenCapture.CaptureScreenshot`, which captures the composited game view, so
+the arm is always in it. Fix: a dedicated capture camera — on
+`Helpers.DetachCamera`, disable `player.playerCamera` and `player.finalCamera`
+and create a plain `Camera`; `PointCameraAt` drives that camera at the creature;
+`AttachCamera` re-enables the player cameras and destroys the capture camera.
+This clears the arm; the frames now show the world (the creature is still not
+framed because it moves too fast — measured ~264 m in a 12 s hold, and climbs
+the terrain, so the walk behaviour is the next slice).
+
+## The generated creature's walk is CharacterController-instability, not a moveSpeed override (2026-08-31)
+
+The walk-entity case drives a spawned mod-owned `EntityAlive` with
+`moveSpeed=0.8` + `SetMoveForward(1f)`, yet the creature's travel is erratic and
+run-to-run variable (`travelled` 264 m, then 462 m, in the 12 s hold) and its Y
+climbs (61 to 74, then 81). So the movement is not a `moveSpeed` artifact — the
+Kinematic Character Controller is unstable: the creature is spawned ~2 m above
+the terrain with a large grounding capsule (radius 0.8, height 2.75, the model
+AABB-derived) on an ACTIVE `Physics` node, and the motor/CC flings and climbs it
+erratically. A controllable gait therefore needs the CharacterController/capsule
+tuning (spawn-at-surface, footprint vs height, slope/step handling) and the
+`EntityAlive.MoveEntityHeaded` motion-lerp constants (0.546, 2.5, 0.3, 0.01)
+reconciled to a grounded crawl — an engine-physics slice distinct from the
+spawn/controller/grounding-NRE work already landed.
+
+Walk-instability negative: spawning the creature at the player's surface level
+(offset Y 2 -> 0) did not help — the case measured `travelled=514 m`, `y[61..84]`,
+and the run-to-run travel is chaotic (264 m, 462 m, 514 m; peak y 74, 81, 84).
+So the launch is not from a spawn drop; the Kinematic Character Controller for
+this generated rig is unstable regardless, and needs the capsule dimensions /
+KinematicCharacterMotor config / `MoveEntityHeaded` constants reconciled — not
+the spawn offset.
+
+Capsule-radius negative: reducing the grounding capsule radius cap 0.8 -> 0.35
+did not stabilize the walk (still `travelled=471 m`, `y[61..82]`). Three
+hypotheses are now ruled out by measurement: not a moveSpeed override, not the
+spawn drop (spawn-at-surface made it worse), not an oversized capsule radius.
+The instability is a deeper engine-physics interaction (KinematicCharacterMotor
++ `MoveEntityHeaded` motion-lerp constants + the generated rig) that needs a
+systematic RE and modelling pass, not one-off parameter guesses.

@@ -182,8 +182,11 @@ class EntityGeneratorTests(unittest.TestCase):
 
     def test_an_animated_creature_is_a_real_spawnable_animal(self) -> None:
         """`--anim` makes the class a concrete EntityAlive, not a bare stub:
-        Class names the C# animal type, PhysicsBody gives it a collider, and
-        IsAnimalEntity/Faction let the game's spawner and AI treat it as one."""
+        Class names the C# animal type, IsAnimalEntity/Faction let the game's
+        spawner and AI treat it as one, and a slow MoveSpeed is emitted so a
+        generated creature walks at a visible pace. The class is the mod's own
+        (default EntityAnimalSnake — not a stock animal's own type, which would
+        inherit a pre-authored model/physics body the rig does not have)."""
         fragment = entity_xml(
             "myCreature",
             "MyMod",
@@ -191,11 +194,14 @@ class EntityGeneratorTests(unittest.TestCase):
             "creature",
             avatar_controller="GameObjectAnimalAnimation",
         )
-        self.assertIn('name="Class" value="EntityAnimalStag"', fragment)
-        self.assertIn('name="PhysicsBody" value="Stag"', fragment)
+        self.assertIn('name="Class" value="EntityAnimalSnake"', fragment)
         self.assertIn('name="IsAnimalEntity" value="true"', fragment)
         self.assertIn('name="Faction" value="animals"', fragment)
         self.assertIn('name="AvatarController" value="GameObjectAnimalAnimation"', fragment)
+        self.assertIn('name="MoveSpeed" value="1.5"', fragment)
+        # No borrowed stock physics body: grounding comes from the Physics-node
+        # capsule the writer emits, not from a Stag layout of stag bone paths.
+        self.assertNotIn("PhysicsBody", fragment)
 
     def test_entity_class_and_minimal_opt_out(self) -> None:
         """`--entity-class` overrides the C# type; `--minimal-entity` emits the
@@ -221,7 +227,7 @@ class EntityGeneratorTests(unittest.TestCase):
             minimal=True,
         )
         self.assertNotIn('name="Class"', minimal)
-        self.assertNotIn('name="PhysicsBody"', minimal)
+        self.assertNotIn("PhysicsBody", minimal)
 
     def test_xml_is_written_by_the_cli(self) -> None:
         xml = self.root / "creature-entityclasses.xml"

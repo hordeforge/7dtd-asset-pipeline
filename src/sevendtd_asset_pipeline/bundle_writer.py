@@ -1969,18 +1969,47 @@ def add_grounding_physics(
     extent = aabb.get("m_Extent", {})
     half_h = max(0.05, float(extent.get("y", 0.9)))
     height = 2.0 * half_h
-    radius = min(0.5, max(0.06, float(extent.get("z", extent.get("x", 0.15))) * 0.5))
+    # The capsule radius must be a moderate footprint, not the model's full
+    # half-width. A radius capped near the whole body (real-animal stags use
+    # 0.22) balloons the collider, which clips small terrain features and
+    # launches the CharacterController erratically (measured: chaotic walk,
+    # travelled 264->514 m, y climbing to 84). `extent.z` is the widest
+    # footprint axis; a radius slightly under it keeps the side from poking
+    # outside the mesh, and the cap keeps a wide body from ballooning. The
+    # bottom stays at the mesh's feet so the engine grounds the feet.
+    radius = min(max(float(extent.get("z", extent.get("x", 0.15))), 0.2), 0.35)
     feet = float(centre.get("y", 0.9)) - half_h
     bottom = feet + height / 2.0
 
     physics_go = f"{stem}:physics:go"
     physics_tr = f"{stem}:physics:transform"
     physics_collider = f"{stem}:physics:collider"
+    # The Physics node must be ACTIVE. The engine's `Entity::AddCharacterController`
+    # reads the node's `CapsuleCollider`, then does
+    # `PhysicsTransform.gameObject.AddComponent<KinematicCharacterMotor>()`
+    # (CharacterControllerKinematic::.ctor). That motor binds its `Capsule`
+    # field in its own Awake via `GetComponent<CapsuleCollider>()`; an
+    # INACTIVE Physics node defers the motor's Awake until it becomes active,
+    # which never happens, so `SetCapsuleDimensions` NREs on a null `Capsule`
+    # (measured: `KinematicCharacterMotor.SetCapsuleDimensions` IL_0015). Making
+    # the node ACTIVE is also the real-animal standard (animalDeerStag carries
+    # an ACTIVE Physics child with a CapsuleCollider at the root), not the
+    # inactive form #165 introduced. That inactive form only existed because
+    # the stock `GameObjectAnimalAnimation.Awake` finds its figure as the model
+    # root's first ACTIVE child, which collides with an active Physics sibling
+    # — a contract that is fundamentally incompatible with grounding (active →
+    # the controller picks Physics, finds no Animation, NREs at `anim["Idle1"]`;
+    # inactive → the motor's capsule is never bound, NREs at SetCapsuleDimensions).
+    # A generated entity therefore must use a controller that finds the figure
+    # by NAME (the writer's `figure` node) rather than by first-active-child —
+    # `ShamwayAnimalController` does exactly that — which is the mod-owned
+    # controller this pipeline now generates for.
+    physics_fields = _game_object_fields("Physics", [physics_tr, physics_collider])
     objects.append(
         BundleObject(
             GAME_OBJECT,
             "Physics",
-            _game_object_fields("Physics", [physics_tr, physics_collider]),
+            physics_fields,
             key=physics_go,
             in_container=False,
         )
@@ -2072,16 +2101,19 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
     animation_key = f"{path.stem}:animation"
     root_go = f"{path.stem}:go"
     root_tr = f"{path.stem}:transform"
-    # The engine's GameObjectAnimalAnimation reads the legacy Animation off
-    # the model root's *first active child* (the "figure"), not off the root:
-    # Awake does figureT = parentT.GetChild(...first active...); anim =
-    # figureT.GetComponent<Animation>(), then anim["Death"] on every Update.
-    # Our writer used to put the Animation on the prefab root, so a spawned
-    # entity's controller NRE'd every frame (recorded in research-provenance).
-    # Insert a figure GameObject between the root and its children and put the
-    # Animation on it — the clip paths (Root/..., authored relative to the
-    # Animation's own GameObject) then resolve because Root stays a child of
-    # the figure.
+    # A generated entity carries its legacy Animation on a `figure` child, and
+    # its grounding capsule on a sibling `Physics` child. Which node supplies
+    # the figure must NOT be decided by "first active child" — that is the
+    # stock `GameObjectAnimalAnimation.Awake` contract, which is incompatible
+    # with the active Physics node the grounding capsule needs (see
+    # add_grounding_physics): active Physics is picked first and carries no
+    # Animation, so the stock controller NREs at `anim["Idle1"]`. A generated
+    # entity therefore uses a controller that finds the figure by NAME — the
+    # writer's `figure` node — which is what the mod-owned
+    # `ShamwayAnimalController` does. We insert a `figure` GameObject as the
+    # model root's active child and put the Animation on it, re-parenting the
+    # bones under it so the clip paths (`Root/...`) still resolve relative to
+    # the Animation's own GameObject.
     figure_go = f"{path.stem}:figure:go"
     figure_tr = f"{path.stem}:figure:transform"
     physics_tr = f"{path.stem}:physics:transform"
@@ -2089,19 +2121,17 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
     for obj in objects:
         if obj.key == root_tr:
             original_root_children = list(obj.fields["m_Children"])
-            # The root keeps the `figure` (the controller's animation carrier)
-            # and the `Physics` node (the grounding capsule the engine reads
-            # from `RootTransform.Find("Physics")`) as its direct children; the
-            # model bones and skinned body move under the figure below.
+            # The model root keeps the `figure` (active, the controller's
+            # animation carrier) and the `Physics` node (inactive, the
+            # grounding capsule) as its children.
             obj.fields["m_Children"] = [Ref(figure_tr), Ref(physics_tr)]
         elif obj.key == figure_tr:  # pragma: no cover - defensive
             raise PipelineError(f"{path.stem} has a node that would collide with the figure")
     if original_root_children is None:
         raise PipelineError(f"{path.stem} prefab has no root transform to wrap in a figure")
     # Re-parent every former root child under the figure — except the `Physics`
-    # node, which must stay a direct child of the root so the engine's
-    # `RootTransform.Find("Physics")` (Entity::PhysicsInit, from Entity.il.txt)
-    # resolves it and `AddCharacterController` can build the grounding capsule.
+    # node, which stays a direct (inactive) child of the root so the engine's
+    # `RootTransform.Find("Physics")` (Entity::PhysicsInit) resolves it.
     figure_children_keys = [
         child.key for child in original_root_children if child.key != physics_tr
     ]
@@ -2110,8 +2140,6 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
             if obj.key == child_key:
                 obj.fields["m_Father"] = Ref(figure_tr)
                 break
-    # The figure GameObject carries the Animation and sits as the model
-    # root's single child, so the controller's figure lookup succeeds.
     objects.append(
         BundleObject(
             GAME_OBJECT,

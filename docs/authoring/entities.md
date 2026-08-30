@@ -191,17 +191,36 @@ What the fragment leaves out for a bare creature — `MaxHealth`, `sounds`,
 `MoveSpeed` tuning, AI behaviour, loot — is mod-specific and belongs in the
 mod's own XML, exactly like the properties a prop or item needs. With
 `--anim` the fragment now also makes the creature a **real spawnable
-animal**: `Class` names a concrete C# entity type (`EntityAnimalStag`, the
-game's wandering animal — or a mod's own type via `--entity-class`), and
+animal**: `Class` names a concrete C# entity type, and
 `IsAnimalEntity`/`Faction` let the game's spawner and AI treat it as one.
-(`PhysicsBody="Stag"` does not align with a procedural rig's bone paths, so
-it contributes no collider; the grounding comes from the `Physics` node the
-writer emits instead — see "What the engine requires of the model" and "What
-is still unbuilt".) A bare
+
+`Class` must be the **mod's own entity type, not a stock animal's** — the
+pipeline's whole point is that the mod owns the model, the clips and the C#
+class. `EntityClass` resolves `Class` through `Type.GetType(string)`
+(`EntityClass.il.txt:349`), which searches all loaded assemblies, so a mod
+DLL shipped at the mod root (`shamway client deploy` copies root-level
+`*.dll`) can name `Class="<ns>.<Type>, <Assembly>"` and the engine
+instantiates the mod's own `EntityAlive` subclass. Reusing `EntityAnimalStag`
+would borrow a type that binds a pre-authored model, a stock `PhysicsBody`
+with stag bone paths the rig does not have, and a template `AITask` wander
+that roams — none of which belongs to the generated asset. The default
+`EntityAnimalSnake` is a concrete `EntityAlive` sub-type the generator emits
+so a working class is produced out of the box; `--entity-class` names a mod's
+own type. No stock `PhysicsBody` is emitted (grounding comes from the
+`Physics`-node capsule the writer builds, below), and a slow `MoveSpeed` is
+emitted so a spawned creature walks at a visible pace. A bare
 `Prefab+Mesh` class is *not* a spawnable `EntityAlive` — without a
 `Class` it loads but `EntityFactory.CreateEntity` returns nothing, so it
 could never walk in-game. `--minimal-entity` opts back out and emits the
 bare stub for a special case.
+
+The generated prefab's animation and grounding are the mod's own too: the
+writer attaches a legacy `Animation` component (with the synthesized clips)
+to the model root's first active child, and adds an **inactive** `Physics`
+child carrying a `CapsuleCollider` whose bottom is at the mesh's feet —
+`Entity::AddCharacterController` reads that capsule and grounds the entity
+on its feet. See "What the engine requires of the model" and
+"Making it move".
 
 ## Bone names are the mod's choice — with two exceptions
 
@@ -357,25 +376,44 @@ that clients see nothing.
   declaration already accepts any name the controller plays.
 - **Mecanim / complex locomotion.** `Animator` + controller + compiled
   clips remain the hard lane; the legacy path covers an animal that idles,
-  walks and attacks by name.
-- **Physics bodies and collision.** A generated creature does spawn as a real
-  `EntityAlive` and animates (its Walk clip plays and it travels), and
-  `--anim` emits a real animal class with `Class`/`PhysicsBody`/
-  `IsAnimalEntity`. The engine grounds an entity by its CharacterController
-  capsule, and it reads that capsule off a **`Physics` child node** of the
-  model root (`Entity::PhysicsInit` does `Transform.Find("Physics")`, then
-  `AddCharacterController` reads that node's `CapsuleCollider` centre/height
-  and calls `SetSize` — recorded in research-provenance). The writer now emits
-  that `Physics` child (a `CapsuleCollider` whose bottom is at the mesh's
-  feet, derived from the model bounds) on every generated entity, so the game
-  settles it on the ground instead of on its torso. `physicsbodies.xml`
-  per-bone bodies (`Detail`/`Normal`) remain closed for a procedural skinned
-  mesh — they build bone-centred colliders that do not reach the feet, and
-  `EnumColliderType` is only `None`/`Normal`/`Detail`/`All` — but the
-  `Physics` node is the non-per-bone capsule body those three values cannot
-  express. The grounding caps the acceptance at a fresh client: **the game
-  reads and grounds it; whether the feet line up in the animated pose is the
-  live look that remains.**
+  walks and attacks by name. In this engine revision the shipped animals use a
+  Mecanim **`Animator`** (type 95 on the model root, read from
+  `automatic_assets_entities/animals.bundle`), while `GameObjectAnimalAnimation`
+  (the `AvatarController` the generator wires) drives a **legacy** `Animation`
+  by clip name — a legacy-animal path.
+- **Grounding and the controller must be the mod's own.** A generated creature
+  spawns as a real `EntityAlive` (its own mod-owned class, not a borrowed stock
+  one — `Class` resolves via `Type.GetType`, and the mod DLL at the mod root
+  names the type). The engine grounds it by its CharacterController capsule,
+  read off an **active `Physics` child node** the writer emits (a
+  `CapsuleCollider` whose bottom is at the mesh's feet, radius ≈ the model's
+  footprint) — `Entity::AddCharacterController` reads that capsule, then does
+  `AddComponent<KinematicCharacterMotor>()` on the node and calls `SetSize`.
+  That motor binds its own `Capsule` field in **its** `Awake`, so the `Physics`
+  node **must be active**: an inactive node defers the motor's Awake forever
+  and `SetCapsuleDimensions` NREs on a null `Capsule` (the measured spawn-time
+  NRE before this fix). The stock `GameObjectAnimalAnimation` controller is
+  **incompatible** with that active `Physics` node — its `Awake` finds its
+  figure as the model root's first *active* child, which then collides with the
+  active `Physics` sibling and NREs at `anim["Idle1"]`. So a generated entity
+  must use a controller that finds the figure **by name** (the writer's
+  `figure` node), not by first-active-child — that is the mod-owned
+  `ShamwayAnimalController`, and the stock one cannot be used. This is the
+  reason the generator wires a mod-owned `AvatarController` and a mod-owned
+  `Class`; a borrowed stock `Class`/controller reintroduces a pre-authored
+  model, a stock AI wander, and a stock speed the walk case cannot contain
+  (measured: the stock `EntityAnimalSnake` class walked 292 m in a 12 s hold,
+  `moveSpeed=0.8` notwithstanding, with a 13 m Y-spread). `physicsbodies.xml`
+  remain closed for a procedural skinned mesh — they build bone-centred
+  colliders that do not reach the feet. Two environment gates can stop a run
+  before the creature is judged, and neither is the asset (recorded in
+  research-provenance): (1) a **client/server game-version skew** — the client
+  refuses to authorize (`Game Version Mismatch: you have 'V 3.2.0' and server
+  has 'V 3.1.0'`) and idles at the menu, so align the dedicated server to the
+  client's version (`steamcmd +app_update 294420`); (2) a genuinely missing
+  Steam client. The `Steamworks is not initialized` exception near boot is
+  **caught and harmless** (the Analytics branch-name probe) — it must not be
+  read as "the run never reached the asset".
 - **SDCS extras** (`GearBoneMap`, `Morphable`) — the editor bakes those; see
   [skinned-gear.md](skinned-gear.md).
 

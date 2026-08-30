@@ -499,7 +499,7 @@ def entity_xml(
     bundle: str,
     stem: str,
     avatar_controller: str | None = None,
-    entity_class: str = "EntityAnimalStag",
+    entity_class: str = "EntityAnimalSnake",
     minimal: bool = False,
 ) -> str:
     """The `entityclasses.xml` patch fragment for the generated entity.
@@ -512,14 +512,26 @@ def entity_xml(
     console or the debug menu.
 
     An animated entity (`avatar_controller` set — i.e. `--anim`) becomes a
-    real, spawnable animal: `Class` names a concrete C# entity type (the
-    game's `EntityAnimalStag`, or a mod's own type via `--entity-class`),
-    `PhysicsBody` gives it a collider to stand on, and `IsAnimalEntity` +
-    `Faction` let the game's own spawner and AI treat it as an animal. A bare
-    `Prefab+Mesh` class is not a spawnable `EntityAlive` — it loads but
-    `EntityFactory.CreateEntity` returns nothing, which is why a generated
-    creature could not be walked until it had a real class. `--minimal-entity`
-    opts back out and emits the bare stub for a special case.
+    real, spawnable animal: `Class` names a concrete C# entity type, and
+    `IsAnimalEntity` + `Faction` let the game's own spawner and AI treat it
+    as an animal. A bare `Prefab+Mesh` class is not a spawnable `EntityAlive`
+    — it loads but `EntityFactory.CreateEntity` returns nothing, which is why
+    a generated creature could not be walked until it had a real class.
+    `--minimal-entity` opts back out and emits the bare stub for a special
+    case.
+
+    The class is deliberately **not a stock animal's own class** — the
+    pipeline's whole point is that the mod owns the model and clips, so
+    relying on `EntityAnimalStag` (which binds a stag model, a stock
+    PhysicsBody with stag bone paths the rig does not have, and a template
+    `AITask` wander that roams) proves nothing about the asset and inherits
+    expectations the generated rig cannot meet. The default `EntityAnimalSnake`
+    is the least-coupled concrete `EntityAlive` sub-type; `--entity-class`
+    names a mod's own C# type. No stock `PhysicsBody` is emitted — grounding
+    comes from the `Physics`-node capsule the writer builds onto the generated
+    prefab (see `add_grounding_physics`), not from a pre-authored body. A slow
+    `MoveSpeed` is emitted so a spawned creature walks at a visible pace
+    rather than the class's inherited gallop.
     """
     uri = f"#@modfolder({mod}):Resources/{bundle}.unity3d?{stem}"
     avatar = ""
@@ -530,9 +542,9 @@ def entity_xml(
         animal = (
             f'\n\t\t\t<property name="Class" value="{entity_class}"/>'
             '\n\t\t\t<property name="IsAnimalEntity" value="true"/>'
-            '\n\t\t\t<property name="PhysicsBody" value="Stag"/>'
             '\n\t\t\t<property name="EntityFlags" value="animal"/>'
             '\n\t\t\t<property name="Faction" value="animals"/>'
+            '\n\t\t\t<property name="MoveSpeed" value="1.5"/>'
         )
     return f"""<configs>
 \t<append xpath="/entity_classes">

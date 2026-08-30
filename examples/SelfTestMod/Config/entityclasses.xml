@@ -4,12 +4,28 @@
 			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCreature"/>
 			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCreature"/>
 			<property name="UserSpawnType" value="Menu"/>
-			<property name="AvatarController" value="GameObjectAnimalAnimation"/>
-			<property name="Class" value="EntityAnimalStag"/>
+			<!-- This mod's own controller: the stock GameObjectAnimalAnimation
+			     reads the figure's Animation at AddComponent time (during model
+			     init, before the hierarchy settles) and NREs at anim["Idle1"],
+			     so a generated creature never spawns. ShamwayAnimalController
+			     binds the figure's legacy Animation lazily on Update. -->
+			<property name="AvatarController" value="ShamwaySelfTest.ShamwayAnimalController, ShamwaySelfTestCreature"/>
+			<!-- This mod's own EntityAlive type, resolved by Type.GetType from
+			     the mod-root DLL: no stock pre-authored model, no stock AI
+			     wander or physics body, so the generated rig's own Physics-node
+			     capsule grounds it and the walk case's moveSpeed sticks. -->
+			<property name="Class" value="ShamwaySelfTest.ShamwaySelfTestCreature, ShamwaySelfTestCreature"/>
 			<property name="IsAnimalEntity" value="true"/>
-			<property name="PhysicsBody" value="Stag"/>
 			<property name="EntityFlags" value="animal"/>
 			<property name="Faction" value="animals"/>
+			<!-- A concrete EntityAlive sub-type the pipeline can own. The mod's
+			     own C# class would be named here as
+			     `Class="<ns>.<Type>, <Assembly>"` (mod DLL at the mod root,
+			     resolved by Type.GetType) once the runtime-DLL build path is
+			     wired; the generator emits this class-owning contract. No stock
+			     PhysicsBody (grounding is the writer's Physics-node capsule),
+			     no `extends` (no template AITask wander), slow MoveSpeed. -->
+			<property name="MoveSpeed" value="1.5"/>
 		</entity_class>
 	</append>
 <append xpath="/entity_classes">

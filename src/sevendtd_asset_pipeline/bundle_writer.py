@@ -1913,17 +1913,19 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
         return objects
     declaration = anim.parse_anim(declaration_path)
     fields_list = anim.clip_fields(declaration)
-    clip_keys = [f"{path.stem}:anim:{clip.name}" for clip in declaration.clips]
+    # clip_fields merges same-name entries into one clip, so the object list
+    # is per clip *name*, not per declaration entry.
     clip_objects = [
         BundleObject(
             ANIMATION_CLIP,
-            clip.name,
+            fields["m_Name"],
             fields,
-            key=clip_key,
+            key=f"{path.stem}:anim:{fields['m_Name']}",
             in_container=False,
         )
-        for clip, clip_key, fields in zip(declaration.clips, clip_keys, fields_list, strict=True)
+        for fields in fields_list
     ]
+    clip_keys = [obj.key for obj in clip_objects]
     animation_key = f"{path.stem}:animation"
     root_go = f"{path.stem}:go"
     animation = BundleObject(

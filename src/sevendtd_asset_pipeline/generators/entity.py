@@ -685,6 +685,17 @@ def _append_view(
     return len(accessors) - 1
 
 
+def _bone_path(rig: Any, bone_name: str) -> str:
+    """The slash-separated transform path of a bone, from the rig root."""
+    parent = {bone.name: bone.parent for bone in rig.bones}
+    chain: list[str] = []
+    cursor: str | None = bone_name
+    while cursor is not None:
+        chain.append(cursor)
+        cursor = parent[cursor]
+    return "/".join(reversed(chain))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("output", type=Path, help="destination skinned entity .glb")
@@ -711,10 +722,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--entity-name", default=None, help="entity_class name (default: stem)")
     parser.add_argument(
         "--anim",
-        action="store_true",
-        help="write a {stem}.anim.json with a looping Idle1 bob on the rig's first"
-        " bone, and add AvatarController=GameObjectAnimalAnimation to the XML —"
-        " the pieces the engine's animal controller plays by name",
+        nargs="?",
+        const="idle",
+        default=None,
+        metavar="KINDS",
+        help="write a {stem}.anim.json with looping legacy clips — comma list of"
+        " idle, head, walk (default: idle). idle bobs the body, head turns it,"
+        " walk trots the legs; the clips are named Idle1/Walk for the engine's"
+        " GameObjectAnimalAnimation, and AvatarController=GameObjectAnimalAnimation"
+        " is added to the XML",
     )
     args = parser.parse_args(argv)
 
@@ -744,15 +760,21 @@ def main(argv: list[str] | None = None) -> int:
     print(f"wrote {args.output}: {len(rig.bones)} bones, {n_parts} parts")
     avatar_controller: str | None = None
     if args.anim:
-        # The bob hangs off the rig's first bone under the root — Hips on the
-        # humanoid, Pelvis/Prosoma on the animals — the path the engine's
-        # GameObjectAnimalAnimation expects a legacy clip to animate.
+        kinds = [kind.strip() for kind in args.anim.split(",") if kind.strip()]
+        unknown = sorted(set(kinds) - {"idle", "head", "walk"})
+        if unknown:
+            raise SystemExit(
+                f"ERROR: unknown --anim kinds {', '.join(unknown)}; use idle, head, walk"
+            )
+        clips: list[dict[str, Any]] = []
+        # The body hangs off the rig's first bone under the root — Hips on the
+        # humanoid, Pelvis/Prosoma on the animals.
         first_child = next(
             (bone.name for bone in rig.bones if bone.parent == rig.root().name),
             rig.root().name,
         )
-        declaration = {
-            "clips": [
+        if "idle" in kinds:
+            clips.append(
                 {
                     "name": "Idle1",
                     "kind": "bob",
@@ -760,12 +782,47 @@ def main(argv: list[str] | None = None) -> int:
                     "amplitude": 0.03,
                     "seconds": 1.5,
                 }
-            ],
-            "play_automatically": True,
-        }
+            )
+        if "head" in kinds:
+            head = next(
+                (bone.name for bone in rig.bones if bone.name == "Head"),
+                first_child,
+            )
+            clips.append(
+                {
+                    "name": "Idle1",
+                    "kind": "head",
+                    "bone": _bone_path(rig, head),
+                    "amplitude": 0.35,
+                    "seconds": 4.0,
+                }
+            )
+        if "walk" in kinds:
+            # Upper legs by name; each lower leg is its child (the knee).
+            legs = [bone.name for bone in rig.bones if "Thigh" in bone.name or "Upper" in bone.name]
+            lower = [
+                next(
+                    (child.name for child in rig.bones if child.parent == leg),
+                    "",
+                )
+                for leg in legs
+            ]
+            clips.append(
+                {
+                    "name": "Walk",
+                    "kind": "walk",
+                    "bones": [_bone_path(rig, bone) for bone in legs],
+                    "lower_bones": [_bone_path(rig, bone) for bone in lower if bone],
+                    "body_bone": f"{rig.root().name}/{first_child}",
+                    "amplitude": 0.35,
+                    "seconds": 1.2,
+                }
+            )
+        declaration = {"clips": clips, "play_automatically": True}
         anim_path = args.output.with_suffix(".anim.json")
         write(anim_path, json.dumps(declaration, indent=2) + "\n")
-        print(f"wrote {anim_path}: Idle1 bob on {rig.root().name}/{first_child}")
+        summary = ", ".join(f"{clip['name']} ({clip['kind']})" for clip in clips)
+        print(f"wrote {anim_path}: {summary}")
         avatar_controller = "GameObjectAnimalAnimation"
     if args.xml is not None:
         entity_name = args.entity_name or stem

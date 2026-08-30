@@ -159,7 +159,8 @@ class AnimDeclarationTests(unittest.TestCase):
         from sevendtd_asset_pipeline.errors import PipelineError
 
         for body, fragment in (
-            ('{"clips": [{"name": "Walk", "kind": "walk", "bone": "Root"}]}', "must be"),
+            ('{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}', "bob, head or walk"),
+            ('{"clips": [{"name": "Walk", "kind": "walk", "bone": "Root"}]}', '"bones"'),
             ('{"clips": [{"name": "Idle1", "kind": "bob"}]}', '"bone"'),
         ):
             with self.subTest(body=body):
@@ -250,3 +251,135 @@ class AnimOnPrefabTests(unittest.TestCase):
         trees = read_objects(bundle)
         self.assertNotIn(74, trees)
         self.assertNotIn(111, trees)
+
+
+class LimbAnimTests(unittest.TestCase):
+    """The walk gait and head-turn curve kinds, and the merged Idle1 clip."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_parse_anim_accepts_walk_and_head(self) -> None:
+        from sevendtd_asset_pipeline.anim import parse_anim
+
+        path = self.root / "a.anim.json"
+        path.write_text(
+            '{"clips": [{"name": "Idle1", "kind": "head", "bone": "Root/Neck/Head"},'
+            ' {"name": "Walk", "kind": "walk",'
+            ' "bones": ["Root/Pelvis/LeftRearUpper", "Root/Pelvis/RightRearUpper"]}]}',
+            encoding="utf-8",
+        )
+        declaration = parse_anim(path)
+        self.assertEqual(len(declaration.clips), 2)
+        head = declaration.clips[0]
+        self.assertEqual((head.kind, head.bone), ("head", "Root/Neck/Head"))
+        walk = declaration.clips[1]
+        self.assertEqual(walk.kind, "walk")
+        self.assertEqual(len(walk.bones), 2)
+
+    def test_parse_anim_refuses_unknown_kind(self) -> None:
+        from sevendtd_asset_pipeline.anim import parse_anim
+        from sevendtd_asset_pipeline.errors import PipelineError
+
+        path = self.root / "bad.anim.json"
+        path.write_text(
+            '{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}', encoding="utf-8"
+        )
+        with self.assertRaisesRegex(PipelineError, "bob, head or walk"):
+            parse_anim(path)
+
+    def test_walk_curves_bend_knees_and_alternate_diagonally(self) -> None:
+        from sevendtd_asset_pipeline.anim import walk_curves
+
+        legs = [
+            ("Root/Pelvis/LeftFrontUpper", "Root/Pelvis/LeftFrontLower"),
+            ("Root/Pelvis/RightRearUpper", "Root/Pelvis/RightRearLower"),
+            ("Root/Pelvis/RightFrontUpper", "Root/Pelvis/RightFrontLower"),
+            ("Root/Pelvis/LeftRearUpper", "Root/Pelvis/LeftRearLower"),
+        ]
+        curves = walk_curves(legs, "Root/Pelvis", stride=0.35, seconds=1.2)
+        self.assertEqual(len(curves), 9)  # upper+lower per leg, plus the body dip
+        upper = {c["path"]: c["curve"]["m_Curve"] for c in curves[:8] if "Upper" in c["path"]}
+        lower = {c["path"]: c["curve"]["m_Curve"] for c in curves[:8] if "Lower" in c["path"]}
+        # Trot: LeftFront pairs with RightRear (phase 0), RightFront with
+        # LeftRear (phase π). At a quarter cycle the phase-0 legs are +stride.
+        for left_front, right_rear in ((legs[0], legs[1]),):
+            self.assertGreater(upper[left_front[0]][2]["value"]["x"], 0.15)
+            self.assertGreater(upper[right_rear[0]][2]["value"]["x"], 0.15)
+        self.assertLess(upper[legs[2][0]][2]["value"]["x"], -0.15)
+        self.assertLess(upper[legs[3][0]][2]["value"]["x"], -0.15)
+        # The knee bends the opposite way: lower-leg rotation is inverted.
+        self.assertLess(lower[legs[0][1]][2]["value"]["x"], -0.05)
+        self.assertGreater(lower[legs[2][1]][2]["value"]["x"], 0.05)
+        # Loops start and end at the same value (no seam).
+        for curve in curves:
+            self.assertAlmostEqual(
+                curve["curve"]["m_Curve"][0]["value"]["x"],
+                curve["curve"]["m_Curve"][-1]["value"]["x"],
+                places=6,
+            )
+        # The body dips twice per stride on the body bone.
+        body = next(c for c in curves if c["path"] == "Root/Pelvis")
+        ys = [kf["value"]["y"] for kf in body["curve"]["m_Curve"]]
+        self.assertLess(min(ys), -0.01)
+        self.assertAlmostEqual(ys[0], 0.0, places=6)
+
+    @needs_unitypy
+    def test_same_name_entries_merge_into_one_clip(self) -> None:
+        from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
+
+        path = self.root / "merge.anim.json"
+        path.write_text(
+            '{"clips": [{"name": "Idle1", "kind": "bob", "bone": "Root/Pelvis"},'
+            ' {"name": "Idle1", "kind": "head", "bone": "Root/Neck/Head"}]}',
+            encoding="utf-8",
+        )
+        fields = clip_fields(parse_anim(path))
+        self.assertEqual(len(fields), 1)
+        self.assertEqual(fields[0]["m_Name"], "Idle1")
+        self.assertEqual(len(fields[0]["m_PositionCurves"]), 1)
+        self.assertEqual(len(fields[0]["m_RotationCurves"]), 1)
+        self.assertEqual(fields[0]["m_RotationCurves"][0]["path"], "Root/Neck/Head")
+
+
+@needs_unitypy
+class LimbAnimBundleTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_anim_kinds_round_trip_through_the_bundle(self) -> None:
+        from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
+        from sevendtd_asset_pipeline.generators import run
+
+        out = self.root / "creature.glb"
+        self.assertEqual(
+            run("entity", [str(out), "--rig", "quadruped", "--anim", "idle,head,walk"]), 0
+        )
+        objects = mesh_source_objects(out, set())
+        objects.append(shader("Shamway/Unlit"))
+        bundle = self.root / "anim.unity3d"
+        bundle.write_bytes(build_bundle(objects, REVISION, "anim.unity3d"))
+        trees = read_objects(bundle)
+        clips = {c["m_Name"]: c for c in trees[74]}
+        self.assertEqual(set(clips), {"Idle1", "Walk"})
+        self.assertEqual(len(clips["Walk"]["m_RotationCurves"]), 8)  # upper+lower per leg
+        self.assertEqual(len(clips["Walk"]["m_PositionCurves"]), 1)  # body dip
+        self.assertEqual(len(clips["Idle1"]["m_RotationCurves"]), 1)
+        self.assertEqual(len(clips["Idle1"]["m_PositionCurves"]), 1)
+        animation = trees[111][0]
+        self.assertEqual(len(animation["m_Animations"]), 2)
+
+    def test_unknown_anim_kind_is_refused(self) -> None:
+        from sevendtd_asset_pipeline.generators import run
+
+        out = self.root / "x.glb"
+        with self.assertRaises(SystemExit):
+            run("entity", [str(out), "--rig", "humanoid", "--anim", "gallop"])

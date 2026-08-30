@@ -24,6 +24,7 @@ Curve shape mirrors `_Take 001` from that bundle: one entry per bone path
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -224,13 +225,122 @@ def idle_bob_curves(
     return [], [position], []
 
 
+def _quat_x(angle: float) -> dict[str, float]:
+    """A rotation about the local X axis, as a quaternion dict."""
+    half = angle / 2.0
+    return {"x": math.sin(half), "y": 0.0, "z": 0.0, "w": math.cos(half)}
+
+
+def _quat_y(angle: float) -> dict[str, float]:
+    """A rotation about the local Y axis, as a quaternion dict."""
+    half = angle / 2.0
+    return {"x": 0.0, "y": math.sin(half), "z": 0.0, "w": math.cos(half)}
+
+
+def _rotation_keyframes(
+    axis: str, amplitude: float, seconds: float, phase: float = 0.0
+) -> list[dict[str, Any]]:
+    """One loop of `amplitude·sin(2πt/seconds + phase)` about an axis.
+
+    Eight samples per cycle: enough for a smooth loop, cheap to serialize.
+    A sine loop starts and ends at the same value with matching slopes, so
+    the clip loops without a seam.
+    """
+    quat = _quat_x if axis == "x" else _quat_y
+    return [
+        {
+            "time": seconds * index / 8.0,
+            "value": quat(amplitude * math.sin(2 * math.pi * index / 8.0 + phase)),
+            "inSlope": quat(0.0),
+            "outSlope": quat(0.0),
+            "weightedMode": 0,
+            "inWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+            "outWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+        }
+        for index in range(9)
+    ]
+
+
+def head_turn_curves(
+    head_bone: str, amplitude: float = 0.35, seconds: float = 4.0
+) -> list[dict[str, Any]]:
+    """A slow side-to-side head turn: a yaw oscillation on the head bone.
+
+    `amplitude` is the half-swing in radians (0.35 ≈ 20° each way over a
+    4 s cycle). Merged into `Idle1`, it reads as a creature looking around.
+    """
+    return [rotation_curve(head_bone, _rotation_keyframes("y", amplitude, seconds))]
+
+
+def walk_curves(
+    legs: list[tuple[str, str]],
+    body_bone: str,
+    stride: float = 0.35,
+    seconds: float = 1.2,
+    body_dip: float = 0.03,
+) -> list[dict[str, Any]]:
+    """A trot gait: upper legs swing, knees bend, the body dips.
+
+    One rotation curve per upper leg (`stride` half-swing about its local X)
+    and one per lower leg bending the knee the opposite way (`0.6·stride`),
+    so the paw stays roughly under the hip instead of sweeping a rigid arc —
+    a rigid whole-leg rotation is the wind-up-toy look. Diagonal pairs move
+    together (`LeftFront` with `RightRear`, `RightFront` with `LeftRear`),
+    and a position curve on `body_bone` dips the body twice per stride as
+    the weight transfers.
+    """
+    curves: list[dict[str, Any]] = []
+
+    def phase(upper: str) -> float:
+        front = "Front" in upper
+        left = "/Left" in upper or upper.startswith("Left")
+        if front:
+            return 0.0 if left else math.pi
+        return 0.0 if not left else math.pi
+
+    for upper, lower in legs:
+        phi = phase(upper)
+        curves.append(rotation_curve(upper, _rotation_keyframes("x", stride, seconds, phi)))
+        curves.append(rotation_curve(lower, _rotation_keyframes("x", -0.6 * stride, seconds, phi)))
+    # The body dips twice per stride, at the weight transfers (quarter and
+    # three-quarter points), never at the stride's end where a foot lands.
+    rest = {"x": 0.0, "y": 0.0, "z": 0.0}
+    keyframes = [
+        {
+            "time": seconds * index / 8.0,
+            "value": {
+                "x": 0.0,
+                "y": -body_dip * (0.5 - 0.5 * math.cos(4 * math.pi * index / 8.0)),
+                "z": 0.0,
+            },
+            "inSlope": rest,
+            "outSlope": rest,
+            "weightedMode": 0,
+            "inWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
+            "outWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
+        }
+        for index in range(9)
+    ]
+    curves.append(position_curve(body_bone, keyframes))
+    return curves
+
+
 @dataclass(frozen=True)
 class AnimClip:
-    """One legacy clip a `.anim.json` declaration asks for."""
+    """One legacy clip a `.anim.json` declaration asks for.
+
+    `kind` selects the curve builder: `bob` (a position bob on `bone`),
+    `head` (a yaw turn on `bone`), or `walk` (a trot gait across `bones`).
+    `amplitude`/`seconds` scale the motion; a `walk` entry uses `bones`
+    (the upper-leg paths) instead of `bone`.
+    """
 
     name: str
     kind: str
-    bone: str
+    bone: str = ""
+    bones: tuple[str, ...] = ()
+    lower_bones: tuple[str, ...] = ()
+    body_bone: str = ""
     amplitude: float = 0.03
     seconds: float = 1.5
 
@@ -246,16 +356,25 @@ class AnimDeclaration:
 def parse_anim(path: Path) -> AnimDeclaration:
     """Read a `.anim.json` declaration.
 
-    The format is deliberately small — one looping legacy clip per entry,
-    each a named motion on one bone path:
+    The format is small — one looping legacy clip per entry, each a named
+    motion:
 
-        {"clips": [{"name": "Idle1", "kind": "bob", "bone": "Root/Pelvis",
-                    "amplitude": 0.03, "seconds": 1.5}]}
+        {"clips": [
+            {"name": "Idle1", "kind": "bob", "bone": "Root/Pelvis",
+             "amplitude": 0.03, "seconds": 1.5},
+            {"name": "Idle1", "kind": "head", "bone": "Root/Neck/Head",
+             "amplitude": 0.35, "seconds": 4.0},
+            {"name": "Walk", "kind": "walk",
+             "bones": ["Root/Pelvis/LeftRearUpper", "Root/Pelvis/RightRearUpper"],
+             "stride": 0.5, "seconds": 1.2}
+        ]}
 
-    `kind` selects the curve builder; `bob` is the only kind today (a
-    looping position bob on the bone path). The clip names are what
-    `GameObjectAnimalAnimation` plays (`Idle1`, `Walk`, `Attack1`, …), so a
-    declaration is how an entity gets a movement clip without an editor.
+    `kind` selects the curve builder: `bob` (position bob), `head` (yaw
+    turn), `walk` (trot gait across the `bones` list). Entries with the
+    same `name` merge into one clip, so an `Idle1` can combine a bob and a
+    head turn. The clip names are what `GameObjectAnimalAnimation` plays
+    (`Idle1`, `Walk`, `Attack1`, …), so a declaration is how an entity gets
+    movement clips without an editor.
     """
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
@@ -274,21 +393,55 @@ def parse_anim(path: Path) -> AnimDeclaration:
             raise PipelineError(f"anim declaration {path} clip {index} is not an object")
         name = item.get("name")
         kind = item.get("kind")
-        bone = item.get("bone")
         if not isinstance(name, str) or not name:
             raise PipelineError(f'anim declaration {path} clip {index} needs a "name"')
-        if kind not in ("bob",):
+        if kind not in ("bob", "head", "walk"):
             raise PipelineError(
-                f'anim declaration {path} clip {name!r} kind must be "bob" (the only kind today)'
+                f"anim declaration {path} clip {name!r} kind must be bob, head or walk"
             )
-        if not isinstance(bone, str) or not bone:
-            raise PipelineError(f'anim declaration {path} clip {name!r} needs a "bone" path')
         for key, default in (("amplitude", 0.03), ("seconds", 1.5)):
             value = item.get(key, default)
             if not isinstance(value, (int, float)) or value <= 0:
                 raise PipelineError(
                     f"anim declaration {path} clip {name!r} {key!r} must be positive"
                 )
+        if kind == "walk":
+            bones = item.get("bones")
+            if (
+                not isinstance(bones, list)
+                or not bones
+                or not all(isinstance(bone, str) and bone for bone in bones)
+            ):
+                raise PipelineError(
+                    f'anim declaration {path} clip {name!r} needs a non-empty "bones" list'
+                )
+            lower = item.get("lower_bones", [])
+            if not isinstance(lower, list) or not all(
+                isinstance(bone, str) and bone for bone in lower
+            ):
+                raise PipelineError(
+                    f'anim declaration {path} clip {name!r} "lower_bones" must be a list'
+                )
+            body_bone = item.get("body_bone", "")
+            if not isinstance(body_bone, str):
+                raise PipelineError(
+                    f'anim declaration {path} clip {name!r} "body_bone" must be a string'
+                )
+            clips.append(
+                AnimClip(
+                    name=name,
+                    kind=kind,
+                    bones=tuple(bones),
+                    lower_bones=tuple(lower),
+                    body_bone=body_bone,
+                    amplitude=float(item.get("amplitude", 0.35)),
+                    seconds=float(item.get("seconds", 1.2)),
+                )
+            )
+            continue
+        bone = item.get("bone")
+        if not isinstance(bone, str) or not bone:
+            raise PipelineError(f'anim declaration {path} clip {name!r} needs a "bone" path')
         clips.append(
             AnimClip(
                 name=name,
@@ -305,33 +458,57 @@ def parse_anim(path: Path) -> AnimDeclaration:
 
 
 def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
-    """One `AnimationClip` type-tree dict per declared clip."""
-    out: list[dict[str, Any]] = []
+    """One `AnimationClip` type-tree dict per declared clip name.
+
+    Entries sharing a name merge into one clip (an `Idle1` can combine a
+    bob and a head turn). A `bob` yields a position curve on its bone; a
+    `head` a yaw rotation on its bone; a `walk` a trot of rotation curves
+    across its `bones`.
+    """
+    grouped: dict[str, list[AnimClip]] = {}
     for clip in declaration.clips:
-        if clip.kind == "bob":
-            rotations, positions, scales = idle_bob_curves(
-                None, pelvis_bone=clip.bone, bob=clip.amplitude
-            )
-            # idle_bob_curves is a fixed 1.5 s cycle; rescale its keyframe
-            # times to the declared duration.
-            factor = clip.seconds / 1.5
-            positions = [
-                {
-                    "curve": {
-                        "m_Curve": [
-                            {
-                                **keyframe,
-                                "time": keyframe["time"] * factor,
-                            }
-                            for keyframe in position["curve"]["m_Curve"]
-                        ],
-                        "m_PreInfinity": position["curve"]["m_PreInfinity"],
-                        "m_PostInfinity": position["curve"]["m_PostInfinity"],
-                        "m_RotationOrder": position["curve"]["m_RotationOrder"],
-                    },
-                    "path": position["path"],
-                }
-                for position in positions
-            ]
-            out.append(legacy_clip(clip.name, rotations, positions, scales, sample_rate=30.0))
+        grouped.setdefault(clip.name, []).append(clip)
+
+    def rescaled(curves: list[dict[str, Any]], factor: float) -> list[dict[str, Any]]:
+        return [
+            {
+                "curve": {
+                    "m_Curve": [
+                        {**keyframe, "time": keyframe["time"] * factor}
+                        for keyframe in curve["curve"]["m_Curve"]
+                    ],
+                    "m_PreInfinity": curve["curve"]["m_PreInfinity"],
+                    "m_PostInfinity": curve["curve"]["m_PostInfinity"],
+                    "m_RotationOrder": curve["curve"]["m_RotationOrder"],
+                },
+                "path": curve["path"],
+            }
+            for curve in curves
+        ]
+
+    out: list[dict[str, Any]] = []
+    for name, entries in grouped.items():
+        rotations: list[dict[str, Any]] = []
+        positions: list[dict[str, Any]] = []
+        scales: list[dict[str, Any]] = []
+        for clip in entries:
+            if clip.kind == "bob":
+                _, bob_positions, _ = idle_bob_curves(
+                    None, pelvis_bone=clip.bone, bob=clip.amplitude
+                )
+                positions += rescaled(bob_positions, clip.seconds / 1.5)
+            elif clip.kind == "head":
+                rotations += rescaled(
+                    head_turn_curves(clip.bone, clip.amplitude, clip.seconds), 1.0
+                )
+            else:  # walk — rotation curves on the legs, a position curve on the body
+                legs = [
+                    (upper, lower)
+                    for upper, lower in zip(clip.bones, clip.lower_bones, strict=False)
+                    if lower
+                ]
+                for curve in walk_curves(legs, clip.body_bone, clip.amplitude, clip.seconds):
+                    is_rotation = len(curve["curve"]["m_Curve"][0]["value"]) == 4
+                    (rotations if is_rotation else positions).append(rescaled([curve], 1.0)[0])
+        out.append(legacy_clip(name, rotations, positions, scales, sample_rate=30.0))
     return tuple(out)

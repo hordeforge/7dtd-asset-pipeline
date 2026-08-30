@@ -1928,6 +1928,62 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
     clip_keys = [obj.key for obj in clip_objects]
     animation_key = f"{path.stem}:animation"
     root_go = f"{path.stem}:go"
+    root_tr = f"{path.stem}:transform"
+    # The engine's GameObjectAnimalAnimation reads the legacy Animation off
+    # the model root's *first active child* (the "figure"), not off the root:
+    # Awake does figureT = parentT.GetChild(...first active...); anim =
+    # figureT.GetComponent<Animation>(), then anim["Death"] on every Update.
+    # Our writer used to put the Animation on the prefab root, so a spawned
+    # entity's controller NRE'd every frame (recorded in research-provenance).
+    # Insert a figure GameObject between the root and its children and put the
+    # Animation on it — the clip paths (Root/..., authored relative to the
+    # Animation's own GameObject) then resolve because Root stays a child of
+    # the figure.
+    figure_go = f"{path.stem}:figure:go"
+    figure_tr = f"{path.stem}:figure:transform"
+    original_root_children: list[Ref] | None = None
+    for obj in objects:
+        if obj.key == root_tr:
+            original_root_children = list(obj.fields["m_Children"])
+            obj.fields["m_Children"] = [Ref(figure_tr)]
+        elif obj.key == figure_tr:  # pragma: no cover - defensive
+            raise PipelineError(f"{path.stem} has a node that would collide with the figure")
+    if original_root_children is None:
+        raise PipelineError(f"{path.stem} prefab has no root transform to wrap in a figure")
+    # Re-parent every former root child under the figure.
+    figure_children_keys = [child.key for child in original_root_children]
+    for child_key in figure_children_keys:
+        for obj in objects:
+            if obj.key == child_key:
+                obj.fields["m_Father"] = Ref(figure_tr)
+                break
+    # The figure GameObject carries the Animation and sits as the model
+    # root's single child, so the controller's figure lookup succeeds.
+    objects.append(
+        BundleObject(
+            GAME_OBJECT,
+            "figure",
+            _game_object_fields("figure", [figure_tr]),
+            key=figure_go,
+            in_container=False,
+        )
+    )
+    objects.append(
+        BundleObject(
+            TRANSFORM,
+            "",
+            {
+                "m_GameObject": Ref(figure_go),
+                "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                "m_LocalPosition": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "m_LocalScale": {"x": 1.0, "y": 1.0, "z": 1.0},
+                "m_Children": original_root_children,
+                "m_Father": Ref(root_tr),
+            },
+            key=figure_tr,
+            in_container=False,
+        )
+    )
     animation = BundleObject(
         ANIMATION_COMPONENT,
         "",
@@ -1939,15 +1995,19 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
             "m_CullingType": 0,
             "m_WrapMode": 2,
             "m_Enabled": True,
-            "m_GameObject": Ref(root_go),
+            "m_GameObject": Ref(figure_go),
         },
         key=animation_key,
         in_container=False,
     )
     for obj in objects:
-        if obj.key == root_go:
+        if obj.key == figure_go:
             components = [item["component"].key for item in obj.fields["m_Component"]]
             components.append(animation_key)
+            obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
+        elif obj.key == root_go:
+            components = [item["component"].key for item in obj.fields["m_Component"]]
+            components.append(figure_tr)
             obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
     return objects + clip_objects + [animation]
 

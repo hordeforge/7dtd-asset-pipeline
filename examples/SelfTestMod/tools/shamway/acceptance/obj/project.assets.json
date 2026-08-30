@@ -420,11 +420,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
+      "projectUniqueName": "/tmp/7dtd-asset-pipeline-entity-fix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
       "projectName": "ShamwaySelfTestAcceptance",
-      "projectPath": "/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
+      "projectPath": "/tmp/7dtd-asset-pipeline-entity-fix/examples/SelfTestMod/tools/shamway/acceptance/ShamwaySelfTestAcceptance.csproj",
       "packagesPath": "/home/yannick/.nuget/packages/",
-      "outputPath": "/tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/obj/",
+      "outputPath": "/tmp/7dtd-asset-pipeline-entity-fix/examples/SelfTestMod/tools/shamway/acceptance/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/home/yannick/.nuget/NuGet/NuGet.Config"

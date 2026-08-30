@@ -241,6 +241,56 @@ class AnimOnPrefabTests(unittest.TestCase):
         self.assertEqual(len(animation["m_Animations"]), 1)
         self.assertNotEqual(animation["m_GameObject"]["m_PathID"], 0)
 
+    def test_the_animation_sits_on_a_figure_under_the_model_root(self) -> None:
+        """GameObjectAnimalAnimation reads the legacy Animation off the model
+        root's first *active child*, not off the root: spawned entities NRE'd
+        every frame when the Animation was on the prefab root. The writer now
+        inserts a figure GameObject between the root and its children and puts
+        the Animation on it, with the root bone as the figure's child so the
+        clip paths still resolve."""
+        from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
+
+        out = self.root / "creature.glb"
+        from sevendtd_asset_pipeline.generators import run
+
+        self.assertEqual(run("entity", [str(out), "--rig", "quadruped", "--anim"]), 0)
+        objects = mesh_source_objects(out, set())
+        objects.append(shader("Shamway/Unlit"))
+        bundle = self.root / "figure.unity3d"
+        bundle.write_bytes(build_bundle(objects, REVISION, "figure.unity3d"))
+        trees = read_objects(bundle)
+        animation = trees[111][0]
+        # The Animation lives on a GameObject that is a child of the prefab root
+        # and is NOT the root itself (the controller grabs the first child).
+        anim_go = animation["m_GameObject"]["m_PathID"]
+        # Recover GameObjects/Transforms from the object tree via UnityPy.
+        import UnityPy
+
+        env = UnityPy.load(str(bundle))
+        gameobjects, transforms = {}, {}
+        for obj in env.objects:
+            if obj.type.name == "GameObject":
+                gameobjects[obj.path_id] = obj.read_typetree()
+            elif obj.type.name == "Transform":
+                t = obj.read_typetree()
+                transforms[obj.path_id] = t
+        go_to_transform = {t["m_GameObject"]["m_PathID"]: ptr for ptr, t in transforms.items()}
+        anim_go_name = gameobjects[anim_go]["m_Name"]
+        # Prefab root is the file stem; the Animation must be on the 'figure'.
+        self.assertEqual(anim_go_name, "figure")
+        anim_transform = go_to_transform[anim_go]
+        figure_parent = transforms[anim_transform]["m_Father"]["m_PathID"]
+        root_transform = transforms[figure_parent]
+        root_go = root_transform["m_GameObject"]["m_PathID"]
+        self.assertEqual(gameobjects[root_go]["m_Name"], "creature")
+        # The figure is the root's only child, and the root bone hangs off it.
+        figure_children = transforms[anim_transform]["m_Children"]
+        self.assertEqual(len(figure_children), 1)
+        root_bone_go = gameobjects[
+            transforms[figure_children[0]["m_PathID"]]["m_GameObject"]["m_PathID"]
+        ]
+        self.assertEqual(root_bone_go["m_Name"], "Root")
+
     def test_a_source_without_a_declaration_gets_no_animation(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
 

@@ -1,6 +1,6 @@
 is_global = true
 build_property.RootNamespace = ShamwaySelfTestAcceptance
-build_property.ProjectDir = /tmp/7dtd-asset-pipeline-anim-kinds/examples/SelfTestMod/tools/shamway/acceptance/
+build_property.ProjectDir = /tmp/7dtd-asset-pipeline-entity-fix/examples/SelfTestMod/tools/shamway/acceptance/
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
 build_property.CsWinRTUseWindowsUIXamlProjections = false

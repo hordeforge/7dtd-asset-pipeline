@@ -14,6 +14,7 @@ in the wrong folder.
 | Directory | What belongs in it |
 |---|---|
 | `bundle/` | **bundle content** — every file here becomes an asset named by its stem; copy only selected outputs in |
+| `creatures/` | editable entity sources: the `--atlas` UV manifest + role map behind each generated creature (provenance, **not** bundle content) |
 | `icons/` | atlas icons: generated or drawn sources, and the cut-out RGBA derivative |
 | `textures/` | albedo, normal, and packed mask sources for materials |
 | `meshes/` | Blender/OpenSCAD scripts and their exported .glb |
@@ -28,8 +29,8 @@ cannot be regenerated from what is written here is not finished.
 | Asset | Source | How it was made | Deployed as | Reviewed |
 |---|---|---|---|---|
 | `shamwaySelfTestProp` | `shamway generate mesh` (see the prop's own history) | a full 1 × 1 × 1 m block, Y-up, UV0 | `bundle/shamwaySelfTestProp.glb` | yes — the playtest asserts it by value |
-| `shamwaySelfTestCreature` | `shamway generate entity bundle/shamwaySelfTestCreature.glb --rig quadruped` | the quadruped rig, default parts, fully deterministic (no seed) | `bundle/shamwaySelfTestCreature.glb` | yes — look signed off 2026-08-30 |
-| `shamwaySelfTestCreature_albedo` | PIL, one deterministic script (256×256: moss green, dorsal stripes, pale snout patch, eye marker) | re-run the recorded script byte-for-byte | `bundle/shamwaySelfTestCreature_albedo.png` | yes — judged with the creature |
+| `shamwaySelfTestCreature` | `shamway generate entity bundle/shamwaySelfTestCreature.glb --rig quadruped --atlas creatures/shamwaySelfTestCreature.atlas.json` | the quadruped rig, default parts, fully deterministic (no seed); `--atlas` gives each part its own UV cell so a hide can paint the feet apart from the body | `bundle/shamwaySelfTestCreature.glb` | yes — look signed off 2026-08-30 |
+| `shamwaySelfTestCreature_albedo` | `shamway generate hide bundle/shamwaySelfTestCreature_albedo.png --atlas creatures/shamwaySelfTestCreature.atlas.json --seed 7 --base 205,196,170 --fur 224,214,188 --paw 58,42,32 --limb 150,132,108 --outline 40,34,28 --size 256` | a role-aware atlased hide: paws dark, limbs a shade, body light, gutters outlined — so the feet read against the legs and the terrain (the old whole-coat cream+spots hid them) | `bundle/shamwaySelfTestCreature_albedo.png` | yes — judged with the creature |
 | `shamwaySelfTestBird` | `shamway generate entity bundle/shamwaySelfTestBird.glb --rig bird` | the bird rig (wings, tail, perched legs), default parts, deterministic | `bundle/shamwaySelfTestBird.glb` | not yet — the `--look` run is the owed picture |
 | `shamwaySelfTestArachnid` | `shamway generate entity bundle/shamwaySelfTestArachnid.glb --rig arachnid` | the arachnid rig (29 bones, eight legs), default parts, deterministic | `bundle/shamwaySelfTestArachnid.glb` | not yet — the `--look` run is the owed picture |
 | `shamwaySelfTestDino` | `shamway generate entity bundle/shamwaySelfTestDino.glb --rig dinosaur` | the dinosaur rig (heavy tail, big legs, tiny arms), default parts, deterministic | `bundle/shamwaySelfTestDino.glb` | not yet — the `--look` run is the owed picture |

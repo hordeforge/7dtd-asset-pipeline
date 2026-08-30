@@ -71,7 +71,8 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "hide": (
         "hide",
         "draw a seeded fur/hide albedo for a generated entity: mottled patches,"
-        " anisotropic fur clumps, hair grain — no image model",
+        " anisotropic fur clumps, hair grain — no image model; --atlas paints"
+        " each part of a per-part-UV entity its role colour (paws dark, body light)",
         ("pillow", "numpy"),
     ),
     "mesh": (
@@ -97,7 +98,9 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     ),
     "entity": (
         "entity",
-        "generate a skinned entity: primitives bound to a rig, plus its entityclasses.xml patch",
+        "generate a skinned entity: primitives bound to a rig, plus its"
+        " entityclasses.xml patch; --atlas gives each part its own UV cell"
+        " (and writes the manifest a role-aware hide reads)",
         (),
     ),
 }

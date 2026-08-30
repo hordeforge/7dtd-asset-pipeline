@@ -306,6 +306,40 @@ class EntityGeneratorTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("no default part set", stderr.getvalue())
 
+    def test_atlas_remaps_each_part_into_its_own_cell(self) -> None:
+        """`--atlas` confines each part's UVs to its own cell of a square grid,
+        so a hide can paint each region its own colour. Every vertex must land
+        inside exactly one cell, and the manifest must name the same cells."""
+        out = self.root / "creature.glb"
+        manifest = self.root / "creature.atlas.json"
+        self.assertEqual(
+            run("entity", [str(out), "--rig", "quadruped", "--atlas", str(manifest)]), 0
+        )
+        document = json.loads(manifest.read_text(encoding="utf-8"))
+        scene = parse_gltf(out)
+        uvs = scene.meshes[0].primitive.uvs
+        assert uvs is not None
+        cells = document["parts"]
+        roles = document["roles"]
+
+        def inside(uv: tuple[float, float], cell: tuple[float, float, float, float]) -> bool:
+            u0, v0, u1, v1 = cell
+            # The mesh insets each cell by 2% so a UV never rides the shared
+            # gutter; tolerate float32 rounding at the inset boundary.
+            eps = 2e-3
+            lo_u, hi_u = u0 + 0.02 * (u1 - u0) - eps, u1 - 0.02 * (u1 - u0) + eps
+            lo_v, hi_v = v0 + 0.02 * (v1 - v0) - eps, v1 - 0.02 * (v1 - v0) + eps
+            return lo_u <= uv[0] <= hi_u and lo_v <= uv[1] <= hi_v
+
+        for uv in uvs:
+            matches = [name for name, cell in cells.items() if inside(uv, cell)]
+            self.assertEqual(len(matches), 1, f"UV {uv} landed in {len(matches)} cells")
+        # The paw parts exist and are classified apart from the body — the
+        # discrimination the atlas exists to enable.
+        self.assertEqual(roles["LeftFrontPaw"], "paw")
+        self.assertEqual(roles["Pelvis"], "body")
+        self.assertNotEqual(roles["LeftFrontPaw"], roles["Pelvis"])
+
 
 @needs_unitypy
 @needs_vkd3d

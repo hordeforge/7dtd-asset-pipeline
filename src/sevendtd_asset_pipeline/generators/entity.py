@@ -11,6 +11,19 @@ Blender-skinning author reaches through `shamway generate rig`.
     shamway generate entity myCreature.glb --rig humanoid
     shamway generate entity myCreature.glb --rig humanoid \
         --mod MyMod --bundle myMod --xml myCreature-entityclasses.xml
+    shamway generate entity myCreature.glb --rig quadruped \
+        --atlas myCreature.atlas.json
+
+`--atlas` is the per-part texture contract. A generated entity merges every
+part into one mesh where each part's vertices span the whole 0-1 UV box, so a
+single coat covers the entire animal and no colour can be reserved for the
+feet — the paws and the body read as one object, and the ground junction
+vanishes. `--atlas` remaps each part's vertices into its own cell of a square
+UV grid and writes a manifest mapping part name to cell and to a semantic role
+(`body`/`limb`/`paw`/`head`/`tail`). Pass that manifest to
+`shamway generate hide --atlas`, which paints each cell the role colour its
+part demands — the mode a rendered creature needs to read at a glance. See
+`docs/authoring/entities.md`.
 
 With `--xml`, the generator also writes the `entityclasses.xml` patch that
 makes the engine spawn the entity. The wiring is the engine's own, verified
@@ -283,12 +296,103 @@ def load_parts(spec: str | None, rig: Rig) -> dict[str, dict[str, Any]]:
     return scale_parts(parts, rig.scale)
 
 
-def build_entity_glb(rig: Rig, parts: dict[str, dict[str, Any]], name: str) -> bytes:
+def _remap_uv(
+    uv: tuple[float, float], cell: tuple[float, float, float, float]
+) -> tuple[float, float]:
+    """Map a primitive's 0-1 UV into an atlas cell `(u0, v0, u1, v1)`.
+
+    The cell is inset slightly so a primitive's default UVs never touch the
+    cell edge: the hide generator fills that gutter with an outline colour,
+    and a UV sitting exactly on the boundary would blur across neighbouring
+    cells at mipmap level. The inset is a fixed fraction of the cell, so the
+    visible region stays large on the atlas and the seams stay thin.
+    """
+    u0, v0, u1, v1 = cell
+    inset = 0.02
+    fu = (u1 - u0) * inset
+    fv = (v1 - v0) * inset
+    lo_u, hi_u = u0 + fu, u1 - fu
+    lo_v, hi_v = v0 + fv, v1 - fv
+    u, v = uv
+    return (lo_u + u * (hi_u - lo_u), lo_v + v * (hi_v - lo_v))
+
+
+def part_role(part_names: list[str]) -> dict[str, str]:
+    """The semantic role of each part, for a role-aware hide.
+
+    A rig's bone names are not standardised — the shipped rigs use `Paw`,
+    `Foot`, `Hand`, `Thigh`, `Upper`, `Lower`, `Head`, `Tail` — so the role is
+    a best-effort name match rather than a fixed table. The four roles a hide
+    needs to draw a readable creature are `body` (the default coat), `limb`
+    (the legs/arms — a shade or the coat), `paw` (the contact/hoof region —
+    dark), and `head`/`tail` (the end accents). A role-aware hide colours the
+    `paw` and `limb` cells apart from the `body` cells, which is exactly the
+    contrast a uniform coat lacks: with every part sampling the same texture,
+    no colour need be reserved for the feet, so the whole creature reads as
+    one object and the ground junction disappears.
+    """
+    roles: dict[str, str] = {}
+    for name in part_names:
+        folded = name.lower()
+        if any(token in folded for token in ("paw", "foot", "hoof", "hand")):
+            roles[name] = "paw"
+        elif "tail" in folded or "wingtip" in folded:
+            roles[name] = "tail"
+        elif "head" in folded:
+            roles[name] = "head"
+        elif any(token in folded for token in ("thigh", "shin", "upper", "lower", "arm", "leg")):
+            roles[name] = "limb"
+        else:
+            roles[name] = "body"
+    return roles
+
+
+def atlas_cell(part_names: list[str]) -> dict[str, tuple[float, float, float, float]]:
+    """A deterministic per-part UV atlas: one grid cell for each part.
+
+    The grid is a square `side x side` arrangement large enough to hold every
+    part, laid out left-to-right, top-to-bottom in the generated (top-down)
+    order of the part names, so the same part set always produces the same
+    atlas. The returned dict maps a part name to the `(u0, v0, u1, v1)` cell
+    its vertices are remapped into, which is also what a role-aware hide reads
+    to paint each region its colour. Every cell is a square of the same size,
+    and the grid is deliberately square: the hide generator draws each cell
+    with its own periodic fur field, which has no seam only if the cell itself
+    is square and the field is generated at exactly that size.
+    """
+    count = len(part_names)
+    side = max(1, math.ceil(math.sqrt(count)))
+    atlas: dict[str, tuple[float, float, float, float]] = {}
+    for index, name in enumerate(part_names):
+        col = index % side
+        row = index // side
+        u0 = col / side
+        v1 = 1.0 - row / side
+        u1 = (col + 1) / side
+        v0 = 1.0 - (row + 1) / side
+        atlas[name] = (u0, v0, u1, v1)
+    return atlas
+
+
+def build_entity_glb(
+    rig: Rig,
+    parts: dict[str, dict[str, Any]],
+    name: str,
+    atlas: dict[str, tuple[float, float, float, float]] | None = None,
+) -> bytes:
     """The skinned entity GLB: rig joints plus one skinned mesh node.
 
     Part geometry is authored in each joint's local space and transformed by
     that joint's world matrix, so the mesh sits in the bind pose exactly as
     the rig describes. Every vertex binds 1.0 to its part's joint.
+
+    `atlas` maps a part name to the rectangular UV cell `(u0, v0, u1, v1)`
+    that part's vertices are remapped into. When it is `None` every part
+    keeps the full 0-1 UV space its primitive is authored in, which is what
+    makes a single flat hide cover the whole entity evenly. When it is set
+    each part samples only its own cell, so a hide can paint each region its
+    own colour — paws dark, body light — because a primitive's default UVs
+    are not allowed to leave their cell.
     """
     unknown = sorted(set(parts) - {bone.name for bone in rig.bones})
     if unknown:
@@ -309,11 +413,12 @@ def build_entity_glb(rig: Rig, parts: dict[str, dict[str, Any]], name: str) -> b
             continue
         base = len(positions)
         local_pos, local_norm, local_uv, part_indices = _primitive(part["shape"], part)
+        cell = atlas.get(bone.name) if atlas else None
         matrix = world[index_by_name[bone.name]]
         for local, normal, uv in zip(local_pos, local_norm, local_uv, strict=True):
             positions.append(_apply_matrix(matrix, local))
             normals.append(_apply_rotation(matrix, normal))
-            uvs.append(uv)
+            uvs.append(_remap_uv(uv, cell) if cell else uv)
             joints.append((index_by_name[bone.name], 0, 0, 0))
             weights.append((1.0, 0.0, 0.0, 0.0))
         for triangle in part_indices:
@@ -772,6 +877,17 @@ def main(argv: list[str] | None = None) -> int:
         " GameObjectAnimalAnimation, and AvatarController=GameObjectAnimalAnimation"
         " is added to the XML",
     )
+    parser.add_argument(
+        "--atlas",
+        default=None,
+        metavar="JSON",
+        help="write a per-part UV atlas manifest here, and give the mesh the"
+        " matching UVs so each part occupies its own cell of the texture."
+        " A role-aware `shamway generate hide --atlas` then paints each part its"
+        " own colour (dark paws, light body) instead of a single whole-coat —"
+        " the mode a rendered creature needs to read at a glance. Default: no"
+        " atlas, and every part shares the whole texture (a flat coat)",
+    )
     args = parser.parse_args(argv)
 
     if args.output.suffix.lower() != ".glb":
@@ -789,14 +905,28 @@ def main(argv: list[str] | None = None) -> int:
 
     stem = args.output.stem
     name = args.name or stem
+    part_names = [bone.name for bone in rig.bones if bone.name in parts]
+    atlas_cells = atlas_cell(part_names) if args.atlas else None
     try:
-        payload = build_entity_glb(rig, parts, name)
+        payload = build_entity_glb(rig, parts, name, atlas_cells)
     except PipelineError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     write(args.output, payload)
+    if args.atlas:
+        manifest = {
+            "stem": stem,
+            "grid": math.ceil(math.sqrt(len(part_names))),
+            "parts": atlas_cells,
+            "roles": part_role(part_names),
+        }
+        write(Path(args.atlas), json.dumps(manifest, indent=2) + "\n")
+        print(
+            f"wrote {args.atlas}: {len(part_names)} parts in a per-part UV atlas"
+            " (roles for `shamway generate hide --atlas`)"
+        )
 
-    n_parts = sum(1 for bone in rig.bones if bone.name in parts)
+    n_parts = len(part_names)
     print(f"wrote {args.output}: {len(rig.bones)} bones, {n_parts} parts")
     avatar_controller: str | None = None
     if args.anim:

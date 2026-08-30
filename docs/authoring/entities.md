@@ -20,7 +20,9 @@ every shipped rig has been staged in a live client (see "End-to-end
 confirmation"). Movement ships too: `--anim` wires a legacy `Animation`
 component with synthesized clips and `AvatarController =
 GameObjectAnimalAnimation` (see "Making it move"), proven live by the
-self-test creature's signed-off turntable clip.
+self-test creature's signed-off turntable clip. `--atlas` gives each part
+its own UV cell so a `generate hide --atlas` can paint the paws apart from
+the body (see "The skin is a sibling albedo").
 
 ## The two ways in
 
@@ -69,7 +71,40 @@ self-test creature's signed-off turntable clip.
    leg-ground boundary with it. `--strength`/`--fur-strength`/
    `--patch-strength`/`--grain` set the contrast, `--size` the resolution
    (256 is plenty for an unlit textured material). The self-test
-   creature's skin is exactly this, seed 7: a cream coat with dark spots.
+   creature's skin was first exactly this, seed 7: a cream coat with dark
+   spots.
+
+   **A whole-coat hide cannot tell the feet apart.** A generated entity
+   merges every part into one mesh where each part's vertices span the
+   whole 0-1 UV box, so a single coat covers the entire animal: no colour
+   is reserved for the paws, and the paws, the legs and the body read as
+   one object — which is why the creature's feet kept disappearing into
+   the ground in the look run. The fix is a **per-part UV atlas**, which
+   `generate entity --atlas` builds: each part gets its own cell of a
+   square UV grid, and a manifest records the cell and a semantic role
+   (`body`/`limb`/`paw`/`head`/`tail`) per part. Hand that manifest to
+   `generate hide --atlas` and each cell is painted the role colour its
+   part demands — paws dark, limbs a shade, body the coat, and the
+   gutters an outline colour so every part's silhouette reads against the
+   terrain:
+
+   ```bash
+   shamway generate entity myCreature.glb --rig quadruped \
+       --atlas myCreature.atlas.json
+   shamway generate hide assets-src/bundle/myCreature_albedo.png \
+       --atlas myCreature.atlas.json --seed 7 \
+       --base 205,196,170 --fur 224,214,188 \
+       --paw 58,42,32 --limb 150,132,108 --outline 40,34,28 --size 256
+   ```
+
+   Each atlas cell is drawn with its own periodic fur field at the cell's
+   own pixel size, so a primitive's wrapping default UVs never seam inside
+   its cell. `--paw`, `--limb` and `--outline` default to shades of
+   `--base`, so a bare `--atlas` invocation is legible without them; pass
+   them to set the tone. The manifest is authoring provenance, not a
+   bundle member — keep it in `assets-src/` (or wherever an editable
+   source lives), never in the bundle source folder. This is what the
+   self-test creature now ships: a dark-pawed, light-bodied atlased hide.
 
 The shipped rigs, all usable as `--rig NAME` with their own default part
 sets (forward is +Z; the humanoid is symmetric):

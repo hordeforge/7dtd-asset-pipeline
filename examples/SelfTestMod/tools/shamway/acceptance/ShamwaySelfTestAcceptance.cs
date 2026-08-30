@@ -241,7 +241,8 @@ if (suite == "shamwayselftest_shamwayselftestcreature_look")
         {
 
         GameObject shamwaySelfTestCreatureStaged = null;
-        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestCreature", new[] { "capture", "bundle" },
+        queue.Add(CaseDef.StagedClip(
+            label, "motion_shamwaySelfTestCreature", new[] { "capture", "bundle", "clip" },
             stage: ctx =>
             {
                 var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestCreature");
@@ -283,7 +284,14 @@ if (suite == "shamwayselftest_shamwayselftestcreature_look")
                 return renderers.Length > 0;
             },
             holdSeconds: 12f,
-            fail: "could not stage shamwaySelfTestCreature in front of the camera"));
+            onHold: (ctx, holdFraction) =>
+            {
+                var staged = shamwaySelfTestCreatureStaged;
+                if (staged == null) return;
+                // One full turn over the hold: 360 degrees across 12 seconds.
+                staged.transform.Rotate(0f, 360f * Time.deltaTime / 12f, 0f);
+            },
+            fail: "could not stage shamwaySelfTestCreature for its motion clip"));
             return;
         }
 if (suite == "shamwayselftest_shamwayselftestdino_look")
@@ -672,6 +680,23 @@ if (suite == "shamwayselftest_timednuke_look")
                 return loaded != null && loaded.name == "shamwaySelfTestBird_mat" && loaded.shader != null;
             },
             fail: "the game did not load shamwaySelfTestBird_mat from the staged bundle"));
+
+        TextAsset shamwaySelfTestCreatureanimLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCreature.anim", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCreatureanimLoaded = DataLoader.LoadAsset<TextAsset>(Bundle + "?shamwaySelfTestCreature.anim");
+                var loaded = shamwaySelfTestCreatureanimLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCreature.anim: LoadAsset<TextAsset> returned null"
+                    : "shamwaySelfTestCreature.anim: " + loaded.name + " bytes=" + loaded.bytes.Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCreatureanimLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCreature.anim" && loaded.text != null;
+            },
+            fail: "the game did not load shamwaySelfTestCreature.anim from the staged bundle"));
 
         GameObject shamwaySelfTestCreatureLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCreature", new[] { "bundle" },

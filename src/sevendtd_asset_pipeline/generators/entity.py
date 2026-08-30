@@ -798,13 +798,23 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
         if "walk" in kinds:
+            # Upper legs by name; each lower leg is its child (the knee).
             legs = [bone.name for bone in rig.bones if "Thigh" in bone.name or "Upper" in bone.name]
+            lower = [
+                next(
+                    (child.name for child in rig.bones if child.parent == leg),
+                    "",
+                )
+                for leg in legs
+            ]
             clips.append(
                 {
                     "name": "Walk",
                     "kind": "walk",
                     "bones": [_bone_path(rig, bone) for bone in legs],
-                    "amplitude": 0.5,
+                    "lower_bones": [_bone_path(rig, bone) for bone in lower if bone],
+                    "body_bone": f"{rig.root().name}/{first_child}",
+                    "amplitude": 0.35,
                     "seconds": 1.2,
                 }
             )

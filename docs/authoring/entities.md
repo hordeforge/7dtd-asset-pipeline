@@ -193,7 +193,7 @@ from the rig's own names):
 |---|---|---|
 | `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma) |
 | `head` | merged into `Idle1` | a slow side-to-side yaw of the `Head` bone (≈20°, 4 s) |
-| `walk` | `Walk` | a trot: each upper leg (`Thigh`/`Upper` bones) swings about its local X, left and right legs out of phase (0.5 rad, 1.2 s) |
+| `walk` | `Walk` | a trot: each upper leg (`Thigh`/`Upper` bones) swings about its local X, the knee (`Lower`/`Shin` child) bends the other way, and the body dips between steps; diagonal pairs move together (0.35 rad, 1.2 s) |
 
 The declaration is a small JSON you can extend — the clip names are the
 ones the controller plays, and entries sharing a name merge into one clip,

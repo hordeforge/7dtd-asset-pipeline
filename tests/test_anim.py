@@ -292,21 +292,41 @@ class LimbAnimTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "bob, head or walk"):
             parse_anim(path)
 
-    def test_walk_curves_alternate_left_and_right(self) -> None:
+    def test_walk_curves_bend_knees_and_alternate_diagonally(self) -> None:
         from sevendtd_asset_pipeline.anim import walk_curves
 
-        curves = walk_curves(
-            ["Root/Pelvis/LeftRearUpper", "Root/Pelvis/RightRearUpper"], stride=0.5, seconds=1.2
-        )
-        self.assertEqual(len(curves), 2)
-        left = curves[0]["curve"]["m_Curve"]
-        right = curves[1]["curve"]["m_Curve"]
-        # At a quarter cycle the left leg is at +stride and the right at -stride;
-        # the quaternion x-component of a `stride` swing is sin(stride / 2).
-        self.assertGreater(left[2]["value"]["x"], 0.2)
-        self.assertLess(right[2]["value"]["x"], -0.2)
-        # Both loops start and end at the same value (no seam).
-        self.assertAlmostEqual(left[0]["value"]["x"], left[-1]["value"]["x"], places=6)
+        legs = [
+            ("Root/Pelvis/LeftFrontUpper", "Root/Pelvis/LeftFrontLower"),
+            ("Root/Pelvis/RightRearUpper", "Root/Pelvis/RightRearLower"),
+            ("Root/Pelvis/RightFrontUpper", "Root/Pelvis/RightFrontLower"),
+            ("Root/Pelvis/LeftRearUpper", "Root/Pelvis/LeftRearLower"),
+        ]
+        curves = walk_curves(legs, "Root/Pelvis", stride=0.35, seconds=1.2)
+        self.assertEqual(len(curves), 9)  # upper+lower per leg, plus the body dip
+        upper = {c["path"]: c["curve"]["m_Curve"] for c in curves[:8] if "Upper" in c["path"]}
+        lower = {c["path"]: c["curve"]["m_Curve"] for c in curves[:8] if "Lower" in c["path"]}
+        # Trot: LeftFront pairs with RightRear (phase 0), RightFront with
+        # LeftRear (phase π). At a quarter cycle the phase-0 legs are +stride.
+        for left_front, right_rear in ((legs[0], legs[1]),):
+            self.assertGreater(upper[left_front[0]][2]["value"]["x"], 0.15)
+            self.assertGreater(upper[right_rear[0]][2]["value"]["x"], 0.15)
+        self.assertLess(upper[legs[2][0]][2]["value"]["x"], -0.15)
+        self.assertLess(upper[legs[3][0]][2]["value"]["x"], -0.15)
+        # The knee bends the opposite way: lower-leg rotation is inverted.
+        self.assertLess(lower[legs[0][1]][2]["value"]["x"], -0.05)
+        self.assertGreater(lower[legs[2][1]][2]["value"]["x"], 0.05)
+        # Loops start and end at the same value (no seam).
+        for curve in curves:
+            self.assertAlmostEqual(
+                curve["curve"]["m_Curve"][0]["value"]["x"],
+                curve["curve"]["m_Curve"][-1]["value"]["x"],
+                places=6,
+            )
+        # The body dips twice per stride on the body bone.
+        body = next(c for c in curves if c["path"] == "Root/Pelvis")
+        ys = [kf["value"]["y"] for kf in body["curve"]["m_Curve"]]
+        self.assertLess(min(ys), -0.01)
+        self.assertAlmostEqual(ys[0], 0.0, places=6)
 
     def test_same_name_entries_merge_into_one_clip(self) -> None:
         from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
@@ -349,7 +369,8 @@ class LimbAnimBundleTests(unittest.TestCase):
         trees = read_objects(bundle)
         clips = {c["m_Name"]: c for c in trees[74]}
         self.assertEqual(set(clips), {"Idle1", "Walk"})
-        self.assertEqual(len(clips["Walk"]["m_RotationCurves"]), 4)
+        self.assertEqual(len(clips["Walk"]["m_RotationCurves"]), 8)  # upper+lower per leg
+        self.assertEqual(len(clips["Walk"]["m_PositionCurves"]), 1)  # body dip
         self.assertEqual(len(clips["Idle1"]["m_RotationCurves"]), 1)
         self.assertEqual(len(clips["Idle1"]["m_PositionCurves"]), 1)
         animation = trees[111][0]

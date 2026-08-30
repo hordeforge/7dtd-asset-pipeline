@@ -273,20 +273,55 @@ def head_turn_curves(
 
 
 def walk_curves(
-    leg_bones: list[str], stride: float = 0.5, seconds: float = 1.2
+    legs: list[tuple[str, str]],
+    body_bone: str,
+    stride: float = 0.35,
+    seconds: float = 1.2,
+    body_dip: float = 0.03,
 ) -> list[dict[str, Any]]:
-    """A trot gait: each upper leg swings about its local X, alternating sides.
+    """A trot gait: upper legs swing, knees bend, the body dips.
 
-    One rotation curve per leg bone, `stride` radians half-swing; the
-    `Left*` legs run in phase, the `Right*` legs opposite, so the creature
-    moves like a trotting animal rather than a wind-up toy. Bones are the
-    rig's upper-leg paths (`Root/Pelvis/LeftRearUpper`, …) — the generator
-    picks them by name.
+    One rotation curve per upper leg (`stride` half-swing about its local X)
+    and one per lower leg bending the knee the opposite way (`0.6·stride`),
+    so the paw stays roughly under the hip instead of sweeping a rigid arc —
+    a rigid whole-leg rotation is the wind-up-toy look. Diagonal pairs move
+    together (`LeftFront` with `RightRear`, `RightFront` with `LeftRear`),
+    and a position curve on `body_bone` dips the body twice per stride as
+    the weight transfers.
     """
-    curves = []
-    for bone in leg_bones:
-        phase = 0.0 if bone.startswith(("Left", "Root/Left")) or "/Left" in bone else math.pi
-        curves.append(rotation_curve(bone, _rotation_keyframes("x", stride, seconds, phase)))
+    curves: list[dict[str, Any]] = []
+
+    def phase(upper: str) -> float:
+        front = "Front" in upper
+        left = "/Left" in upper or upper.startswith("Left")
+        if front:
+            return 0.0 if left else math.pi
+        return 0.0 if not left else math.pi
+
+    for upper, lower in legs:
+        phi = phase(upper)
+        curves.append(rotation_curve(upper, _rotation_keyframes("x", stride, seconds, phi)))
+        curves.append(rotation_curve(lower, _rotation_keyframes("x", -0.6 * stride, seconds, phi)))
+    # The body dips twice per stride, at the weight transfers (quarter and
+    # three-quarter points), never at the stride's end where a foot lands.
+    rest = {"x": 0.0, "y": 0.0, "z": 0.0}
+    keyframes = [
+        {
+            "time": seconds * index / 8.0,
+            "value": {
+                "x": 0.0,
+                "y": -body_dip * (0.5 - 0.5 * math.cos(4 * math.pi * index / 8.0)),
+                "z": 0.0,
+            },
+            "inSlope": rest,
+            "outSlope": rest,
+            "weightedMode": 0,
+            "inWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
+            "outWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
+        }
+        for index in range(9)
+    ]
+    curves.append(position_curve(body_bone, keyframes))
     return curves
 
 
@@ -304,6 +339,8 @@ class AnimClip:
     kind: str
     bone: str = ""
     bones: tuple[str, ...] = ()
+    lower_bones: tuple[str, ...] = ()
+    body_bone: str = ""
     amplitude: float = 0.03
     seconds: float = 1.5
 
@@ -378,12 +415,26 @@ def parse_anim(path: Path) -> AnimDeclaration:
                 raise PipelineError(
                     f'anim declaration {path} clip {name!r} needs a non-empty "bones" list'
                 )
+            lower = item.get("lower_bones", [])
+            if not isinstance(lower, list) or not all(
+                isinstance(bone, str) and bone for bone in lower
+            ):
+                raise PipelineError(
+                    f'anim declaration {path} clip {name!r} "lower_bones" must be a list'
+                )
+            body_bone = item.get("body_bone", "")
+            if not isinstance(body_bone, str):
+                raise PipelineError(
+                    f'anim declaration {path} clip {name!r} "body_bone" must be a string'
+                )
             clips.append(
                 AnimClip(
                     name=name,
                     kind=kind,
                     bones=tuple(bones),
-                    amplitude=float(item.get("amplitude", 0.5)),
+                    lower_bones=tuple(lower),
+                    body_bone=body_bone,
+                    amplitude=float(item.get("amplitude", 0.35)),
                     seconds=float(item.get("seconds", 1.2)),
                 )
             )
@@ -450,9 +501,14 @@ def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
                 rotations += rescaled(
                     head_turn_curves(clip.bone, clip.amplitude, clip.seconds), 1.0
                 )
-            else:  # walk
-                rotations += rescaled(
-                    walk_curves(list(clip.bones), clip.amplitude, clip.seconds), 1.0
-                )
+            else:  # walk — rotation curves on the legs, a position curve on the body
+                legs = [
+                    (upper, lower)
+                    for upper, lower in zip(clip.bones, clip.lower_bones, strict=False)
+                    if lower
+                ]
+                for curve in walk_curves(legs, clip.body_bone, clip.amplitude, clip.seconds):
+                    is_rotation = len(curve["curve"]["m_Curve"][0]["value"]) == 4
+                    (rotations if is_rotation else positions).append(rescaled([curve], 1.0)[0])
         out.append(legacy_clip(name, rotations, positions, scales, sample_rate=30.0))
     return tuple(out)

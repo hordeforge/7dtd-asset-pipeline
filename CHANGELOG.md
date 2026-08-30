@@ -14,6 +14,15 @@ tag has no changelog section.
 
 ### Added
 
+- Generated entities **walk and look around**: `--anim idle,head,walk`
+  writes legacy clips — `Idle1` (a body bob merged with a slow head yaw)
+  and `Walk` (a trot: upper legs swing, knees bend the opposite way, the
+  body dips between steps, diagonal pairs move together) — with the bone
+  paths picked rig-aware from the rig's own names. The `.anim.json`
+  declaration is the extension point (any clip name the engine's
+  controller plays; entries merging by name). The self-test creature's
+  turntable clip was signed off for motion, the gait as a recorded
+  milestone.
 - Generated entities **move**: `generate entity --anim` writes a
   `{stem}.anim.json` (a looping `Idle1` bob on the rig's first bone) and
   sets `AvatarController=GameObjectAnimalAnimation` on the entity class;

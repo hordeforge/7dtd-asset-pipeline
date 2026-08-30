@@ -362,9 +362,10 @@ rig's look suite staged its prefab with a renderer (`pass=1 fail=0` per
 run). All four rig frames were **signed off** (creature: quadruped, four
 legs, head forward, not mirrored, textured; bird, arachnid and dinosaur
 read as their rigs). The animated creature's turntable clip — 48 frames,
-muxed — was **signed off for motion the same day**: it spins (turntable)
-and bobs (the `Idle1` legacy clip), so the movement lane is confirmed in a
-live client, not only by serialization.
+muxed — was **signed off for motion**: it spins (turntable), bobs (`Idle1`),
+turns its head (`head`) and trots with a knee-bending gait (`walk` — the
+gait was signed off as a milestone, with "can still be improved" recorded).
+The movement lane is confirmed in a live client, not only by serialization.
 
 This is the check that caught the one failure nothing offline could: a
 structurally perfect bundle that `DataLoader.LoadAsset<T>` answered null for,

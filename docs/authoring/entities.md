@@ -208,15 +208,19 @@ so an `Idle1` can combine a bob and a head turn:
      "amplitude": 0.35, "seconds": 4.0},
     {"name": "Walk", "kind": "walk",
      "bones": ["Root/Pelvis/LeftRearUpper", "Root/Pelvis/RightRearUpper"],
-     "amplitude": 0.5, "seconds": 1.2}
+     "lower_bones": ["Root/Pelvis/LeftRearLower", "Root/Pelvis/RightRearLower"],
+     "body_bone": "Root/Pelvis",
+     "amplitude": 0.35, "seconds": 1.2}
   ],
   "play_automatically": true
 }
 ```
 
 `kind` selects the curve builder (`bob` position, `head` yaw, `walk` trot);
-`bone` is the rig's own slash-separated path (`Root/Hips` on the humanoid),
-`bones` the upper-leg paths for `walk`. Why this works at all: **legacy
+`bone` is the rig's own slash-separated path (`Root/Hips` on the humanoid);
+a `walk` entry takes `bones` (the upper-leg paths, which the generator
+picks as every `Thigh`/`Upper` bone), `lower_bones` (each upper leg's
+child, so the knee bends), and `body_bone` (the body-dip target). Why this works at all: **legacy
 clips carry their curves directly** (`m_MuscleClipSize = 0`, measured from
 the game's `animals.bundle` `_Take 001`) — no compiled `m_Clip` stream,
 unlike Mecanim clips. `anim.py` builds the type-tree dicts and

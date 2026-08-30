@@ -170,43 +170,58 @@ component carrying looping clips under those names, and
 are synthesized:
 
 ```bash
-shamway generate entity myCreature.glb --rig quadruped --anim \
+shamway generate entity myCreature.glb --rig quadruped --anim idle,head,walk \
     --mod MyMod --bundle myMod --xml myCreature-entityclasses.xml
 ```
 
-`--anim` does three things:
+`--anim [KINDS]` (comma list, default `idle`) does three things:
 
-1. writes a **`{stem}.anim.json`** beside the GLB — a looping `Idle1` bob
-   (a 0.03 m position cycle on the rig's first bone, 1.5 s) — and the
-   writer's skinned lane picks up that sibling file and attaches the legacy
-   `Animation` component (class 111) with the declared clips (class 74,
-   `m_Legacy = true`, `m_MuscleClipSize = 0`) to the prefab root;
+1. writes a **`{stem}.anim.json`** beside the GLB — one looping legacy clip
+   per name — and the writer's skinned lane picks up that sibling file and
+   attaches the legacy `Animation` component (class 111) with the declared
+   clips (class 74, `m_Legacy = true`, `m_MuscleClipSize = 0`) to the
+   prefab root;
 2. adds **`AvatarController = GameObjectAnimalAnimation`** to the
    `entityclasses.xml` patch;
-3. so the entity **moves in game**: the controller plays `Idle1` by name
-   and the whole creature bobs.
+3. so the entity **moves in game**: the controller plays the clips by name
+   as its state changes.
+
+The kinds select the curve builders (all rig-aware — the bone paths come
+from the rig's own names):
+
+| Kind | Clip | What moves |
+|---|---|---|
+| `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma) |
+| `head` | merged into `Idle1` | a slow side-to-side yaw of the `Head` bone (≈20°, 4 s) |
+| `walk` | `Walk` | a trot: each upper leg (`Thigh`/`Upper` bones) swings about its local X, left and right legs out of phase (0.5 rad, 1.2 s) |
 
 The declaration is a small JSON you can extend — the clip names are the
-ones the controller plays, so a `Walk` or `Attack1` entry becomes a clip
-the controller plays when the animal moves or attacks:
+ones the controller plays, and entries sharing a name merge into one clip,
+so an `Idle1` can combine a bob and a head turn:
 
 ```json
 {
   "clips": [
     {"name": "Idle1", "kind": "bob", "bone": "Root/Pelvis",
-     "amplitude": 0.03, "seconds": 1.5}
+     "amplitude": 0.03, "seconds": 1.5},
+    {"name": "Idle1", "kind": "head", "bone": "Root/Pelvis/Spine/Chest/Neck/Head",
+     "amplitude": 0.35, "seconds": 4.0},
+    {"name": "Walk", "kind": "walk",
+     "bones": ["Root/Pelvis/LeftRearUpper", "Root/Pelvis/RightRearUpper"],
+     "amplitude": 0.5, "seconds": 1.2}
   ],
   "play_automatically": true
 }
 ```
 
-`kind` selects the curve builder; `bob` is the only kind today, and the
-`bone` path is the rig's own (slash-separated, as authored in the spec —
-`Root/Hips` on the humanoid). Why this works at all: **legacy clips carry
-their curves directly** (`m_MuscleClipSize = 0`, measured from the game's
-`animals.bundle` `_Take 001`) — no compiled `m_Clip` stream, unlike Mecanim
-clips. `anim.py` builds the type-tree dicts and `tests/test_anim.py`
-round-trips them through `build_bundle` and back through UnityPy.
+`kind` selects the curve builder (`bob` position, `head` yaw, `walk` trot);
+`bone` is the rig's own slash-separated path (`Root/Hips` on the humanoid),
+`bones` the upper-leg paths for `walk`. Why this works at all: **legacy
+clips carry their curves directly** (`m_MuscleClipSize = 0`, measured from
+the game's `animals.bundle` `_Take 001`) — no compiled `m_Clip` stream,
+unlike Mecanim clips. `anim.py` builds the type-tree dicts and
+`tests/test_anim.py` round-trips them through `build_bundle` and back
+through UnityPy.
 
 To prove motion in a live client, give the entity's look suite a motion
 kind in the mod's `.shamway.toml`, so the look run captures a frame
@@ -217,9 +232,10 @@ sequence instead of one still:
 motion_kinds = { shamwaySelfTestCreature = "turntable" }
 ```
 
-The self-test's animated creature does exactly this, and its turntable
-clip — spinning while bobbing — was signed off on 2026-08-30. `turntable`
-is the staged-prefab motion kind; `walk-cycle` is for equipped items (see
+The self-test's animated creature does exactly this (with `--anim
+idle,head,walk`), and its turntable clip — spinning while bobbing, turning
+its head and trotting — was signed off on 2026-08-30. `turntable` is the
+staged-prefab motion kind; `walk-cycle` is for equipped items (see
 [`shamway docs video`](video.md)).
 
 ## The dedicated-server caveat
@@ -235,10 +251,9 @@ that clients see nothing.
 
 ## What is still unbuilt
 
-- **More clip kinds.** `bob` is the only curve builder; a walk cycle with
-  leg swing, attack chains and death poses are more curve sets, not a
-  format change — the declaration already accepts any name the controller
-  plays.
+- **More clip kinds.** `bob`, `head` and `walk` are built in; attack
+  chains, death poses, jumps and swims are more curve sets, not a format
+  change — the declaration already accepts any name the controller plays.
 - **Mecanim / complex locomotion.** `Animator` + controller + compiled
   clips remain the hard lane; the legacy path covers an animal that idles,
   walks and attacks by name.

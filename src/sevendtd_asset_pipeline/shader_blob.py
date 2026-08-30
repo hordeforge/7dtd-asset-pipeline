@@ -205,6 +205,52 @@ float4 main(PixelIn input) : SV_Target
 }
 """
 
+UNLIT_VERTEX_HLSL_COLOR = (
+    _UNITY_CBUFFERS_HLSL
+    + """
+struct VertexIn
+{
+    float4 vertex : POSITION;
+    float4 color : COLOR;
+    float2 uv : TEXCOORD0;
+};
+
+struct VertexOut
+{
+    float4 position : SV_POSITION;
+    float4 color : COLOR;
+    float2 uv : TEXCOORD0;
+};
+
+VertexOut main(VertexIn input)
+{
+    VertexOut output;
+    float4 world = mul(unity_ObjectToWorld, input.vertex);
+    output.position = mul(unity_MatrixVP, world);
+    output.color = input.color;
+    output.uv = input.uv;
+    return output;
+}
+"""
+)
+
+UNLIT_FRAGMENT_HLSL_COLOR = """
+Texture2D<float4> _MainTex : register(t0);
+SamplerState sampler_MainTex : register(s0);
+
+struct PixelIn
+{
+    float4 position : SV_POSITION;
+    float4 color : COLOR;
+    float2 uv : TEXCOORD0;
+};
+
+float4 main(PixelIn input) : SV_Target
+{
+    return _MainTex.Sample(sampler_MainTex, input.uv) * input.color;
+}
+"""
+
 
 # Unity's OpenGLCore convention, read out of the stock
 # `Legacy Shaders/Transparent/Cutout/VertexLit` GL blob: one source carrying
@@ -258,6 +304,51 @@ void main()
 #endif
 """
 
+UNLIT_GLSL_COLOR = """
+#ifdef VERTEX
+#version 150
+#extension GL_ARB_explicit_attrib_location : require
+
+uniform vec4 hlslcc_mtx4x4unity_ObjectToWorld[4];
+uniform vec4 hlslcc_mtx4x4unity_MatrixVP[4];
+
+in vec3 in_POSITION0;
+in vec4 in_COLOR0;
+in vec2 in_TEXCOORD0;
+out vec4 vs_COLOR0;
+out vec2 vs_TEXCOORD0;
+
+void main()
+{
+    vec4 world = hlslcc_mtx4x4unity_ObjectToWorld[0] * in_POSITION0.x
+               + hlslcc_mtx4x4unity_ObjectToWorld[1] * in_POSITION0.y
+               + hlslcc_mtx4x4unity_ObjectToWorld[2] * in_POSITION0.z
+               + hlslcc_mtx4x4unity_ObjectToWorld[3];
+    gl_Position = hlslcc_mtx4x4unity_MatrixVP[0] * world.x
+                + hlslcc_mtx4x4unity_MatrixVP[1] * world.y
+                + hlslcc_mtx4x4unity_MatrixVP[2] * world.z
+                + hlslcc_mtx4x4unity_MatrixVP[3] * world.w;
+    vs_COLOR0 = in_COLOR0;
+    vs_TEXCOORD0 = in_TEXCOORD0;
+}
+#endif
+#ifdef FRAGMENT
+#version 150
+#extension GL_ARB_explicit_attrib_location : require
+
+uniform sampler2D _MainTex;
+
+in vec4 vs_COLOR0;
+in vec2 vs_TEXCOORD0;
+layout(location = 0) out vec4 SV_Target0;
+
+void main()
+{
+    SV_Target0 = texture(_MainTex, vs_TEXCOORD0) * vs_COLOR0;
+}
+#endif
+"""
+
 
 # Unity's `VertexAttribute` enum, as the trailing mask of a GLCore code record
 # indexes it. Derived on 2026-08-24 from two stock records in
@@ -274,6 +365,11 @@ VERTEX_ATTRIBUTE_TEXCOORD1 = 5
 
 # What `UNLIT_GLSL` declares: `in vec3 in_POSITION0` and `in vec2 in_TEXCOORD0`.
 UNLIT_VERTEX_ATTRIBUTES = (1 << VERTEX_ATTRIBUTE_POSITION) | (1 << VERTEX_ATTRIBUTE_TEXCOORD0)
+PARTICLE_VERTEX_ATTRIBUTES = (
+    (1 << VERTEX_ATTRIBUTE_POSITION)
+    | (1 << VERTEX_ATTRIBUTE_COLOR)
+    | (1 << VERTEX_ATTRIBUTE_TEXCOORD0)
+)
 
 
 def source_blob(program_type: int, source: str, vertex_attributes: int = 0) -> bytes:
@@ -502,6 +598,51 @@ layout(binding = 0) uniform sampler2D _MainTex;
 void main()
 {
     SV_Target0 = texture(_MainTex, vs_TEXCOORD0);
+}
+"""
+
+UNLIT_VERTEX_HLSL_VULKAN_COLOR = """
+cbuffer VGlobals : register(b0)
+{
+    float4x4 unity_ObjectToWorld;
+    float4x4 unity_MatrixVP;
+};
+
+struct VertexIn
+{
+    float4 vertex : POSITION;
+    float4 color : COLOR;
+    float2 uv : TEXCOORD0;
+};
+
+struct VertexOut
+{
+    float4 position : SV_POSITION;
+    float4 color : COLOR;
+    float2 uv : TEXCOORD0;
+};
+
+VertexOut main(VertexIn input)
+{
+    VertexOut output;
+    float4 world = mul(unity_ObjectToWorld, input.vertex);
+    output.position = mul(unity_MatrixVP, world);
+    output.position.y = -output.position.y;
+    output.color = input.color;
+    output.uv = input.uv;
+    return output;
+}
+"""
+
+UNLIT_FRAGMENT_GLSL_VULKAN_COLOR = """
+#version 450
+layout(location = 0) in vec2 vs_TEXCOORD0;
+layout(location = 1) in vec4 vs_COLOR0;
+layout(location = 0) out vec4 SV_Target0;
+layout(binding = 0) uniform sampler2D _MainTex;
+void main()
+{
+    SV_Target0 = texture(_MainTex, vs_TEXCOORD0) * vs_COLOR0;
 }
 """
 
@@ -1243,7 +1384,9 @@ class CompiledShader:
         return out
 
 
-def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
+def unlit_textured(
+    texture_property: str = "_MainTex", *, vertex_color: bool = False
+) -> CompiledShader:
     """Compile the one-pass unlit textured shader this writer ships.
 
     Vertex: object space through `unity_ObjectToWorld` then `unity_MatrixVP`.
@@ -1251,11 +1394,16 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
     hardware tier, and two platforms: d3d11 (the one the game runs, through
     Proton) and OpenGLCore (so a Linux editor running `verify-bundle` has a
     sub-program it can actually create).
+
+    `vertex_color` multiplies the sample by COLOR0, which is how a particle
+    system's start colour and colour-over-lifetime reach the card. The opaque
+    mesh lane leaves it off.
     """
-    fragment_source = UNLIT_FRAGMENT_HLSL
+    fragment_source = UNLIT_FRAGMENT_HLSL_COLOR if vertex_color else UNLIT_FRAGMENT_HLSL
+    vertex_source = UNLIT_VERTEX_HLSL_COLOR if vertex_color else UNLIT_VERTEX_HLSL
     if texture_property != "_MainTex":
         fragment_source = fragment_source.replace("_MainTex", texture_property)
-    vertex_dxbc = compile_hlsl(UNLIT_VERTEX_HLSL, "vs_4_0")
+    vertex_dxbc = compile_hlsl(vertex_source, "vs_4_0")
     fragment_dxbc = compile_hlsl(fragment_source, "ps_4_0")
     # Cheap, and it is the difference between a prop that draws on every
     # graphics API and one that draws on OpenGL only.
@@ -1281,17 +1429,19 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
     # sub-program: a d3d11-only shader has nothing that host can create, and
     # `shamway verify-bundle` then reports it unsupported for a reason that
     # says nothing about the bundle. The game runs d3d11 under Proton.
+    glsl_source = UNLIT_GLSL_COLOR if vertex_color else UNLIT_GLSL
     glsl = (
-        UNLIT_GLSL
+        glsl_source
         if texture_property == "_MainTex"
-        else UNLIT_GLSL.replace("_MainTex", texture_property)
+        else glsl_source.replace("_MainTex", texture_property)
     )
+    attributes = PARTICLE_VERTEX_ATTRIBUTES if vertex_color else UNLIT_VERTEX_ATTRIBUTES
     gl_raw = assemble_blob(
         [
             vertex_parameters.to_bytes(),
             fragment_parameters.to_bytes(),
-            source_blob(GL_CORE_32, glsl, UNLIT_VERTEX_ATTRIBUTES),
-            source_blob(GL_CORE_32, glsl, UNLIT_VERTEX_ATTRIBUTES),
+            source_blob(GL_CORE_32, glsl, attributes),
+            source_blob(GL_CORE_32, glsl, attributes),
         ]
     )
     # Vulkan is additive and optional: a host without the SMOL-V encoder builds
@@ -1309,10 +1459,16 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
         # has, and the parameter record mirrors stock: the texture entry names
         # its own sampler (0xffffffff = none) and there is no separate sampler
         # entry, exactly as the measured VertexLit record declares `_MainTex`.
+        vulkan_fragment_source = (
+            UNLIT_FRAGMENT_GLSL_VULKAN_COLOR if vertex_color else UNLIT_FRAGMENT_GLSL_VULKAN
+        )
+        vulkan_vertex_source = (
+            UNLIT_VERTEX_HLSL_VULKAN_COLOR if vertex_color else UNLIT_VERTEX_HLSL_VULKAN
+        )
         vulkan_fragment = (
-            UNLIT_FRAGMENT_GLSL_VULKAN
+            vulkan_fragment_source
             if texture_property == "_MainTex"
-            else UNLIT_FRAGMENT_GLSL_VULKAN.replace("_MainTex", texture_property)
+            else vulkan_fragment_source.replace("_MainTex", texture_property)
         )
         vulkan_parameters = ParameterBlob(
             buffers=(VULKAN_VERTEX_CBUFFER,),
@@ -1338,9 +1494,7 @@ def unlit_textured(texture_property: str = "_MainTex") -> CompiledShader:
                         )
                     ),
                     compress_smolv(
-                        unity_descriptor_sets(
-                            compile_spirv_glslang(UNLIT_VERTEX_HLSL_VULKAN, "vert")
-                        )
+                        unity_descriptor_sets(compile_spirv_glslang(vulkan_vertex_source, "vert"))
                     ),
                 ),
             ]

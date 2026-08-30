@@ -481,10 +481,13 @@ See [examples/ExampleMod](examples/ExampleMod) for a minimal consumer layout.
 ## Scope
 
 This project synthesizes, builds and validates mod-owned asset bundles. Its
-shader lane emits one unlit opaque pass per platform — Direct3D 11 and
-OpenGL Core that render, plus an optional Vulkan one the client does not accept
-yet; lit and transparent shading and keyword variants are unbuilt — a gap with
-a known route, not a claim about what is possible. It does not ship copyrighted game
+shader lane emits an unlit opaque mesh pass and transparent/additive
+particle passes per platform — Direct3D 11 and OpenGL Core that render, plus
+an optional Vulkan one the client does not accept yet; lit, cut-out,
+normal-mapped and keyword-complete shading are unbuilt — a gap with a known
+route, not a claim about what is possible. Named glTF hierarchies,
+SkinnedMeshRenderer and ParticleSystem graphs are synthesized without an
+editor. It does not ship copyrighted game
 assets, edit the game install, automate Unity account credentials, guarantee
 visual quality, or claim that an offline parse proves runtime compatibility.
 

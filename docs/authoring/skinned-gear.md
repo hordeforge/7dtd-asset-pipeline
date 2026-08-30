@@ -1,11 +1,12 @@
 # Skinned character gear (SDCS armor)
 
 Worn armor is the one asset class in 7 Days to Die that a mod cannot reach
-through the prop lane. A held item, a placed block and a VFX card are all
-static: a mesh, a material, a prefab, done. A garment has to deform with the
-wearer, and the engine binds it to the player's skeleton at the moment it is
-equipped. That changes what has to be authored, and it closes the editorless
-lane, so it gets its own page.
+through the static prop lane. A held item, a placed block and a VFX card
+are a mesh, a material, a prefab. A garment has to deform with the wearer,
+and the engine binds it to the player's skeleton at the moment it is
+equipped. The editorless writer now emits that deformation graph from a
+glTF skin; SDCS extras (`GearBoneMap`, `Morphable`) still want an editor,
+so they stay on this page.
 
 **Status: walked end to end on 2026-08-24.** A mod-authored garment now loads
 from a mod's own bundle, grafts onto the player rig, deforms with the body and
@@ -20,20 +21,20 @@ this page marks something *inferred*, nobody has run it.
 
 ## Why this is not the mesh lane
 
-`shamway build` writes bundles without Unity, and for a static mesh that is the
-whole story. A skinned mesh is different in two ways that both bite:
+`shamway build` writes bundles without Unity. A glTF/GLB that actually
+contains a skin (joints, inverse bind matrices, `JOINTS_0`, `WEIGHTS_0`)
+is synthesized as `SkinnedMeshRenderer` plus the named bone hierarchy —
+bind poses, bone weights, bone-name hashes, root bone, no MeshRenderer
+fallback. That is the editorless deformation graph.
 
-- It carries a bind pose, bone weights per vertex, and a `SkinnedMeshRenderer`
-  whose `bones[]` array points at transforms. None of that is in the editorless
-  writer's scope, and pretending otherwise produces a bundle that loads and a
-  garment that does not move.
-- The prefab needs Unity components (`GearBoneMap`, optionally `Morphable`,
-  rig constraints) that only the editor bakes.
+Two SDCS extras still want an editor:
 
-So a mod authoring gear is on `bundle_source = "unity"`. That is not a
-temporary gap to route around; it is the honest boundary, and
-[authoring-tools.md](authoring-tools.md) already says rigging and animation are
-outside the editorless lane.
+- Unity components (`GearBoneMap`, optionally `Morphable`, rig constraints)
+  that only the editor bakes.
+- Animation clips / Animator.
+
+A garment that needs those extras is on `bundle_source = "unity"`. A
+deformation-ready skinned prefab that does not is synthesized.
 
 ## The one prerequisite: bone names
 

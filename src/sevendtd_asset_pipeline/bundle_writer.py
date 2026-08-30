@@ -26,27 +26,36 @@ rules are the ones a reader of Unity's format already agrees on.
 
 The proof boundary is narrow and stated in `docs/bundles/no-unity.md`: this
 writes containers and objects for a bounded set of classes — `Texture2D`,
-`AudioClip`, `TextAsset`, `Mesh`, `Material`, `Shader`, and the
-`GameObject`/`Transform`/`MeshFilter`/`MeshRenderer` group that makes a prefab.
-The shader lane is the one part with a host dependency: `vkd3d-compiler`
-compiles the pass's HLSL to the DXBC a d3d11 sub-program carries, and without
-it a mesh source degrades to a bare `Mesh` instead of a prefab. An offline
-parse of what it wrote proves construction, never acceptance.
+`AudioClip`, `TextAsset`, `Mesh`, `Material`, `Shader`, the
+`GameObject`/`Transform`/`MeshFilter`/`MeshRenderer` group that makes a static
+prefab, plus — when the source actually contains them — named child
+hierarchies, `SkinnedMeshRenderer`, and `ParticleSystem`/`ParticleSystemRenderer`
+with transparent/additive particle shaders. The shader lane is the one part
+with a host dependency: `vkd3d-compiler` compiles the pass's HLSL to the DXBC
+a d3d11 sub-program carries, and without it a *static* mesh source degrades to
+a bare `Mesh` instead of a prefab. A skinned, hierarchical, or VFX source
+without the compiler is refused. An offline parse of what it wrote proves
+construction, never acceptance.
 """
 
 from __future__ import annotations
 
 import hashlib
+import math
 import struct
 import sys
+import zlib
 from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 
 from . import block_compress, shader_blob, transcode
+from . import particles as particle_fields
 from .capabilities import has_capability, require_capability
 from .errors import PipelineError
+from .gltf_scene import GltfNode, GltfPrimitive, GltfScene, parse_gltf
+from .vfx import parse_vfx
 
 ASSET_BUNDLE = 142
 TEXT_ASSET = 49
@@ -60,9 +69,16 @@ MESH_RENDERER = 23
 BOX_COLLIDER = 65
 SHADER = 48
 MATERIAL = 21
+SKINNED_MESH_RENDERER = 137
+PARTICLE_SYSTEM = 198
+PARTICLE_SYSTEM_RENDERER = 199
 
 UNLIT_SHADER_NAME = "Shamway/Unlit"
-"""The one shader the editorless writer emits, shared by every material."""
+"""The opaque unlit shader shared by static-mesh materials."""
+PARTICLE_ALPHA_SHADER = "Shamway/Particles/Alpha"
+PARTICLE_ADDITIVE_SHADER = "Shamway/Particles/Additive"
+"""Transparent particle shaders. They do not reuse Shamway/Unlit: that pass is
+opaque One/Zero and would draw flat particle cards."""
 
 ALBEDO_SUFFIX = "_albedo"
 # The prefab takes the source file's stem, so its mesh and material cannot.
@@ -514,7 +530,10 @@ MESH_CHANNELS = 14
 CHANNEL_POSITION = 0
 CHANNEL_NORMAL = 1
 CHANNEL_UV0 = 4
+CHANNEL_BLEND_WEIGHT = 12
+CHANNEL_BLEND_INDICES = 13
 VERTEX_FORMAT_FLOAT = 0
+VERTEX_FORMAT_UINT32 = 10
 INDEX_FORMAT_UINT16 = 0
 INDEX_FORMAT_UINT32 = 1
 TOPOLOGY_TRIANGLES = 0
@@ -962,13 +981,26 @@ def _float_value(value: float) -> dict[str, Any]:
     return {"val": float(value), "name": NO_PROPERTY}
 
 
-def _blend_state(colour_mask: float = 15.0) -> dict[str, Any]:
-    """One render target's blend state: opaque `One`/`Zero`, all channels."""
+# UnityEngine.Rendering.BlendMode, as GeneratedAsset.ParticleMaterial and the
+# AtomicDoomsday YAML materials write them: SrcAlpha=5, One=1,
+# OneMinusSrcAlpha=10, Zero=0. Opaque One/Zero is 1/0.
+BLEND_ONE = 1.0
+BLEND_ZERO = 0.0
+BLEND_SRC_ALPHA = 5.0
+BLEND_ONE_MINUS_SRC_ALPHA = 10.0
+
+
+def _blend_state(
+    colour_mask: float = 15.0,
+    src_blend: float = BLEND_ONE,
+    dst_blend: float = BLEND_ZERO,
+) -> dict[str, Any]:
+    """One render target's blend state. Opaque default is `One`/`Zero`."""
     return {
-        "srcBlend": _float_value(1.0),
-        "destBlend": _float_value(0.0),
-        "srcBlendAlpha": _float_value(1.0),
-        "destBlendAlpha": _float_value(0.0),
+        "srcBlend": _float_value(src_blend),
+        "destBlend": _float_value(dst_blend),
+        "srcBlendAlpha": _float_value(src_blend),
+        "destBlendAlpha": _float_value(dst_blend),
         "blendOp": _float_value(0.0),
         "blendOpAlpha": _float_value(0.0),
         "colMask": _float_value(colour_mask),
@@ -985,23 +1017,33 @@ def _stencil_op() -> dict[str, Any]:
     }
 
 
-def _shader_state(name: str) -> dict[str, Any]:
-    """An opaque, depth-tested, back-face-culled pass state.
+def _shader_state(
+    name: str,
+    *,
+    src_blend: float = BLEND_ONE,
+    dst_blend: float = BLEND_ZERO,
+    z_write: float = 1.0,
+    culling: float = 2.0,
+) -> dict[str, Any]:
+    """Pass render state.
 
     Field names and their scales are the engine's: `zTest` 4 is `LEqual`,
-    `culling` 2 is `Back`, and the stencil comparison 8 is `Always`. They were
-    read out of the stock `Entities/trees` shaders rather than chosen.
+    `culling` 2 is `Back` and 0 is `Off`, and the stencil comparison 8 is
+    `Always`. Opaque values were read out of the stock `Entities/trees`
+    shaders. Transparent/additive values (SrcAlpha/OneMinusSrcAlpha or
+    SrcAlpha/One, ZWrite 0, cull off) match GeneratedAsset.ParticleMaterial
+    and the AtomicDoomsday YAML particle materials.
     """
     state: dict[str, Any] = {"m_Name": name}
     for index in range(8):
-        state[f"rtBlend{index}"] = _blend_state()
+        state[f"rtBlend{index}"] = _blend_state(src_blend=src_blend, dst_blend=dst_blend)
     state.update(
         {
             "rtSeparateBlend": False,
             "zClip": _float_value(1.0),
             "zTest": _float_value(4.0),
-            "zWrite": _float_value(1.0),
-            "culling": _float_value(2.0),
+            "zWrite": _float_value(z_write),
+            "culling": _float_value(culling),
             "conservative": _float_value(0.0),
             "offsetFactor": _float_value(0.0),
             "offsetUnits": _float_value(0.0),
@@ -1117,7 +1159,13 @@ def _texture_property(name: str) -> dict[str, Any]:
     }
 
 
-def shader(name: str, texture_property: str = "_MainTex") -> BundleObject:
+def shader(
+    name: str,
+    texture_property: str = "_MainTex",
+    *,
+    blend: str = "opaque",
+    vertex_color: bool = False,
+) -> BundleObject:
     """A one-pass unlit textured `Shader`, compiled without an editor.
 
     The bytecode is produced by `vkd3d-compiler` and wrapped in the container
@@ -1126,13 +1174,38 @@ def shader(name: str, texture_property: str = "_MainTex") -> BundleObject:
     tier, no keyword variants, and two platforms: d3d11, which is what the game
     runs, and OpenGLCore, so a Linux editor can create it in `verify-bundle`.
 
-    This is a **synthesized** shader, not a built one: nothing in the path
-    ever ran Unity's shader compiler, and the offline gates that check it
-    share an author with the thing they check. What it is worth is settled by
-    `shamway verify-bundle` (a real Unity runtime reporting
-    `Shader.isSupported`) and then by a person looking at the rendered prop.
+    `blend` is `opaque` (One/Zero, ZWrite on, the mesh lane), `alpha`
+    (SrcAlpha/OneMinusSrcAlpha, ZWrite off, queue Transparent) or `additive`
+    (SrcAlpha/One, ZWrite off). Particle cards use `alpha` or `additive` with
+    `vertex_color=True`; reusing the opaque pass draws flat opaque quads.
     """
-    compiled = shader_blob.unlit_textured(texture_property)
+    compiled = shader_blob.unlit_textured(texture_property, vertex_color=vertex_color)
+    if blend == "opaque":
+        src, dst, z_write, culling, render_type = (
+            BLEND_ONE,
+            BLEND_ZERO,
+            1.0,
+            2.0,
+            "Opaque",
+        )
+    elif blend == "alpha":
+        src, dst, z_write, culling, render_type = (
+            BLEND_SRC_ALPHA,
+            BLEND_ONE_MINUS_SRC_ALPHA,
+            0.0,
+            0.0,
+            "Transparent",
+        )
+    elif blend == "additive":
+        src, dst, z_write, culling, render_type = (
+            BLEND_SRC_ALPHA,
+            BLEND_ONE,
+            0.0,
+            0.0,
+            "Transparent",
+        )
+    else:
+        raise PipelineError(f"shader blend {blend!r} is not opaque, alpha or additive")
     platforms = compiled.platforms
     a_pass = {
         "m_EditorDataHash": [],
@@ -1140,7 +1213,9 @@ def shader(name: str, texture_property: str = "_MainTex") -> BundleObject:
         "m_NameIndices": [],
         # PassType 0 = Normal.
         "m_Type": 0,
-        "m_State": _shader_state(name),
+        "m_State": _shader_state(
+            name, src_blend=src, dst_blend=dst, z_write=z_write, culling=culling
+        ),
         # 6 = vertex | fragment, the two stages this pass fills.
         "m_ProgramMask": 6,
         "progVertex": _program(
@@ -1171,7 +1246,7 @@ def shader(name: str, texture_property: str = "_MainTex") -> BundleObject:
         "m_SubShaders": [
             {
                 "m_Passes": [a_pass],
-                "m_Tags": {"tags": [("RenderType", "Opaque")]},
+                "m_Tags": {"tags": [("RenderType", render_type)]},
                 "m_LOD": 100,
             }
         ],
@@ -1210,6 +1285,8 @@ def material(
     shader_key: str,
     texture_key: str | None = None,
     texture_property: str = "_MainTex",
+    *,
+    blend: str = "opaque",
 ) -> BundleObject:
     """A `Material` binding a shader and, optionally, one texture.
 
@@ -1218,12 +1295,35 @@ def material(
     default rather than failing — so a caller that forgets the texture gets
     white, not an error, and `build.py` says so rather than shipping it
     silently.
+
+    `blend` other than `opaque` writes the transparent queue and blend
+    factors onto the material as well as the shader, matching
+    GeneratedAsset.ParticleMaterial (SrcAlpha + One or OneMinusSrcAlpha,
+    ZWrite 0, queue 3000).
     """
     texture_value = {
         "m_Texture": Ref(texture_key) if texture_key else NULL_PPTR,
         "m_Scale": {"x": 1.0, "y": 1.0},
         "m_Offset": {"x": 0.0, "y": 0.0},
     }
+    if blend == "opaque":
+        queue = -1
+        floats: list[tuple[str, float]] = []
+        tags: list[tuple[str, str]] = []
+    elif blend == "alpha":
+        queue = 3000
+        floats = [
+            ("_SrcBlend", BLEND_SRC_ALPHA),
+            ("_DstBlend", BLEND_ONE_MINUS_SRC_ALPHA),
+            ("_ZWrite", 0.0),
+        ]
+        tags = [("RenderType", "Transparent")]
+    elif blend == "additive":
+        queue = 3000
+        floats = [("_SrcBlend", BLEND_SRC_ALPHA), ("_DstBlend", BLEND_ONE), ("_ZWrite", 0.0)]
+        tags = [("RenderType", "Transparent")]
+    else:
+        raise PipelineError(f"material blend {blend!r} is not opaque, alpha or additive")
     return BundleObject(
         MATERIAL,
         name,
@@ -1235,18 +1335,640 @@ def material(
             "m_LightmapFlags": 4,
             "m_EnableInstancingVariants": False,
             "m_DoubleSidedGI": False,
-            "m_CustomRenderQueue": -1,
-            "stringTagMap": [],
+            "m_CustomRenderQueue": queue,
+            "stringTagMap": tags,
             "disabledShaderPasses": [],
             "m_SavedProperties": {
                 "m_TexEnvs": [(texture_property, texture_value)],
                 "m_Ints": [],
-                "m_Floats": [],
+                "m_Floats": floats,
                 "m_Colors": [],
             },
             "m_BuildTextureStacks": [],
         },
     )
+
+
+def bone_name_hash(name: str) -> int:
+    """The digest Unity stores in `Mesh.m_BoneNameHashes`.
+
+    Harvested from the installed game's `player/female/gear/nomad.bundle`
+    Mesh `bodyCloth`: bone GameObject `Hips` hashes to 1722913273. Unity
+    documents `Animator.StringToHash` as CRC-32 of the name; this is that
+    digest of the UTF-8 bytes, the same value the mesh field carries.
+    """
+    return zlib.crc32(name.encode("utf-8")) & 0xFFFFFFFF
+
+
+def _lh_position(value: tuple[float, float, float]) -> dict[str, float]:
+    return {"x": -float(value[0]), "y": float(value[1]), "z": float(value[2])}
+
+
+def _lh_quaternion(value: tuple[float, float, float, float]) -> dict[str, float]:
+    # Negate X of positions; the matching quaternion map is (x, -y, -z, w).
+    x, y, z, w = (float(value[0]), -float(value[1]), -float(value[2]), float(value[3]))
+    length = math.sqrt(x * x + y * y + z * z + w * w)
+    if length == 0 or not math.isfinite(length):
+        raise PipelineError("a node rotation is zero or non-finite after handedness conversion")
+    return {"x": x / length, "y": y / length, "z": z / length, "w": w / length}
+
+
+def _lh_matrix(column_major: tuple[float, ...]) -> dict[str, float]:
+    """glTF column-major 4x4 -> Unity Matrix4x4f after the X-axis handedness map."""
+    import numpy
+
+    matrix = numpy.asarray(column_major, dtype=float).reshape(4, 4, order="F")
+    handedness = numpy.diag([-1.0, 1.0, 1.0, 1.0])
+    converted = handedness @ matrix @ handedness
+    det = float(numpy.linalg.det(converted))
+    if not math.isfinite(det) or abs(det) < 1e-12:
+        raise PipelineError("a bind-pose matrix is singular after handedness conversion")
+    return {f"e{row}{col}": float(converted[row, col]) for row in range(4) for col in range(4)}
+
+
+def _transform_fields(
+    game_object: str,
+    node: GltfNode,
+    children: list[str],
+    father: Any,
+) -> dict[str, Any]:
+    return {
+        "m_GameObject": Ref(game_object),
+        "m_LocalRotation": _lh_quaternion(node.rotation),
+        "m_LocalPosition": _lh_position(node.translation),
+        "m_LocalScale": {
+            "x": float(node.scale[0]),
+            "y": float(node.scale[1]),
+            "z": float(node.scale[2]),
+        },
+        "m_Children": [Ref(key) for key in children],
+        "m_Father": father,
+    }
+
+
+def _game_object_fields(name: str, components: list[str]) -> dict[str, Any]:
+    return {
+        "m_Component": [{"component": Ref(key)} for key in components],
+        "m_Layer": 0,
+        "m_Name": name,
+        "m_Tag": 0,
+        "m_IsActive": True,
+    }
+
+
+def _mesh_from_primitive(
+    name: str,
+    primitive: GltfPrimitive,
+    *,
+    joints: int = 0,
+    joint_names: tuple[str, ...] = (),
+    inverse_bind: tuple[tuple[float, ...], ...] = (),
+    root_bone: str = "",
+) -> BundleObject:
+    """A Mesh from one glTF primitive, with optional skin channels.
+
+    Vertex layout without skin matches `mesh()` (position + normal + UV0).
+    With a skin, BlendWeight (channel 12, float4) and BlendIndices (channel 13,
+    uint32x4) follow, the layout harvested from nomad.bundle `bodyCloth`.
+    """
+    import numpy
+
+    positions = numpy.asarray(primitive.positions, dtype="<f4").reshape(-1, 3).copy()
+    normals = numpy.asarray(primitive.normals, dtype="<f4").reshape(-1, 3).copy()
+    positions[:, 0] *= -1.0
+    normals[:, 0] *= -1.0
+    triangles = numpy.asarray(primitive.indices, dtype="<u4")[:, ::-1]
+    has_uv = primitive.uvs is not None and len(primitive.uvs) == len(positions)
+    skinned = joints > 0
+    weight_rows: list[list[float]] = []
+    index_rows: list[list[int]] = []
+    if skinned:
+        if primitive.joints is None or primitive.weights is None:
+            raise PipelineError(f"{name} is skinned but the primitive has no JOINTS_0/WEIGHTS_0")
+        for vertex, (joint_row, weight_row) in enumerate(
+            zip(primitive.joints, primitive.weights, strict=True)
+        ):
+            weights = [float(item) for item in weight_row]
+            indices = [int(item) for item in joint_row]
+            if any(not math.isfinite(item) for item in weights):
+                raise PipelineError(f"{name} vertex {vertex} has a non-finite bone weight")
+            if any(item < 0 for item in weights):
+                raise PipelineError(f"{name} vertex {vertex} has a negative bone weight")
+            if any(item < 0 or item >= joints for item in indices):
+                raise PipelineError(
+                    f"{name} vertex {vertex} joint index is out of range for {joints} bones"
+                )
+            total = sum(weights)
+            if total <= 0:
+                raise PipelineError(f"{name} vertex {vertex} has no bone weight")
+            weights = [item / total for item in weights]
+            weight_rows.append(weights)
+            index_rows.append(indices)
+    stride = 24 + (8 if has_uv else 0) + (32 if skinned else 0)
+    stream = numpy.zeros((len(positions), stride // 4), dtype="<f4")
+    stream[:, 0:3] = positions
+    stream[:, 3:6] = normals
+    cursor = 6
+    if has_uv:
+        stream[:, 6:8] = numpy.asarray(primitive.uvs, dtype="<f4").reshape(-1, 2)
+        cursor = 8
+    payload = stream.tobytes()
+    if skinned:
+        weight_bytes = numpy.asarray(weight_rows, dtype="<f4").tobytes()
+        index_bytes = numpy.asarray(index_rows, dtype="<u4").tobytes()
+        chunks = []
+        float_stride = cursor * 4
+        for index in range(len(positions)):
+            chunks.append(stream[index].tobytes()[:float_stride])
+            chunks.append(weight_bytes[index * 16 : (index + 1) * 16])
+            chunks.append(index_bytes[index * 16 : (index + 1) * 16])
+        payload = b"".join(chunks)
+    channels = _vertex_channels(has_uv)
+    if skinned:
+        offset = 24 + (8 if has_uv else 0)
+        channels[CHANNEL_BLEND_WEIGHT] = {
+            "stream": 0,
+            "offset": offset,
+            "format": VERTEX_FORMAT_FLOAT,
+            "dimension": 4,
+        }
+        channels[CHANNEL_BLEND_INDICES] = {
+            "stream": 0,
+            "offset": offset + 16,
+            "format": VERTEX_FORMAT_UINT32,
+            "dimension": 4,
+        }
+    wide = len(positions) > 0xFFFF
+    index_bytes_mesh = triangles.astype("<u4" if wide else "<u2").tobytes()
+    low = positions.min(axis=0)
+    high = positions.max(axis=0)
+    centre = (high + low) / 2.0
+    extent = (high - low) / 2.0
+    aabb = {
+        "m_Center": {"x": float(centre[0]), "y": float(centre[1]), "z": float(centre[2])},
+        "m_Extent": {"x": float(extent[0]), "y": float(extent[1]), "z": float(extent[2])},
+    }
+    bind_pose = [_lh_matrix(matrix) for matrix in inverse_bind] if skinned else []
+    hashes = [bone_name_hash(item) for item in joint_names] if skinned else []
+    return BundleObject(
+        MESH,
+        name,
+        {
+            "m_Name": name,
+            "m_SubMeshes": [
+                {
+                    "firstByte": 0,
+                    "indexCount": int(triangles.size),
+                    "topology": TOPOLOGY_TRIANGLES,
+                    "baseVertex": 0,
+                    "firstVertex": 0,
+                    "vertexCount": len(positions),
+                    "localAABB": aabb,
+                }
+            ],
+            "m_Shapes": {"vertices": [], "shapes": [], "channels": [], "fullWeights": []},
+            "m_BindPose": bind_pose,
+            "m_BoneNameHashes": hashes,
+            "m_RootBoneNameHash": bone_name_hash(root_bone) if root_bone else 0,
+            "m_BonesAABB": [],
+            "m_VariableBoneCountWeights": {"m_Data": []},
+            "m_MeshCompression": 0,
+            "m_IsReadable": True,
+            "m_KeepVertices": True,
+            "m_KeepIndices": True,
+            "m_IndexFormat": INDEX_FORMAT_UINT32 if wide else INDEX_FORMAT_UINT16,
+            "m_IndexBuffer": index_bytes_mesh,
+            "m_VertexData": {
+                "m_VertexCount": len(positions),
+                "m_Channels": channels,
+                "m_DataSize": payload,
+            },
+            "m_CompressedMesh": _empty_compressed_mesh(),
+            "m_LocalAABB": aabb,
+            "m_MeshUsageFlags": 0,
+            "m_CookingOptions": MESH_COOKING_OPTIONS,
+            "m_BakedConvexCollisionMesh": b"",
+            "m_BakedTriangleCollisionMesh": b"",
+            "m_MeshMetrics[0]": 1.0,
+            "m_MeshMetrics[1]": 1.0,
+            "m_StreamData": {"offset": 0, "size": 0, "path": ""},
+        },
+    )
+
+
+def _renderer_shared(game_object: str, material_keys: tuple[str, ...]) -> dict[str, Any]:
+    return {
+        "m_GameObject": Ref(game_object),
+        "m_Enabled": True,
+        "m_CastShadows": 1,
+        "m_ReceiveShadows": 1,
+        "m_DynamicOccludee": 1,
+        "m_StaticShadowCaster": 0,
+        "m_MotionVectors": 1,
+        "m_LightProbeUsage": 1,
+        "m_ReflectionProbeUsage": 1,
+        "m_RayTracingMode": 2,
+        "m_RayTraceProcedural": 0,
+        "m_RenderingLayerMask": 1,
+        "m_RendererPriority": 0,
+        "m_LightmapIndex": 65535,
+        "m_LightmapIndexDynamic": 65535,
+        "m_LightmapTilingOffset": {"x": 1.0, "y": 1.0, "z": 0.0, "w": 0.0},
+        "m_LightmapTilingOffsetDynamic": {"x": 1.0, "y": 1.0, "z": 0.0, "w": 0.0},
+        "m_Materials": [Ref(key) for key in material_keys],
+        "m_StaticBatchInfo": {"firstSubMesh": 0, "subMeshCount": 0},
+        "m_StaticBatchRoot": NULL_PPTR,
+        "m_ProbeAnchor": NULL_PPTR,
+        "m_LightProbeVolumeOverride": NULL_PPTR,
+        "m_SortingLayerID": 0,
+        "m_SortingLayer": 0,
+        "m_SortingOrder": 0,
+    }
+
+
+def _walk_nodes(scene: GltfScene) -> list[int]:
+    """Scene roots, then each node's children in authored order. Deterministic."""
+    seen: set[int] = set()
+    order: list[int] = []
+
+    def visit(index: int) -> None:
+        if index in seen:
+            raise PipelineError(f"{scene.source.name} has a cyclic node hierarchy at node {index}")
+        seen.add(index)
+        order.append(index)
+        for child in scene.nodes[index].children:
+            visit(child)
+
+    for root in scene.roots:
+        visit(root)
+    return order
+
+
+def _assert_unique_child_paths(scene: GltfScene, names: dict[int, str]) -> None:
+    parent = {child: node.index for node in scene.nodes for child in node.children}
+    paths: dict[str, int] = {}
+    seen_names: dict[str, int] = {}
+    for node in scene.nodes:
+        if node.index not in names:
+            continue
+        name = names[node.index]
+        chain = [name]
+        cursor = parent.get(node.index)
+        walked: set[int] = set()
+        while cursor is not None and cursor not in walked:
+            walked.add(cursor)
+            chain.append(names.get(cursor, scene.nodes[cursor].name))
+            cursor = parent.get(cursor)
+        path = "/".join(reversed(chain))
+        if path in paths:
+            raise PipelineError(
+                f"{scene.source.name} has duplicate child path {path!r} "
+                f"(nodes {paths[path]} and {node.index})"
+            )
+        paths[path] = node.index
+        if name in seen_names and name:
+            raise PipelineError(
+                f"{scene.source.name} has two nodes named {name!r}; FindInChilds would be ambiguous"
+            )
+        if name:
+            seen_names[name] = node.index
+
+
+def hierarchy_prefab_objects(
+    stem: str, scene: GltfScene, texture_stems: set[str]
+) -> list[BundleObject]:
+    """One GameObject/Transform per authored node, mesh components on the node that owns them.
+
+    The loadable prefab root is always the file stem. Authored node names are
+    preserved as children so a bone called `Hips` and a child called `armedLamp`
+    stay findable by those names. A glTF node named the same as the stem would
+    collide with that root and is refused.
+    """
+    order = _walk_nodes(scene)
+    names: dict[int, str] = {}
+    for index in order:
+        node = scene.nodes[index]
+        if not node.name:
+            raise PipelineError(
+                f"{scene.source.name} node {index} has no name; named hierarchy requires authored names"  # noqa: E501
+            )
+        names[index] = node.name
+    if stem in names.values():
+        raise PipelineError(
+            f"{scene.source.name} has a node named {stem!r}, which collides with the prefab root"
+        )
+    _assert_unique_child_paths(scene, names)
+    albedo = f"{stem}{ALBEDO_SUFFIX}"
+    objects: list[BundleObject] = []
+    mesh_count = sum(1 for node in scene.nodes if node.mesh is not None)
+    root_go = f"{stem}:go"
+    root_tr = f"{stem}:transform"
+    objects.append(
+        BundleObject(GAME_OBJECT, stem, _game_object_fields(stem, [root_tr]), key=root_go)
+    )
+    objects.append(
+        BundleObject(
+            TRANSFORM,
+            "",
+            {
+                "m_GameObject": Ref(root_go),
+                "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                "m_LocalPosition": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "m_LocalScale": {"x": 1.0, "y": 1.0, "z": 1.0},
+                "m_Children": [Ref(f"{stem}:node:{root}:transform") for root in scene.roots],
+                "m_Father": NULL_PPTR,
+            },
+            key=root_tr,
+            in_container=False,
+        )
+    )
+    for index in order:
+        node = scene.nodes[index]
+        go_key = f"{stem}:node:{index}:go"
+        transform_key = f"{stem}:node:{index}:transform"
+        child_keys = [f"{stem}:node:{child}:transform" for child in node.children]
+        father = (
+            Ref(root_tr)
+            if index in scene.roots
+            else Ref(f"{stem}:node:{_parent_of(scene, index)}:transform")
+        )
+        components = [transform_key]
+        node_objects: list[BundleObject] = []
+        if node.mesh is not None:
+            mesh_obj = scene.meshes[node.mesh]
+            mesh_key = (
+                f"{stem}{MESH_SUFFIX}" if mesh_count == 1 else f"{stem}_{names[index]}{MESH_SUFFIX}"
+            )
+            material_key = (
+                f"{stem}{MATERIAL_SUFFIX}"
+                if mesh_count == 1
+                else f"{stem}_{names[index]}{MATERIAL_SUFFIX}"
+            )
+            geometry = _mesh_from_primitive(mesh_key, mesh_obj.primitive)
+            if albedo in texture_stems and not _has_uv(geometry):
+                raise PipelineError(
+                    f"{scene.source.name} node {names[index]!r} has no UV channel, but {albedo} is here "  # noqa: E501
+                    "to be its texture."
+                )
+            node_objects.append(geometry)
+            node_objects.append(
+                material(
+                    material_key, UNLIT_SHADER_NAME, albedo if albedo in texture_stems else None
+                )
+            )
+            filter_key = f"{stem}:node:{index}:filter"
+            renderer_key = f"{stem}:node:{index}:renderer"
+            components.extend([filter_key, renderer_key])
+            node_objects.append(
+                BundleObject(
+                    MESH_FILTER,
+                    "",
+                    {"m_GameObject": Ref(go_key), "m_Mesh": Ref(mesh_key)},
+                    key=filter_key,
+                    in_container=False,
+                )
+            )
+            renderer_fields = _renderer_shared(go_key, (material_key,))
+            renderer_fields["m_AdditionalVertexStreams"] = NULL_PPTR
+            renderer_fields["m_EnlightenVertexStream"] = NULL_PPTR
+            node_objects.append(
+                BundleObject(
+                    MESH_RENDERER, "", renderer_fields, key=renderer_key, in_container=False
+                )
+            )
+        objects.append(
+            BundleObject(
+                GAME_OBJECT,
+                names[index],
+                _game_object_fields(names[index], components),
+                key=go_key,
+                in_container=False,
+            )
+        )
+        objects.append(
+            BundleObject(
+                TRANSFORM,
+                "",
+                _transform_fields(go_key, node, child_keys, father),
+                key=transform_key,
+                in_container=False,
+            )
+        )
+        objects.extend(node_objects)
+    return objects
+
+
+def _parent_of(scene: GltfScene, index: int) -> int:
+    for node in scene.nodes:
+        if index in node.children:
+            return node.index
+    raise PipelineError(f"{scene.source.name} node {index} has a dangling parent")
+
+
+def skinned_prefab_objects(
+    stem: str, scene: GltfScene, texture_stems: set[str]
+) -> list[BundleObject]:
+    """SkinnedMeshRenderer plus the bone hierarchy. Never falls back to MeshRenderer."""
+    if not scene.has_skin():
+        raise PipelineError(f"{scene.source.name} asked for skinning but has no skin")
+    skinned_nodes = [node for node in scene.nodes if node.skin is not None]
+    if len(skinned_nodes) != 1:
+        raise PipelineError(
+            f"{scene.source.name} has {len(skinned_nodes)} skinned nodes; this writer encodes one"
+        )
+    node = skinned_nodes[0]
+    if node.mesh is None:
+        raise PipelineError(f"{scene.source.name} skinned node {node.name!r} has no mesh")
+    skin_index = node.skin
+    if skin_index is None:
+        raise PipelineError(f"{scene.source.name} skinned node {node.name!r} has no skin")
+    skin = scene.skins[skin_index]
+    primitive = scene.meshes[node.mesh].primitive
+    if primitive.joints is None or primitive.weights is None:
+        raise PipelineError(f"{scene.source.name} skin has no JOINTS_0/WEIGHTS_0")
+    joint_names = []
+    for joint in skin.joints:
+        name = scene.nodes[joint].name
+        if not name:
+            raise PipelineError(f"{scene.source.name} joint node {joint} has no name")
+        joint_names.append(name)
+    root_joint = skin.skeleton if skin.skeleton is not None else skin.joints[0]
+    if (
+        skin.skeleton is not None
+        and root_joint not in skin.joints
+        and (root_joint < 0 or root_joint >= len(scene.nodes))
+    ):
+        raise PipelineError(f"{scene.source.name} has a dangling root bone")
+    root_name = scene.nodes[root_joint].name
+    if not root_name:
+        raise PipelineError(f"{scene.source.name} root bone has no name")
+    albedo = f"{stem}{ALBEDO_SUFFIX}"
+    mesh_key = f"{stem}{MESH_SUFFIX}"
+    material_key = f"{stem}{MATERIAL_SUFFIX}"
+    geometry = _mesh_from_primitive(
+        mesh_key,
+        primitive,
+        joints=len(skin.joints),
+        joint_names=tuple(joint_names),
+        inverse_bind=skin.inverse_bind,
+        root_bone=root_name,
+    )
+    if albedo in texture_stems and not _has_uv(geometry):
+        raise PipelineError(
+            f"{scene.source.name} has no UV channel, but {albedo} is here to be its texture."
+        )
+    objects = hierarchy_prefab_objects(stem, scene, texture_stems)
+    # hierarchy_prefab_objects attached MeshFilter/MeshRenderer; replace them.
+    stripped = [
+        obj for obj in objects if obj.class_id not in (MESH_FILTER, MESH_RENDERER, MESH, MATERIAL)
+    ]
+    # Drop the static mesh/material the hierarchy path added for this node.
+    objects = stripped
+    objects.append(geometry)
+    objects.append(
+        material(material_key, UNLIT_SHADER_NAME, albedo if albedo in texture_stems else None)
+    )
+    # Find the skinned node's game object key.
+    go_key = f"{stem}:node:{node.index}:go"
+    renderer_key = f"{stem}:node:{node.index}:renderer"
+    bone_keys = [f"{stem}:node:{joint}:transform" for joint in skin.joints]
+    root_key = f"{stem}:node:{root_joint}:transform"
+    fields = _renderer_shared(go_key, (material_key,))
+    fields.update(
+        {
+            "m_Quality": 0,
+            "m_UpdateWhenOffscreen": False,
+            "m_SkinnedMotionVectors": True,
+            "m_Mesh": Ref(mesh_key),
+            "m_Bones": [Ref(key) for key in bone_keys],
+            "m_BlendShapeWeights": [],
+            "m_RootBone": Ref(root_key),
+            "m_AABB": geometry.fields["m_LocalAABB"],
+            "m_DirtyAABB": False,
+        }
+    )
+    objects.append(
+        BundleObject(SKINNED_MESH_RENDERER, "", fields, key=renderer_key, in_container=False)
+    )
+    for obj in objects:
+        if obj.key == go_key:
+            components = [item["component"].key for item in obj.fields["m_Component"]]
+            components = [
+                key
+                for key in components
+                if not key.endswith(":filter") and not key.endswith(":renderer")
+            ]
+            components.append(renderer_key)
+            obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
+    return objects
+
+
+def mesh_source_objects(path: Path, texture_stems: set[str]) -> list[BundleObject]:
+    """Prefab group for one mesh file: static, hierarchy, or skinned, by source content."""
+    if path.suffix.lower() not in {".glb", ".gltf"}:
+        return prefab_objects(path, texture_stems)
+    scene = parse_gltf(path)
+    if scene.has_skin():
+        return skinned_prefab_objects(path.stem, scene, texture_stems)
+    if scene.needs_hierarchy():
+        return hierarchy_prefab_objects(path.stem, scene, texture_stems)
+    return prefab_objects(path, texture_stems)
+
+
+def vfx_prefab_objects(path: Path, texture_stems: set[str]) -> tuple[list[BundleObject], set[str]]:
+    """A particle prefab from a `.vfx` declaration. Returns objects and shader names used."""
+    declaration = parse_vfx(path)
+    stem = path.stem
+    missing = sorted(
+        {item.texture for item in declaration.materials if item.texture not in texture_stems}
+    )
+    if missing:
+        raise PipelineError(
+            f"{path.name} references missing particle card(s) {missing}; "
+            "put those textures in the bundle source directory"
+        )
+    objects: list[BundleObject] = []
+    shaders: set[str] = set()
+    child_transform_keys: list[str] = []
+    for system in declaration.systems:
+        go_key = f"{stem}:sys:{system.name}:go"
+        transform_key = f"{stem}:sys:{system.name}:transform"
+        ps_key = f"{stem}:sys:{system.name}:ps"
+        renderer_key = f"{stem}:sys:{system.name}:renderer"
+        child_transform_keys.append(transform_key)
+        mat = next(item for item in declaration.materials if item.name == system.renderer.material)
+        shader_name = PARTICLE_ADDITIVE_SHADER if mat.blend == "additive" else PARTICLE_ALPHA_SHADER
+        shaders.add(shader_name)
+        objects.append(
+            BundleObject(
+                GAME_OBJECT,
+                system.name,
+                _game_object_fields(system.name, [transform_key, ps_key, renderer_key]),
+                key=go_key,
+                in_container=False,
+            )
+        )
+        objects.append(
+            BundleObject(
+                TRANSFORM,
+                "",
+                {
+                    "m_GameObject": Ref(go_key),
+                    "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                    "m_LocalPosition": {"x": 0.0, "y": 0.0, "z": 0.0},
+                    "m_LocalScale": {"x": 1.0, "y": 1.0, "z": 1.0},
+                    "m_Children": [],
+                    "m_Father": Ref(f"{stem}:transform"),
+                },
+                key=transform_key,
+                in_container=False,
+            )
+        )
+        objects.append(
+            BundleObject(
+                PARTICLE_SYSTEM,
+                "",
+                particle_fields.particle_system_fields(system, Ref(go_key)),
+                key=ps_key,
+                in_container=False,
+            )
+        )
+        objects.append(
+            BundleObject(
+                PARTICLE_SYSTEM_RENDERER,
+                "",
+                particle_fields.particle_renderer_fields(system, Ref(go_key), Ref(mat.name)),
+                key=renderer_key,
+                in_container=False,
+            )
+        )
+    for mat in declaration.materials:
+        shader_name = PARTICLE_ADDITIVE_SHADER if mat.blend == "additive" else PARTICLE_ALPHA_SHADER
+        objects.append(material(mat.name, shader_name, mat.texture, blend=mat.blend))
+    root_go = f"{stem}:go"
+    root_tr = f"{stem}:transform"
+    objects.insert(
+        0,
+        BundleObject(
+            TRANSFORM,
+            "",
+            {
+                "m_GameObject": Ref(root_go),
+                "m_LocalRotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                "m_LocalPosition": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "m_LocalScale": {"x": 1.0, "y": 1.0, "z": 1.0},
+                "m_Children": [Ref(key) for key in child_transform_keys],
+                "m_Father": NULL_PPTR,
+            },
+            key=root_tr,
+            in_container=False,
+        ),
+    )
+    objects.insert(
+        0,
+        BundleObject(GAME_OBJECT, stem, _game_object_fields(stem, [root_tr]), key=root_go),
+    )
+    return objects, shaders
 
 
 def _empty_compressed_mesh() -> dict[str, Any]:
@@ -1359,6 +2081,7 @@ ASSET_KINDS: dict[str, str] = {
     ".txt": "TextAsset",
     ".json": "TextAsset",
     ".csv": "TextAsset",
+    ".vfx": "GameObject",
     ".glb": "Mesh",
     ".gltf": "Mesh",
     ".obj": "Mesh",
@@ -1420,8 +2143,8 @@ def collect_sources(source_dir: Path) -> list[Path]:
         kinds = ", ".join(sorted(ASSET_KINDS))
         raise PipelineError(
             "this backend cannot build " + ", ".join(unknown[:5]) + f"; it writes {kinds}. "
-            "Prefabs, materials and the unlit shader are generated from the meshes "
-            "in this directory rather than read from files — see 'shamway docs no-unity'."
+            "Prefabs, materials and shaders are generated from the meshes and `.vfx` "
+            "files in this directory rather than read from files — see 'shamway docs no-unity'."
         )
     if not found:
         raise PipelineError(f"{source_dir} holds no assets to build")
@@ -1445,6 +2168,10 @@ def object_for(path: Path, compress_textures: bool = False) -> BundleObject:
             return audio_clip(stem, decoded)
     if suffix in MESH_SUFFIXES:
         return mesh(stem, path)
+    if suffix == ".vfx":
+        raise PipelineError(
+            f"{path.name} is a VFX declaration; it is packed as a prefab, not a TextAsset"
+        )
     try:
         return text_asset(stem, path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as exc:
@@ -1540,14 +2267,38 @@ def synthesized_members(source_dir: Path) -> list[tuple[str, str]]:
     members: list[tuple[str, str]] = []
     for path in sources:
         kind = ASSET_KINDS[path.suffix.lower()]
-        if kind != "Mesh":
+        if path.suffix.lower() == ".vfx":
+            declaration = parse_vfx(path)
+            members.append((path.stem, "GameObject"))
+            for item in declaration.materials:
+                members.append((item.name, "Material"))
+        elif kind != "Mesh":
             members.append((path.stem, kind))
         elif prefabs:
-            # The prefab owns the stem, because that is the name `Meshfile` and
-            # block `Model` resolve through `LoadAsset<GameObject>`.
             members.append((path.stem, "GameObject"))
-            members.append((f"{path.stem}{MESH_SUFFIX}", "Mesh"))
-            members.append((f"{path.stem}{MATERIAL_SUFFIX}", "Material"))
+            scene = None
+            if path.suffix.lower() in {".glb", ".gltf"}:
+                try:
+                    scene = parse_gltf(path)
+                except PipelineError:
+                    scene = None
+            if scene is not None and scene.needs_hierarchy() and not scene.has_skin():
+                mesh_nodes = scene.mesh_nodes()
+                if len(mesh_nodes) == 1:
+                    members.append((f"{path.stem}{MESH_SUFFIX}", "Mesh"))
+                    members.append((f"{path.stem}{MATERIAL_SUFFIX}", "Material"))
+                else:
+                    names = {}
+                    root_index = scene.roots[0] if len(scene.roots) == 1 else None
+                    for node in scene.nodes:
+                        names[node.index] = path.stem if node.index == root_index else node.name
+                    for node in mesh_nodes:
+                        label = names.get(node.index) or f"node{node.index}"
+                        members.append((f"{path.stem}_{label}{MESH_SUFFIX}", "Mesh"))
+                        members.append((f"{path.stem}_{label}{MATERIAL_SUFFIX}", "Material"))
+            else:
+                members.append((f"{path.stem}{MESH_SUFFIX}", "Mesh"))
+                members.append((f"{path.stem}{MATERIAL_SUFFIX}", "Material"))
         else:
             members.append((path.stem, "Mesh"))
     return members
@@ -1567,23 +2318,65 @@ def pack_directory(
     """
     sources = collect_sources(source_dir)
     # The prefab lane needs a shader compiler; see `_prefab_lane` for why the
-    # fallback is packing less rather than refusing.
+    # fallback is packing less rather than refusing. Skinned meshes, named
+    # hierarchies and VFX cannot degrade that way: flattening a skin is the
+    # forbidden fallback, and a particle prefab without its shader is opaque
+    # cards.
     prefabs = _prefab_lane(sources)
-    objects = [
-        object_for(path, compress_textures)
-        for path in sources
-        if not (prefabs and _is_mesh_source(path))
-    ]
+    vfx_paths = [path for path in sources if path.suffix.lower() == ".vfx"]
     meshes = [path for path in sources if _is_mesh_source(path)]
+    if vfx_paths and not has_capability("vkd3d-compiler"):
+        raise PipelineError(
+            "a .vfx source needs vkd3d-compiler to write transparent particle shaders. "
+            "Install it with 'shamway script install-tools --with-authoring'."
+        )
     texture_stems = {
         path.stem for path in sources if ASSET_KINDS.get(path.suffix.lower()) == "Texture2D"
     }
+    skip = set(vfx_paths)
+    if prefabs:
+        skip.update(meshes)
+    objects = [object_for(path, compress_textures) for path in sources if path not in skip]
+    particle_shaders: set[str] = set()
     if prefabs:
         for path in meshes:
+            if path.suffix.lower() in {".glb", ".gltf"}:
+                try:
+                    scene = parse_gltf(path)
+                except PipelineError:
+                    scene = None
+                if scene is not None and (scene.has_skin() or scene.needs_hierarchy()):
+                    objects.extend(mesh_source_objects(path, texture_stems))
+                    continue
             objects.extend(prefab_objects(path, texture_stems))
-        # One shader serves every material in the bundle; it carries no
-        # per-material state, so a second copy would only be a second name.
         objects.append(shader(UNLIT_SHADER_NAME))
+    else:
+        for path in meshes:
+            if path.suffix.lower() not in {".glb", ".gltf"}:
+                continue
+            try:
+                scene = parse_gltf(path)
+            except PipelineError:
+                continue
+            if scene.has_skin():
+                raise PipelineError(
+                    f"{path.name} contains a skin; this writer will not flatten it "
+                    "to MeshRenderer. Install vkd3d-compiler to emit SkinnedMeshRenderer."
+                )
+            if scene.needs_hierarchy():
+                raise PipelineError(
+                    f"{path.name} contains a named node hierarchy; emitting it needs "
+                    "the shader compiler so mesh nodes can carry materials. "
+                    "Install vkd3d-compiler."
+                )
+    for path in vfx_paths:
+        packed, used = vfx_prefab_objects(path, texture_stems)
+        objects.extend(packed)
+        particle_shaders.update(used)
+    if PARTICLE_ALPHA_SHADER in particle_shaders:
+        objects.append(shader(PARTICLE_ALPHA_SHADER, blend="alpha", vertex_color=True))
+    if PARTICLE_ADDITIVE_SHADER in particle_shaders:
+        objects.append(shader(PARTICLE_ADDITIVE_SHADER, blend="additive", vertex_color=True))
     bundle = build_bundle(objects, unity_version, bundle_name, target)
     members = [f"{source_dir.name}/{path.relative_to(source_dir).as_posix()}" for path in sources]
     return bundle, render_manifest(bundle_name, members)

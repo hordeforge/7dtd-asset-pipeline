@@ -473,7 +473,7 @@ integration. This table says which is which, so nobody has to guess — and so
 | Asset | Generate/author | Pre-Unity check | Final gate |
 |---|---|---|---|
 | hard-surface mesh | OpenSCAD or Blender Python | `shamway check-mesh` (trimesh + glTF Validator) | `shamway build` straight from the exported file — it becomes a loadable prefab; then in-game view |
-| organic/rigged mesh | Blender | glTF Validator + render turntable | Unity import (rigging and animation are not in the editorless lane) + in-game view |
+| organic/rigged mesh | Blender | glTF Validator + render turntable | `shamway build` from a glTF skin (SkinnedMeshRenderer); animation clips still want an editor |
 | PBR maps | Material Maker or seeded Python | channel/range checks + montage | `.mat` keywords/import + in-game light sweep |
 | item icon | `shamway generate cutout`, `shamway render-icon` (editor) or `shamway generate mesh-icon` (Blender), Pillow/ImageMagick | `shamway check-icons` + downscaled montage | client atlas lookup + human readability |
 | particle card | Pillow/NumPy/Blender | alpha-edge montage | particle material state + live VFX |

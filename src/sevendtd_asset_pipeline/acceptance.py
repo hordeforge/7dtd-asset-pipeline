@@ -82,6 +82,7 @@ ASSET_CASES: dict[str, str] = {
     ".prefab": "GameObject",
     ".fbx": "GameObject",
     ".mat": "Material",
+    ".vfx": "GameObject",
     ".glb": "Mesh",
     ".gltf": "Mesh",
     ".obj": "Mesh",

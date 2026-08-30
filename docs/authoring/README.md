@@ -14,11 +14,11 @@ classes whose runtime behaviour makes a correct build silent or invisible.
   can be inaudible.
 - [video.md](video.md) — staged motion clips: the motion-kind declaration,
   `client capture --clip`, and the deadeye model-review lane.
-- [vfx.md](vfx.md) — particle budgets, LOD tiers, and the two silent material
-  failures.
-- [skinned-gear.md](skinned-gear.md) — worn armor: why it is the one asset
-  class that leaves the editorless lane, the bone names it binds to by name
-  with no error on a miss, and what the prefab has to carry.
+- [vfx.md](vfx.md) — `.vfx` ParticleSystem graphs, budgets, LOD tiers, and
+  the two silent material failures.
+- [skinned-gear.md](skinned-gear.md) — worn armor: SkinnedMeshRenderer from a
+  glTF skin; SDCS extras still want an editor; bone names bind with no error
+  on a miss.
 - [environment-effects.md](environment-effects.md) — weather, fog, and light:
   why a zone effect that ships only particles reads as a glitch, and the
   engine controls that make it weather.

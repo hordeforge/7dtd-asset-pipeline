@@ -129,9 +129,11 @@ mod-specific agent rules — and delete the backups. `assets-src/` and
 
 A mod scaffolded before `"synthesized"` was the default, or one that opted into
 an editor and no longer needs it, moves in two steps. Whether it *can* move is
-the first question: the writer emits one unlit opaque pass, so a mod whose
-props are lit, transparent, normal-mapped or multi-pass, or that ships
-particles or rigging, stays on `"unity"`. Check what is actually in the bundle
+the first question: the writer emits an unlit opaque mesh pass plus transparent/additive
+particle passes, named glTF hierarchies, and SkinnedMeshRenderer from a
+glTF skin. A mod whose props are lit, normal-mapped or multi-pass, or that
+needs SDCS `GearBoneMap` extras or particle modules the `.vfx` schema does
+not encode, stays on `"unity"`. Check what is actually in the bundle
 first:
 
 ```bash

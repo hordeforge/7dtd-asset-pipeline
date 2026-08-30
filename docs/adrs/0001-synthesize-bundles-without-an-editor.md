@@ -183,11 +183,14 @@ decoded there over three changes: the code blob and its 38-byte program-data
 header, the parameter blob, and the bind-channel block. No Unity anywhere in
 the path.
 
-The scope that is built is deliberately one pass: **unlit, textured, opaque,
-no keyword variants**. Lit, transparent, cut-out, normal-mapped, instanced and
-multi-pass shaders are still an editor's job, and a mod that needs one wants
-`unity` or `external`. That is a narrower claim than "shaders work", and it is
-the claim the evidence supports.
+The mesh pass that is built is **unlit, textured, opaque, no keyword
+variants**. Particle cards use a second pass — vertex colour × texture,
+SrcAlpha blend, ZWrite off — as `Shamway/Particles/Alpha` and
+`Shamway/Particles/Additive`. Lit, cut-out, normal-mapped, instanced and
+multi-pass shaders are still an editor's job. Named glTF hierarchies,
+SkinnedMeshRenderer and `.vfx` ParticleSystem graphs are synthesized
+without an editor (2026-08-30); see
+[research-provenance.md](../research/research-provenance.md).
 
 **The borrowing finding above stands and was not re-tested.** Both borrowing
 routes remain closed; what changed is that a mod no longer needs to borrow

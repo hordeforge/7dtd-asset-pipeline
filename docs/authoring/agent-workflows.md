@@ -71,8 +71,9 @@ not acceptance evidence.
 With `bundle_source = "unity"`, steps 5 and 6 are different: import into the
 Unity project, commit its `.meta` and importer settings, create the exact
 game-facing prefab and name, then build. Take that route when the prop needs
-lit, transparent or normal-mapped shading, rigging, or animation — none of
-which the writer's unlit pass covers.
+lit or normal-mapped shading, SDCS extras, or animation — none of
+which the writer's unlit mesh pass covers. Named glTF children, glTF skins
+and `.vfx` ParticleSystems are synthesized without an editor.
 
 ## Texture/material lane
 
@@ -144,10 +145,9 @@ Full lane, with budgets, tiers, and the two silent material failures:
    distance culling, concurrency policy, and fallback.
 2. Generate cards/meshes and complete transparent material state.
 3. Put hard caps in the prefab, not only in runtime selection code.
-4. Verify all particle curves/modules in the Unity log and live client. The
-   whole VFX lane is Unity-only: the editorless writer emits no
-   `ParticleSystem`, so a mod shipping particles sets
-   `bundle_source = "unity"` or `"external"`.
+4. Put the systems in a `.vfx` declaration next to the card PNGs and
+   `shamway build`. `inspect --deep` must show ParticleSystem counts.
+   Modules the schema does not encode still want an editor.
 5. Test repeated effects for frame time, allocations, orphans, obstruction,
    flicker, and accessibility.
 

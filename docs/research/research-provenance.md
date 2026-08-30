@@ -1649,3 +1649,51 @@ may overwrite it) and **counted in the installed game's own config**
 this pipeline's synthesized prefabs put the mesh AABB at y 0..h under an
 identity transform - floats half a block on the default and needs
 `ModelOffset` `0,0,0` in the block definition.
+
+## ParticleSystem, ParticleSystemRenderer, SkinnedMeshRenderer, Mesh skin channels (2026-08-30)
+
+**Type trees.** UnityPy `get_typetree_node` at Unity `2022.3.62f2` for class
+IDs 198 (ParticleSystem, 3848-line tree, serializedVersion 8), 199
+(ParticleSystemRenderer, version 6), 137 (SkinnedMeshRenderer, version 2),
+43 (Mesh, including `m_BindPose`, `m_BoneNameHashes`, `m_RootBoneNameHash`,
+vertex channels 12/13), 4 (Transform `m_Children`/`m_Father`), 1
+(GameObject). A class without a tree at this revision is still refused.
+
+**ParticleSystem field values.** Read-only UnityPy `read_typetree` of the
+installed game's
+`Data/Addressables/Standalone/zombies_assets_entities/zombies/lab.bundle`
+(118 ParticleSystem + 118 ParticleSystemRenderer). Shape type histogram:
+4=Cone (78), 10=Circle (16), 2=Hemisphere (14), 0=Sphere (10). Renderer
+modes: 1=Stretch (64), 4=Mesh (28), 0=Billboard (26). MinMaxCurve
+`minMaxState` 0/1/2/3, empty unused curves with `m_PreInfinity=2`,
+`m_PostInfinity=2`, `m_RotationOrder=4`. Gradients: `ctime1=atime1=65535`,
+`m_ColorSpace=-1`, two keys. Emission bursts: `time`, `countCurve`,
+`cycleCount`, `repeatInterval`, `probability`.
+
+**ParticleSystemRenderer billboard defaults.** AtomicDoomsday editor-authored
+YAML prefab
+`_meta/unity/AtomicDoomsdayAssets/Assets/AtomicDoomsday/Bundle/Generated/Vfx/atomicDoomsdayNukeDetonationVfxLow.prefab`
+(class 199, serializedVersion 6): `m_RenderMode` 0 (billboard) and 2
+(horizontal billboard), `m_UseCustomVertexStreams: 0`, `m_VertexStreams:
+00010304` (bytes 0,1,3,4), `m_CastShadows: 0`, `m_ReceiveShadows: 0`,
+`m_LightProbeUsage: 0`, `m_MaxParticleSize: 0.5`, `m_LengthScale: 2`,
+`m_NormalDirection: 1`, `m_EnableGPUInstancing: 1`. Additive vs fade blend
+factors from `GeneratedAsset.ParticleMaterial`: SrcAlpha=5, One=1,
+OneMinusSrcAlpha=10, ZWrite 0, queue 3000.
+
+**SkinnedMeshRenderer and Mesh skin channels.** Installed game
+`Data/Addressables/Standalone/player_assets_entities/player/female/gear/nomad.bundle`
+(16 SkinnedMeshRenderer, 8 Mesh). SMR: `m_Quality: 0`,
+`m_UpdateWhenOffscreen: False`, `m_SkinnedMotionVectors: True`, `m_Bones`
+as PPtr array, `m_RootBone`, `m_AABB`, `m_DirtyAABB: False`. Mesh
+`bodyCloth`: channel 12 BlendWeight stream 2 offset 0 format 0 dim 4;
+channel 13 BlendIndices stream 2 offset 16 format 10 (UInt32) dim 4;
+179 bind poses; 179 `m_BoneNameHashes`; `m_RootBoneNameHash` 1722913273
+for GameObject `Hips`. Transform `m_Father`/`m_Children` from the same
+bundle and from AtomicDoomsday `atomicDoomsdayNukeTimedHeld.prefab` (child
+`armedLamp`).
+
+**Box shape type.** Unity `ParticleSystemShapeType.Box = 5` (docs.unity3d.com
+2022.3 ScriptReference). lab.bundle had no type-5 system; the field layout
+is the same ShapeModule as types 0/2/4/10 (UnityPy type tree), so box uses
+`m_Scale` / `boxThickness` already present on those harvested modules.

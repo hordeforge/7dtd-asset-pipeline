@@ -349,31 +349,11 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
             ctx.Detail = "placed type=" + ctx.World.GetBlock(at).type + ", waiting for model near " + at;
             return false;
         }
-        // The display pass places the model at a chunk-local position under the
-        // origin parent, which lands it off to the side and above the block
-        // (measured: "too high up and too far right"). Reposition it into the
-        // camera's space - 1.5m ahead, just below eye level - so the playtest
-        // capture frames it well. The camera transform lives in the origin-
-        // relative scene space, so the target must be computed from it, never
-        // from the block's absolute coordinates.
-        var camera = ctx.Player != null && ctx.Player.playerCamera != null
-            ? ctx.Player.playerCamera.transform
-            : (ctx.Player != null ? ctx.Player.transform : null);
-        if (camera != null)
-        {
-            var ahead = camera.forward;
-            ahead.y = 0f;
-            if (ahead.sqrMagnitude < 0.01f)
-            {
-                ahead = camera.forward;
-            }
-            ahead.Normalize();
-            var want = camera.position + ahead * 1.5f;
-            want.y = camera.position.y - 0.5f;
-            bed.transform.position = want;
-        }
-        // The display pass may have left the renderers disabled (collision-only
-        // mesh); switch them on so the model actually draws.
+        // Leave the model on the voxel. AtomicDoomsday's placed-bomb /
+        // detonator cases (SetBlockRpc, then Helpers.LookAt the voxel centre)
+        // prove the capture by pointing the camera at the block, not by
+        // dragging the transform into the player's face. A previous fixture
+        // yanked it 1.5m ahead of the camera; that is not a placement.
         if (!Helpers.ActivateBlockEntityModel(bed))
         {
             ctx.Detail = "model transform exists at " + at + " but has no renderers";
@@ -406,8 +386,6 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                     Report.Info("shamwaySelfTestPropBlock: block is not in the world at " + at);
                     return false;
                 }
-                // The model was repositioned in front of the camera by the
-                // place case; verify its renderers are still live.
                 var bed = Helpers.BlockEntityDataAt(world, at);
                 var modelRenderers = bed != null && bed.transform != null
                     ? bed.transform.GetComponentsInChildren<Renderer>(true)
@@ -417,8 +395,9 @@ public sealed class ShamwaySelfTestBlockAcceptanceProvider : IScenarioProvider
                     Report.Info("shamwaySelfTestPropBlock: placed but the model has no live renderers");
                     return false;
                 }
+                Helpers.LookAt(player, at.ToVector3Center());
                 Report.Info("shamwaySelfTestPropBlock: model at " + modelRenderers[0].transform.position
-                    + " renderers=" + modelRenderers.Length);
+                    + " renderers=" + modelRenderers.Length + " looking at voxel " + at);
                 return true;
             },
             holdSeconds: 12f,

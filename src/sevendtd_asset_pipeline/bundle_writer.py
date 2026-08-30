@@ -1349,15 +1349,43 @@ def material(
     )
 
 
-def bone_name_hash(name: str) -> int:
+def bone_name_hash(path: str) -> int:
     """The digest Unity stores in `Mesh.m_BoneNameHashes`.
 
     Harvested from the installed game's `player/female/gear/nomad.bundle`
-    Mesh `bodyCloth`: bone GameObject `Hips` hashes to 1722913273. Unity
-    documents `Animator.StringToHash` as CRC-32 of the name; this is that
-    digest of the UTF-8 bytes, the same value the mesh field carries.
+    Mesh `bodyCloth`: every hash is CRC-32 of the UTF-8 slash-separated
+    Transform path starting at `Origin` (inclusive). `Hips` is
+    `Origin/Hips` = 1722913273, not CRC-32 of the leaf `Hips`
+    (3738240529) and not of the prefab-rooted path
+    `gearFemaleNomadPrefab/Origin/Hips`. Unity documents
+    `Animator.StringToHash` as CRC-32 of that string.
     """
-    return zlib.crc32(name.encode("utf-8")) & 0xFFFFFFFF
+    return zlib.crc32(path.encode("utf-8")) & 0xFFFFFFFF
+
+
+def bone_transform_path(scene: GltfScene, joint: int) -> str:
+    """Slash-separated Transform path hashed into `m_BoneNameHashes`.
+
+    Walks from the joint to the glTF scene root. If `Origin` is on that
+    chain, the path starts there (inclusive) — the synthetic stem-named
+    prefab wrap this writer adds is not a glTF node and is never hashed.
+    Without an `Origin` node the path is the authored ancestor chain.
+    """
+    parent = {child: node.index for node in scene.nodes for child in node.children}
+    chain: list[str] = []
+    cursor: int | None = joint
+    seen: set[int] = set()
+    while cursor is not None and cursor not in seen:
+        seen.add(cursor)
+        name = scene.nodes[cursor].name
+        if not name:
+            raise PipelineError(f"{scene.source.name} joint path through node {cursor} has no name")
+        chain.append(name)
+        cursor = parent.get(cursor)
+    chain.reverse()
+    if "Origin" in chain:
+        chain = chain[chain.index("Origin") :]
+    return "/".join(chain)
 
 
 def _lh_position(value: tuple[float, float, float]) -> dict[str, float]:
@@ -1786,12 +1814,7 @@ def skinned_prefab_objects(
     primitive = scene.meshes[node.mesh].primitive
     if primitive.joints is None or primitive.weights is None:
         raise PipelineError(f"{scene.source.name} skin has no JOINTS_0/WEIGHTS_0")
-    joint_names = []
-    for joint in skin.joints:
-        name = scene.nodes[joint].name
-        if not name:
-            raise PipelineError(f"{scene.source.name} joint node {joint} has no name")
-        joint_names.append(name)
+    joint_paths = tuple(bone_transform_path(scene, joint) for joint in skin.joints)
     root_joint = skin.skeleton if skin.skeleton is not None else skin.joints[0]
     if (
         skin.skeleton is not None
@@ -1799,9 +1822,7 @@ def skinned_prefab_objects(
         and (root_joint < 0 or root_joint >= len(scene.nodes))
     ):
         raise PipelineError(f"{scene.source.name} has a dangling root bone")
-    root_name = scene.nodes[root_joint].name
-    if not root_name:
-        raise PipelineError(f"{scene.source.name} root bone has no name")
+    root_path = bone_transform_path(scene, root_joint)
     albedo = f"{stem}{ALBEDO_SUFFIX}"
     mesh_key = f"{stem}{MESH_SUFFIX}"
     material_key = f"{stem}{MATERIAL_SUFFIX}"
@@ -1809,9 +1830,9 @@ def skinned_prefab_objects(
         mesh_key,
         primitive,
         joints=len(skin.joints),
-        joint_names=tuple(joint_names),
+        joint_names=joint_paths,
         inverse_bind=skin.inverse_bind,
-        root_bone=root_name,
+        root_bone=root_path,
     )
     if albedo in texture_stems and not _has_uv(geometry):
         raise PipelineError(
@@ -2274,14 +2295,12 @@ def synthesized_members(source_dir: Path) -> list[tuple[str, str]]:
                 members.append((item.name, "Material"))
         elif kind != "Mesh":
             members.append((path.stem, kind))
-        elif prefabs:
+        else:
+            scene = parse_gltf(path) if path.suffix.lower() in {".glb", ".gltf"} else None
+            if not prefabs:
+                members.append((path.stem, "Mesh"))
+                continue
             members.append((path.stem, "GameObject"))
-            scene = None
-            if path.suffix.lower() in {".glb", ".gltf"}:
-                try:
-                    scene = parse_gltf(path)
-                except PipelineError:
-                    scene = None
             if scene is not None and scene.needs_hierarchy() and not scene.has_skin():
                 mesh_nodes = scene.mesh_nodes()
                 if len(mesh_nodes) == 1:
@@ -2299,8 +2318,6 @@ def synthesized_members(source_dir: Path) -> list[tuple[str, str]]:
             else:
                 members.append((f"{path.stem}{MESH_SUFFIX}", "Mesh"))
                 members.append((f"{path.stem}{MATERIAL_SUFFIX}", "Material"))
-        else:
-            members.append((path.stem, "Mesh"))
     return members
 
 
@@ -2341,11 +2358,8 @@ def pack_directory(
     if prefabs:
         for path in meshes:
             if path.suffix.lower() in {".glb", ".gltf"}:
-                try:
-                    scene = parse_gltf(path)
-                except PipelineError:
-                    scene = None
-                if scene is not None and (scene.has_skin() or scene.needs_hierarchy()):
+                scene = parse_gltf(path)
+                if scene.has_skin() or scene.needs_hierarchy():
                     objects.extend(mesh_source_objects(path, texture_stems))
                     continue
             objects.extend(prefab_objects(path, texture_stems))
@@ -2354,10 +2368,7 @@ def pack_directory(
         for path in meshes:
             if path.suffix.lower() not in {".glb", ".gltf"}:
                 continue
-            try:
-                scene = parse_gltf(path)
-            except PipelineError:
-                continue
+            scene = parse_gltf(path)
             if scene.has_skin():
                 raise PipelineError(
                     f"{path.name} contains a skin; this writer will not flatten it "

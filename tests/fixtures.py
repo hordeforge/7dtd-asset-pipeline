@@ -1,7 +1,57 @@
 from __future__ import annotations
 
+import json
 import struct
 from pathlib import Path
+
+
+def static_triangle_glb(path: Path) -> Path:
+    """A one-triangle GLB `parse_gltf` accepts, with no extra named nodes.
+
+    Acceptance membership tests used to write empty `.glb` bytes and rely on
+    the writer swallowing a parse error and inventing a static prefab. A
+    broken skin must fail that parse, so the dummy has to be a real document.
+    """
+    positions = struct.pack("<9f", 1, 0, 0, 0, 1, 0, 0, 0, 1)
+    normals = struct.pack("<9f", 0, 0, 1, 0, 0, 1, 0, 0, 1)
+    uvs = struct.pack("<6f", 0, 0, 1, 0, 0, 1)
+    indices = struct.pack("<3H", 0, 1, 2)
+    blob = positions + normals + uvs + indices
+    document = {
+        "asset": {"version": "2.0"},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"name": "Cube", "mesh": 0}],
+        "meshes": [
+            {
+                "primitives": [
+                    {"attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2}, "indices": 3}
+                ]
+            }
+        ],
+        "buffers": [{"byteLength": len(blob)}],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": 36},
+            {"buffer": 0, "byteOffset": 36, "byteLength": 36},
+            {"buffer": 0, "byteOffset": 72, "byteLength": 24},
+            {"buffer": 0, "byteOffset": 96, "byteLength": 6},
+        ],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC2"},
+            {"bufferView": 3, "componentType": 5123, "count": 3, "type": "SCALAR"},
+        ],
+    }
+    json_chunk = 0x4E4F534A
+    bin_chunk = 0x004E4942
+    encoded = json.dumps(document, separators=(",", ":")).encode("utf-8")
+    encoded += b" " * ((-len(encoded)) % 4)
+    chunks = struct.pack("<II", len(encoded), json_chunk) + encoded
+    padded = blob + b"\x00" * ((-len(blob)) % 4)
+    chunks += struct.pack("<II", len(padded), bin_chunk) + padded
+    path.write_bytes(b"glTF" + struct.pack("<II", 2, 12 + len(chunks)) + chunks)
+    return path
 
 
 def filesystem_is_case_insensitive(directory: Path) -> bool:

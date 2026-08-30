@@ -116,6 +116,32 @@ PROVIDER_DIRECTORY = "tools/shamway/acceptance"
 # that answered every request would read as a pass on every case above.
 ABSENT_STEM = "shamwayAbsentStemProbe"
 _IDENTIFIER = re.compile(r"[^A-Za-z0-9_]")
+_SUITE_SPLIT = re.compile(r"[,;\s]+")
+
+
+def mixed_visual_suites(suite_list: str) -> bool:
+    """True when a PLAYTEST_SUITE list asks for both prefab-look and block-place.
+
+    Those are different pictures. Instantiating a prefab in front of the camera
+    (`*_look`) and `SetBlockRpc` onto a voxel (`*_block_*`) must never share a
+    client session: the self-test rendered a texture mid-air AND a placed
+    block in the same run, repeatedly, whenever they were comma-listed.
+    """
+    tokens = [token for token in _SUITE_SPLIT.split(suite_list.strip()) if token]
+    look = any(token.endswith("_look") for token in tokens)
+    block = any("_block_" in token for token in tokens)
+    return look and block
+
+
+def reject_mixed_visual_suites(suite_list: str) -> None:
+    """Refuse a suite list that would paint two different pictures in one run."""
+    if mixed_visual_suites(suite_list):
+        raise PipelineError(
+            f"refusing mixed visual suites {suite_list!r}: a prefab-look suite "
+            "(*_look) and a block-placement suite (*_block_*) are different "
+            "pictures. Run them as separate playtest invocations, never in one "
+            "PLAYTEST_SUITE list."
+        )
 
 
 def _cs_body(text: str) -> str:
@@ -320,7 +346,10 @@ def _stage_body(stem: str) -> str:
     The prefab is instantiated directly rather than placed as a block: the
     question is whether *this bundle's* renderer draws, and a block adds the
     game's own placement, rotation and collision on top of the thing under
-    test.
+    test. A ModelEntity block's look is a separate provider that
+    `SetBlockRpc`s into a grounded voxel and `Helpers.LookAt`s it (see
+    SelfTestMod's `shamwayselftest_block_model`). Standoff is 3.5 m so a
+    1 m cube is in frame rather than filling the lens.
     """
     name = _cs_body(stem)
     variable = _identifier(stem)
@@ -350,7 +379,7 @@ def _stage_body(stem: str) -> str:
                     : player.transform;
                 var ahead = camera.forward;
                 {variable}Staged = UnityEngine.Object.Instantiate(prefab);
-                {variable}Staged.transform.position = camera.position + ahead * 1.2f;
+                {variable}Staged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
                 {variable}Staged.transform.rotation =
@@ -472,12 +501,12 @@ def _walk_clip_case(prefab_stem: str) -> str:
 def render(plan_: ProviderPlan) -> dict[str, str]:
     """The provider's files, as `filename -> text`."""
     cases = "".join(_case(stem, kind) for stem, kind in plan_.stems)
-    # One staged frame per prefab: the only case here that can fail on a bundle
-    # whose every member loads and whose prop is invisible. A prefab with a
-    # declared motion kind stages the same scene as a StagedClip turntable
-    # (turntable), equips the item on the player and records a real walk
-    # (walk-cycle), or keeps today's unchanged staged-look case (fixed and
-    # absent).
+    # Prefab look is its own suite (`*_look`), never folded into `*_bundle`.
+    # Instantiating a mesh in front of the camera is not placing a block;
+    # mixing those pictures in one PLAYTEST_SUITE list is refused by
+    # `reject_mixed_visual_suites`. A prefab with a declared motion kind
+    # stages a turntable (turntable), a walk (walk-cycle), or a still look
+    # (fixed / absent) — still in `*_look`, never in the load suite.
     motion_kinds = dict(plan_.motions)
     staged: list[str] = []
     for stem, kind in plan_.stems:
@@ -490,12 +519,27 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
             staged.append(_walk_clip_case(stem))
         else:
             staged.append(_staged_case(stem))
-    cases += "".join(staged)
+    look_id = (
+        plan_.suite_id[: -len("_bundle")] + "_look"
+        if plan_.suite_id.endswith("_bundle")
+        else plan_.suite_id + "_look"
+    )
+    if staged:
+        look_body = "".join(staged)
+        look_yields = f'yield return "{look_id}";'
+        look_branch = (
+            f'if (suite == "{look_id}")\n        {{\n{look_body}            return;\n        }}\n'
+        )
+    else:
+        look_yields = ""
+        look_branch = ""
     mod_name = _cs_body(plan_.mod_name)
     source = _template("AcceptanceProvider.cs.in").format(
         MOD_NAME=mod_name,
         CLASS_NAME=f"{plan_.assembly}Provider",
         SUITE_ID=plan_.suite_id,
+        LOOK_YIELDS=look_yields,
+        LOOK_BRANCH=look_branch,
         BUNDLE_URI_PATH=_cs_body(plan_.bundle_uri_path),
         CASES=cases,
         ABSENT_STEM=ABSENT_STEM,

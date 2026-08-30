@@ -322,9 +322,17 @@ easy for a person to judge.
 | Assertion | The failure it catches |
 |---|---|
 | the prefab returns with `renderers=1` | an empty `GameObject`, which loads and draws nothing |
-| mesh `bounds=(0.30, 0.50, 0.20)` | a broken vertex stream, or a lost Y-up conversion |
+| mesh `bounds=(1.00, 1.00, 1.00)` | a broken vertex stream, or a lost Y-up conversion |
 | material `shader=Shamway/Unlit` | a `PPtr` chain that did not survive serialization |
 | texture at its authored size | a `Texture2D` that decoded to something else |
+| `shamwayselftest_block_model` places the block and looks at the voxel | a prefab instantiated in the player's face, which is not a placement |
+
+Those are **separate suites**. `<mod>_bundle` is loads only. `<mod>_look`
+instantiates the prefab in front of the camera and is opt-in. `<mod>_block_*`
+places a block on a voxel. Never comma-list `*_look` with `*_block_*` in one
+`PLAYTEST_SUITE`: `playtest-acceptance.sh` refuses it, and the generated
+provider throws if that script is bypassed. `playtest-synthesized` runs
+`_bundle` and `_block_model` only.
 
 It refuses to run its assertions when the bundle carries no prefab, because
 without a usable `vkd3d-compiler` the writer packs a bare `Mesh` **by design**

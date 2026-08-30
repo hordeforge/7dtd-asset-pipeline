@@ -9,7 +9,7 @@
             <property name="Material" value="Mwood" />
             <property name="Shape" value="ModelEntity" />
             <property name="Model" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestProp.prefab" />
-            <!-- The prefab's pivot is at its base (mesh AABB y 0..0.5, identity
+            <!-- The prefab's pivot is at its base (mesh AABB y 0..1, identity
                  transform), and BlockShapeModelEntity's default modelOffset is
                  (0, 0.5, 0) - for center-pivot models. Base-pivot models zero
                  it, as 488 stock blocks do, or the model floats half a block. -->

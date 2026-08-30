@@ -92,6 +92,9 @@ class StatusTests(unittest.TestCase):
         self.assertIn("ExampleMod", text)
         self.assertIn("example.unity3d", text)
         self.assertIn("shamway status --json", text)
+        self.assertIn("Never comma-list", text)
+        self.assertIn("*_look", text)
+        self.assertIn("*_block_*", text)
         # The guide carries JSON examples; rendering must not mangle their
         # braces or choke on them.
         self.assertIn('{"id":1,"op":"status"}', text)
@@ -129,6 +132,7 @@ class AgentGuideVariantsTests(unittest.TestCase):
         """Never 'built': the guide teaches the word the gates constrain."""
         text = self._render("synthesized")
         self.assertIn("written by shamway itself", text)
+        self.assertIn("Never comma-list", text)
         self.assertIn('bundle_source = "synthesized"', text)
         self.assertIn("verify-bundle", text)
 

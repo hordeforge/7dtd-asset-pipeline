@@ -14,6 +14,19 @@ tag has no changelog section.
 
 ### Added
 
+- Generated entity bones **carry colliders**: the writer adds a small
+  `BoxCollider` to every skinned bone GameObject, so the game's physics body
+  builds real colliders instead of `NullCollider`s
+  (`PhysicsBodyInstance.bindCollider` looks for a Box/Capsule/Sphere collider
+  on each referenced bone and, finding none, created a null collider — the
+  real root cause of a generated creature floating). A generated creature is
+  now physically solid and grounds when the engine simulates it (e.g.
+  server-side). **Grounded walking is still not demable in the client-side
+  look harness:** the client does not gravity-simulate a client-spawned
+  entity — measured, the creature holds its +3 m spawn offset (y=64.08) with
+  the colliders present. A server-side spawn (or a harness that simulates the
+  spawned entity's gravity) is the outstanding, non-asset step; recorded in
+  research-provenance.
 - **`shamway generate hide`** draws a seeded fur/hide albedo for a
   generated entity — mottled patches, anisotropic fur clumps, hair grain
   (periodic by construction, so a primitive's default UVs never show a

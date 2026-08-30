@@ -194,6 +194,9 @@ from the rig's own names):
 | `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma) |
 | `head` | merged into `Idle1` | a slow side-to-side yaw of the `Head` bone (≈20°, 4 s) |
 | `walk` | `Walk` | a trot: each upper leg (`Thigh`/`Upper` bones) swings about its local X, the knee (`Lower`/`Shin` child) bends the other way, and the body dips between steps; diagonal pairs move together (0.35 rad, 1.2 s) |
+| `attack` | `Attack1` | a bite: the `Head` snaps forward and back (0.5 rad, 0.6 s) while the body pitches with it |
+| `death` | `Death` | the body rolls over about its own axis and stays down — `loop: false`, so the clip plays once rather than wrapping (1.2 s) |
+| `jump` | `Jump` | a hop: the body rises 0.2 m and lands (0.8 s) |
 
 The declaration is a small JSON you can extend — the clip names are the
 ones the controller plays, and entries sharing a name merge into one clip,
@@ -210,17 +213,29 @@ so an `Idle1` can combine a bob and a head turn:
      "bones": ["Root/Pelvis/LeftRearUpper", "Root/Pelvis/RightRearUpper"],
      "lower_bones": ["Root/Pelvis/LeftRearLower", "Root/Pelvis/RightRearLower"],
      "body_bone": "Root/Pelvis",
-     "amplitude": 0.35, "seconds": 1.2}
+     "amplitude": 0.35, "seconds": 1.2},
+    {"name": "Attack1", "kind": "attack",
+     "bone": "Root/Pelvis/Spine/Chest/Neck/Head",
+     "body_bone": "Root/Pelvis",
+     "amplitude": 0.5, "seconds": 0.6},
+    {"name": "Death", "kind": "death", "bone": "Root/Pelvis",
+     "loop": false, "amplitude": 3.14159, "seconds": 1.2},
+    {"name": "Jump", "kind": "jump", "bone": "Root/Pelvis",
+     "amplitude": 0.2, "seconds": 0.8}
   ],
   "play_automatically": true
 }
 ```
 
-`kind` selects the curve builder (`bob` position, `head` yaw, `walk` trot);
-`bone` is the rig's own slash-separated path (`Root/Hips` on the humanoid);
-a `walk` entry takes `bones` (the upper-leg paths, which the generator
-picks as every `Thigh`/`Upper` bone), `lower_bones` (each upper leg's
-child, so the knee bends), and `body_bone` (the body-dip target). Why this works at all: **legacy
+`kind` selects the curve builder (`bob` position, `head` yaw, `attack`
+lunge, `death` one-shot roll, `jump` hop, `walk` trot); `bone` is the rig's
+own slash-separated path (`Root/Hips` on the humanoid); an `attack` entry
+also takes `body_bone` (the body-pitch target); a `death` or `jump` entry
+points `bone` at the body; `loop: false` makes a clip play once (a `Death`
+should stay down — the serialized `m_WrapMode` is 1 instead of 2); a `walk`
+entry takes `bones` (the upper-leg paths, which the generator picks as every
+`Thigh`/`Upper` bone), `lower_bones` (each upper leg's child, so the knee
+bends), and `body_bone` (the body-dip target). Why this works at all: **legacy
 clips carry their curves directly** (`m_MuscleClipSize = 0`, measured from
 the game's `animals.bundle` `_Take 001`) — no compiled `m_Clip` stream,
 unlike Mecanim clips. `anim.py` builds the type-tree dicts and
@@ -256,9 +271,9 @@ that clients see nothing.
 
 ## What is still unbuilt
 
-- **More clip kinds.** `bob`, `head` and `walk` are built in; attack
-  chains, death poses, jumps and swims are more curve sets, not a format
-  change — the declaration already accepts any name the controller plays.
+- **More clip kinds.** `bob`, `head`, `walk`, `attack`, `death` and `jump`
+  are built in; swims are the remaining curve set, not a format change — the
+  declaration already accepts any name the controller plays.
 - **Mecanim / complex locomotion.** `Animator` + controller + compiled
   clips remain the hard lane; the legacy path covers an animal that idles,
   walks and attacks by name.

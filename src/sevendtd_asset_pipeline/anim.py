@@ -325,14 +325,86 @@ def walk_curves(
     return curves
 
 
+def attack_curves(
+    head_bone: str, body_bone: str, lunge: float = 0.5, seconds: float = 0.6
+) -> list[dict[str, Any]]:
+    """A quick lunge: the head snaps forward and back over `seconds`.
+
+    One sharp out-and-back sine burst on the head (a bite: `lunge` rad
+    forward, `0.6·lunge` back past rest) and a shallower body pitch on
+    `body_bone`. Short and fast — an attack, not an idle sway. The engine
+    plays `Attack1` when the animal attacks.
+    """
+    curves = []
+    for bone, amplitude in ((head_bone, lunge), (body_bone, 0.4 * lunge)):
+        curves.append(rotation_curve(bone, _rotation_keyframes("x", amplitude, seconds, phase=0.0)))
+    return curves
+
+
+def death_curves(
+    body_bone: str, roll: float = math.pi, seconds: float = 1.2
+) -> list[dict[str, Any]]:
+    """The body rolls over: a full rotation about local Z on `body_bone`.
+
+    Rises fast, ends rolled — the clip's `loop` flag should be false so the
+    animal stays down. The engine plays `Death` when the animal dies.
+    """
+    rest = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
+    keyframes = []
+    for index in range(9):
+        angle = roll * (index / 8.0) ** 2  # fast start, settle at rest
+        keyframes.append(
+            {
+                "time": seconds * index / 8.0,
+                "value": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": math.sin(angle / 2.0),
+                    "w": math.cos(angle / 2.0),
+                },
+                "inSlope": rest,
+                "outSlope": rest,
+                "weightedMode": 0,
+                "inWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+                "outWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+            }
+        )
+    return [rotation_curve(body_bone, keyframes)]
+
+
+def jump_curves(body_bone: str, height: float = 0.2, seconds: float = 0.8) -> list[dict[str, Any]]:
+    """A hop: the body rises `height` metres and lands, over `seconds`.
+
+    A single smooth up-and-down on `body_bone`; the engine plays `Jump`
+    when the animal jumps.
+    """
+    rest = {"x": 0.0, "y": 0.0, "z": 0.0}
+    keyframes = [
+        {
+            "time": seconds * index / 8.0,
+            "value": {"x": 0.0, "y": height * math.sin(math.pi * index / 8.0), "z": 0.0},
+            "inSlope": rest,
+            "outSlope": rest,
+            "weightedMode": 0,
+            "inWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
+            "outWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
+        }
+        for index in range(9)
+    ]
+    return [position_curve(body_bone, keyframes)]
+
+
 @dataclass(frozen=True)
 class AnimClip:
     """One legacy clip a `.anim.json` declaration asks for.
 
     `kind` selects the curve builder: `bob` (a position bob on `bone`),
-    `head` (a yaw turn on `bone`), or `walk` (a trot gait across `bones`).
+    `head` (a yaw turn on `bone`), `walk` (a trot gait across `bones`),
+    `attack` (a lunge on `bone` with a body pitch on `body_bone`), `death`
+    (a one-shot roll on `bone`), or `jump` (a hop on `bone`).
     `amplitude`/`seconds` scale the motion; a `walk` entry uses `bones`
-    (the upper-leg paths) instead of `bone`.
+    (the upper-leg paths) instead of `bone`, and `loop=False` makes the
+    clip play once rather than wrap (a `Death` should not loop).
     """
 
     name: str
@@ -341,6 +413,7 @@ class AnimClip:
     bones: tuple[str, ...] = ()
     lower_bones: tuple[str, ...] = ()
     body_bone: str = ""
+    loop: bool = True
     amplitude: float = 0.03
     seconds: float = 1.5
 
@@ -370,11 +443,13 @@ def parse_anim(path: Path) -> AnimDeclaration:
         ]}
 
     `kind` selects the curve builder: `bob` (position bob), `head` (yaw
-    turn), `walk` (trot gait across the `bones` list). Entries with the
-    same `name` merge into one clip, so an `Idle1` can combine a bob and a
-    head turn. The clip names are what `GameObjectAnimalAnimation` plays
-    (`Idle1`, `Walk`, `Attack1`, …), so a declaration is how an entity gets
-    movement clips without an editor.
+    turn), `walk` (trot gait across the `bones` list), `attack` (a lunge
+    on `bone` plus a body pitch on `body_bone`), `death` (a one-shot roll
+    on `bone` — set `loop: false`), and `jump` (a hop on `bone`). Entries
+    with the same `name` merge into one clip, so an `Idle1` can combine a
+    bob and a head turn. The clip names are what `GameObjectAnimalAnimation`
+    plays (`Idle1`, `Walk`, `Attack1`, …), so a declaration is how an entity
+    gets movement clips without an editor.
     """
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
@@ -395,9 +470,10 @@ def parse_anim(path: Path) -> AnimDeclaration:
         kind = item.get("kind")
         if not isinstance(name, str) or not name:
             raise PipelineError(f'anim declaration {path} clip {index} needs a "name"')
-        if kind not in ("bob", "head", "walk"):
+        if kind not in ("bob", "head", "walk", "attack", "death", "jump"):
             raise PipelineError(
-                f"anim declaration {path} clip {name!r} kind must be bob, head or walk"
+                f"anim declaration {path} clip {name!r} kind must be bob, head, walk, "
+                "attack, death or jump"
             )
         for key, default in (("amplitude", 0.03), ("seconds", 1.5)):
             value = item.get(key, default)
@@ -442,11 +518,21 @@ def parse_anim(path: Path) -> AnimDeclaration:
         bone = item.get("bone")
         if not isinstance(bone, str) or not bone:
             raise PipelineError(f'anim declaration {path} clip {name!r} needs a "bone" path')
+        body_bone = item.get("body_bone", "")
+        if not isinstance(body_bone, str):
+            raise PipelineError(
+                f'anim declaration {path} clip {name!r} "body_bone" must be a string'
+            )
+        loop = item.get("loop", True)
+        if not isinstance(loop, bool):
+            raise PipelineError(f'anim declaration {path} clip {name!r} "loop" must be a bool')
         clips.append(
             AnimClip(
                 name=name,
                 kind=kind,
                 bone=bone,
+                body_bone=body_bone,
+                loop=loop,
                 amplitude=float(item.get("amplitude", 0.03)),
                 seconds=float(item.get("seconds", 1.5)),
             )
@@ -462,8 +548,11 @@ def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
 
     Entries sharing a name merge into one clip (an `Idle1` can combine a
     bob and a head turn). A `bob` yields a position curve on its bone; a
-    `head` a yaw rotation on its bone; a `walk` a trot of rotation curves
-    across its `bones`.
+    `head` a yaw rotation on its bone; an `attack` a lunge rotation pair;
+    a `death` a one-shot roll; a `jump` a hop position curve; a `walk` a
+    trot of rotation curves across its `bones`. A clip whose entries all
+    loop wraps (`WRAP_LOOP`); one with any non-looping entry (a `Death`)
+    plays once (`WRAP_ONCE`).
     """
     grouped: dict[str, list[AnimClip]] = {}
     for clip in declaration.clips:
@@ -501,6 +590,14 @@ def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
                 rotations += rescaled(
                     head_turn_curves(clip.bone, clip.amplitude, clip.seconds), 1.0
                 )
+            elif clip.kind == "attack":
+                rotations += rescaled(
+                    attack_curves(clip.bone, clip.body_bone, clip.amplitude, clip.seconds), 1.0
+                )
+            elif clip.kind == "death":
+                rotations += rescaled(death_curves(clip.bone, clip.amplitude, clip.seconds), 1.0)
+            elif clip.kind == "jump":
+                positions += rescaled(jump_curves(clip.bone, clip.amplitude, clip.seconds), 1.0)
             else:  # walk — rotation curves on the legs, a position curve on the body
                 legs = [
                     (upper, lower)
@@ -510,5 +607,8 @@ def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
                 for curve in walk_curves(legs, clip.body_bone, clip.amplitude, clip.seconds):
                     is_rotation = len(curve["curve"]["m_Curve"][0]["value"]) == 4
                     (rotations if is_rotation else positions).append(rescaled([curve], 1.0)[0])
-        out.append(legacy_clip(name, rotations, positions, scales, sample_rate=30.0))
+        wrap = WRAP_LOOP if all(clip.loop for clip in entries) else 1
+        out.append(
+            legacy_clip(name, rotations, positions, scales, sample_rate=30.0, wrap_mode=wrap)
+        )
     return tuple(out)

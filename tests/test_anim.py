@@ -9,6 +9,7 @@ curves, the legacy flag and the empty compiled stream intact.
 
 from __future__ import annotations
 
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -159,7 +160,10 @@ class AnimDeclarationTests(unittest.TestCase):
         from sevendtd_asset_pipeline.errors import PipelineError
 
         for body, fragment in (
-            ('{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}', "bob, head or walk"),
+            (
+                '{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}',
+                "bob, head, walk, attack, death or jump",
+            ),
             ('{"clips": [{"name": "Walk", "kind": "walk", "bone": "Root"}]}', '"bones"'),
             ('{"clips": [{"name": "Idle1", "kind": "bob"}]}', '"bone"'),
         ):
@@ -289,7 +293,7 @@ class LimbAnimTests(unittest.TestCase):
         path.write_text(
             '{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}', encoding="utf-8"
         )
-        with self.assertRaisesRegex(PipelineError, "bob, head or walk"):
+        with self.assertRaisesRegex(PipelineError, "bob, head, walk, attack, death or jump"):
             parse_anim(path)
 
     def test_walk_curves_bend_knees_and_alternate_diagonally(self) -> None:
@@ -346,6 +350,79 @@ class LimbAnimTests(unittest.TestCase):
         self.assertEqual(fields[0]["m_RotationCurves"][0]["path"], "Root/Neck/Head")
 
 
+class CombatAnimTests(unittest.TestCase):
+    """The attack / death / jump curve kinds: parse, shape, wrap mode."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_parse_anim_accepts_attack_death_jump(self) -> None:
+        from sevendtd_asset_pipeline.anim import parse_anim
+
+        path = self.root / "kinds.anim.json"
+        path.write_text(
+            '{"clips": ['
+            ' {"name": "Attack1", "kind": "attack", "bone": "Root/Neck/Head",'
+            '  "body_bone": "Root/Pelvis", "amplitude": 0.5, "seconds": 0.6},'
+            ' {"name": "Death", "kind": "death", "bone": "Root/Pelvis",'
+            '  "loop": false, "amplitude": 3.14159, "seconds": 1.2},'
+            ' {"name": "Jump", "kind": "jump", "bone": "Root/Pelvis",'
+            '  "amplitude": 0.2, "seconds": 0.8}]}',
+            encoding="utf-8",
+        )
+        declaration = parse_anim(path)
+        self.assertEqual(len(declaration.clips), 3)
+        attack, death, jump = declaration.clips
+        self.assertEqual(
+            (attack.kind, attack.bone, attack.body_bone),
+            ("attack", "Root/Neck/Head", "Root/Pelvis"),
+        )
+        self.assertEqual((death.kind, death.loop), ("death", False))
+        self.assertEqual((jump.kind, jump.bone), ("jump", "Root/Pelvis"))
+
+    def test_attack_curves_lunge_head_and_pitch_body(self) -> None:
+        from sevendtd_asset_pipeline.anim import attack_curves
+
+        curves = attack_curves("Root/Neck/Head", "Root/Pelvis", lunge=0.5, seconds=0.6)
+        self.assertEqual(len(curves), 2)
+        self.assertEqual({c["path"] for c in curves}, {"Root/Neck/Head", "Root/Pelvis"})
+        head = next(c for c in curves if c["path"] == "Root/Neck/Head")
+        body = next(c for c in curves if c["path"] == "Root/Pelvis")
+        for curve in (head, body):
+            keyframes = curve["curve"]["m_Curve"]
+            self.assertEqual(len(keyframes), 9)
+            # A sine burst: starts and ends at rest.
+            self.assertAlmostEqual(keyframes[0]["value"]["x"], 0.0, places=6)
+            self.assertAlmostEqual(keyframes[-1]["value"]["x"], 0.0, places=6)
+        self.assertGreater(head["curve"]["m_Curve"][2]["value"]["x"], 0.15)
+        # The body pitches shallower than the head lunges.
+        head_peak = max(kf["value"]["x"] for kf in head["curve"]["m_Curve"])
+        body_peak = max(kf["value"]["x"] for kf in body["curve"]["m_Curve"])
+        self.assertGreater(head_peak, body_peak)
+
+    def test_death_rolls_once_and_jump_hops(self) -> None:
+        from sevendtd_asset_pipeline.anim import death_curves, jump_curves
+
+        death = death_curves("Root/Pelvis", roll=math.pi, seconds=1.2)
+        self.assertEqual(len(death), 1)
+        keyframes = death[0]["curve"]["m_Curve"]
+        # Ends fully rolled about local Z: quat (sin π/2, cos π/2) = (1, 0).
+        self.assertAlmostEqual(keyframes[-1]["value"]["z"], 1.0, places=5)
+        self.assertAlmostEqual(keyframes[-1]["value"]["w"], 0.0, places=5)
+        self.assertGreater(abs(keyframes[1]["value"]["z"]), 0.02)  # fast start
+        jump = jump_curves("Root/Pelvis", height=0.2, seconds=0.8)
+        self.assertEqual(len(jump), 1)
+        self.assertEqual(jump[0]["path"], "Root/Pelvis")
+        ys = [kf["value"]["y"] for kf in jump[0]["curve"]["m_Curve"]]
+        self.assertGreater(max(ys), 0.1)
+        self.assertAlmostEqual(ys[0], 0.0, places=6)
+        self.assertAlmostEqual(ys[-1], 0.0, places=6)
+
+
 @needs_unitypy
 class LimbAnimBundleTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -376,6 +453,33 @@ class LimbAnimBundleTests(unittest.TestCase):
         self.assertEqual(len(clips["Idle1"]["m_PositionCurves"]), 1)
         animation = trees[111][0]
         self.assertEqual(len(animation["m_Animations"]), 2)
+
+    def test_attack_death_jump_round_trip_with_wrap(self) -> None:
+        from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
+        from sevendtd_asset_pipeline.generators import run
+
+        out = self.root / "creature.glb"
+        self.assertEqual(
+            run("entity", [str(out), "--rig", "quadruped", "--anim", "attack,death,jump"]), 0
+        )
+        objects = mesh_source_objects(out, set())
+        objects.append(shader("Shamway/Unlit"))
+        bundle = self.root / "combat.unity3d"
+        bundle.write_bytes(build_bundle(objects, REVISION, "combat.unity3d"))
+        trees = read_objects(bundle)
+        clips = {c["m_Name"]: c for c in trees[74]}
+        self.assertEqual(set(clips), {"Attack1", "Death", "Jump"})
+        self.assertEqual(len(clips["Attack1"]["m_RotationCurves"]), 2)  # head + body
+        self.assertEqual(
+            clips["Attack1"]["m_RotationCurves"][0]["path"], "Root/Pelvis/Spine/Chest/Neck/Head"
+        )
+        self.assertEqual(len(clips["Death"]["m_RotationCurves"]), 1)
+        self.assertEqual(clips["Death"]["m_WrapMode"], 1)  # plays once
+        self.assertEqual(len(clips["Jump"]["m_PositionCurves"]), 1)
+        self.assertEqual(clips["Jump"]["m_PositionCurves"][0]["path"], "Root/Pelvis")
+        # The looping kinds wrap like every other clip.
+        self.assertEqual(clips["Attack1"]["m_WrapMode"], 2)
+        self.assertEqual(clips["Jump"]["m_WrapMode"], 2)
 
     def test_unknown_anim_kind_is_refused(self) -> None:
         from sevendtd_asset_pipeline.generators import run

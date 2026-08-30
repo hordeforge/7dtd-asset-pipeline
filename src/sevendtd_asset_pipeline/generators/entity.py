@@ -726,9 +726,11 @@ def main(argv: list[str] | None = None) -> int:
         const="idle",
         default=None,
         metavar="KINDS",
-        help="write a {stem}.anim.json with looping legacy clips — comma list of"
-        " idle, head, walk (default: idle). idle bobs the body, head turns it,"
-        " walk trots the legs; the clips are named Idle1/Walk for the engine's"
+        help="write a {stem}.anim.json with legacy clips — comma list of"
+        " idle, head, walk, attack, death, jump (default: idle). idle bobs"
+        " the body, head turns it, walk trots the legs, attack lunges the"
+        " head, death rolls the body over once (non-looping), jump hops;"
+        " the clips are named Idle1/Walk/Attack1/Death/Jump for the engine's"
         " GameObjectAnimalAnimation, and AvatarController=GameObjectAnimalAnimation"
         " is added to the XML",
     )
@@ -761,10 +763,11 @@ def main(argv: list[str] | None = None) -> int:
     avatar_controller: str | None = None
     if args.anim:
         kinds = [kind.strip() for kind in args.anim.split(",") if kind.strip()]
-        unknown = sorted(set(kinds) - {"idle", "head", "walk"})
+        unknown = sorted(set(kinds) - {"idle", "head", "walk", "attack", "death", "jump"})
         if unknown:
             raise SystemExit(
-                f"ERROR: unknown --anim kinds {', '.join(unknown)}; use idle, head, walk"
+                f"ERROR: unknown --anim kinds {', '.join(unknown)}; "
+                "use idle, head, walk, attack, death, jump"
             )
         clips: list[dict[str, Any]] = []
         # The body hangs off the rig's first bone under the root — Hips on the
@@ -783,18 +786,51 @@ def main(argv: list[str] | None = None) -> int:
                     "seconds": 1.5,
                 }
             )
+        head = next(
+            (bone.name for bone in rig.bones if bone.name == "Head"),
+            first_child,
+        )
+        head_path = _bone_path(rig, head)
         if "head" in kinds:
-            head = next(
-                (bone.name for bone in rig.bones if bone.name == "Head"),
-                first_child,
-            )
             clips.append(
                 {
                     "name": "Idle1",
                     "kind": "head",
-                    "bone": _bone_path(rig, head),
+                    "bone": head_path,
                     "amplitude": 0.35,
                     "seconds": 4.0,
+                }
+            )
+        if "attack" in kinds:
+            clips.append(
+                {
+                    "name": "Attack1",
+                    "kind": "attack",
+                    "bone": head_path,
+                    "body_bone": f"{rig.root().name}/{first_child}",
+                    "amplitude": 0.5,
+                    "seconds": 0.6,
+                }
+            )
+        if "death" in kinds:
+            clips.append(
+                {
+                    "name": "Death",
+                    "kind": "death",
+                    "bone": f"{rig.root().name}/{first_child}",
+                    "loop": False,
+                    "amplitude": math.pi,
+                    "seconds": 1.2,
+                }
+            )
+        if "jump" in kinds:
+            clips.append(
+                {
+                    "name": "Jump",
+                    "kind": "jump",
+                    "bone": f"{rig.root().name}/{first_child}",
+                    "amplitude": 0.2,
+                    "seconds": 0.8,
                 }
             )
         if "walk" in kinds:

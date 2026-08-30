@@ -342,21 +342,24 @@ with `CaseDef.RegisterStaged` so the next hold cannot overlay it).
 mechanical. Never comma-list unrelated suites in one `PLAYTEST_SUITE`;
 never comma-list `*_look` with `*_block_*`. `playtest-synthesized` runs
 `_bundle`, `_block_model`, and `_editorless` as one declared concern.
-Visual sign-off of the looping VFX is `playtest-synthesized.sh --look`
-(`shamwayselftest_burst_look` only). The creature has its own
-`shamwayselftest_shamwaySelfTestCreature_look` invocation.
+`playtest-synthesized.sh --look [STEM]` runs that prefab's look suite
+(`<mod>_<stem>_look`) alone — every generated rig in the self-test has one
+(`shamwayselftest_shamwayselftestbird_look`, `_shamwayselftestarachnid_look`,
+`_shamwayselftestdino_look`, `_shamwayselftestcreature_look`) — and without
+`STEM` runs the looping VFX suite `shamwayselftest_burst_look`. Suite ids
+are lowercase: the orchestrator lowercases suite tokens, and the provider
+compares case-sensitively.
 
 It refuses to run its assertions when the bundle carries no prefab, because
 without a usable `vkd3d-compiler` the writer packs a bare `Mesh` **by design**
 and a missing capability must not be reported as a broken bundle.
 
 **Ran live on 2026-08-30** (client + dedicated server on the development
-host): `playtest-synthesized` reported `SUMMARY pass=25 fail=0`. A later
-`--look` that staged every prefab in one suite at the same offset is not
-the procedure; `--look` is `shamwayselftest_burst_look` only, and the
-creature has `shamwayselftest_shamwaySelfTestCreature_look`. The creature
-frame captured that day was **signed off** (quadruped: four legs, head
-forward, not mirrored, textured).
+host): `playtest-synthesized` reported `SUMMARY pass=25 fail=0`, and each
+rig's look suite staged its prefab with a renderer (`pass=1 fail=0` per
+run). The creature frame was **signed off** (quadruped: four legs, head
+forward, not mirrored, textured); the bird, arachnid and dinosaur frames
+await sign-off.
 
 This is the check that caught the one failure nothing offline could: a
 structurally perfect bundle that `DataLoader.LoadAsset<T>` answered null for,

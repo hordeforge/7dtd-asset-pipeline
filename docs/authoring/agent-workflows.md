@@ -71,9 +71,10 @@ not acceptance evidence.
 With `bundle_source = "unity"`, steps 5 and 6 are different: import into the
 Unity project, commit its `.meta` and importer settings, create the exact
 game-facing prefab and name, then build. Take that route when the prop needs
-lit or normal-mapped shading, SDCS extras, or animation — none of
-which the writer's unlit mesh pass covers. Named glTF children, glTF skins
-and `.vfx` ParticleSystems are synthesized without an editor.
+lit or normal-mapped shading, SDCS extras, or Mecanim animation — none of
+which the writer's unlit mesh pass covers. Named glTF children, glTF skins,
+`.vfx` ParticleSystems, and legacy animation clips
+(`anim.py`, see `docs authoring entities`) are synthesized without an editor.
 
 ## Texture/material lane
 

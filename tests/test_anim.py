@@ -127,3 +127,126 @@ class LegacyClipTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AnimDeclarationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_parse_anim_reads_a_bob_declaration(self) -> None:
+        from sevendtd_asset_pipeline.anim import parse_anim
+
+        path = self.root / "creature.anim.json"
+        path.write_text(
+            '{"clips": [{"name": "Idle1", "kind": "bob", "bone": "Root/Pelvis",'
+            ' "amplitude": 0.05, "seconds": 2.0}], "play_automatically": false}',
+            encoding="utf-8",
+        )
+        declaration = parse_anim(path)
+        self.assertEqual(len(declaration.clips), 1)
+        clip = declaration.clips[0]
+        self.assertEqual(clip.name, "Idle1")
+        self.assertEqual(clip.bone, "Root/Pelvis")
+        self.assertAlmostEqual(clip.amplitude, 0.05)
+        self.assertFalse(declaration.play_automatically)
+
+    def test_parse_anim_refuses_unknown_kinds_and_missing_bones(self) -> None:
+        from sevendtd_asset_pipeline.anim import parse_anim
+        from sevendtd_asset_pipeline.errors import PipelineError
+
+        for body, fragment in (
+            ('{"clips": [{"name": "Walk", "kind": "walk", "bone": "Root"}]}', "must be"),
+            ('{"clips": [{"name": "Idle1", "kind": "bob"}]}', '"bone"'),
+        ):
+            with self.subTest(body=body):
+                path = self.root / "bad.anim.json"
+                path.write_text(body, encoding="utf-8")
+                with self.assertRaisesRegex(PipelineError, fragment):
+                    parse_anim(path)
+
+
+@needs_unitypy
+class AnimOnPrefabTests(unittest.TestCase):
+    """A `.anim.json` beside a skinned source: the prefab carries an Animation
+    component with the declared legacy clip."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_generate_entity_with_anim_writes_the_declaration_and_avatar(self) -> None:
+        from sevendtd_asset_pipeline.generators import run
+
+        out = self.root / "creature.glb"
+        xml = self.root / "entityclasses.xml"
+        self.assertEqual(
+            run(
+                "entity",
+                [
+                    str(out),
+                    "--rig",
+                    "quadruped",
+                    "--anim",
+                    "--mod",
+                    "M",
+                    "--bundle",
+                    "b",
+                    "--xml",
+                    str(xml),
+                ],
+            ),
+            0,
+        )
+        declaration = (self.root / "creature.anim.json").read_text(encoding="utf-8")
+        self.assertIn('"name": "Idle1"', declaration)
+        self.assertIn('"bone": "Root/Pelvis"', declaration)
+        self.assertIn(
+            'name="AvatarController" value="GameObjectAnimalAnimation"',
+            xml.read_text(encoding="utf-8"),
+        )
+
+    def test_the_prefab_carries_the_animation_component_and_clip(self) -> None:
+        from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
+
+        out = self.root / "creature.glb"
+        from sevendtd_asset_pipeline.generators import run
+
+        self.assertEqual(run("entity", [str(out), "--rig", "bird", "--anim"]), 0)
+        objects = mesh_source_objects(out, set())
+        objects.append(shader("Shamway/Unlit"))
+        bundle = self.root / "anim.unity3d"
+        bundle.write_bytes(build_bundle(objects, REVISION, "anim.unity3d"))
+        trees = read_objects(bundle)
+        self.assertIn(74, trees)  # the clip
+        self.assertIn(111, trees)  # the legacy Animation component
+        clip = trees[74][0]
+        self.assertEqual(clip["m_Name"], "Idle1")
+        self.assertTrue(clip["m_Legacy"])
+        self.assertEqual(clip["m_MuscleClipSize"], 0)
+        self.assertEqual(len(clip["m_PositionCurves"]), 1)
+        animation = trees[111][0]
+        self.assertTrue(animation["m_PlayAutomatically"])
+        self.assertEqual(len(animation["m_Animations"]), 1)
+        self.assertNotEqual(animation["m_GameObject"]["m_PathID"], 0)
+
+    def test_a_source_without_a_declaration_gets_no_animation(self) -> None:
+        from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
+
+        out = self.root / "creature.glb"
+        from sevendtd_asset_pipeline.generators import run
+
+        self.assertEqual(run("entity", [str(out), "--rig", "bird"]), 0)
+        objects = mesh_source_objects(out, set())
+        objects.append(shader("Shamway/Unlit"))
+        bundle = self.root / "plain.unity3d"
+        bundle.write_bytes(build_bundle(objects, REVISION, "plain.unity3d"))
+        trees = read_objects(bundle)
+        self.assertNotIn(74, trees)
+        self.assertNotIn(111, trees)

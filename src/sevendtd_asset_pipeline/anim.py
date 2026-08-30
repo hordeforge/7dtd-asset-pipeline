@@ -23,11 +23,16 @@ Curve shape mirrors `_Take 001` from that bundle: one entry per bone path
 
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from .errors import PipelineError
 
 # The curve-write flags Unity uses on the animation component.
 ANIMATION_CLIP = 74
-ANIMATION_COMPONENT = 95
+ANIMATION_COMPONENT = 111
 
 # WrapMode: Loop makes a legacy clip repeat; the game's imported takes carry
 # Default (0) and loop through the component/settings, Loop is the safe
@@ -217,3 +222,116 @@ def idle_bob_curves(
         ],
     )
     return [], [position], []
+
+
+@dataclass(frozen=True)
+class AnimClip:
+    """One legacy clip a `.anim.json` declaration asks for."""
+
+    name: str
+    kind: str
+    bone: str
+    amplitude: float = 0.03
+    seconds: float = 1.5
+
+
+@dataclass(frozen=True)
+class AnimDeclaration:
+    """A `.anim.json` beside a skinned source: the clips its prefab carries."""
+
+    clips: tuple[AnimClip, ...]
+    play_automatically: bool = True
+
+
+def parse_anim(path: Path) -> AnimDeclaration:
+    """Read a `.anim.json` declaration.
+
+    The format is deliberately small — one looping legacy clip per entry,
+    each a named motion on one bone path:
+
+        {"clips": [{"name": "Idle1", "kind": "bob", "bone": "Root/Pelvis",
+                    "amplitude": 0.03, "seconds": 1.5}]}
+
+    `kind` selects the curve builder; `bob` is the only kind today (a
+    looping position bob on the bone path). The clip names are what
+    `GameObjectAnimalAnimation` plays (`Idle1`, `Walk`, `Attack1`, …), so a
+    declaration is how an entity gets a movement clip without an editor.
+    """
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise PipelineError(f"anim declaration {path} does not exist") from None
+    except json.JSONDecodeError as exc:
+        raise PipelineError(f"anim declaration {path} is not valid JSON: {exc}") from None
+    if not isinstance(document, dict):
+        raise PipelineError(f"anim declaration {path} must be a JSON object")
+    raw = document.get("clips")
+    if not isinstance(raw, list) or not raw:
+        raise PipelineError(f'anim declaration {path} needs a non-empty "clips" array')
+    clips: list[AnimClip] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise PipelineError(f"anim declaration {path} clip {index} is not an object")
+        name = item.get("name")
+        kind = item.get("kind")
+        bone = item.get("bone")
+        if not isinstance(name, str) or not name:
+            raise PipelineError(f'anim declaration {path} clip {index} needs a "name"')
+        if kind not in ("bob",):
+            raise PipelineError(
+                f'anim declaration {path} clip {name!r} kind must be "bob" (the only kind today)'
+            )
+        if not isinstance(bone, str) or not bone:
+            raise PipelineError(f'anim declaration {path} clip {name!r} needs a "bone" path')
+        for key, default in (("amplitude", 0.03), ("seconds", 1.5)):
+            value = item.get(key, default)
+            if not isinstance(value, (int, float)) or value <= 0:
+                raise PipelineError(
+                    f"anim declaration {path} clip {name!r} {key!r} must be positive"
+                )
+        clips.append(
+            AnimClip(
+                name=name,
+                kind=kind,
+                bone=bone,
+                amplitude=float(item.get("amplitude", 0.03)),
+                seconds=float(item.get("seconds", 1.5)),
+            )
+        )
+    play = document.get("play_automatically", True)
+    if not isinstance(play, bool):
+        raise PipelineError(f'anim declaration {path} "play_automatically" must be a bool')
+    return AnimDeclaration(clips=tuple(clips), play_automatically=play)
+
+
+def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
+    """One `AnimationClip` type-tree dict per declared clip."""
+    out: list[dict[str, Any]] = []
+    for clip in declaration.clips:
+        if clip.kind == "bob":
+            rotations, positions, scales = idle_bob_curves(
+                None, pelvis_bone=clip.bone, bob=clip.amplitude
+            )
+            # idle_bob_curves is a fixed 1.5 s cycle; rescale its keyframe
+            # times to the declared duration.
+            factor = clip.seconds / 1.5
+            positions = [
+                {
+                    "curve": {
+                        "m_Curve": [
+                            {
+                                **keyframe,
+                                "time": keyframe["time"] * factor,
+                            }
+                            for keyframe in position["curve"]["m_Curve"]
+                        ],
+                        "m_PreInfinity": position["curve"]["m_PreInfinity"],
+                        "m_PostInfinity": position["curve"]["m_PostInfinity"],
+                        "m_RotationOrder": position["curve"]["m_RotationOrder"],
+                    },
+                    "path": position["path"],
+                }
+                for position in positions
+            ]
+            out.append(legacy_clip(clip.name, rotations, positions, scales, sample_rate=30.0))
+    return tuple(out)

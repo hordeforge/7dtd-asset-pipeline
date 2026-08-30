@@ -50,7 +50,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 
-from . import block_compress, shader_blob, transcode
+from . import anim, block_compress, shader_blob, transcode
 from . import particles as particle_fields
 from .capabilities import has_capability, require_capability
 from .errors import PipelineError
@@ -70,6 +70,8 @@ BOX_COLLIDER = 65
 SHADER = 48
 MATERIAL = 21
 SKINNED_MESH_RENDERER = 137
+ANIMATION_CLIP = 74
+ANIMATION_COMPONENT = 111
 PARTICLE_SYSTEM = 198
 PARTICLE_SYSTEM_RENDERER = 199
 
@@ -1890,10 +1892,62 @@ def mesh_source_objects(path: Path, texture_stems: set[str]) -> list[BundleObjec
         return prefab_objects(path, texture_stems)
     scene = parse_gltf(path)
     if scene.has_skin():
-        return skinned_prefab_objects(path.stem, scene, texture_stems)
+        objects = skinned_prefab_objects(path.stem, scene, texture_stems)
+        return attach_anim_objects(path, objects)
     if scene.needs_hierarchy():
         return hierarchy_prefab_objects(path.stem, scene, texture_stems)
     return prefab_objects(path, texture_stems)
+
+
+def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleObject]:
+    """Add the legacy Animation component and clips a sibling `.anim.json` asks for.
+
+    A `.anim.json` beside a skinned source (written by
+    `shamway generate entity --anim`) names the clips the prefab's legacy
+    `Animation` component carries — `Idle1` for an idle bob, and so on. The
+    engine's `GameObjectAnimalAnimation` plays those by name, so this is how
+    a generated entity gets a movement clip without an editor.
+    """
+    declaration_path = path.with_suffix(".anim.json")
+    if not declaration_path.is_file():
+        return objects
+    declaration = anim.parse_anim(declaration_path)
+    fields_list = anim.clip_fields(declaration)
+    clip_keys = [f"{path.stem}:anim:{clip.name}" for clip in declaration.clips]
+    clip_objects = [
+        BundleObject(
+            ANIMATION_CLIP,
+            clip.name,
+            fields,
+            key=clip_key,
+            in_container=False,
+        )
+        for clip, clip_key, fields in zip(declaration.clips, clip_keys, fields_list, strict=True)
+    ]
+    animation_key = f"{path.stem}:animation"
+    root_go = f"{path.stem}:go"
+    animation = BundleObject(
+        ANIMATION_COMPONENT,
+        "",
+        {
+            "m_Animation": Ref(clip_keys[0]),
+            "m_Animations": [Ref(key) for key in clip_keys],
+            "m_PlayAutomatically": declaration.play_automatically,
+            "m_AnimatePhysics": False,
+            "m_CullingType": 0,
+            "m_WrapMode": 2,
+            "m_Enabled": True,
+            "m_GameObject": Ref(root_go),
+        },
+        key=animation_key,
+        in_container=False,
+    )
+    for obj in objects:
+        if obj.key == root_go:
+            components = [item["component"].key for item in obj.fields["m_Component"]]
+            components.append(animation_key)
+            obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
+    return objects + clip_objects + [animation]
 
 
 def vfx_prefab_objects(path: Path, texture_stems: set[str]) -> tuple[list[BundleObject], set[str]]:

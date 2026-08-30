@@ -25,7 +25,7 @@ lists what each assertion catches.
 | `assets-src/bundle/shamwaySelfTestProp.glb` | the mesh, a full 1 × 1 × 1 m block so it fills the voxel it is placed into, carrying UV0 so a texture can map; orientation is carried by the albedo's arrows and markers |
 | `assets-src/bundle/timedNuke.glb` | named hierarchy with an `armedLamp` child |
 | `assets-src/bundle/gear.glb` | two-bone skinned mesh (`Origin/Hips`, `Origin/Hips/Spine`) |
-| `assets-src/bundle/burst.vfx` | looping ParticleSystems a person can see: additive gold flash (haze card), alpha smoke (haze card), falling sparks (streak card) |
+| `assets-src/bundle/burst.vfx` | looping ParticleSystems (gold flash, grey haze, falling sparks). Systems are offset (`shape.position`) so they are not one blob. Flash and sparks have been seen live; **grey haze is not signed off** ([improvements.md §8](../../docs/status/improvements.md)) |
 | `assets-src/bundle/flashCard.png` / `smokeCard.png` / `sparkCard.png` | particle cards from `shamway generate particle-card` haze/streak |
 | `assets-src/bundle/shamwaySelfTestProp_albedo.png` | bound to the prefab's material by the `_albedo` convention; a large **R** and an up-arrow, so mirrored and upside-down each read wrong at a glance |
 | `assets-src/bundle/shamwaySelfTestCreature.glb` | a generated skinned entity (`shamway generate entity --rig quadruped`), so the entity lane's prefab — bones, weights, `SkinnedMeshRenderer` — is exercised by the same live client |

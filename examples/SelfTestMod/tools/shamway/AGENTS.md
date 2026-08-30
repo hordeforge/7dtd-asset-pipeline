@@ -118,7 +118,8 @@ Never copy a script out of the pipeline into this repository, and never write a
 relative path into a checkout of it. Everything generalized is reachable from
 the command this mod already depends on:
 
-- `shamway generate --list` — sound, audio, cutout, icon, texture-maps, mesh
+- `shamway generate --list` — sound, audio, cutout, particle-card, icon, texture-maps, mesh
+- `shamway docs vfx` — `.vfx` graphs, `shape.position`, `--look`
 - `shamway generate sound --help` — each one explains itself
 - `shamway docs` — every rule the pipeline knows
 - `shamway docs art-direction` — the style contract, in full

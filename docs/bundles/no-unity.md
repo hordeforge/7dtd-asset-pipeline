@@ -210,6 +210,7 @@ asset, named by its file stem — the name 7DTD's URIs ask for:
 | `myModBlast.wav` | `AudioClip`, 16-bit PCM in an FSB5 bank | `sounds.xml`, `LoadAsset<AudioClip>` |
 | `myModData.json`, `.txt`, `.csv` | `TextAsset` | `LoadAsset<TextAsset>` |
 | `myModThing.glb`, `.gltf`, `.obj`, `.stl`, `.ply` | a **prefab** with its `Mesh`, `Material` and `Shader` | `Meshfile`, block `Model`, `LoadAsset<GameObject>` |
+| `burst.vfx` (next to its card PNGs) | a **prefab** of ParticleSystem children | `LoadAsset<GameObject>`; look suite `<mod>_<stem>_look` |
 | `myModBeep.ogg`, `.mp3`, `.flac`, `.aiff`, `.m4a`, `.opus`, `.wma` | `AudioClip`, decoded by **FFmpeg** first | `sounds.xml`, `LoadAsset<AudioClip>` |
 | `myModGlyph.svg`, `.psd`, `.exr`, `.webp`, `.avif` | `Texture2D`, rasterized by **ImageMagick** first | `LoadAsset<Texture2D>` |
 
@@ -236,6 +237,18 @@ the bundle the same way, with no editor between them and it.
 shamway check-mesh assets-src/bundle/myModThing.glb
 shamway build
 ```
+
+A glTF with extra named nodes keeps that hierarchy (SelfTest `timedNuke` /
+`armedLamp`). A glTF with a skin becomes a `SkinnedMeshRenderer` (SelfTest
+`gear`, generated entities). See [vfx.md](../authoring/vfx.md) for `.vfx`
+graphs and [entities.md](../authoring/entities.md) for rigs.
+
+### Particle graphs (`.vfx`)
+
+One `.vfx` file is one prefab. `shamway generate particle-card` writes the
+cards; `shape.position` offsets child systems in local metres. Mechanical
+proof is the default `playtest-synthesized` run. A picture is a separate
+`--look` / `<mod>_<stem>_look` invocation — never mixed with `*_block_*`.
 
 Two conversions happen inside the writer, because both are the kind of wrong
 that loads perfectly and looks broken:

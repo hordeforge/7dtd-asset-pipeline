@@ -282,6 +282,20 @@ look at it, or listen to it, and say that you did. [Validation](../validation.md
 lists exactly what offline parsing cannot prove; [Release
 checklist](../runbooks/release-checklist.md) is the full list.
 
+This repository's writer regression is `shamway script playtest-synthesized`:
+it loads every member, places the self-test block on a voxel, and runs
+editorless mechanical cases. That is **not** a floating-prefab picture.
+Visual sign-off of one prefab:
+
+```bash
+shamway script playtest-synthesized --look
+```
+
+Default `--look` is the looping burst only. Another stem:
+`playtest-synthesized --look shamwaySelfTestCreature`. Never mix a
+`*_look` suite with `*_block_*`. Grey haze on burst is not signed off
+([improvements.md §8](../status/improvements.md)).
+
 For a C# mod, point `deploy` at the built dist/release modlet, not its source
 root. A source tree with `.cs`/`.csproj` inputs but no root-level DLL is
 refused: deploying only its XML and resources produces cascading missing-class

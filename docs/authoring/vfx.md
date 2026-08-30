@@ -97,6 +97,66 @@ sparks, and no readable grey haze. The fixture now offsets those three
 itself visible is still open in
 [improvements.md](../status/improvements.md).
 
+## Field reference
+
+Keys the writer accepts. Anything else fails the pack. Defaults are in
+parentheses.
+
+**File:** `format` (`shamway.vfx`), `version` (1), `budget` (cap 10000),
+`materials`, `systems` (cap 16).
+
+**Material:** `name`, `blend` (`additive` or `alpha`), `texture` (card
+stem already in the bundle folder).
+
+**System:** `name`, `duration`, `looping`, `play_on_awake`, `start_delay`,
+`simulation_space` (`local` / `world`), `scaling_mode` (`hierarchy` /
+`local` / `shape`), `max_particles`, `start_lifetime`, `start_speed`,
+`start_size`, `start_rotation`, `start_color`, `emission`, `shape`,
+`velocity_over_lifetime`, `limit_velocity`, `size_over_lifetime`,
+`rotation_over_lifetime`, `color_over_lifetime`, `renderer`.
+
+**Emission:** `rate`, `bursts` (`time`, `count`, `cycles`, `interval`;
+cap 8 bursts).
+
+**Shape:** `type` (`sphere` / `hemisphere` / `cone` / `box` / `circle`),
+`radius`, `angle`, `length`, `radius_thickness`, `arc`, `scale`,
+`position` (local metres), `rotation` (local degrees). After a look
+stages the prefab facing the camera: −X left, +X right, +Y up.
+
+**Renderer:** `mode` (`billboard` / `stretched_billboard` /
+`horizontal_billboard`), `material`, `length_scale`, `velocity_scale`.
+
+**Curves:** a number, `[min, max]`, `{"curve": [[t, v], …]}` (cap 8
+keys), or two-curve form. Velocity `x`/`y`/`z` must share one curve
+mode, plus `space` (`local` / `world`).
+
+## How to look at it
+
+Offline: `shamway build` then `shamway inspect --deep Resources/mymod.unity3d`
+must list `ParticleSystem` counts for the stem.
+
+Live mechanical (did the game instantiate it): default
+`shamway script playtest-synthesized` — bundle + block-on-voxel +
+editorless. That is not a picture of the VFX.
+
+Visual: a **separate** invocation.
+
+```bash
+shamway script playtest-synthesized --look
+```
+
+Default `--look` is this repo's looping burst only
+(`shamwayselftest_burst_look`). Another prefab:
+
+```bash
+shamway script playtest-synthesized --look shamwaySelfTestCreature
+```
+
+or `playtest-acceptance.sh --suite <mod>_<stem>_look`. Never comma-list
+`*_look` with `*_block_*`. File the frame with
+`shamway client capture`. Grey haze on the self-test burst is **not**
+signed off ([improvements.md §8](../status/improvements.md)).
+
 Everything below is detail.
 
 ## Scope: presentation only
@@ -347,11 +407,17 @@ every failure that looked like one.
 
 ## Acceptance
 
-Offline, before a client: `build` passes the module and class-142 gates,
-`inspect --deep` shows the systems survived, and the `.mat` grep shows real
-blend state.
+Editorless path (the default). Offline, before a client: `build` passes,
+and `inspect --deep` shows ParticleSystem / ParticleSystemRenderer counts
+for the stem. That proves construction, not a picture.
 
-In a client, and only there:
+Live mechanical: `playtest-synthesized` without `--look` instantiates the
+prefab. Visual sign-off is `--look` / `<mod>_<stem>_look` plus
+`client capture`. A passing look suite means something rendered; grey
+haze on the self-test burst is still open
+([improvements.md §8](../status/improvements.md)).
+
+For a gameplay-hooked effect (Unity-authored or Harmony-spawned), also:
 
 1. The effect spawns on the real event, and the log line naming the tier and
    distance appears.

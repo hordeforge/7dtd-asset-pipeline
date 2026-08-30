@@ -461,3 +461,19 @@ children, and killing only the direct child would orphan them against
 `Library/`, so the next launch would hang on a lock left by a dead run and
 read as a corrupt project. If you ever see worker processes outlive a killed
 editor, it is a bug here; do not clean them up by hand.
+
+## “refusing mixed visual suites” / PLAYTEST_SUITE mixes `*_look` and `*_block_*`
+
+Those are two pictures. Run the look as its own invocation
+(`playtest-synthesized --look` or `--suite <mod>_<stem>_look`) and the
+block run separately. Do not append a look id to
+`PLAYTEST_CONCERN_SUITES`. Children of one `.vfx` prefab are one
+concern; two prefabs are not.
+
+## `--look` passes but there is no grey haze
+
+The suite asserts a renderer, not a picture. Self-test burst flash and
+sparks have been seen; grey haze has not
+([improvements.md §8](../status/improvements.md)). That is a card/blend
+problem, not a missing ParticleSystem and not another `shape.position`
+offset.

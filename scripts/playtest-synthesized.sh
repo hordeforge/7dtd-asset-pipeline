@@ -185,6 +185,18 @@ grep -qE "${STEM}_mat: .*shader=Shamway/Unlit" "$CLIENT_LOG" ||
 	fail "the material does not name the synthesized shader: the PPtr chain broke"
 grep -qE "${STEM}_albedo: .*256x256" "$CLIENT_LOG" ||
 	fail "the texture did not come back at its authored size"
+# The entity lane: a generated creature rides the same bundle. Its prefab
+# must come back with its SkinnedMeshRenderer (renderers=1) and its weighted
+# mesh with the authored vertex count. Spawning it as an entity class is
+# deliberately NOT asserted here: a custom entity class on a dedicated server
+# gets a negative id and renders nothing on clients (docs/authoring/entities.md),
+# and this run always uses one. The prefab load is the engine reading the
+# bundle; the class wiring is the offline `validate` gate's job.
+CREATURE="shamwaySelfTestCreature"
+grep -qE "$CREATURE: $CREATURE .*renderers=1" "$CLIENT_LOG" ||
+	fail "the entity prefab did not come back with its skinned renderer: an empty GameObject draws nothing"
+grep -qE "${CREATURE}_mesh: .*vertices=[0-9]+ submeshes=1" "$CLIENT_LOG" ||
+	fail "the entity mesh did not load with its vertex stream: the skin was flattened or dropped"
 grep -qE "PASS shamwayselftest_block_model/place_${STEM}Block" "$CLIENT_LOG" ||
 	fail "the block was not placed on a voxel (SetBlockRpc + ModelEntity spawn)"
 grep -qE "${STEM}Block: .*looking at voxel" "$CLIENT_LOG" ||
@@ -206,6 +218,8 @@ cat <<EOF
   OK   the mesh bounds are what was authored
   OK   the material names the synthesized shader
   OK   the texture loaded at its authored size
+  OK   the entity prefab loaded with its skinned renderer
+  OK   the entity mesh loaded with its vertex stream
   OK   the block sits on a voxel and the camera looks at it
   OK   armedLamp is findable by name
   OK   the skinned renderer resolved both bones

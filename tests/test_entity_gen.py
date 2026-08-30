@@ -34,7 +34,7 @@ from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.generators import run
 from sevendtd_asset_pipeline.generators.entity import entity_xml
 from sevendtd_asset_pipeline.gltf_scene import parse_gltf
-from sevendtd_asset_pipeline.rigs import load_rig
+from sevendtd_asset_pipeline.rigs import load_rig, scaled
 
 REVISION = "2022.3.62f2"
 needs_unitypy = unittest.skipUnless(
@@ -196,6 +196,71 @@ class EntityGeneratorTests(unittest.TestCase):
             code = run("entity", [str(out), "--rig", str(self.root / "nope.json")])
         self.assertEqual(code, 1)
         self.assertIn("does not exist", stderr.getvalue())
+
+    def test_every_named_rig_generates_with_its_own_parts(self) -> None:
+        from sevendtd_asset_pipeline.generators.entity import default_parts_for
+
+        for name in (
+            "humanoid",
+            "quadruped",
+            "quadruped-small",
+            "quadruped-large",
+            "bird",
+            "dinosaur",
+            "arachnid",
+            "crocodile",
+        ):
+            with self.subTest(name):
+                out = self.root / f"{name}.glb"
+                self.assertEqual(run("entity", [str(out), "--rig", name]), 0)
+                scene = parse_gltf(out)
+                self.assertEqual(len(scene.skins), 1)
+                rig = load_rig(name)
+                parts = default_parts_for(rig)
+                # Root gets no part; every other bone of the rig has one.
+                self.assertEqual(len(parts), len(rig.bones) - 1, name)
+
+    def test_size_variant_scales_the_parts_with_the_bones(self) -> None:
+        from sevendtd_asset_pipeline.generators.entity import default_parts_for
+
+        medium = default_parts_for(load_rig("quadruped"))
+        small = default_parts_for(load_rig("quadruped-small"))
+        self.assertAlmostEqual(small["Head"]["radius"], medium["Head"]["radius"] * 0.45)
+        self.assertAlmostEqual(
+            small["LeftFrontUpper"]["height"], medium["LeftFrontUpper"]["height"] * 0.45
+        )
+
+    def test_scale_flag_halves_bones_and_parts(self) -> None:
+        from sevendtd_asset_pipeline.generators.entity import default_parts_for
+
+        out = self.generate("--rig", "quadruped", "--scale", "0.5")
+        scene = parse_gltf(out)
+        pelvis = next(node for node in scene.nodes if node.name == "Pelvis")
+        self.assertAlmostEqual(pelvis.translation[1], 0.3, places=4)
+        rig = scaled(load_rig("quadruped"), 0.5)
+        parts = default_parts_for(rig)
+        self.assertAlmostEqual(parts["Head"]["radius"], 0.075 * 0.5)
+
+    def test_a_rig_without_default_parts_asks_for_a_parts_file(self) -> None:
+        spec = self.root / "tree.json"
+        spec.write_text(
+            json.dumps(
+                {
+                    "name": "tree",
+                    "bones": [
+                        {"name": "Trunk", "parent": None, "pos": [0, 0, 0]},
+                        {"name": "Branch", "parent": "Trunk", "pos": [0, 0.4, 0]},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        out = self.root / "tree.glb"
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            code = run("entity", [str(out), "--rig", str(spec)])
+        self.assertEqual(code, 1)
+        self.assertIn("no default part set", stderr.getvalue())
 
 
 @needs_unitypy

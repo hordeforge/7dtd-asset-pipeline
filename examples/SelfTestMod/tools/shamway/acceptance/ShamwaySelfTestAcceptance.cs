@@ -125,6 +125,50 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             holdSeconds: 12f,
             fail: "could not stage gear in front of the camera"));
 
+        GameObject shamwaySelfTestCreatureStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestCreature", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestCreature");
+                if (prefab == null)
+                {
+                    Report.Info("shamwaySelfTestCreature: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "shamwaySelfTestCreature: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                shamwaySelfTestCreatureStaged = UnityEngine.Object.Instantiate(prefab);
+                shamwaySelfTestCreatureStaged.transform.position = camera.position + ahead * 3.5f;
+                // Face the camera, and keep the prop's own up axis upright so
+                // the orientation card is readable rather than lying on edge.
+                shamwaySelfTestCreatureStaged.transform.rotation =
+                    Quaternion.LookRotation(-ahead, Vector3.up);
+                var renderers = shamwaySelfTestCreatureStaged.GetComponentsInChildren<Renderer>(true);
+                Report.Info("shamwaySelfTestCreature: staged at " + shamwaySelfTestCreatureStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", with " + renderers.Length + " renderer(s)");
+                // A prefab with no renderer cannot be photographed into evidence.
+                return renderers.Length > 0;
+            },
+            holdSeconds: 12f,
+            fail: "could not stage shamwaySelfTestCreature in front of the camera"));
+
         GameObject shamwaySelfTestPropStaged = null;
         queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestProp", new[] { "capture", "bundle" },
             stage: ctx =>
@@ -334,6 +378,57 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                 return loaded != null && loaded.name == "gear_mat" && loaded.shader != null;
             },
             fail: "the game did not load gear_mat from the staged bundle"));
+
+        GameObject shamwaySelfTestCreatureLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCreature", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCreatureLoaded = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestCreature");
+                var loaded = shamwaySelfTestCreatureLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCreature: LoadAsset<GameObject> returned null"
+                    : "shamwaySelfTestCreature: " + loaded.name + " children=" + loaded.transform.childCount + " renderers=" + loaded.GetComponentsInChildren<Renderer>(true).Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCreatureLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCreature" && loaded.transform != null;
+            },
+            fail: "the game did not load shamwaySelfTestCreature from the staged bundle"));
+
+        Mesh shamwaySelfTestCreature_meshLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCreature_mesh", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCreature_meshLoaded = DataLoader.LoadAsset<Mesh>(Bundle + "?shamwaySelfTestCreature_mesh");
+                var loaded = shamwaySelfTestCreature_meshLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCreature_mesh: LoadAsset<Mesh> returned null"
+                    : "shamwaySelfTestCreature_mesh: " + loaded.name + " vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount + " bounds=" + loaded.bounds.size);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCreature_meshLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCreature_mesh" && loaded.vertexCount > 0 && loaded.triangles.Length > 0;
+            },
+            fail: "the game did not load shamwaySelfTestCreature_mesh from the staged bundle"));
+
+        Material shamwaySelfTestCreature_matLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCreature_mat", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCreature_matLoaded = DataLoader.LoadAsset<Material>(Bundle + "?shamwaySelfTestCreature_mat");
+                var loaded = shamwaySelfTestCreature_matLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCreature_mat: LoadAsset<Material> returned null"
+                    : "shamwaySelfTestCreature_mat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCreature_matLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCreature_mat" && loaded.shader != null;
+            },
+            fail: "the game did not load shamwaySelfTestCreature_mat from the staged bundle"));
 
         GameObject shamwaySelfTestPropLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestProp", new[] { "bundle" },

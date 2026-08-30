@@ -1,0 +1,24 @@
+{
+  "name": "quadruped",
+  "bones": [
+    { "name": "Root", "parent": null, "pos": [0, 0, 0] },
+    { "name": "Pelvis", "parent": "Root", "pos": [0, 0.6, 0] },
+    { "name": "Spine", "parent": "Pelvis", "pos": [0, 0.1, 0] },
+    { "name": "Chest", "parent": "Spine", "pos": [0, 0.1, 0.03] },
+    { "name": "Neck", "parent": "Chest", "pos": [0, 0.1, 0.22] },
+    { "name": "Head", "parent": "Neck", "pos": [0, 0.04, 0.26] },
+    { "name": "Tail", "parent": "Pelvis", "pos": [0, 0.02, -0.22] },
+    { "name": "LeftFrontUpper", "parent": "Chest", "pos": [-0.1, -0.08, 0.12] },
+    { "name": "LeftFrontLower", "parent": "LeftFrontUpper", "pos": [0, -0.34, 0] },
+    { "name": "LeftFrontPaw", "parent": "LeftFrontLower", "pos": [0, -0.32, 0.04] },
+    { "name": "RightFrontUpper", "parent": "Chest", "pos": [0.1, -0.08, 0.12] },
+    { "name": "RightFrontLower", "parent": "RightFrontUpper", "pos": [0, -0.34, 0] },
+    { "name": "RightFrontPaw", "parent": "RightFrontLower", "pos": [0, -0.32, 0.04] },
+    { "name": "LeftRearUpper", "parent": "Pelvis", "pos": [-0.11, -0.06, -0.14] },
+    { "name": "LeftRearLower", "parent": "LeftRearUpper", "pos": [0, -0.26, 0] },
+    { "name": "LeftRearPaw", "parent": "LeftRearLower", "pos": [0, -0.25, 0.05] },
+    { "name": "RightRearUpper", "parent": "Pelvis", "pos": [0.11, -0.06, -0.14] },
+    { "name": "RightRearLower", "parent": "RightRearUpper", "pos": [0, -0.26, 0] },
+    { "name": "RightRearPaw", "parent": "RightRearLower", "pos": [0, -0.25, 0.05] }
+  ]
+}

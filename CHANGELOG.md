@@ -25,6 +25,17 @@ tag has no changelog section.
   rig and writes the `entityclasses.xml` patch (mandatory `Prefab` + `Mesh`
   bundle URI). Both feed the writer's skinned lane, and the generated
   prefab is proven by UnityPy read-back.
+- Seven more shipped rigs, each with its own default part set:
+  `quadruped` and its `quadruped-small`/`quadruped-large` size variants
+  (one-line `"base"` + `"scale"` specs), `bird`, `dinosaur`, `arachnid` and
+  `crocodile`. A rig spec can now carry `"scale"` and extend another rig by
+  `"base"`, and both generators take `--scale` on top — bones and parts
+  scale together.
+- The self-test fixture (`examples/SelfTestMod`) now carries a generated
+  skinned entity beside the prop: `playtest-synthesized` asserts in a live
+  client that the entity prefab comes back with its `SkinnedMeshRenderer`
+  and that its weighted mesh loads with its vertex stream, and `validate`
+  cross-checks the entity's `entityclasses.xml` URIs against the manifest.
 - Editorless `bundle_source = "synthesized"` now writes named glTF prefab
   hierarchies (including an `armedLamp` child), `SkinnedMeshRenderer` from a
   glTF skin (bind poses, weights, bone-name hashes; never flattened to

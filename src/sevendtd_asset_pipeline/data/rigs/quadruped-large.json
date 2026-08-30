@@ -1,0 +1,5 @@
+{
+  "name": "quadruped-large",
+  "base": "quadruped",
+  "scale": 1.5
+}

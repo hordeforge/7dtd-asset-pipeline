@@ -65,7 +65,18 @@ RIGS_DIR = Path(__file__).parent / "data" / "rigs"
 
 # A named rig may only come from the packaged set. Everything else must be a
 # path the caller owns; a typo'd name must not silently resolve to a template.
-NAMED_RIGS = frozenset({"humanoid"})
+NAMED_RIGS = frozenset(
+    {
+        "humanoid",
+        "quadruped",
+        "quadruped-small",
+        "quadruped-large",
+        "bird",
+        "dinosaur",
+        "arachnid",
+        "crocodile",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -86,10 +97,17 @@ class RigBone:
 
 @dataclass(frozen=True)
 class Rig:
-    """A validated bone structure, in declaration order."""
+    """A validated bone structure, in declaration order.
+
+    `scale` is the total uniform factor already applied to every bone's
+    position: 1 for an authored rig, the product of every `base` and `scale`
+    on its spec chain. The generators multiply part sizes by it, so a size
+    variant stays proportioned to its bones.
+    """
 
     name: str
     bones: tuple[RigBone, ...]
+    scale: float = 1.0
 
     def root(self) -> RigBone:
         """The single bone whose parent is None (every rig has exactly one)."""
@@ -102,15 +120,27 @@ class Rig:
         raise KeyError(name)
 
 
-def load_rig(spec: str | Path) -> Rig:
+def load_rig(spec: str | Path, _seen: frozenset[Path] = frozenset()) -> Rig:
     """Load a rig from a path (``.json``) or a packaged template by name.
 
     ``humanoid`` resolves to the shipped template; any other string is taken
     as a filesystem path so a mod owns its rigs. The spec is validated the
     moment it loads — a rig with a dangling parent or a cycle is refused
     before any generator touches it.
+
+    A spec may carry `"scale": <factor>` to resize every bone position, and
+    `"base": <spec>` to inherit another rig's bones at that scale — the
+    packaged size variants are exactly that:
+
+        {"name": "quadruped-small", "base": "quadruped", "scale": 0.45}
+
+    `base` chains are cycle-guarded and depth-bounded.
     """
     path = resolve_rig_spec(spec)
+    if path in _seen:
+        raise PipelineError(
+            f"rig spec {path} is already on its own base chain; a rig cannot extend itself"
+        )
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -122,6 +152,25 @@ def load_rig(spec: str | Path) -> Rig:
     name = document.get("name")
     if not isinstance(name, str) or not name:
         raise PipelineError(f'rig spec {path} needs a non-empty string "name"')
+    scale = _read_spec_scale(document, path)
+    base = document.get("base")
+    if base is not None and not isinstance(base, str):
+        raise PipelineError(f'rig spec {path} "base" must be a string or absent')
+    if base is not None:
+        base_rig = load_rig(base, _seen | {path})
+        base_bones = tuple(
+            RigBone(
+                name=bone.name,
+                parent=bone.parent,
+                pos=(bone.pos[0] * scale, bone.pos[1] * scale, bone.pos[2] * scale),
+                rot=bone.rot,
+                scale=bone.scale,
+            )
+            for bone in base_rig.bones
+        )
+        rig = Rig(name=name, bones=base_bones, scale=base_rig.scale * scale)
+        validate_rig(rig, source=str(path))
+        return rig
     raw_bones = document.get("bones")
     if not isinstance(raw_bones, list) or not raw_bones:
         raise PipelineError(f'rig spec {path} needs a non-empty "bones" array')
@@ -146,9 +195,42 @@ def load_rig(spec: str | Path) -> Rig:
                 scale=_read_scale(item, path, bone_name),
             )
         )
-    rig = Rig(name=name, bones=tuple(bones))
+    if scale != 1.0:
+        bones = [
+            RigBone(
+                name=bone.name,
+                parent=bone.parent,
+                pos=(bone.pos[0] * scale, bone.pos[1] * scale, bone.pos[2] * scale),
+                rot=bone.rot,
+                scale=bone.scale,
+            )
+            for bone in bones
+        ]
+    rig = Rig(name=name, bones=tuple(bones), scale=scale)
     validate_rig(rig, source=str(path))
     return rig
+
+
+def scaled(rig: Rig, factor: float) -> Rig:
+    """A copy of `rig` with every bone position and its `scale` multiplied.
+
+    The generators' `--scale` flag uses this: the armature comes out the new
+    size, and `rig.scale` tells the entity generator how to scale the parts
+    with it.
+    """
+    if not math.isfinite(factor) or factor <= 0:
+        raise PipelineError(f"scale must be a positive number, not {factor!r}")
+    bones = tuple(
+        RigBone(
+            name=bone.name,
+            parent=bone.parent,
+            pos=(bone.pos[0] * factor, bone.pos[1] * factor, bone.pos[2] * factor),
+            rot=bone.rot,
+            scale=bone.scale,
+        )
+        for bone in rig.bones
+    )
+    return Rig(name=rig.name, bones=bones, scale=rig.scale * factor)
 
 
 def resolve_rig_spec(spec: str | Path) -> Path:
@@ -313,6 +395,16 @@ def _read_scale(item: dict[str, Any], path: Path, bone: str) -> float:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise PipelineError(f'rig spec {path} bone {bone!r} "scale" must be a number')
     return float(value)
+
+
+def _read_spec_scale(document: dict[str, Any], path: Path) -> float:
+    value = document.get("scale", 1.0)
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise PipelineError(f'rig spec {path} "scale" must be a number')
+    scale = float(value)
+    if not math.isfinite(scale) or scale <= 0:
+        raise PipelineError(f'rig spec {path} "scale" must be a positive number')
+    return scale
 
 
 def world_matrices(rig: Rig) -> list[list[float]]:

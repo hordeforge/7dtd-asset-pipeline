@@ -1883,6 +1883,45 @@ def skinned_prefab_objects(
             ]
             components.append(renderer_key)
             obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
+    # The game's physics body only grounds an entity whose referenced bone has
+    # an actual collider component: PhysicsBodyInstance.bindCollider does
+    # modelRoot.Find(path) then GetComponent<Box/Capsule/SphereCollider>() and,
+    # finding none, creates a PhysicsBodyNullCollider (verified from
+    # PhysicsBodyInstance.il.txt). Real animal models carry colliders on their
+    # bones; a generated creature's bones are bare transforms, so it floats at
+    # its spawn offset no matter which physics body the entity class names. Add
+    # a small BoxCollider to every bone so the physics body builds real
+    # colliders and gravity settles the creature on the ground.
+    collider_size = {"x": 0.08, "y": 0.08, "z": 0.08}
+    for joint in skin.joints:
+        bone_go = f"{stem}:node:{joint}:go"
+        collider_key = f"{stem}:node:{joint}:collider"
+        objects.append(
+            BundleObject(
+                BOX_COLLIDER,
+                "",
+                {
+                    "m_GameObject": Ref(bone_go),
+                    "m_Material": NULL_PPTR,
+                    "m_IncludeLayers": {"m_Bits": 0},
+                    "m_ExcludeLayers": {"m_Bits": 0},
+                    "m_LayerOverridePriority": 0,
+                    "m_IsTrigger": False,
+                    "m_ProvidesContacts": False,
+                    "m_Enabled": True,
+                    "m_Size": collider_size,
+                    "m_Center": {"x": 0.0, "y": 0.0, "z": 0.0},
+                },
+                key=collider_key,
+                in_container=False,
+            )
+        )
+        for obj in objects:
+            if obj.key == bone_go:
+                components = [item["component"].key for item in obj.fields["m_Component"]]
+                components.append(collider_key)
+                obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
+                break
     return objects
 
 

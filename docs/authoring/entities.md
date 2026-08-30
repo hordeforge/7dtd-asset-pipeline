@@ -188,17 +188,20 @@ because a load run and a look run paint different pictures:
   comes back with its `SkinnedMeshRenderer`, its weighted mesh loads with
   its vertex stream, and its albedo texture loads at its authored size
   (`examples/SelfTestMod` carries a generated quadruped for exactly this);
-- the `--look` run asserts the game **instantiates** it: the creature stages
-  in front of the camera with a renderer, so there is a frame to judge:
+- the creature's own look suite asserts the game **instantiates** it, alone,
+  in front of the camera with a renderer, so there is a frame to judge.
+  `playtest-synthesized --look` is the looping VFX prefab only
+  (`shamwayselftest_burst_look`); do not stack the creature with other
+  prefabs in one invocation.
 
   ```bash
-  shamway script playtest-synthesized            # loads + block placement
-  shamway script playtest-synthesized --look     # prefabs staged in camera
+  shamway script playtest-synthesized
+  shamway script playtest-acceptance --suite shamwayselftest_shamwaySelfTestCreature_look
   ```
 
-**A load is not a look, and a staged prefab is not a sign-off.** The `--look`
-run proves the creature renders *something*; that it reads as a creature is
-a person's judgement. File it, with the frame and the observable it was
+**A load is not a look, and a staged prefab is not a sign-off.** The creature
+look suite proves it renders *something*; that it reads as a creature is a
+person's judgement. File it, with the frame and the observable it was
 checked against, through `shamway client capture entity-look --observable
 "a quadruped, four legs, head forward, not mirrored"` — and the entity lane
 is not complete until that capture exists.
@@ -206,9 +209,8 @@ is not complete until that capture exists.
 **Ran live on 2026-08-30** (client + dedicated server on the development
 host): the default run reported `SUMMARY pass=25 fail=0` — the engine
 loaded every bundle member through `DataLoader.LoadAsset<T>`, the generated
-creature's prefab, weighted mesh, material and albedo included — and the
-`--look` run reported `SUMMARY pass=5 fail=0` with
-`look_shamwaySelfTestCreature` passing: the creature instantiated in front
-of the camera with a renderer, and a 2560×1920 frame was captured. The
-frame was **signed off the same day**: the creature reads as a quadruped —
-four legs, head forward, not mirrored, textured.
+creature's prefab, weighted mesh, material and albedo included. A later
+mixed `--look` that staged every prefab in one suite at the same offset is
+not the procedure; each prefab has its own `*_look` suite. The creature
+frame captured that day was **signed off**: four legs, head forward, not
+mirrored, textured.

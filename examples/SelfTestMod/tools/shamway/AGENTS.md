@@ -340,12 +340,14 @@ grounded voxel and the camera `LookAt`s it — the AtomicDoomsday
 bomb/detonator pattern, not a prefab hanging in front of the player) and
 `shamwayselftest_block_place` (the character places the block through the
 `PlaceAsBlock` item action). `shamway script playtest-synthesized` runs
-`shamwayselftest_bundle` (loads) and `shamwayselftest_block_model` (placed
-block). It does **not** run `shamwayselftest_look`. That suite instantiates
-the prefab in front of the camera; mixing it with the block suite is how a
-texture floated mid-air in the same session as a placed block. The scripts
-and the generated provider refuse that mix. Run `_look` alone if you need
-it: `shamway script playtest-acceptance --suite shamwayselftest_look`.
+`shamwayselftest_bundle` (loads), `shamwayselftest_block_model` (placed
+block), and `shamwayselftest_editorless` (mechanical). It does **not**
+camera-stage prefabs. Each GameObject has its own `<stem>_look` suite so
+they cannot overlay at the same world point. Mixing a look suite with the
+block suite is how a texture floated mid-air in the same session as a
+placed block. The scripts and the generated provider refuse that mix. For
+the looping VFX only: `playtest-synthesized.sh --look` (suite
+`shamwayselftest_burst_look`).
 
 And the last step is still a person. A suite that passes every case above
 proves the game read your bytes and ran your logic; it does not prove the art

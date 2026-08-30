@@ -312,9 +312,10 @@ script is bypassed; `7dtd-playtest`'s orchestrator refuses it too. The name
 **is** the picture: a suite that hangs a prefab in the player's face must
 end in `_look`, or the gate cannot see it. A particle system that is already
 part of the staged prefab is not a second picture; consecutive cases of one
-feature in one suite are not either. Run `_look` as its own invocation if
-you need it. Do not drag a block-entity transform into the camera "so there
-is something to photograph".
+feature in one suite are not either. Run one `<mod>_<stem>_look` as its own invocation if
+you need a floating prefab. Do not drag a block-entity transform into the camera "so there
+is something to photograph". Do not comma-list several `*_look` suites:
+that overlays unrelated prefabs at the same camera offset.
 
 That is the boundary. The pipeline knows what is *in* the bundle, so it can
 prove the engine reads every member. It has no idea what any of it is *for* —

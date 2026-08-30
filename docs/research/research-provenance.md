@@ -1876,6 +1876,22 @@ engine-integration problem requiring either that or a mod-side C# physics
 body — a live-verified grounded walk is the outstanding acceptance, not yet
 achieved.
 
+**(2) third attempt, measured closed — and the config route is exhausted:**
+`type="Normal"` (the other per-bone collider type) with `Root/`-prefixed
+paths also floats in the treeline. `EnumColliderType` (from
+`PhysicsBodyColliderConfiguration.il.txt`) is only `None`/`Normal`/`Detail`/
+`All` — there is **no explicit box/capsule type** — and both `Normal` and
+`Detail` build per-bone Unity `CapsuleCollider`s that the procedural skinned
+mesh does not ground with. So the *config-`physicsbodies.xml`* route is
+measured closed for the grounded walk. The remaining route is a **mod-side C#
+physics body** (a custom component that adds a grounding collider to the
+spawned entity) — which is a C# mod, not an asset-pipeline output. That is
+the honest limit: the asset pipeline produces the entity, clips and XML; a
+procedurally-skinned creature's *physics grounding* is not achievable via
+generated config alone in this engine revision. A generated creature
+animates and travels (verified), but a fully grounded walk needs a C# mod
+component — recorded as the outstanding, non-pipeline item.
+
 ## Ground height: GetTerrainHeight is the voxel surface; GetHeightAt is not (2026-08-30)
 
 `ilspycmd -t World` on the installed `Assembly-CSharp.dll` (Unity 2022.3

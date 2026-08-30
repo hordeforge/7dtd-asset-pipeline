@@ -65,6 +65,11 @@ tag has no changelog section.
 
 ### Changed
 
+- Usage docs for this session's surfaces: `docs/authoring/vfx.md` field
+  reference and `--look` recipe; `no-unity.md` `.vfx` membership;
+  `validation.md` `PLAYTEST_CONCERN_SUITES`; `consumer-api.md` /
+  `quickstart.md` synthesized vs `--look`; troubleshooting for mixed
+  suites and the unsigned-off burst haze.
 - The self-test `burst` look stages flash, smoke and sparks as one prefab
   (that is allowed). They used to share one origin, so the additive gold
   flash hid the other layers. Each system now has a distinct

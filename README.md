@@ -221,6 +221,11 @@ shamway acceptance-provider --harness-dll /path/to/7dtd-playtest.dll --install
 shamway script playtest-acceptance
 ```
 
+For **this** repository's synthesized writer, `shamway script
+playtest-synthesized` is the live regression (load + block on a voxel +
+editorless mechanical). A picture of one prefab is a second invocation:
+`playtest-synthesized --look` (burst) or `--look STEM`. Load is not look.
+
 A bare launch proves the mod loads, not that anything read the bundle. It
 refuses to start over a client that is already running, because a reused
 process proves nothing about a rebuild:
@@ -459,7 +464,9 @@ consuming mod reads them with no checkout of this repository, and
 - [Authoring tools](docs/authoring/authoring-tools.md) — the researched OSS toolchain and which gate each belongs to
 - [ADR 0006: icons from the mesh with Blender](docs/adrs/0006-render-icons-from-the-mesh-with-blender.md) — the editorless icon lane and its honest downside
 - [Sound](docs/authoring/audio.md) — synthesis, `sounds.xml`, and why a loaded clip can be silent
-- [Visual effects](docs/authoring/vfx.md) — budgets, LOD tiers, and the two silent material failures
+- [Visual effects](docs/authoring/vfx.md) — `.vfx` graphs, `particle-card`,
+  `shape.position`, how to `--look`, budgets, and the two silent material
+  failures
 - [Environment effects](docs/authoring/environment-effects.md) — weather, fog and light: the effect the bundle cannot carry
 
 **Reference**

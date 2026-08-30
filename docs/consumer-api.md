@@ -180,6 +180,15 @@ machine**. Only three ever do, and `build` only when the mod set
 | `prompt KIND --subject …` | no | no | no | render a house-style image prompt and its lane |
 | `docs [TOPIC]` | no | no | no | print packaged documentation |
 | `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized, playtest-capture) |
+
+`playtest-synthesized` default suite list is
+`<mod>_bundle,<mod>_block_model,<mod>_editorless` with
+`PLAYTEST_CONCERN_SUITES` set to that same list. `--look [STEM]` replaces
+it with one `<mod>_<stem>_look` (no STEM: `shamwayselftest_burst_look`).
+`playtest-acceptance --suite ID` is the same orchestrator for a consuming
+mod. `acceptance-provider` emits **one look suite per prefab** and
+`CaseDef.RegisterStaged` on each camera-staged instance. Mix of `*_look`
+and `*_block_*` is refused.
 | `client where\|deploy\|hold\|launch\|log\|mute\|unmute\|capture\|disable-discord` | no | no | **deploy/launch** write outside the modlet; **capture** writes `.local/acceptance/` inside it; `hold` runs another command under the deploy lock | fresh-client acceptance plumbing |
 | `schema` / `call NAME` / `serve` | no | no | per operation | the machine-readable surface |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |

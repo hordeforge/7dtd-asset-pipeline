@@ -341,8 +341,10 @@ with `CaseDef.RegisterStaged` so the next hold cannot overlay it).
 `<mod>_block_*` places a block on a voxel. `<mod>_editorless` is
 mechanical. Never comma-list unrelated suites in one `PLAYTEST_SUITE`;
 never comma-list `*_look` with `*_block_*`. `playtest-synthesized` runs
-`_bundle`, `_block_model`, and `_editorless` as one declared concern.
-`playtest-synthesized.sh --look [STEM]` runs that prefab's look suite
+`_bundle`, `_block_model`, and `_editorless` as one declared concern
+(`PLAYTEST_CONCERN_SUITES` set to that same list so the harness can refuse
+an undeclared mix). `--look` is a **different** invocation: do not append
+a look id to that env. `playtest-synthesized.sh --look [STEM]` runs that prefab's look suite
 (`<mod>_<stem>_look`) alone — every generated rig in the self-test has one
 (`shamwayselftest_shamwayselftestbird_look`, `_shamwayselftestarachnid_look`,
 `_shamwayselftestdino_look`, `_shamwayselftestcreature_look`) — and without

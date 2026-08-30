@@ -23,6 +23,9 @@ lists what each assertion catches.
 | Path | Why |
 |---|---|
 | `assets-src/bundle/shamwaySelfTestProp.glb` | the mesh, a full 1 × 1 × 1 m block so it fills the voxel it is placed into, carrying UV0 so a texture can map; orientation is carried by the albedo's arrows and markers |
+| `assets-src/bundle/timedNuke.glb` | named hierarchy with an `armedLamp` child |
+| `assets-src/bundle/gear.glb` | two-bone skinned mesh (`Origin/Hips`, `Origin/Hips/Spine`) |
+| `assets-src/bundle/burst.vfx` | two ParticleSystems (additive flash, alpha smoke) |
 | `assets-src/bundle/shamwaySelfTestProp_albedo.png` | bound to the prefab's material by the `_albedo` convention; a large **R** and an up-arrow, so mirrored and upside-down each read wrong at a glance |
 | `Config/blocks.xml` | one block, `Shape` + `Model` and nothing else — every extra property would be one more thing that could explain a failure |
 | `UIAtlases/ItemIconAtlas/` | the icon, from `shamway generate mesh-icon`: a clay render, not the in-game look |

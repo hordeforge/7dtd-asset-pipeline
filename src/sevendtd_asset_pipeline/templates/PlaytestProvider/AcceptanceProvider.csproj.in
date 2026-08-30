@@ -32,6 +32,14 @@
       <HintPath>$(GameManagedDir)/UnityEngine.AudioModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(GameManagedDir)/UnityEngine.AnimationModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule">
+      <HintPath>$(GameManagedDir)/UnityEngine.ParticleSystemModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="7dtd-playtest">
       <HintPath>$(PlaytestHarnessPath)</HintPath>
       <Private>false</Private>

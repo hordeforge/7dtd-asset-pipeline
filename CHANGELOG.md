@@ -65,6 +65,14 @@ tag has no changelog section.
 
 ### Changed
 
+- The self-test `burst` look stages flash, smoke and sparks as one prefab
+  (that is allowed). They used to share one origin, so the additive gold
+  flash hid the other layers. Each system now has a distinct
+  `shape.position` (smoke left, flash centre, sparks right).
+  `docs/authoring/vfx.md` documents that as the reusable `.vfx` surface
+  (`shape.position` / `shape.rotation`, `shamway generate particle-card`);
+  any synthesized mod uses the same commands. Grey haze is still not
+  readable at `--look` — parked as improvements.md §8.
 - AGENTS.md and CONTRIBUTING.md state the uv rule as a run contract: bootstrap
   **this** checkout, then `uv run --project . shamway` / `.venv/bin/shamway`.
   A sibling clone's venv or the system interpreter is a different environment.

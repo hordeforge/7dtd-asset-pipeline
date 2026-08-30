@@ -1,0 +1,27 @@
+{
+  "name": "crocodile",
+  "bones": [
+    { "name": "Root", "parent": null, "pos": [0, 0, 0] },
+    { "name": "Pelvis", "parent": "Root", "pos": [0, 0.3, 0] },
+    { "name": "Spine1", "parent": "Pelvis", "pos": [0, 0.08, 0.24] },
+    { "name": "Spine2", "parent": "Spine1", "pos": [0, 0.06, 0.26] },
+    { "name": "Chest", "parent": "Spine2", "pos": [0, 0.06, 0.28] },
+    { "name": "Neck", "parent": "Chest", "pos": [0, 0.05, 0.3] },
+    { "name": "Head", "parent": "Neck", "pos": [0, 0.03, 0.38] },
+    { "name": "Tail1", "parent": "Pelvis", "pos": [0, 0.06, -0.35] },
+    { "name": "Tail2", "parent": "Tail1", "pos": [0, -0.02, -0.4] },
+    { "name": "Tail3", "parent": "Tail2", "pos": [0, -0.06, -0.38] },
+    { "name": "LeftFrontUpper", "parent": "Chest", "pos": [-0.12, -0.08, 0.1] },
+    { "name": "LeftFrontLower", "parent": "LeftFrontUpper", "pos": [0, -0.22, 0] },
+    { "name": "LeftFrontFoot", "parent": "LeftFrontLower", "pos": [0, -0.06, 0.05] },
+    { "name": "RightFrontUpper", "parent": "Chest", "pos": [0.12, -0.08, 0.1] },
+    { "name": "RightFrontLower", "parent": "RightFrontUpper", "pos": [0, -0.22, 0] },
+    { "name": "RightFrontFoot", "parent": "RightFrontLower", "pos": [0, -0.06, 0.05] },
+    { "name": "LeftRearUpper", "parent": "Pelvis", "pos": [-0.14, -0.06, -0.1] },
+    { "name": "LeftRearLower", "parent": "LeftRearUpper", "pos": [0, -0.18, 0] },
+    { "name": "LeftRearFoot", "parent": "LeftRearLower", "pos": [0, -0.05, 0.05] },
+    { "name": "RightRearUpper", "parent": "Pelvis", "pos": [0.14, -0.06, -0.1] },
+    { "name": "RightRearLower", "parent": "RightRearUpper", "pos": [0, -0.18, 0] },
+    { "name": "RightRearFoot", "parent": "RightRearLower", "pos": [0, -0.05, 0.05] }
+  ]
+}

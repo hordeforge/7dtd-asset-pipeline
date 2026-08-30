@@ -1,0 +1,24 @@
+{
+  "name": "bird",
+  "bones": [
+    { "name": "Root", "parent": null, "pos": [0, 0, 0] },
+    { "name": "Pelvis", "parent": "Root", "pos": [0, 0.3, 0] },
+    { "name": "Spine", "parent": "Pelvis", "pos": [0, 0.06, 0] },
+    { "name": "Chest", "parent": "Spine", "pos": [0, 0.06, 0.02] },
+    { "name": "Neck", "parent": "Chest", "pos": [0, 0.1, 0.18] },
+    { "name": "Head", "parent": "Neck", "pos": [0, 0.02, 0.14] },
+    { "name": "Tail", "parent": "Pelvis", "pos": [0, 0.01, -0.16] },
+    { "name": "LeftWingUpper", "parent": "Chest", "pos": [-0.06, 0.02, 0.04] },
+    { "name": "LeftWingLower", "parent": "LeftWingUpper", "pos": [-0.16, 0, 0] },
+    { "name": "LeftWingTip", "parent": "LeftWingLower", "pos": [-0.14, 0, 0] },
+    { "name": "RightWingUpper", "parent": "Chest", "pos": [0.06, 0.02, 0.04] },
+    { "name": "RightWingLower", "parent": "RightWingUpper", "pos": [0.16, 0, 0] },
+    { "name": "RightWingTip", "parent": "RightWingLower", "pos": [0.14, 0, 0] },
+    { "name": "LeftLegUpper", "parent": "Pelvis", "pos": [-0.03, -0.05, -0.02] },
+    { "name": "LeftLegLower", "parent": "LeftLegUpper", "pos": [0, -0.14, 0] },
+    { "name": "LeftFoot", "parent": "LeftLegLower", "pos": [0, -0.1, 0.02] },
+    { "name": "RightLegUpper", "parent": "Pelvis", "pos": [0.03, -0.05, -0.02] },
+    { "name": "RightLegLower", "parent": "RightLegUpper", "pos": [0, -0.14, 0] },
+    { "name": "RightFoot", "parent": "RightLegLower", "pos": [0, -0.1, 0.02] }
+  ]
+}

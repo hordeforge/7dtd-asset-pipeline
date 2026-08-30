@@ -21,7 +21,7 @@ from sevendtd_asset_pipeline.bundle_writer import bone_name_hash
 from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.generators import run
 from sevendtd_asset_pipeline.gltf_scene import parse_gltf
-from sevendtd_asset_pipeline.rigs import Rig, load_rig, rig_to_glb
+from sevendtd_asset_pipeline.rigs import Rig, load_rig, rig_to_glb, scaled
 
 HUMANOID_BONE_COUNT = 20
 
@@ -227,6 +227,120 @@ class HumanoidTemplateTests(unittest.TestCase):
             head_height += by_name[cursor].pos[1]
             cursor = by_name[cursor].parent
         self.assertAlmostEqual(head_height, 1.59, places=2)
+
+
+class AnimalRigTests(unittest.TestCase):
+    """The shipped non-humanoid rigs: structure, size variants, and `scale`."""
+
+    QUADRUPED_BONES = 19
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.tmp = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_quadruped_is_a_four_legged_animal(self) -> None:
+        rig = load_rig("quadruped")
+        self.assertEqual(rig.name, "quadruped")
+        self.assertEqual(len(rig.bones), self.QUADRUPED_BONES)
+        self.assertEqual(rig.scale, 1.0)
+        self.assertEqual(rig.root().name, "Root")
+        by_name = {bone.name: bone for bone in rig.bones}
+        self.assertEqual(by_name["Pelvis"].parent, "Root")
+        self.assertEqual(by_name["Tail"].parent, "Pelvis")
+        self.assertEqual(by_name["LeftFrontUpper"].parent, "Chest")
+        self.assertEqual(by_name["LeftFrontPaw"].parent, "LeftFrontLower")
+        self.assertEqual(by_name["RightRearUpper"].parent, "Pelvis")
+        self.assertEqual(by_name["RightRearPaw"].parent, "RightRearLower")
+
+    def test_quadruped_size_variants_scale_the_base(self) -> None:
+        medium = load_rig("quadruped")
+        small = load_rig("quadruped-small")
+        large = load_rig("quadruped-large")
+        self.assertEqual(small.name, "quadruped-small")
+        self.assertAlmostEqual(small.scale, 0.45)
+        self.assertAlmostEqual(large.scale, 1.5)
+        self.assertEqual([bone.name for bone in small.bones], [bone.name for bone in medium.bones])
+        pelvis = small.index("Pelvis")
+        self.assertAlmostEqual(small.bones[pelvis].pos[1], 0.6 * 0.45, places=4)
+        chest = large.index("Chest")
+        self.assertAlmostEqual(large.bones[chest].pos[1], 0.1 * 1.5, places=4)
+
+    def test_bird_has_wings_and_legs(self) -> None:
+        rig = load_rig("bird")
+        self.assertEqual(len(rig.bones), self.QUADRUPED_BONES)
+        by_name = {bone.name: bone for bone in rig.bones}
+        self.assertEqual(by_name["LeftWingUpper"].parent, "Chest")
+        self.assertEqual(by_name["LeftWingTip"].parent, "LeftWingLower")
+        self.assertEqual(by_name["RightFoot"].parent, "RightLegLower")
+        self.assertEqual(by_name["Tail"].parent, "Pelvis")
+
+    def test_dinosaur_is_a_bipedal_theropod(self) -> None:
+        rig = load_rig("dinosaur")
+        self.assertEqual(len(rig.bones), 19)
+        by_name = {bone.name: bone for bone in rig.bones}
+        self.assertEqual(by_name["Tail2"].parent, "Tail1")
+        self.assertEqual(by_name["Tail3"].parent, "Tail2")
+        self.assertEqual(by_name["LeftThigh"].parent, "Pelvis")
+        self.assertEqual(by_name["LeftFoot"].parent, "LeftShin")
+        # The tiny arms hang off the chest, well behind the head.
+        self.assertEqual(by_name["LeftArm"].parent, "Chest")
+        self.assertEqual(by_name["LeftForearm"].parent, "LeftArm")
+
+    def test_arachnid_has_eight_legs(self) -> None:
+        rig = load_rig("arachnid")
+        self.assertEqual(len(rig.bones), 29)
+        by_name = {bone.name: bone for bone in rig.bones}
+        self.assertEqual(by_name["Abdomen"].parent, "Prosoma")
+        self.assertEqual(by_name["LeftPedipalp"].parent, "Prosoma")
+        for side in ("Left", "Right"):
+            for index in range(1, 5):
+                upper = f"{side}Leg{index}Upper"
+                middle = f"{side}Leg{index}Middle"
+                lower = f"{side}Leg{index}Lower"
+                self.assertEqual(by_name[upper].parent, "Prosoma", upper)
+                self.assertEqual(by_name[middle].parent, upper, middle)
+                self.assertEqual(by_name[lower].parent, middle, lower)
+
+    def test_crocodile_is_long_and_low(self) -> None:
+        rig = load_rig("crocodile")
+        self.assertEqual(len(rig.bones), 22)
+        by_name = {bone.name: bone for bone in rig.bones}
+        self.assertEqual(by_name["Spine2"].parent, "Spine1")
+        self.assertEqual(by_name["Chest"].parent, "Spine2")
+        self.assertEqual(by_name["Head"].parent, "Neck")
+        self.assertEqual(by_name["Tail3"].parent, "Tail2")
+        self.assertEqual(by_name["LeftFrontUpper"].parent, "Chest")
+        self.assertEqual(by_name["LeftRearUpper"].parent, "Pelvis")
+
+    def test_a_rig_cannot_extend_itself(self) -> None:
+        path = write_spec(
+            self.tmp / "selfie.json", {"name": "selfie", "base": str(self.tmp / "selfie.json")}
+        )
+        with self.assertRaisesRegex(PipelineError, "base chain"):
+            load_rig(path)
+
+    def test_a_spec_scale_must_be_positive(self) -> None:
+        for value in (0, -1, "big"):
+            with self.subTest(value):
+                path = write_spec(
+                    self.tmp / "bad.json",
+                    {"name": "bad", "scale": value, "bones": [{"name": "A", "parent": None}]},
+                )
+                with self.assertRaisesRegex(PipelineError, "must be a"):
+                    load_rig(path)
+
+    def test_scaled_resizes_positions_and_scale_together(self) -> None:
+        rig = load_rig("quadruped")
+        double = scaled(rig, 2.0)
+        self.assertAlmostEqual(double.scale, 2.0)
+        pelvis = double.index("Pelvis")
+        self.assertAlmostEqual(double.bones[pelvis].pos[1], 1.2, places=4)
+        # A second call compounds, exactly like --scale on a size variant.
+        quadruple = scaled(double, 2.0)
+        self.assertAlmostEqual(quadruple.scale, 4.0)
 
 
 class ArmatureRoundTripTests(unittest.TestCase):

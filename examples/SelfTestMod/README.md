@@ -27,12 +27,21 @@ lists what each assertion catches.
 | `assets-src/bundle/gear.glb` | two-bone skinned mesh (`Origin/Hips`, `Origin/Hips/Spine`) |
 | `assets-src/bundle/burst.vfx` | two ParticleSystems (additive flash, alpha smoke) |
 | `assets-src/bundle/shamwaySelfTestProp_albedo.png` | bound to the prefab's material by the `_albedo` convention; a large **R** and an up-arrow, so mirrored and upside-down each read wrong at a glance |
+| `assets-src/bundle/shamwaySelfTestCreature.glb` | a generated skinned entity (`shamway generate entity --rig quadruped`), so the entity lane's prefab — bones, weights, `SkinnedMeshRenderer` — is exercised by the same live client |
 | `Config/blocks.xml` | one block, `Shape` + `Model` and nothing else — every extra property would be one more thing that could explain a failure |
+| `Config/entityclasses.xml` | the creature's entity class: the mandatory `Prefab` + `Mesh`, both the same bundle URI (`shamway generate entity --xml` wrote it) |
 | `UIAtlases/ItemIconAtlas/` | the icon, from `shamway generate mesh-icon`: a clay render, not the in-game look |
 | `Resources/` + `tools/shamway/manifests/` | build outputs, committed together as one artifact, the way any consuming mod commits them |
 
 The block sets **no `Class`**. A model block has none, and an invented one
 aborts the whole XML file — see `docs/validation.md`.
+
+The creature is asserted as a **bundle prefab**, never as a spawned entity:
+this run always uses a dedicated server, and a custom entity class on a dedi
+gets a negative id and renders nothing on clients
+(`docs/authoring/entities.md`). The class wiring itself is the offline
+`shamway validate` gate's job — it cross-checks the XML URIs against the
+manifest.
 
 ## Rebuilding it
 

@@ -1,0 +1,8 @@
+<configs>
+	<append xpath="/entity_classes">
+		<entity_class name="shamwaySelfTestCreature">
+			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCreature"/>
+			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCreature"/>
+		</entity_class>
+	</append>
+</configs>

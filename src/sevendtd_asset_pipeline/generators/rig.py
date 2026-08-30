@@ -44,7 +44,7 @@ from pathlib import Path
 
 from ..atomic import write
 from ..errors import PipelineError
-from ..rigs import Rig, load_rig, rig_to_glb
+from ..rigs import Rig, load_rig, rig_to_glb, scaled
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,7 +53,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--rig",
         default="humanoid",
-        help="rig template name (humanoid) or a path to a .json rig spec",
+        help="rig template name (humanoid, quadruped, quadruped-small, quadruped-large,"
+        " bird) or a path to a .json rig spec",
+    )
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=None,
+        help="uniform size factor on top of the rig's own scale (e.g. 0.5 halves it)",
     )
     parser.add_argument(
         "--name",
@@ -66,11 +73,13 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("ERROR: the armature must be written as .glb")
     try:
         rig: Rig = load_rig(args.rig)
+        if args.scale is not None:
+            rig = scaled(rig, args.scale)
     except PipelineError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     if args.name:
-        rig = Rig(name=args.name, bones=rig.bones)
+        rig = Rig(name=args.name, bones=rig.bones, scale=rig.scale)
 
     write(args.output, rig_to_glb(rig))
     print(f"wrote {args.output} ({len(rig.bones)} bones, rig {rig.name!r})")

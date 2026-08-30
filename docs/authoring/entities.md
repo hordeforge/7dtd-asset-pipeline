@@ -47,6 +47,27 @@ offline gate can prove is in "What is still unbuilt" below.
    rigidly bound to one bone, and the generated GLB is a normal skinned mesh
    a mod can re-skin or replace later.
 
+The shipped rigs, all usable as `--rig NAME` with their own default part
+sets (forward is +Z; the humanoid is symmetric):
+
+| Rig | What it is | Bones |
+|---|---|---|
+| `humanoid` | ~1.6 m standing biped T-pose | 20 |
+| `quadruped` | ~0.8 m shoulder four-legged animal (deer/wolf-ish) | 19 |
+| `quadruped-small` | `quadruped` at 0.45× — rabbit-sized | 19 |
+| `quadruped-large` | `quadruped` at 1.5× — bear-sized | 19 |
+| `bird` | flying creature: wings, tail, perched legs | 19 |
+| `dinosaur` | bipedal theropod: heavy tail, big legs, tiny arms | 19 |
+| `arachnid` | eight-legged crawler: prosoma, abdomen, pedipalps | 29 |
+| `crocodile` | long low reptile: multi-segment body and tail, short legs | 22 |
+
+A rig spec can carry `"scale": <factor>` and `"base": <other-rig>` — the
+three quadruped sizes are exactly that, one line each. The `--scale` flag on
+either generator multiplies a rig's own size on top, bones and parts
+together, so a giant or a micro creature is one argument away. A rig without
+its own default part set refuses `generate entity` until `--parts` names one,
+because a creature with no geometry on its bones is not what anyone asked for.
+
 Both outputs are inputs to the same lane: a GLB with a skin. The writer
 reads it straight off the file — see
 [skinned-gear.md](skinned-gear.md#why-this-is-not-the-mesh-lane) for what it

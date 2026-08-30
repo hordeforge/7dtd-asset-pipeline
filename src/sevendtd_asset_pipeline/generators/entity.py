@@ -59,38 +59,184 @@ from typing import Any
 
 from ..atomic import write
 from ..errors import PipelineError
-from ..rigs import Rig, glb_bytes, load_rig, mat_inverse, world_matrices
+from ..rigs import Rig, glb_bytes, load_rig, mat_inverse, scaled, world_matrices
 
-# The default part set for the humanoid template: one primitive per joint, in
-# that joint's local space, sized to a ~1.75 m figure. The joint sits at the
-# primitive's centre; cylinders run along the local Y.
-DEFAULT_PARTS: dict[str, dict[str, Any]] = {
-    "Hips": {"shape": "cylinder", "radius": 0.17, "height": 0.2},
-    "Spine": {"shape": "cylinder", "radius": 0.15, "height": 0.17},
-    "Chest": {"shape": "cylinder", "radius": 0.16, "height": 0.2},
-    "Neck": {"shape": "cylinder", "radius": 0.05, "height": 0.07},
-    "Head": {"shape": "sphere", "radius": 0.11},
-    "LeftShoulder": {"shape": "sphere", "radius": 0.06},
-    "RightShoulder": {"shape": "sphere", "radius": 0.06},
-    "LeftArm": {"shape": "cylinder", "radius": 0.055, "height": 0.21},
-    "RightArm": {"shape": "cylinder", "radius": 0.055, "height": 0.21},
-    "LeftForearm": {"shape": "cylinder", "radius": 0.05, "height": 0.21},
-    "RightForearm": {"shape": "cylinder", "radius": 0.05, "height": 0.21},
-    "LeftHand": {"shape": "box", "width": 0.09, "depth": 0.05, "height": 0.12},
-    "RightHand": {"shape": "box", "width": 0.09, "depth": 0.05, "height": 0.12},
-    "LeftThigh": {"shape": "cylinder", "radius": 0.08, "height": 0.25},
-    "RightThigh": {"shape": "cylinder", "radius": 0.08, "height": 0.25},
-    "LeftShin": {"shape": "cylinder", "radius": 0.06, "height": 0.41},
-    "RightShin": {"shape": "cylinder", "radius": 0.06, "height": 0.41},
-    "LeftFoot": {"shape": "box", "width": 0.09, "depth": 0.24, "height": 0.07},
-    "RightFoot": {"shape": "box", "width": 0.09, "depth": 0.24, "height": 0.07},
+
+def _arachnid_leg_parts() -> dict[str, dict[str, Any]]:
+    """The 24 leg segments of the arachnid rig, as one part per joint.
+
+    A spider is legs; the two body spheres alone would read as a floating
+    sac. Each leg is three tapering cylinders, thin enough to read as
+    limbs against the prosoma and abdomen.
+    """
+    parts: dict[str, dict[str, Any]] = {}
+    for side in ("Left", "Right"):
+        for index in range(1, 5):
+            parts[f"{side}Leg{index}Upper"] = {"shape": "cylinder", "radius": 0.016, "height": 0.16}
+            parts[f"{side}Leg{index}Middle"] = {
+                "shape": "cylinder",
+                "radius": 0.013,
+                "height": 0.14,
+            }
+            parts[f"{side}Leg{index}Lower"] = {"shape": "cylinder", "radius": 0.01, "height": 0.12}
+    return parts
+
+
+# Default part sets, keyed by the rig they were authored for: one primitive
+# per joint, in that joint's local space. The joint sits at the primitive's
+# centre; cylinders run along the local Y. A rig without its own entry gets
+# no default parts (pass `--parts`), and a size variant (a rig whose `scale`
+# is not 1) takes its base rig's set scaled with it.
+PARTS_BY_RIG: dict[str, dict[str, Any]] = {
+    "humanoid": {
+        "Hips": {"shape": "cylinder", "radius": 0.17, "height": 0.2},
+        "Spine": {"shape": "cylinder", "radius": 0.15, "height": 0.17},
+        "Chest": {"shape": "cylinder", "radius": 0.16, "height": 0.2},
+        "Neck": {"shape": "cylinder", "radius": 0.05, "height": 0.07},
+        "Head": {"shape": "sphere", "radius": 0.11},
+        "LeftShoulder": {"shape": "sphere", "radius": 0.06},
+        "RightShoulder": {"shape": "sphere", "radius": 0.06},
+        "LeftArm": {"shape": "cylinder", "radius": 0.055, "height": 0.21},
+        "RightArm": {"shape": "cylinder", "radius": 0.055, "height": 0.21},
+        "LeftForearm": {"shape": "cylinder", "radius": 0.05, "height": 0.21},
+        "RightForearm": {"shape": "cylinder", "radius": 0.05, "height": 0.21},
+        "LeftHand": {"shape": "box", "width": 0.09, "depth": 0.05, "height": 0.12},
+        "RightHand": {"shape": "box", "width": 0.09, "depth": 0.05, "height": 0.12},
+        "LeftThigh": {"shape": "cylinder", "radius": 0.08, "height": 0.25},
+        "RightThigh": {"shape": "cylinder", "radius": 0.08, "height": 0.25},
+        "LeftShin": {"shape": "cylinder", "radius": 0.06, "height": 0.41},
+        "RightShin": {"shape": "cylinder", "radius": 0.06, "height": 0.41},
+        "LeftFoot": {"shape": "box", "width": 0.09, "depth": 0.24, "height": 0.07},
+        "RightFoot": {"shape": "box", "width": 0.09, "depth": 0.24, "height": 0.07},
+    },
+    "quadruped": {
+        "Pelvis": {"shape": "cylinder", "radius": 0.14, "height": 0.24},
+        "Spine": {"shape": "cylinder", "radius": 0.13, "height": 0.13},
+        "Chest": {"shape": "cylinder", "radius": 0.14, "height": 0.15},
+        "Neck": {"shape": "cylinder", "radius": 0.05, "height": 0.24},
+        "Head": {"shape": "sphere", "radius": 0.075},
+        "Tail": {"shape": "cylinder", "radius": 0.025, "height": 0.16},
+        "LeftFrontUpper": {"shape": "cylinder", "radius": 0.045, "height": 0.36},
+        "LeftFrontLower": {"shape": "cylinder", "radius": 0.04, "height": 0.34},
+        "LeftFrontPaw": {"shape": "box", "width": 0.07, "depth": 0.1, "height": 0.045},
+        "RightFrontUpper": {"shape": "cylinder", "radius": 0.045, "height": 0.36},
+        "RightFrontLower": {"shape": "cylinder", "radius": 0.04, "height": 0.34},
+        "RightFrontPaw": {"shape": "box", "width": 0.07, "depth": 0.1, "height": 0.045},
+        "LeftRearUpper": {"shape": "cylinder", "radius": 0.055, "height": 0.28},
+        "LeftRearLower": {"shape": "cylinder", "radius": 0.045, "height": 0.27},
+        "LeftRearPaw": {"shape": "box", "width": 0.08, "depth": 0.12, "height": 0.05},
+        "RightRearUpper": {"shape": "cylinder", "radius": 0.055, "height": 0.28},
+        "RightRearLower": {"shape": "cylinder", "radius": 0.045, "height": 0.27},
+        "RightRearPaw": {"shape": "box", "width": 0.08, "depth": 0.12, "height": 0.05},
+    },
+    "bird": {
+        "Pelvis": {"shape": "cylinder", "radius": 0.09, "height": 0.12},
+        "Spine": {"shape": "cylinder", "radius": 0.08, "height": 0.08},
+        "Chest": {"shape": "cylinder", "radius": 0.09, "height": 0.1},
+        "Neck": {"shape": "cylinder", "radius": 0.03, "height": 0.22},
+        "Head": {"shape": "sphere", "radius": 0.05},
+        "Tail": {"shape": "cylinder", "radius": 0.02, "height": 0.18},
+        "LeftWingUpper": {"shape": "box", "width": 0.16, "depth": 0.04, "height": 0.03},
+        "LeftWingLower": {"shape": "box", "width": 0.16, "depth": 0.04, "height": 0.025},
+        "LeftWingTip": {"shape": "box", "width": 0.14, "depth": 0.03, "height": 0.02},
+        "RightWingUpper": {"shape": "box", "width": 0.16, "depth": 0.04, "height": 0.03},
+        "RightWingLower": {"shape": "box", "width": 0.16, "depth": 0.04, "height": 0.025},
+        "RightWingTip": {"shape": "box", "width": 0.14, "depth": 0.03, "height": 0.02},
+        "LeftLegUpper": {"shape": "cylinder", "radius": 0.02, "height": 0.16},
+        "LeftLegLower": {"shape": "cylinder", "radius": 0.018, "height": 0.12},
+        "LeftFoot": {"shape": "box", "width": 0.06, "depth": 0.07, "height": 0.02},
+        "RightLegUpper": {"shape": "cylinder", "radius": 0.02, "height": 0.16},
+        "RightLegLower": {"shape": "cylinder", "radius": 0.018, "height": 0.12},
+        "RightFoot": {"shape": "box", "width": 0.06, "depth": 0.07, "height": 0.02},
+    },
+    "dinosaur": {
+        "Pelvis": {"shape": "cylinder", "radius": 0.3, "height": 0.45},
+        "Spine": {"shape": "cylinder", "radius": 0.25, "height": 0.4},
+        "Chest": {"shape": "cylinder", "radius": 0.22, "height": 0.35},
+        "Neck": {"shape": "cylinder", "radius": 0.12, "height": 0.5},
+        "Head": {"shape": "sphere", "radius": 0.13},
+        "Tail1": {"shape": "cylinder", "radius": 0.15, "height": 0.6},
+        "Tail2": {"shape": "cylinder", "radius": 0.09, "height": 0.55},
+        "Tail3": {"shape": "cylinder", "radius": 0.05, "height": 0.5},
+        "LeftThigh": {"shape": "cylinder", "radius": 0.14, "height": 0.55},
+        "LeftShin": {"shape": "cylinder", "radius": 0.1, "height": 0.75},
+        "LeftFoot": {"shape": "box", "width": 0.22, "depth": 0.45, "height": 0.1},
+        "RightThigh": {"shape": "cylinder", "radius": 0.14, "height": 0.55},
+        "RightShin": {"shape": "cylinder", "radius": 0.1, "height": 0.75},
+        "RightFoot": {"shape": "box", "width": 0.22, "depth": 0.45, "height": 0.1},
+        "LeftArm": {"shape": "cylinder", "radius": 0.05, "height": 0.32},
+        "LeftForearm": {"shape": "cylinder", "radius": 0.04, "height": 0.25},
+        "RightArm": {"shape": "cylinder", "radius": 0.05, "height": 0.32},
+        "RightForearm": {"shape": "cylinder", "radius": 0.04, "height": 0.25},
+    },
+    "arachnid": {
+        "Prosoma": {"shape": "sphere", "radius": 0.16},
+        "Abdomen": {"shape": "sphere", "radius": 0.2},
+        "LeftPedipalp": {"shape": "cylinder", "radius": 0.015, "height": 0.12},
+        "RightPedipalp": {"shape": "cylinder", "radius": 0.015, "height": 0.12},
+        **_arachnid_leg_parts(),
+    },
+    "crocodile": {
+        "Pelvis": {"shape": "cylinder", "radius": 0.16, "height": 0.25},
+        "Spine1": {"shape": "cylinder", "radius": 0.15, "height": 0.3},
+        "Spine2": {"shape": "cylinder", "radius": 0.14, "height": 0.32},
+        "Chest": {"shape": "cylinder", "radius": 0.13, "height": 0.34},
+        "Neck": {"shape": "cylinder", "radius": 0.07, "height": 0.32},
+        "Head": {"shape": "cylinder", "radius": 0.06, "height": 0.4},
+        "Tail1": {"shape": "cylinder", "radius": 0.09, "height": 0.4},
+        "Tail2": {"shape": "cylinder", "radius": 0.06, "height": 0.42},
+        "Tail3": {"shape": "cylinder", "radius": 0.035, "height": 0.4},
+        "LeftFrontUpper": {"shape": "cylinder", "radius": 0.035, "height": 0.24},
+        "LeftFrontLower": {"shape": "cylinder", "radius": 0.028, "height": 0.2},
+        "LeftFrontFoot": {"shape": "box", "width": 0.06, "depth": 0.1, "height": 0.03},
+        "RightFrontUpper": {"shape": "cylinder", "radius": 0.035, "height": 0.24},
+        "RightFrontLower": {"shape": "cylinder", "radius": 0.028, "height": 0.2},
+        "RightFrontFoot": {"shape": "box", "width": 0.06, "depth": 0.1, "height": 0.03},
+        "LeftRearUpper": {"shape": "cylinder", "radius": 0.04, "height": 0.2},
+        "LeftRearLower": {"shape": "cylinder", "radius": 0.03, "height": 0.18},
+        "LeftRearFoot": {"shape": "box", "width": 0.06, "depth": 0.1, "height": 0.03},
+        "RightRearUpper": {"shape": "cylinder", "radius": 0.04, "height": 0.2},
+        "RightRearLower": {"shape": "cylinder", "radius": 0.03, "height": 0.18},
+        "RightRearFoot": {"shape": "box", "width": 0.06, "depth": 0.1, "height": 0.03},
+    },
 }
 
 _SEGMENTS = 20
 
 
-def load_parts(spec: str | None) -> dict[str, dict[str, Any]]:
-    """The part set a `--parts` argument means: the default, or a JSON file.
+def default_parts_for(rig: Rig) -> dict[str, dict[str, Any]]:
+    """The default part set for `rig`, scaled with the rig.
+
+    Size variants (``quadruped-small`` and friends) are the base rig's bones
+    at another scale, so they take the base rig's part set; a rig with no
+    authored set gets none, and a mod passes `--parts` instead.
+    """
+    source = PARTS_BY_RIG.get(rig.name) or PARTS_BY_RIG.get(rig.name.rsplit("-", 1)[0])
+    if source is None:
+        return {}
+    return scale_parts(source, rig.scale)
+
+
+def scale_parts(parts: dict[str, dict[str, Any]], factor: float) -> dict[str, dict[str, Any]]:
+    """A copy of `parts` with every dimension multiplied by `factor`.
+
+    `shape` is left alone; every numeric key (radius, height, width, depth)
+    scales, so a part set authored for the base rig stays proportioned to a
+    size variant's bones.
+    """
+    if factor == 1.0:
+        return {name: dict(part) for name, part in parts.items()}
+    return {
+        name: {
+            key: value * factor if key != "shape" and isinstance(value, (int, float)) else value
+            for key, value in part.items()
+        }
+        for name, part in parts.items()
+    }
+
+
+def load_parts(spec: str | None, rig: Rig) -> dict[str, dict[str, Any]]:
+    """The part set a `--parts` argument means: the rig's default, or a JSON file.
 
     A parts file maps bone names to primitives:
 
@@ -101,10 +247,16 @@ def load_parts(spec: str | None) -> dict[str, dict[str, Any]]:
 
     Every named bone must exist in the rig; bones without a part simply get
     none (they are still joints, and the engine's bone chain does not need
-    geometry on every link).
+    geometry on every link). A custom spec is scaled with the rig exactly
+    like the defaults.
     """
     if spec is None:
-        return dict(DEFAULT_PARTS)
+        defaults = default_parts_for(rig)
+        if not defaults:
+            raise PipelineError(
+                f"rig {rig.name!r} has no default part set; pass --parts with a JSON file"
+            )
+        return defaults
     path = Path(spec)
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
@@ -128,7 +280,7 @@ def load_parts(spec: str | None) -> dict[str, dict[str, Any]]:
             if key != "shape" and (not isinstance(value, (int, float)) or value <= 0):
                 raise PipelineError(f"parts spec {path} part {name!r} {key!r} must be positive")
         parts[name] = dict(item)
-    return parts
+    return scale_parts(parts, rig.scale)
 
 
 def build_entity_glb(rig: Rig, parts: dict[str, dict[str, Any]], name: str) -> bytes:
@@ -526,7 +678,13 @@ def main(argv: list[str] | None = None) -> int:
         "--rig", default="humanoid", help="rig template name (humanoid) or a .json rig spec"
     )
     parser.add_argument(
-        "--parts", default=None, help="path to a parts JSON (default: humanoid set)"
+        "--parts", default=None, help="path to a parts JSON (default: the rig's own set)"
+    )
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=None,
+        help="uniform size factor on top of the rig's own scale (e.g. 0.5 halves it)",
     )
     parser.add_argument(
         "--name", default=None, help="entity and prefab name (default: output stem)"
@@ -545,7 +703,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("ERROR: --xml needs --mod and --bundle to build the bundle URI")
     try:
         rig = load_rig(args.rig)
-        parts = load_parts(args.parts)
+        if args.scale is not None:
+            rig = scaled(rig, args.scale)
+        parts = load_parts(args.parts, rig)
     except PipelineError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

@@ -309,7 +309,7 @@ shamway script playtest-synthesized
 ```
 
 It builds that modlet with no editor, deploys it, runs it through a live
-client, and then asserts by value — not by case name — the four things that
+client, and then asserts by value — not by case name — the things that
 could each be wrong while every offline gate passed:
 
 The mod is a fixture rather than something the script invents, because a mod
@@ -317,7 +317,9 @@ that exists only inside one run cannot be inspected after a failure, diffed
 against a previous build, or deployed by hand. Its prop is asymmetric on all
 three axes and textured with a glyph that reads wrong mirrored and an arrow
 that reads wrong upside-down, so the half a suite cannot judge is at least
-easy for a person to judge.
+easy for a person to judge. Beside the prop the fixture carries a generated
+entity (`shamway generate entity --rig quadruped`) whose skinned prefab rides
+the same bundle.
 
 | Assertion | The failure it catches |
 |---|---|
@@ -325,6 +327,8 @@ easy for a person to judge.
 | mesh `bounds=(1.00, 1.00, 1.00)` | a broken vertex stream, or a lost Y-up conversion |
 | material `shader=Shamway/Unlit` | a `PPtr` chain that did not survive serialization |
 | texture at its authored size | a `Texture2D` that decoded to something else |
+| the entity prefab returns with `renderers=1` | a skinned mesh flattened to a bare `Mesh`, or a `SkinnedMeshRenderer` that lost its renderer |
+| the entity mesh loads with its vertex stream | the skin's joints/weights dropped out of the bundle |
 | `shamwayselftest_block_model` places the block and looks at the voxel | a prefab instantiated in the player's face, which is not a placement |
 
 Those are **separate suites**. `<mod>_bundle` is loads only. `<mod>_look`

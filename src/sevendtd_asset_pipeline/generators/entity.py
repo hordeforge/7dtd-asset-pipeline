@@ -388,7 +388,9 @@ def build_entity_glb(rig: Rig, parts: dict[str, dict[str, Any]], name: str) -> b
     return glb_bytes(document, bytes(blob))
 
 
-def entity_xml(entity_name: str, mod: str, bundle: str, stem: str) -> str:
+def entity_xml(
+    entity_name: str, mod: str, bundle: str, stem: str, avatar_controller: str | None = None
+) -> str:
     """The `entityclasses.xml` patch fragment for the generated entity.
 
     `UserSpawnType` is included because it decides whether the class is
@@ -399,12 +401,15 @@ def entity_xml(entity_name: str, mod: str, bundle: str, stem: str) -> str:
     console or the debug menu.
     """
     uri = f"#@modfolder({mod}):Resources/{bundle}.unity3d?{stem}"
+    avatar = ""
+    if avatar_controller:
+        avatar = f'\n\t\t\t<property name="AvatarController" value="{avatar_controller}"/>'
     return f"""<configs>
 \t<append xpath="/entity_classes">
 \t\t<entity_class name="{entity_name}">
 \t\t\t<property name="Prefab" value="{uri}"/>
 \t\t\t<property name="Mesh" value="{uri}"/>
-\t\t\t<property name="UserSpawnType" value="Menu"/>
+\t\t\t<property name="UserSpawnType" value="Menu"/>{avatar}
 \t\t</entity_class>
 \t</append>
 </configs>
@@ -704,6 +709,13 @@ def main(argv: list[str] | None = None) -> int:
         "--xml", default=None, help="write the entityclasses.xml patch to this path"
     )
     parser.add_argument("--entity-name", default=None, help="entity_class name (default: stem)")
+    parser.add_argument(
+        "--anim",
+        action="store_true",
+        help="write a {stem}.anim.json with a looping Idle1 bob on the rig's first"
+        " bone, and add AvatarController=GameObjectAnimalAnimation to the XML —"
+        " the pieces the engine's animal controller plays by name",
+    )
     args = parser.parse_args(argv)
 
     if args.output.suffix.lower() != ".glb":
@@ -730,9 +742,36 @@ def main(argv: list[str] | None = None) -> int:
 
     n_parts = sum(1 for bone in rig.bones if bone.name in parts)
     print(f"wrote {args.output}: {len(rig.bones)} bones, {n_parts} parts")
+    avatar_controller: str | None = None
+    if args.anim:
+        # The bob hangs off the rig's first bone under the root — Hips on the
+        # humanoid, Pelvis/Prosoma on the animals — the path the engine's
+        # GameObjectAnimalAnimation expects a legacy clip to animate.
+        first_child = next(
+            (bone.name for bone in rig.bones if bone.parent == rig.root().name),
+            rig.root().name,
+        )
+        declaration = {
+            "clips": [
+                {
+                    "name": "Idle1",
+                    "kind": "bob",
+                    "bone": f"{rig.root().name}/{first_child}",
+                    "amplitude": 0.03,
+                    "seconds": 1.5,
+                }
+            ],
+            "play_automatically": True,
+        }
+        anim_path = args.output.with_suffix(".anim.json")
+        write(anim_path, json.dumps(declaration, indent=2) + "\n")
+        print(f"wrote {anim_path}: Idle1 bob on {rig.root().name}/{first_child}")
+        avatar_controller = "GameObjectAnimalAnimation"
     if args.xml is not None:
         entity_name = args.entity_name or stem
-        fragment = entity_xml(entity_name, args.mod, args.bundle, stem)
+        fragment = entity_xml(
+            entity_name, args.mod, args.bundle, stem, avatar_controller=avatar_controller
+        )
         write(Path(args.xml), fragment)
         print(
             f"wrote {args.xml}: entity_class {entity_name!r} -> "

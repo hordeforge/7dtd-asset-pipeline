@@ -6,6 +6,7 @@ Assets:
 - bundle/gear.glb
 - bundle/shamwaySelfTestArachnid.glb
 - bundle/shamwaySelfTestBird.glb
+- bundle/shamwaySelfTestCreature.anim.json
 - bundle/shamwaySelfTestCreature.glb
 - bundle/shamwaySelfTestCreature_albedo.png
 - bundle/shamwaySelfTestDino.glb

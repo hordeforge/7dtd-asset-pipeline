@@ -250,8 +250,10 @@ not complete until that capture exists.
 host): the default run reported `SUMMARY pass=25 fail=0` — the engine
 loaded every bundle member through `DataLoader.LoadAsset<T>`, all four
 generated entities' prefabs, meshes and textures included. Each rig's look
-suite staged its prefab with a renderer (`pass=1 fail=0` per run): the
-creature frame was **signed off** (four legs, head forward, not mirrored,
-textured); the bird, arachnid and dinosaur frames are at
-`/home/yannick/look_Bird.png`, `look_Arachnid.png`, `look_Dino.png`,
-awaiting sign-off.
+suite staged its prefab with a renderer (`pass=1 fail=0` per run), and all
+four frames were **signed off** (creature: four legs, head forward, not
+mirrored, textured; bird, arachnid and dinosaur read as their rigs). The
+animated creature's turntable clip — 48 frames, muxed to
+`/home/yannick/motion_creature.mp4` — was **signed off for motion the same
+day**: it spins on the turntable and bobs on the `Idle1` legacy clip, so
+the movement lane is confirmed in a live client.

@@ -357,9 +357,12 @@ and a missing capability must not be reported as a broken bundle.
 **Ran live on 2026-08-30** (client + dedicated server on the development
 host): `playtest-synthesized` reported `SUMMARY pass=25 fail=0`, and each
 rig's look suite staged its prefab with a renderer (`pass=1 fail=0` per
-run). The creature frame was **signed off** (quadruped: four legs, head
-forward, not mirrored, textured); the bird, arachnid and dinosaur frames
-await sign-off.
+run). All four rig frames were **signed off** (creature: quadruped, four
+legs, head forward, not mirrored, textured; bird, arachnid and dinosaur
+read as their rigs). The animated creature's turntable clip — 48 frames,
+muxed — was **signed off for motion the same day**: it spins (turntable)
+and bobs (the `Idle1` legacy clip), so the movement lane is confirmed in a
+live client, not only by serialization.
 
 This is the check that caught the one failure nothing offline could: a
 structurally perfect bundle that `DataLoader.LoadAsset<T>` answered null for,

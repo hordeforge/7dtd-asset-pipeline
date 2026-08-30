@@ -1,0 +1,12 @@
+{
+  "clips": [
+    {
+      "name": "Idle1",
+      "kind": "bob",
+      "bone": "Root/Pelvis",
+      "amplitude": 0.03,
+      "seconds": 1.5
+    }
+  ],
+  "play_automatically": true
+}

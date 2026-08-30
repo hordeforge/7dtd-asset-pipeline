@@ -35,3 +35,6 @@ version = "2022.3.62f2"
 [game]
 # Prefer SEVEN_DAYS_TO_DIE_DIR. The installed game is read-only reference.
 directory = ""
+
+[acceptance]
+motion_kinds = { shamwaySelfTestCreature = "turntable" }

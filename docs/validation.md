@@ -350,6 +350,13 @@ It refuses to run its assertions when the bundle carries no prefab, because
 without a usable `vkd3d-compiler` the writer packs a bare `Mesh` **by design**
 and a missing capability must not be reported as a broken bundle.
 
+**Ran live on 2026-08-30** (client + dedicated server on the development
+host): `playtest-synthesized` reported `SUMMARY pass=25 fail=0` and
+`playtest-synthesized --look` reported `SUMMARY pass=5 fail=0`, including
+`look_shamwaySelfTestCreature` — the generated creature staged in front of
+the camera with a renderer, frame captured and **signed off** the same day
+(reads as a quadruped: four legs, head forward, not mirrored, textured).
+
 This is the check that caught the one failure nothing offline could: a
 structurally perfect bundle that `DataLoader.LoadAsset<T>` answered null for,
 because the provider asked at a stem the prefab had taken over. It needs a game

@@ -202,3 +202,13 @@ a person's judgement. File it, with the frame and the observable it was
 checked against, through `shamway client capture entity-look --observable
 "a quadruped, four legs, head forward, not mirrored"` — and the entity lane
 is not complete until that capture exists.
+
+**Ran live on 2026-08-30** (client + dedicated server on the development
+host): the default run reported `SUMMARY pass=25 fail=0` — the engine
+loaded every bundle member through `DataLoader.LoadAsset<T>`, the generated
+creature's prefab, weighted mesh, material and albedo included — and the
+`--look` run reported `SUMMARY pass=5 fail=0` with
+`look_shamwaySelfTestCreature` passing: the creature instantiated in front
+of the camera with a renderer, and a 2560×1920 frame was captured. The
+frame was **signed off the same day**: the creature reads as a quadruped —
+four legs, head forward, not mirrored, textured.

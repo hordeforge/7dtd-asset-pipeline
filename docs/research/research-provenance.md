@@ -1838,6 +1838,18 @@ harness drives its position forward). What does not work is the game
 grounding it (physics-body alignment) and the controller animating it
 (prefab structure), both recorded above.
 
+**(1) is now fixed.** `attach_anim_objects` inserts a `figure` GameObject
+between the prefab root and its children and puts the legacy `Animation` on
+the figure — the model root's single active child — while `Root` stays a
+child of the figure so the clip paths (`Root/Pelvis/...`, authored relative
+to the Animation's own GameObject) still resolve. Live-verified on
+2026-08-30: the per-frame `GameObjectAnimalAnimation.Update` NREs are gone
+(the controller plays the Walk clip and the entity travels), where before
+there were dozens per second. One NRE remains in `Awake` at spawn
+(`createAvatarController` → `AddComponent → Awake [0x00064]`, likely a
+transient first-pass `FindModel` miss) — still open. **(2), the
+physics-body alignment, is the remaining blocker for a *grounded* walk.**
+
 ## Ground height: GetTerrainHeight is the voxel surface; GetHeightAt is not (2026-08-30)
 
 `ilspycmd -t World` on the installed `Assembly-CSharp.dll` (Unity 2022.3

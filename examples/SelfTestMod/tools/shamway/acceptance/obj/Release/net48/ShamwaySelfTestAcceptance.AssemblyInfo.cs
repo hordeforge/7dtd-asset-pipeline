@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ShamwaySelfTestAcceptance")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+348684fa958e8c364b6ae987e4ea0473f236fb3f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+eb9b77da3d1e1d66196e3ae9bd3d448983c9accd")]
 [assembly: System.Reflection.AssemblyProductAttribute("ShamwaySelfTestAcceptance")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ShamwaySelfTestAcceptance")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

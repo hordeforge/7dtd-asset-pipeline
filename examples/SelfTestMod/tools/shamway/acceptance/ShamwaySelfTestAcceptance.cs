@@ -26,7 +26,11 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
         get
         {
             yield return "shamwayselftest_bundle";
-            yield return "shamwayselftest_look";
+            yield return "shamwayselftest_burst_look";
+            yield return "shamwayselftest_gear_look";
+            yield return "shamwayselftest_shamwaySelfTestCreature_look";
+            yield return "shamwayselftest_shamwaySelfTestProp_look";
+            yield return "shamwayselftest_timedNuke_look";
         }
     }
 
@@ -34,7 +38,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
     {
         RejectMixedVisualSuites();
         string label = lap > 0 ? suite + "@" + lap : suite;
-        if (suite == "shamwayselftest_look")
+        if (suite == "shamwayselftest_burst_look")
         {
 
         GameObject burstStaged = null;
@@ -66,6 +70,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 burstStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(burstStaged);
                 burstStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -80,6 +85,10 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             holdSeconds: 12f,
             fail: "could not stage burst in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_gear_look")
+        {
 
         GameObject gearStaged = null;
         queue.Add(CaseDef.Staged(label, "look_gear", new[] { "capture", "bundle" },
@@ -110,6 +119,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 gearStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(gearStaged);
                 gearStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -124,6 +134,10 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             holdSeconds: 12f,
             fail: "could not stage gear in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_shamwaySelfTestCreature_look")
+        {
 
         GameObject shamwaySelfTestCreatureStaged = null;
         queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestCreature", new[] { "capture", "bundle" },
@@ -154,6 +168,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 shamwaySelfTestCreatureStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestCreatureStaged);
                 shamwaySelfTestCreatureStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -168,6 +183,10 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestCreature in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_shamwaySelfTestProp_look")
+        {
 
         GameObject shamwaySelfTestPropStaged = null;
         queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestProp", new[] { "capture", "bundle" },
@@ -198,6 +217,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 shamwaySelfTestPropStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestPropStaged);
                 shamwaySelfTestPropStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.
@@ -212,6 +232,10 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestProp in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_timedNuke_look")
+        {
 
         GameObject timedNukeStaged = null;
         queue.Add(CaseDef.Staged(label, "look_timedNuke", new[] { "capture", "bundle" },
@@ -242,6 +266,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     : player.transform;
                 var ahead = camera.forward;
                 timedNukeStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(timedNukeStaged);
                 timedNukeStaged.transform.position = camera.position + ahead * 3.5f;
                 // Face the camera, and keep the prop's own up axis upright so
                 // the orientation card is readable rather than lying on edge.

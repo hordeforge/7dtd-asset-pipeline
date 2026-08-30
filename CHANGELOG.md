@@ -17,19 +17,18 @@ tag has no changelog section.
 - The generated entity is now spawnable and visibly textured:
   `generate entity --xml` emits `UserSpawnType="Menu"` (the console
   `spawnentity` command lists only non-`None` classes — verified from IL),
-  and the self-test creature ships a 256×256 albedo. `playtest-synthesized
-  --look` runs the `<mod>_look` suite alone and asserts the creature — and
-  every prefab — staged in front of the camera with a renderer; the default
-  run additionally asserts the creature's texture loads at its authored
-  size.
+  and the self-test creature ships a 256×256 albedo. The creature's look
+  is its own suite (`shamwayselftest_shamwaySelfTestCreature_look`), not
+  stacked with every other prefab. The default `playtest-synthesized` run
+  asserts the creature's texture loads at its authored size.
 - `examples/SelfTestMod` ships a hierarchy (`timedNuke` / `armedLamp`), a
   skinned `gear` prefab, and a looping `burst` VFX graph whose cards come
   from `shamway generate particle-card` (haze flash/smoke, streak sparks).
   `playtest-synthesized` runs `shamwayselftest_editorless` and asserts the
   live client found the named child, bound both skinned bones, and
-  instantiated the particle prefab. Visual sign-off of those prefabs is
-  `playtest-synthesized.sh --look` (`shamwayselftest_look`, its own
-  invocation — never comma-listed with `*_block_*`).
+  instantiated the particle prefab. Visual sign-off of the looping VFX is
+  `playtest-synthesized.sh --look` (`shamwayselftest_burst_look` only —
+  never comma-listed with `*_block_*`, never stacked with other prefabs).
 - The entity lane: `shamway generate rig` emits a bone-structure template as
   a glTF armature (a shipped 20-bone `humanoid` rig, any custom spec, rigid
   validation), and `shamway generate entity` skins procedural primitives to a

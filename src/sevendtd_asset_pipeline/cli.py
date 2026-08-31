@@ -41,6 +41,7 @@ from .icon_render import (
     DEFAULT_YAW,
     render_icon,
 )
+from .localization_check import check_localization
 from .mesh_check import DEFAULT_MAX_EXTENT, check_mesh
 from .operations import manifest
 from .prompts import main as prompt_main
@@ -340,6 +341,20 @@ def _parser() -> argparse.ArgumentParser:
         "--cell", type=int, default=DEFAULT_CELL, help="expected atlas cell size in pixels"
     )
     icons.add_argument("--json", action="store_true")
+
+    loc = commands.add_parser(
+        "check-localization",
+        help="reconcile every Config/ localization key with the mod's Localization.csv "
+        "(and the game's, so vanilla keys are allowed)",
+    )
+    loc.add_argument(
+        "--allow-vanilla-keys",
+        action="store_true",
+        default=True,
+        help="allow keys resolved by the game's own Localization.csv (default)",
+    )
+    loc.add_argument("--no-vanilla-keys", action="store_true", help="fail vanilla keys too")
+    loc.add_argument("--json", action="store_true")
 
     render = commands.add_parser(
         "render-icon", help="render a bundle prefab into an atlas icon with the editor"
@@ -952,6 +967,26 @@ def run(args: argparse.Namespace) -> int:
                 print(f"problem: {problem}")
             print("OK" if icons.ok else "FAILED")
         return 0 if icons.ok else 1
+    if args.command == "check-localization":
+        loc_report = check_localization(
+            config.mod_root,
+            config.config_dir,
+            config.game_dir,
+            not args.no_vanilla_keys,
+        )
+        if args.json:
+            print(json.dumps(loc_report.as_dict(), indent=2, sort_keys=True))
+        else:
+            print(
+                f"referenced: {len(loc_report.referenced)}  resolved: {len(loc_report.resolved)}"
+                f"  vanilla: {len(loc_report.vanilla)}  missing: {len(loc_report.missing)}"
+            )
+            for note in loc_report.notes:
+                print(f"note: {note}")
+            for problem in loc_report.problems:
+                print(f"problem: {problem}")
+            print("OK" if loc_report.ok else "FAILED")
+        return 0 if loc_report.ok else 1
     if args.command == "render-icon":
         result = render_icon(
             config,

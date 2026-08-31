@@ -362,6 +362,23 @@ _DEFINITIONS: tuple[Operation, ...] = (
         needs_config=True,
     ),
     Operation(
+        name="check_localization",
+        summary="Reconcile every localization key Config/ references with the mod's "
+        "Config/Localization.csv and the game's table (so vanilla keys are allowed). "
+        "A definition name the engine looks up but no table provides shows the raw "
+        "name in the UI, with no error anywhere.",
+        parameters=_schema(
+            {
+                "allow_vanilla_keys": {"type": "boolean", "default": True},
+            }
+        ),
+        returns="LocalizationReport: csv, referenced[], resolved[], vanilla[], missing[], "
+        "problems, notes, ok",
+        cost=INSTANT,
+        writes=False,
+        needs_config=True,
+    ),
+    Operation(
         name="render_icon",
         summary="Photograph a bundle prefab into an atlas icon with the editor, so the icon "
         "cannot drift from the mesh. Needs a graphics device; never uses -nographics.",

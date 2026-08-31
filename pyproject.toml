@@ -100,7 +100,7 @@ target-version = "py311"
 # consuming mod, not source this repository authors. Formatting it would make
 # the fixture differ from what a real consumer gets, which is the one thing it
 # exists to be.
-extend-exclude = ["examples/SelfTestMod/tools"]
+extend-exclude = ["examples/SelfTestMod/tools", "examples/SelfTestMod/reference"]
 
 [tool.ruff.lint]
 select = [
@@ -167,7 +167,9 @@ python_version = "3.11"
 strict = true
 # Written against mypy 2.3.1; CI pins the same version as it pins ruff.
 # Regenerable setuptools output; checking it doubles every finding.
-exclude = ["^build/"]
+# examples/SelfTestMod/reference is a vendored headless-Blender script (bpy/
+# mathutils), not pipeline Python.
+exclude = ["^build/", "examples/SelfTestMod/reference"]
 # The optional-capability modules ship stubs only (numpy), which
 # follow_imports otherwise keeps parsing regardless of the override below.
 follow_imports_for_stubs = true

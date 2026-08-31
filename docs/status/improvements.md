@@ -32,18 +32,25 @@ implements what the engine does rather than what seems natural. Until then:
 grep every XPath you author against `$SEVEN_DAYS_TO_DIE_DIR/Data/Config/`
 by hand.
 
-## 2. Localization keys are not reconciled
+## 2. Localization keys are not reconciled  — **done (2026-08-31)**
 
-`icon_check` already reconciles every `CustomIcon` and `display_entry icon=`
-key against atlas PNGs. The text half of that idea is missing: a
-`display_name` or tooltip key referenced by item/block XML is not checked
-against `Config/Localization.csv`, and `Localization.Get` returns the key
-itself on a miss — so the symptom is raw keys in UI, not an error.
+**Closed.** `shamway check-localization` is the text half of `icon_check`,
+with the same reconciliation shape: it collects every localization key
+Config/ references (item/block/entity_class names + bare-token
+`display_name`/`Description`/`desc_key`/`tooltip` values), subtracts the mod's
+`Config/Localization.csv`, subtracts the game's vanilla table by default
+(`--allow-vanilla-keys`, `--no-vanilla-keys` to fail those), and reports the
+rest as `missing`. It fails a referenced key in neither table **only when the
+mod ships a `Localization.csv`** (a mod that localizes anything clearly meant
+to localize this, so a dropped row is a bug); a mod with no CSV reports that
+its names are untranslated instead of failing. The engine fact —
+`Localization.csv` lives in `Config/` and `Localization.Get(key)` returns the
+key itself on a miss — is recorded in `docs/research/research-provenance.md`.
 
-**Close it with:** the same reconciliation shape as `icon_check`: collect
-localization keys referenced by the mod's XML, subtract what the CSV provides,
-and fail the difference. Vanilla keys resolve through the game's own table, so
-the check needs a `--allow-vanilla-keys` default, not an exception list.
+*Why this shape:* a `Description` value of "A sturdy tool" is passed to
+`Localization.Get` too, but it is not a key the author must provide (it is
+shown as-is on a miss), so only bare tokens (single, no spaces/commas) are
+reconciled as keys.
 
 ## 3. ModInfo.xml Version is unread
 

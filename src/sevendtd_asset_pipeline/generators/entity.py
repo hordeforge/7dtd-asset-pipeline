@@ -603,8 +603,13 @@ def _cylinder(
     indices: list[tuple[int, int, int]] = []
     for i in range(_SEGMENTS):
         nxt = (i + 1) % _SEGMENTS
-        indices.append((side_top[i], side_bottom[i], side_top[nxt]))
-        indices.append((side_top[nxt], side_bottom[i], side_bottom[nxt]))
+        # Wound CCW from outside (outward radial normal). The previous order
+        # (top_i, bottom_i, top_nxt) wound the curved surface CW, so with the
+        # shader's default back-face culling a cylinder's body was culled and
+        # only its two cap discs drew - a generated quadruped (mostly cylinders)
+        # rendered as a couple of floating discs. (a,b,c) -> (a,c,b) flips it.
+        indices.append((side_top[i], side_top[nxt], side_bottom[i]))
+        indices.append((side_top[nxt], side_bottom[nxt], side_bottom[i]))
     for center_y, normal_y in ((top, 1.0), (bottom, -1.0)):
         center = len(positions)
         positions.append((0.0, center_y, 0.0))

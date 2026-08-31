@@ -195,8 +195,15 @@ has_python_311() {
 }
 
 # The optional Python capabilities, probed by a sibling script for the reason
-# the JSON selection is one: this file stays shell.
-has_module() { python3 "$ROOT/scripts/have_module.py" "$@"; }
+# the JSON selection is one: this file stays shell. install_python_extras puts
+# them in the checkout's .venv (`uv sync --extra all`), so probe that python
+# when this is a checkout with a .venv — probing the system interpreter reports
+# the extras as MISS even after a successful install.
+has_module() {
+	local py=python3
+	if [[ -x "$ROOT/.venv/bin/python" ]]; then py="$ROOT/.venv/bin/python"; fi
+	"$py" "$ROOT/scripts/have_module.py" "$@"
+}
 
 # Presence is not capability: vkd3d-shader grew HLSL support in 1.3, and Debian
 # and Ubuntu both still package 1.2. Ask the binary what it reads rather than

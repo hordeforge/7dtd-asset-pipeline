@@ -58,6 +58,7 @@ CLIENT_PLATFORM="${PLAYTEST_CLIENT_PLATFORM:-local}"
 # running client. This script never passes a fresh/reuse flag; the orchestrator
 # is always fresh by default.
 LISTEN=0
+TRACE_ENTITY=0
 SHAMWAY="${SHAMWAY:-shamway}"
 
 usage() {
@@ -80,6 +81,7 @@ usage() {
 		  --timeout SECONDS        orchestrator budget         (default: 900)
 		  --client-platform MODE   local or steam              (default: local)
 		  --listen                 do not mute the client, for an audio sign-off
+		  --trace-entity           per-second spawned-entity render/collision probes
 		  -h, --help               this text
 
 		ENVIRONMENT
@@ -113,6 +115,7 @@ while (($#)); do
 		--fresh-save) shift ;; # accepted; fresh is already the unconditional default
 		--reuse-save) die "reuse is not allowed: every run starts from a fresh save (hard rule)" ;;
 		--listen) LISTEN=1; shift ;;
+		--trace-entity) TRACE_ENTITY=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) die "unknown option: $1 (try --help)" ;;
 	esac
@@ -242,11 +245,16 @@ CONCERN_ARGS=()
 if [[ -n "${PLAYTEST_CONCERN_SUITES:-}" ]]; then
 	CONCERN_ARGS=(--concern-suites "$PLAYTEST_CONCERN_SUITES")
 fi
+TRACE_ARGS=()
+if (( TRACE_ENTITY )); then
+	TRACE_ARGS=(--trace-entity)
+fi
 set +e
 uv run --project "$PLAYTEST_ROOT" python "$PLAYTEST_ROOT/scripts/playtest_run.py" \
 	--server stock \
 	--suite "$SUITE" \
 	"${CONCERN_ARGS[@]}" \
+	"${TRACE_ARGS[@]}" \
 	--world-name "$WORLD_NAME" \
 	--game-name "$GAME_NAME" \
 	--game-srv "$SEVEN_DAYS_TO_DIE_SERVER_DIR" \

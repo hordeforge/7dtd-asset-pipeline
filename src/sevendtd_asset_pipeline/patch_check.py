@@ -21,19 +21,20 @@ than guessed, so the gate never claims a verdict on a selector it could not run.
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 try:  # Full XPath 1.0, matching .NET XPathEvaluate. Optional: the standard
     # library subset is the fallback, and the gate says so when it cannot run
     # a selector. lxml is an untyped optional module; pyproject's mypy override
     # lists it so the import is not a type error.
-    from lxml import etree as _LX
+    from lxml import etree as lxml_etree
 
     _HAS_LXML = True
 except ImportError:  # pragma: no cover - a venv without the patch extra
-    _LX = None
+    lxml_etree = None
     _HAS_LXML = False
 
 from .errors import PipelineError
@@ -87,7 +88,7 @@ def _evaluate(target_root: Any, xpath: str) -> int:
     if _HAS_LXML:
         try:
             result = target_root.xpath(xpath)
-        except Exception:
+        except lxml_etree.XPathError:
             return -1
         # Full XPath 1.0 returns a node list for a node-set selector and a
         # scalar (e.g. count() -> float, string() -> str) otherwise. A scalar is
@@ -97,6 +98,11 @@ def _evaluate(target_root: Any, xpath: str) -> int:
         if not isinstance(result, list):
             return -1
         return len(result)
+    # ElementTree accepts a union token syntactically but treats the complete
+    # expression as a tag name and returns an empty list. That is not a valid
+    # zero-match verdict; only a full XPath 1.0 evaluator can run a union.
+    if "|" in xpath:
+        return -1
     try:
         if xpath.startswith("//"):
             # Pure descendant search. ElementTree rejects a leading '//' on an
@@ -185,7 +191,11 @@ def check_patches(
 def _parse_xml(path: Path, source: Path) -> Any:
     try:
         if _HAS_LXML:
-            return _LX.parse(str(path)).getroot()
-        return ET.parse(path).getroot()
-    except (OSError, ET.ParseError, ValueError) as exc:
+            parser = lxml_etree.XMLParser(resolve_entities=False, no_network=True)
+            return lxml_etree.parse(str(path), parser).getroot()
+        # ElementTree does not resolve external entities. This fallback reads
+        # only the caller's local mod XML and the installed game's read-only
+        # config, with failures contained as PipelineError below.
+        return ET.parse(path).getroot()  # noqa: S314
+    except (OSError, ET.ParseError, SyntaxError, ValueError) as exc:
         raise PipelineError(f"cannot parse {source}: {exc}") from exc

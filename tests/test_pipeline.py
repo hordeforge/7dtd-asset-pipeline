@@ -404,7 +404,10 @@ class PipelineTests(unittest.TestCase):
             os.environ.pop("UNITY_EDITOR", None)
         windows = next(check for check in checks if check.name == "Windows support")
         self.assertEqual("OK", windows.status)
-        self.assertEqual(str(support), windows.detail)
+        # macOS exposes the temporary directory through /var while realpath
+        # canonicalizes it to /private/var. The doctor is allowed to report
+        # either spelling of the same file.
+        self.assertEqual(support.resolve(), Path(windows.detail).resolve())
 
     def test_doctor_reports_the_synthesized_build_readiness(self) -> None:
         """The editorless writer answers three questions: revision, sources, UnityPy.

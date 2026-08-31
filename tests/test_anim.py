@@ -28,6 +28,9 @@ REVISION = "2022.3.62f2"
 needs_unitypy = unittest.skipUnless(
     has_capability("UnityPy"), "the writer needs UnityPy for the engine's type trees"
 )
+needs_vkd3d = unittest.skipUnless(
+    has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+)
 
 
 def read_objects(bundle: Path) -> dict[int, list[dict[str, Any]]]:
@@ -217,6 +220,7 @@ class AnimOnPrefabTests(unittest.TestCase):
             xml.read_text(encoding="utf-8"),
         )
 
+    @needs_vkd3d
     def test_the_prefab_carries_the_animation_component_and_clip(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
 
@@ -241,6 +245,7 @@ class AnimOnPrefabTests(unittest.TestCase):
         self.assertEqual(len(animation["m_Animations"]), 1)
         self.assertNotEqual(animation["m_GameObject"]["m_PathID"], 0)
 
+    @needs_vkd3d
     def test_the_animation_sits_on_a_figure_under_the_model_root(self) -> None:
         """GameObjectAnimalAnimation reads the legacy Animation off the model
         root's first *active child*, not off the root: spawned entities NRE'd
@@ -291,6 +296,7 @@ class AnimOnPrefabTests(unittest.TestCase):
         ]
         self.assertEqual(root_bone_go["m_Name"], "Root")
 
+    @needs_vkd3d
     def test_a_source_without_a_declaration_gets_no_animation(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
 
@@ -381,6 +387,35 @@ class LimbAnimTests(unittest.TestCase):
         ys = [kf["value"]["y"] for kf in body["curve"]["m_Curve"]]
         self.assertLess(min(ys), -0.01)
         self.assertAlmostEqual(ys[0], 0.0, places=6)
+
+    @needs_unitypy
+    def test_position_curves_preserve_the_bones_rest_translation(self) -> None:
+        from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
+
+        path = self.root / "rest.anim.json"
+        path.write_text(
+            '{"clips": ['
+            '{"name": "Idle1", "kind": "bob", "bone": "Root/Pelvis"},'
+            '{"name": "Walk", "kind": "walk",'
+            ' "bones": ["Root/Pelvis/LeftUpper"],'
+            ' "lower_bones": ["Root/Pelvis/LeftUpper/LeftLower"],'
+            ' "body_bone": "Root/Pelvis"},'
+            '{"name": "Jump", "kind": "jump", "bone": "Root/Pelvis",'
+            ' "amplitude": 0.2}'
+            "]}"
+        )
+        rest = {"Root/Pelvis": (-0.2, 0.6, 0.4)}
+        clips = {item["m_Name"]: item for item in clip_fields(parse_anim(path), rest)}
+
+        idle_values = clips["Idle1"]["m_PositionCurves"][0]["curve"]["m_Curve"]
+        self.assertEqual(idle_values[0]["value"], {"x": -0.2, "y": 0.6, "z": 0.4})
+        self.assertAlmostEqual(max(key["value"]["y"] for key in idle_values), 0.63)
+        walk_values = clips["Walk"]["m_PositionCurves"][0]["curve"]["m_Curve"]
+        self.assertEqual(walk_values[0]["value"], {"x": -0.2, "y": 0.6, "z": 0.4})
+        self.assertAlmostEqual(min(key["value"]["y"] for key in walk_values), 0.57)
+        jump_values = clips["Jump"]["m_PositionCurves"][0]["curve"]["m_Curve"]
+        self.assertEqual(jump_values[0]["value"], {"x": -0.2, "y": 0.6, "z": 0.4})
+        self.assertAlmostEqual(jump_values[4]["value"]["y"], 0.8)
 
     @needs_unitypy
     def test_same_name_entries_merge_into_one_clip(self) -> None:
@@ -484,6 +519,7 @@ class LimbAnimBundleTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    @needs_vkd3d
     def test_anim_kinds_round_trip_through_the_bundle(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
         from sevendtd_asset_pipeline.generators import run
@@ -506,6 +542,7 @@ class LimbAnimBundleTests(unittest.TestCase):
         animation = trees[111][0]
         self.assertEqual(len(animation["m_Animations"]), 2)
 
+    @needs_vkd3d
     def test_attack_death_jump_round_trip_with_wrap(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
         from sevendtd_asset_pipeline.generators import run
@@ -549,6 +586,7 @@ class BoneColliderTests(unittest.TestCase):
     PhysicsBodyNullCollider and the creature floats)."""
 
     @needs_unitypy
+    @needs_vkd3d
     def test_every_bone_has_a_collider_component(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
 

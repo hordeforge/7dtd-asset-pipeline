@@ -37,6 +37,8 @@ MOD_NAME="ShamwaySelfTest"
 FIXTURE=""
 LOOK=0
 LOOK_STEM=""
+PREFAB_LOOK=0
+TRACE_ENTITY=0
 EXTRA=()
 
 usage() {
@@ -50,12 +52,21 @@ usage() {
 		OPTIONS
 		  --fixture DIR     the modlet to build   (default: examples/SelfTestMod)
 		  --stem NAME       asset stem it carries (default: shamwaySelfTestProp)
-		  --look [STEM]     run that prefab's look suite (<mod>_<stem>_look) alone:
-		                    one camera-staged instance, one invocation. Without
-		                    STEM, runs shamwayselftest_burst_look (the looping VFX
-		                    prefab). The generated rigs each get their own look
+		  --look [STEM]     run that asset's look suite (<mod>_<stem>_look) alone:
+		                    a walk-entity stem is engine-spawned; other assets are
+		                    camera-staged. Without STEM, runs
+		                    shamwayselftest_burst_look (the looping VFX prefab).
+		                    The generated rigs each get their own look
 		                    suite — shamwayselftest_shamwaySelfTestCreature_look,
 		                    _Bird_look, _Arachnid_look, _Dino_look.
+		  --prefab-look STEM
+		                    for a walk-entity stem, run its raw bundle-prefab
+		                    control (<mod>_<stem>_prefab_look) alone. This keeps
+		                    its SkinnedMeshRenderer but removes EntityAlive,
+		                    grounding and the avatar controller.
+		  --trace-entity    emit per-second live pose, renderer, grounding,
+		                    capsule/collider and physics-query evidence for a
+		                    spawned walk-entity case.
 		  -h, --help        this text
 
 		Anything after -- is passed to playtest-acceptance.sh, so --listen (and
@@ -68,7 +79,7 @@ usage() {
 
 		EXIT
 		  0  the game loaded the prefab and placed the block on a voxel
-		     (--look: the look suite held the floating prefabs)
+		     (--look: the asset's single look suite passed)
 		  1  a case failed, or an assertion below did
 
 		This proves the engine READ the bundle. It says nothing about whether
@@ -82,15 +93,24 @@ while (($#)); do
 	case "$1" in
 		--fixture) FIXTURE="${2:-}"; shift 2 ;;
 		--stem) STEM="${2:-}"; shift 2 ;;
-		--look) LOOK=1; shift
+		--look) (( LOOK == 0 )) || die "choose only one of --look and --prefab-look"
+			LOOK=1; shift
 			if (($#)) && [[ "$1" != -* ]]; then
 				LOOK_STEM="$1"; shift
 			fi ;;
+		--prefab-look) (( LOOK == 0 )) || die "choose only one of --look and --prefab-look"
+			LOOK=1; PREFAB_LOOK=1; LOOK_STEM="${2:-}"; shift 2
+			[[ -n "$LOOK_STEM" ]] || die "--prefab-look needs a STEM" ;;
+		--trace-entity) TRACE_ENTITY=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		--) shift; EXTRA=("$@"); break ;;
 		*) die "unknown option: $1 (try --help)" ;;
 	esac
 done
+
+if (( TRACE_ENTITY )); then
+	EXTRA+=(--trace-entity)
+fi
 
 SHAMWAY="${SHAMWAY:-shamway}"
 command -v "$SHAMWAY" >/dev/null 2>&1 || die "$SHAMWAY is not on PATH"
@@ -159,7 +179,11 @@ if (( LOOK )); then
 		# Suite ids are lowercased by the orchestrator (playtest_run.py
 		# splits `suite.lower()`), and the generated provider compares
 		# case-sensitively, so the stem must arrive lowercase too.
-		SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_look")
+		if (( PREFAB_LOOK )); then
+			SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_prefab_look")
+		else
+			SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_look")
+		fi
 	else
 		SUITE_ARGS=(--suite "shamwayselftest_burst_look")
 	fi
@@ -188,6 +212,7 @@ fail() {
 	FAILED=1
 }
 FAILED=0
+WALK_ENTITY_LOOK=0
 
 # The per-asset detail lines live in the CLIENT log, not in the acceptance
 # script's stdout, which reprints only PASS/FAIL/SUMMARY. Asserting against
@@ -211,8 +236,11 @@ if (( LOOK )); then
 		# (the game grounds it), so the evidence is the spawn + travel line,
 		# not a staged prefab in front of the camera.
 		if grep -qE "$LOOK_STEM: spawned_id=[0-9]+ travelled=[0-9.]+m" "$CLIENT_LOG"; then
+			WALK_ENTITY_LOOK=1
 			grep -qE "$LOOK_STEM: spawned_id=[0-9]+ travelled=[1-9][0-9.]*m" "$CLIENT_LOG" ||
 				fail "the $LOOK_STEM entity spawned but did not travel (walk-entity case)"
+			grep -qE "motion_${LOOK_STEM}: render-probe .*collisionReady=True.*groundReady=True" "$CLIENT_LOG" ||
+				fail "the engine-spawned entity did not prove both collision and surface grounding; rerun with --trace-entity and inspect collisionReady, surfaceRay, surfaceHit, groundClearance, and groundReady"
 		else
 			grep -qE "$LOOK_STEM: staged at .*with [1-9][0-9]* renderer" "$CLIENT_LOG" ||
 				fail "the $LOOK_STEM prefab was not staged in front of the camera with a renderer"
@@ -237,12 +265,9 @@ else
 		fail "the texture did not come back at its authored size"
 	# The entity lane: a generated creature rides the same bundle. Its prefab
 	# must come back with its SkinnedMeshRenderer (renderers=1) and its weighted
-	# mesh with the authored vertex count. Spawning it as an entity class is
-	# deliberately NOT asserted here: a custom entity class on a dedicated
-	# server gets a negative id and renders nothing on clients
-	# (docs/authoring/entities.md), and this run always uses one. The prefab
-	# load is the engine reading the bundle; the class wiring is the offline
-	# `validate` gate's job.
+	# mesh with the authored vertex count. This default run stays a mechanical
+	# bundle-load concern. The separate --look STEM invocation spawns the real
+	# EntityAlive and asserts renderer, collision and precise grounding together.
 	grep -qE "$CREATURE: $CREATURE .*renderers=1" "$CLIENT_LOG" ||
 		fail "the entity prefab did not come back with its skinned renderer: an empty GameObject draws nothing"
 	grep -qE "${CREATURE}_mesh: .*vertices=[0-9]+ submeshes=1" "$CLIENT_LOG" ||
@@ -268,14 +293,28 @@ fi
 
 if (( LOOK )); then
 	if [[ -n "$LOOK_STEM" ]]; then
-		cat <<EOF
-  OK   the $LOOK_STEM prefab staged in front of the camera, with a renderer
+		if (( WALK_ENTITY_LOOK )); then
+			cat <<EOF
+  OK   the engine spawned $LOOK_STEM as EntityAlive, with a renderer
+  OK   its authored Physics collider was hit by the collision probe
+  OK   its posed visible bottom stayed on the raycast ground surface
 
-The game instantiated the generated rig. What it looked like is in the
-captured frames — judge them, then file the sign-off:
+The game spawned, rendered, grounded, and collided with the generated rig.
+What it looked like is in the captured frames. Judge them, then file the
+sign-off:
 
   shamway client capture $LOOK_STEM --observable "reads as its rig: proportions, facing, not mirrored"
 EOF
+		else
+			cat <<EOF
+  OK   the $LOOK_STEM prefab staged in front of the camera, with a renderer
+
+The game instantiated the generated rig. What it looked like is in the
+captured frames — judge it, then file the sign-off:
+
+  shamway client capture $LOOK_STEM --observable "reads as its rig: proportions, facing, not mirrored"
+EOF
+		fi
 	else
 		cat <<EOF
   OK   look_burst was held in front of the camera

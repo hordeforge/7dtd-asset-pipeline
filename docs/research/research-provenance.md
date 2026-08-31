@@ -2640,6 +2640,106 @@ without lxml) is reported as "not checked" rather than guessed, so the gate
 never claims a verdict it did not take. `lxml` is registered in
 `capabilities.REGISTRY`.
 
+## CORRECTION: the live renderer worked; an absolute pelvis curve buried the skin (2026-08-31)
+
+The last sentence above is superseded. The d3d11/platform conclusion was
+drawn from an empty frame before the camera and animated pose were measured.
+The corrected investigation used fresh live-client runs of
+`playtest-synthesized.sh --look shamwaySelfTestCreature`, first with the normal
+d3d11 launch and then `GFX_API=glcore`, plus an instrumented
+`7dtd-playtest` `CaseDef.WalkEntity` and the separate raw-prefab suite
+`shamwayselftest_shamwayselftestcreature_prefab_look`.
+
+The first instrumented OpenGL run reported a healthy live pass
+(`shader=Shamway/Unlit supported=True passes=1 SetPass0=True`) and 1,382 baked
+vertices, but its camera ray hit `terrainCollider@4.11 target=False` before the
+mesh at distance 5.44. After `FrameWorldBounds` chose an unobstructed detached
+camera, the ray reported `Physics@3.19 target=True`. This refutes the API
+hypothesis: the prior d3d11 and OpenGL pictures were both occluded by the same
+fixed camera lane.
+
+The raw-prefab control then visibly rasterized under the live OpenGL client.
+The human observation was that it was clipped into the ground. The probe made
+that observation quantitative:
+
+```text
+shared mesh bounds  center=(0.00, 0.50, 0.17) extents=(0.17, 0.52, 0.42)
+baked posed bounds  center=(0.00,-0.08, 0.17) extents=(0.17, 0.52, 0.42)
+```
+
+The authored AABB bottom is about `-0.02`; the live posed bottom is about
+`-0.60`, a 0.58 m downward displacement. Reading
+`examples/SelfTestMod/assets-src/bundle/shamwaySelfTestCreature.glb` as glTF
+shows `Pelvis.translation = [0, 0.6, 0]`. Reading the sibling
+`.anim.json` and `anim.idle_bob_curves` shows the `Idle1` position keys were
+absolute values `[0, 0..0.03, 0]`. A Unity legacy position curve replaces the
+target Transform's local position; it does not add a delta. The clip therefore
+discarded the pelvis's 0.60 m rest height and moved the complete skinned body
+down while the root-level `Physics` capsule stayed fixed.
+
+The animation writer now passes glTF joint rest translations into clip
+construction. Bob, walk-dip and jump keys add their displacement to that rest
+value. The regression test uses a non-zero three-axis rest translation and
+requires all three motion kinds to preserve it. The playtest harness now uses
+`SkinnedMeshRenderer.BakeMesh` for posed bounds and reports the authored
+`Physics` capsule, active solid collider count, and a live `Physics.Raycast`
+hit on the spawned entity. `--trace-entity` repeats that evidence once per
+second. This separates four failures that the old `renderer enabled` line
+could not: camera occlusion, shader/pass rejection, pose displacement, and a
+missing or non-queryable collider.
+
+At the time this correction was written, the OpenGL raw-prefab picture had
+been looked at, but the corrected bundle had not yet completed its fresh d3d11
+spawned-entity run. That run, including `collisionReady=True` and a human look
+at feet versus terrain, is the acceptance gate; the measurements above are the
+diagnosis, not the final visual sign-off.
+
+**The first corrected D3D11 spawn found a second harness defect.** The fixed
+clip reached the live client: every one-second sample reported baked center Y
+`0.50..0.52` with extent `0.52`, the `Physics` capsule had center Y `0.50`,
+height `1.040`, bottom `-0.020`, all 40 colliders were active and solid, and
+`collisionRay=Root@0.35 target=True collisionReady=True`. The user still saw
+the creature clipped into the floor. The final line explained it:
+`getpos.y=60.06`, while the loaded road column's top block has standing surface
+Y `61`.
+
+`7dtd-playtest` had used `World.GetHeightAt`, the terrain generator's heightmap,
+inside `GroundYFor`. `ilspycmd -t World` on the installed client shows the
+stock distinction: `GetHeightAt(float,float)` delegates to
+`GetTerrainGenerator().GetTerrainHeightAt`, while `GetHeight(int,int)` resolves
+the loaded chunk and calls `Chunk.GetHeight`; stock spawn samplers then add one
+for the top face. The harness now uses `GetHeight + 1`, subtracts the authored
+capsule bottom, and rejects a sample unless the posed visual bottom is within
+`-0.08..0.20` m of that loaded surface. This is independent of the animation
+bug: the first moved the skin relative to the root; the second moved the whole
+root relative to the world.
+
+The looked-at corrected frame exposed one more surface distinction. The entity
+was now visible and no longer buried, but it climbed much too high over bumps
+that were not visibly that large. `World.GetHeight + 1` is the top boundary of
+the occupied voxel, not the precise collider surface of a slope or partial
+block inside that voxel. Because `WalkEntity` forces Y on its scripted orbit,
+it turned those shapes into invisible one-metre steps. The harness now uses
+`Physics.RaycastAll` with the engine's traversable-surface mask `268500992`,
+ignores hits under the spawned entity's own hierarchy, and converts the hit
+from rebased render coordinates back to absolute world Y. The trace retains
+both `voxelTop` and `surfaceRay`, plus `voxelMinusSurface`; `groundClearance`
+is measured against the ray hit. This is a harness artifact of forced motion,
+not evidence that the authored capsule grew or that the renderer moved again.
+
+**Fresh d3d11 acceptance closed the sequence on 2026-08-31.** The real
+spawned-entity suite completed `pass=1 fail=0`. Its t=11 s sample crossed the
+column that had produced the visible hop and measured
+`voxelTop=62.000 surfaceRay=61.000 voxelMinusSurface=1.000`; the posed skin
+bottom was `61.032`, so `groundClearance=0.032 groundReady=True`. The separate
+collision query still hit `Root@0.35 target=True collisionReady=True`, the
+shader remained `supported=True passes=1 SetPass0=True`, and all 40 colliders
+were active and solid. The user looked at the moving result and signed off that
+it looked good after this surface correction. The original d3d11 TODO is
+therefore closed as three independent faults: an occluded camera, absolute
+animation keys that discarded rest translation, and forced grounding against
+a voxel ceiling instead of the collider surface.
+
 
 ## FSB5 Vorbis: the setup header is not stored, it is named by a CRC-32 (2026-08-31)
 

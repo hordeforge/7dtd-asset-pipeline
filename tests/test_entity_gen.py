@@ -621,6 +621,165 @@ class RemainingRigConstructionTests(unittest.TestCase):
                 self.assertIn('name="Mesh"', text)
                 self.assertIn('name="UserSpawnType" value="Menu"', text)
 
+    def test_bird_torso_is_longer_front_to_back_than_tall(self) -> None:
+        """A bird body is a keel along Z, not a vertical can of Y-cylinders."""
+        out = self.root / "bird-torso.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", "bird"]), 0)
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        joints = primitive.joints
+        assert joints is not None
+        skin_joints = scene.skins[0].joints
+        torso = [
+            position
+            for position, joint_row in zip(primitive.positions, joints, strict=True)
+            if scene.nodes[skin_joints[joint_row[0]]].name in {"Pelvis", "Spine", "Chest"}
+        ]
+        self.assertTrue(torso)
+        span_z = max(p[2] for p in torso) - min(p[2] for p in torso)
+        span_y = max(p[1] for p in torso) - min(p[1] for p in torso)
+        self.assertGreater(span_z, span_y)
+
+    def test_bird_feet_meet_the_lower_legs(self) -> None:
+        """Lower-leg cylinders span down to the foot boxes; no floating feet."""
+        out = self.root / "bird-feet.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", "bird"]), 0)
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        joints = primitive.joints
+        assert joints is not None
+        skin_joints = scene.skins[0].joints
+
+        def verts(name: str) -> list[tuple[float, float, float]]:
+            return [
+                position
+                for position, joint_row in zip(primitive.positions, joints, strict=True)
+                if scene.nodes[skin_joints[joint_row[0]]].name == name
+            ]
+
+        lower, foot = verts("LeftLegLower"), verts("LeftFoot")
+        self.assertTrue(lower and foot)
+        self.assertLessEqual(min(p[1] for p in lower), max(p[1] for p in foot) + 0.02)
+
+    def test_bird_wings_span_wider_than_the_legs(self) -> None:
+        """Improved bird: wing plates span further outboard than the perch legs.
+
+        The construction-bar bird used matchstick boxes whose |x| barely beat
+        the legs; a wing that reads as a wing has a chord and a span, so the
+        mesh's wing vertices reach further in X than any leg/foot vertex.
+        """
+        out = self.root / "bird.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", "bird"]), 0)
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        joints = primitive.joints
+        assert joints is not None
+        skin_joints = scene.skins[0].joints
+        wing_x: list[float] = []
+        leg_x: list[float] = []
+        for position, joint_row in zip(primitive.positions, joints, strict=True):
+            bone = scene.nodes[skin_joints[joint_row[0]]].name
+            if "Wing" in bone:
+                wing_x.append(abs(position[0]))
+            elif "Leg" in bone or bone.endswith("Foot"):
+                leg_x.append(abs(position[0]))
+        self.assertTrue(wing_x and leg_x)
+        self.assertGreater(max(wing_x), max(leg_x) * 1.8)
+
+    def test_bird_head_meets_the_neck(self) -> None:
+        """The neck box reaches the head joint: no floating-head gap."""
+        out = self.root / "bird-neck.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", "bird"]), 0)
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        joints = primitive.joints
+        assert joints is not None
+        skin_joints = scene.skins[0].joints
+
+        def verts(name: str) -> list[tuple[float, float, float]]:
+            return [
+                position
+                for position, joint_row in zip(primitive.positions, joints, strict=True)
+                if scene.nodes[skin_joints[joint_row[0]]].name == name
+            ]
+
+        neck, head, chest = verts("Neck"), verts("Head"), verts("Chest")
+        self.assertTrue(neck and head and chest)
+        self.assertGreaterEqual(max(p[2] for p in neck), min(p[2] for p in head) - 0.02)
+        self.assertLessEqual(min(p[2] for p in neck), max(p[2] for p in chest) + 0.02)
+
+    def test_crocodile_is_a_long_low_hull(self) -> None:
+        """A crocodile is much longer in Z than it is tall, with the tail on the pelvis."""
+        out = self.root / "croc-hull.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", "crocodile"]), 0)
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        zs = [p[2] for p in primitive.positions]
+        ys = [p[1] for p in primitive.positions]
+        self.assertGreater(max(zs) - min(zs), (max(ys) - min(ys)) * 3.0)
+        joints = primitive.joints
+        assert joints is not None
+        skin_joints = scene.skins[0].joints
+
+        def verts(name: str) -> list[tuple[float, float, float]]:
+            return [
+                position
+                for position, joint_row in zip(primitive.positions, joints, strict=True)
+                if scene.nodes[skin_joints[joint_row[0]]].name == name
+            ]
+
+        tail, pelvis = verts("Tail1"), verts("Pelvis")
+        self.assertTrue(tail and pelvis)
+        self.assertGreaterEqual(max(p[2] for p in tail), min(p[2] for p in pelvis) - 0.02)
+
+    def test_crocodile_head_is_a_forward_snout_not_a_vertical_tube(self) -> None:
+        """The improved crocodile head is elongated in Z (a snout), not Y."""
+        out = self.root / "croc.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", "crocodile"]), 0)
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        joints = primitive.joints
+        assert joints is not None
+        skin_joints = scene.skins[0].joints
+        head = [
+            position
+            for position, joint_row in zip(primitive.positions, joints, strict=True)
+            if scene.nodes[skin_joints[joint_row[0]]].name == "Head"
+        ]
+        self.assertTrue(head)
+        zs = [p[2] for p in head]
+        ys = [p[1] for p in head]
+        self.assertGreater(max(zs) - min(zs), (max(ys) - min(ys)) * 2.0)
+
+    def test_part_offset_is_scaled_and_shifts_geometry(self) -> None:
+        parts = self.root / "parts.json"
+        parts.write_text(
+            json.dumps(
+                {
+                    "parts": {
+                        "Head": {
+                            "shape": "box",
+                            "width": 0.1,
+                            "depth": 0.1,
+                            "height": 0.1,
+                            "offset": [0.0, 0.0, 0.4],
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        out = self.root / "offset.glb"
+        self.assertEqual(
+            run("entity", [str(out), "--rig", "humanoid", "--parts", str(parts), "--scale", "2"]),
+            0,
+        )
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        zs = [p[2] for p in primitive.positions]
+        # Head sits at ~1.6 m Y; offset 0.4 * scale 2 = 0.8 m local Z.
+        self.assertGreater(max(zs), 0.7)
+
     def test_scale_morph_of_a_shipped_rig_differs_in_size(self) -> None:
         """`--scale` on generate entity is the size morph; no mesh edit."""
         base = self.root / "dino.glb"
@@ -632,6 +791,96 @@ class RemainingRigConstructionTests(unittest.TestCase):
         base_pelvis = next(node for node in base_scene.nodes if node.name == "Pelvis")
         tiny_pelvis = next(node for node in tiny_scene.nodes if node.name == "Pelvis")
         self.assertAlmostEqual(tiny_pelvis.translation[1], base_pelvis.translation[1] * 0.4)
+
+    def test_idle_includes_an_in_place_walk_and_tail_sway(self) -> None:
+        """Staged looks play Idle1: it must march in place, and a croc tail sways."""
+        out = self.root / "croc-anim.glb"
+        self.assertEqual(
+            run("entity", [str(out), "--rig", "crocodile", "--anim", "idle,head,walk"]), 0
+        )
+        anim = json.loads((self.root / "croc-anim.anim.json").read_text(encoding="utf-8"))
+        idle = [c for c in anim["clips"] if c["name"] == "Idle1"]
+        kinds = {c["kind"] for c in idle}
+        self.assertIn("walk", kinds)
+        self.assertIn("sway", kinds)
+        walk = next(c for c in anim["clips"] if c["name"] == "Walk" and c["kind"] == "sway")
+        self.assertTrue(any("Tail" in path for path in walk["bones"]))
+
+    def test_humanoid_arms_extend_along_x(self) -> None:
+        """Arm boxes follow the X-chain, not a Y-cylinder standing on the shoulder."""
+        out = self.root / "human.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", "humanoid"]), 0)
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        joints = primitive.joints
+        assert joints is not None
+        skin_joints = scene.skins[0].joints
+        arm_x = [
+            abs(position[0])
+            for position, joint_row in zip(primitive.positions, joints, strict=True)
+            if "Arm" in scene.nodes[skin_joints[joint_row[0]]].name
+            or "Hand" in scene.nodes[skin_joints[joint_row[0]]].name
+        ]
+        chest_x = [
+            abs(position[0])
+            for position, joint_row in zip(primitive.positions, joints, strict=True)
+            if scene.nodes[skin_joints[joint_row[0]]].name == "Chest"
+        ]
+        self.assertTrue(arm_x and chest_x)
+        self.assertGreater(max(arm_x), max(chest_x) * 1.3)
+
+    def test_dinosaur_body_goes_forward_not_up(self) -> None:
+        out = self.root / "dino-body.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", "dinosaur"]), 0)
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        joints = primitive.joints
+        assert joints is not None
+        skin_joints = scene.skins[0].joints
+
+        def named(name: str) -> list[tuple[float, float, float]]:
+            return [
+                position
+                for position, joint_row in zip(primitive.positions, joints, strict=True)
+                if scene.nodes[skin_joints[joint_row[0]]].name == name
+            ]
+
+        pelvis, chest = named("Pelvis"), named("Chest")
+        self.assertTrue(pelvis and chest)
+        self.assertGreater(max(p[2] for p in chest), max(p[2] for p in pelvis))
+        tail, neck, head = named("Tail1"), named("Neck"), named("Head")
+        self.assertTrue(tail and neck and head)
+        self.assertGreaterEqual(max(p[2] for p in tail), min(p[2] for p in pelvis) - 0.02)
+        self.assertGreaterEqual(max(p[2] for p in neck), min(p[2] for p in head) - 0.02)
+        thigh, shin = named("LeftThigh"), named("LeftShin")
+        self.assertTrue(thigh and shin)
+        self.assertLessEqual(min(p[1] for p in thigh), max(p[1] for p in shin) + 0.02)
+
+    def test_arachnid_abdomen_is_flatter_than_wide(self) -> None:
+        out = self.root / "spider.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", "arachnid"]), 0)
+        scene = parse_gltf(out)
+        primitive = scene.meshes[0].primitive
+        joints = primitive.joints
+        assert joints is not None
+        skin_joints = scene.skins[0].joints
+        abdomen = [
+            position
+            for position, joint_row in zip(primitive.positions, joints, strict=True)
+            if scene.nodes[skin_joints[joint_row[0]]].name == "Abdomen"
+        ]
+        span_y = max(p[1] for p in abdomen) - min(p[1] for p in abdomen)
+        span_x = max(p[0] for p in abdomen) - min(p[0] for p in abdomen)
+        self.assertGreater(span_x, span_y * 1.4)
+        # Legs splay outboard of the abdomen, not hang as table posts under it.
+        leg_x = [
+            abs(position[0])
+            for position, joint_row in zip(primitive.positions, joints, strict=True)
+            if "Leg" in scene.nodes[skin_joints[joint_row[0]]].name
+        ]
+        abdomen_x = [abs(p[0]) for p in abdomen]
+        self.assertTrue(leg_x and abdomen_x)
+        self.assertGreater(max(leg_x), max(abdomen_x) * 1.3)
 
     def test_creature_one_shot_calls_entity_and_hide(self) -> None:
         """`generate creature` is the easy on-ramp: atlas + anim + hide."""

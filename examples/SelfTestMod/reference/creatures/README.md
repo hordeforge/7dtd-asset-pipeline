@@ -11,11 +11,7 @@ the spawn-area car) can be judged against what actually should be there.
 > It answers *does the in-game frame contain this body shape?*, not *does the
 > colour read right?*.
 
-## The four clay sheets
-
-Crocodile and humanoid ship as generated bundle members at the same
-construction bar (atlas, Idle1+Walk, role-aware hide) but do not yet have
-clay contact sheets. The four below are the original live-look references.
+## The clay sheets
 
 | Stem | Rig | Source | Rendered |
 |---|---|---|---|
@@ -23,6 +19,8 @@ clay contact sheets. The four below are the original live-look references.
 | `shamwaySelfTestBird` | bird | `assets-src/bundle/shamwaySelfTestBird.glb` | `shamwaySelfTestBird_reference.png` |
 | `shamwaySelfTestArachnid` | arachnid | `assets-src/bundle/shamwaySelfTestArachnid.glb` | `shamwaySelfTestArachnid_reference.png` |
 | `shamwaySelfTestDino` | dinosaur | `assets-src/bundle/shamwaySelfTestDino.glb` | `shamwaySelfTestDino_reference.png` |
+| `shamwaySelfTestCrocodile` | crocodile | `assets-src/bundle/shamwaySelfTestCrocodile.glb` | `shamwaySelfTestCrocodile_reference.png` |
+| `shamwaySelfTestHumanoid` | humanoid | `assets-src/bundle/shamwaySelfTestHumanoid.glb` | `shamwaySelfTestHumanoid_reference.png` |
 
 Each `_reference.png` is a 2×3 contact sheet of six views: front, 3/4, side,
 back, back-3/4, other-side. The camera is orthographic, framed from the model's

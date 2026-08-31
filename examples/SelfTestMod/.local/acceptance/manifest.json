@@ -22,5 +22,65 @@
     "session": "wayland",
     "sha256": "bb8e3bfa12a3b271fc64320377475d99f216d4ca88d0bf693683685f002a9824",
     "verdict": null
+  },
+  {
+    "backend": "provided",
+    "bytes": 5863067,
+    "captured_at": "2026-08-31T13:33:18Z",
+    "file": "shamwaySelfTestBird.png",
+    "label": "shamwaySelfTestBird",
+    "notes": [],
+    "observable": "keel body, wings, neck meets head, feet attached to legs, slate hide; staged Idle1 in-place walk. A load is not a look.",
+    "session": "wayland",
+    "sha256": "e4c3b659b5f053e647c2b48c650ddf389589c200a6ca3c8b94d24048450b8d17",
+    "verdict": null
+  },
+  {
+    "backend": "provided",
+    "bytes": 6126755,
+    "captured_at": "2026-08-31T13:35:17Z",
+    "file": "shamwaySelfTestCrocodile.png",
+    "label": "shamwaySelfTestCrocodile",
+    "notes": [],
+    "observable": "long low overlapping hull, forward snout, tail on the pelvis, four sprawl legs, rust hide. Clay six-view has side/back. A load is not a look.",
+    "session": "wayland",
+    "sha256": "3ac622d7af71c2fd4e68d523bf8c99debb67974210ad11943cbf8f8834c6191a",
+    "verdict": null
+  },
+  {
+    "backend": "provided",
+    "bytes": 6258252,
+    "captured_at": "2026-08-31T13:37:12Z",
+    "file": "shamwaySelfTestDino.png",
+    "label": "shamwaySelfTestDino",
+    "notes": [],
+    "observable": "connected theropod: neck and tail along Z, thighs meet shins, olive hide. Live frame is a front-3/4 of the rotating staged look; clay six-view has side and back. A load is not a look.",
+    "session": "wayland",
+    "sha256": "7a4458747a0176d56e149eba2c5229db33c713bd2dae33752e16660a768d9d15",
+    "verdict": null
+  },
+  {
+    "backend": "provided",
+    "bytes": 5806106,
+    "captured_at": "2026-08-31T13:39:10Z",
+    "file": "shamwaySelfTestArachnid.png",
+    "label": "shamwaySelfTestArachnid",
+    "notes": [],
+    "observable": "flat abdomen (not a sphere), legs splayed outboard of the prosoma, pedipalps forward, charcoal hide. A load is not a look.",
+    "session": "wayland",
+    "sha256": "aa5d5a1c6e4ec2096ebf304582ddabd19a0dbbe32d9948dfe794404fe7973791",
+    "verdict": null
+  },
+  {
+    "backend": "provided",
+    "bytes": 6127496,
+    "captured_at": "2026-08-31T13:41:06Z",
+    "file": "shamwaySelfTestHumanoid.png",
+    "label": "shamwaySelfTestHumanoid",
+    "notes": [],
+    "observable": "T-pose person: X-arm boxes, sphere head, legs with feet, tan hide. Reads more like a 7DTD player character than stacked Y-cylinders. A load is not a look.",
+    "session": "wayland",
+    "sha256": "860489e130389ff2c1d0225617533e5576478e4c011ab4767a8bcc82a06f9aac",
+    "verdict": null
   }
 ]

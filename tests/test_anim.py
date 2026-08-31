@@ -165,7 +165,7 @@ class AnimDeclarationTests(unittest.TestCase):
         for body, fragment in (
             (
                 '{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}',
-                "bob, head, walk, flap, attack, death or jump",
+                "bob, head, walk, flap, sway, attack, death or jump",
             ),
             ('{"clips": [{"name": "Walk", "kind": "walk", "bone": "Root"}]}', '"bones"'),
             ('{"clips": [{"name": "Idle1", "kind": "bob"}]}', '"bone"'),
@@ -349,7 +349,9 @@ class LimbAnimTests(unittest.TestCase):
         path.write_text(
             '{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}', encoding="utf-8"
         )
-        with self.assertRaisesRegex(PipelineError, "bob, head, walk, flap, attack, death or jump"):
+        with self.assertRaisesRegex(
+            PipelineError, "bob, head, walk, flap, sway, attack, death or jump"
+        ):
             parse_anim(path)
 
     def test_walk_curves_bend_knees_and_alternate_diagonally(self) -> None:
@@ -535,7 +537,8 @@ class LimbAnimBundleTests(unittest.TestCase):
         trees = read_objects(bundle)
         clips = {c["m_Name"]: c for c in trees[74]}
         self.assertEqual(set(clips), {"Idle1", "Walk"})
-        self.assertEqual(len(clips["Walk"]["m_RotationCurves"]), 8)  # upper+lower per leg
+        # 8 leg curves + the tail sway on Walk.
+        self.assertEqual(len(clips["Walk"]["m_RotationCurves"]), 9)
         self.assertEqual(len(clips["Walk"]["m_PositionCurves"]), 1)  # body dip
         self.assertEqual(len(clips["Idle1"]["m_RotationCurves"]), 1)
         self.assertEqual(len(clips["Idle1"]["m_PositionCurves"]), 1)

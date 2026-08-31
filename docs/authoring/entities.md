@@ -1,5 +1,26 @@
 # Custom entities: the rig, the skin, and the XML that spawns them
 
+## Quick start
+
+A reusable creature from a shipped rig, with atlas, motion clips, and a
+role-aware hide:
+
+```bash
+shamway generate creature myRaptor.glb --rig dinosaur --coat olive --mod MyMod --bundle myMod --xml myRaptor-entityclasses.xml
+```
+
+A size and coat morph of that same rig, no mesh edit:
+
+```bash
+shamway generate creature myRaptorTiny.glb --rig dinosaur --scale 0.5 --coat rust
+```
+
+`--rig` is one of `humanoid`, `quadruped`, `quadruped-small`, `quadruped-large`,
+`bird`, `dinosaur`, `arachnid`, `crocodile`. `--coat` is `moss`, `brown`,
+`cream`, `slate`, `olive`, `rust`, `charcoal`, or `tan`. Put the GLB and the
+sibling `{stem}_albedo.png` in `assets-src/bundle/`, then `shamway build`.
+Everything below is detail.
+
 A custom in-game entity is the one 3D asset class that is never one object.
 A block is a static mesh; an item is a mesh and a prefab. An entity is a
 **skeleton with a skinned mesh on top** — bones, bind poses, weights, a
@@ -318,9 +339,10 @@ from the rig's own names):
 
 | Kind | Clip | What moves |
 |---|---|---|
-| `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma). On a bird, also a `flap` of both `WingUpper` bones (they beat together; inverted so identity-bound left/right wings drop in the same world direction) |
+| `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma). On a bird, also a `flap` of both `WingUpper` bones (they beat together; inverted so identity-bound left/right wings drop in the same world direction). On remaining rigs (`bird`, `arachnid`, `dinosaur`, `crocodile`, `humanoid`) `--anim walk` also merges a half-amplitude in-place walk into Idle1, because a staged look plays Idle1 automatically |
 | `head` | merged into `Idle1` | a slow side-to-side yaw of the `Head` bone (≈20°, 4 s) |
-| `walk` | `Walk` | a body-plan gait: locomotor uppers only (`is_locomotor_upper` — `Thigh`, or `Upper` with `Leg`/`Front`/`Rear`; **not** `Wing` or `Arm` as legs). The knee (`Lower`/`Shin`/`Middle` child) bends the other way, the body dips between steps. Phase: quadruped/crocodile trot on diagonals; humanoid/dinosaur/bird alternate left/right; arachnid alternating tetrapod (odd left + even right). Biped `Arm` bones swing opposite the same-side thigh. Per-rig stride/period: humanoid 0.4 rad/1.0 s, quadruped 0.35/1.2, bird 0.28/0.8, dinosaur 0.4/1.1, arachnid 0.22/0.9, crocodile 0.22/1.6 |
+| `walk` | `Walk` | a body-plan gait: locomotor uppers only (`is_locomotor_upper` — `Thigh`, or `Upper` with `Leg`/`Front`/`Rear`; **not** `Wing` or `Arm` as legs). The knee (`Lower`/`Shin`/`Middle` child) bends the other way, the body dips between steps. Phase: quadruped/crocodile trot on diagonals; humanoid/dinosaur/bird alternate left/right; arachnid alternating tetrapod (odd left + even right). Biped `Arm` bones swing opposite the same-side thigh. A Tail* chain also gets a travelling yaw (`sway`). Per-rig stride/period: humanoid 0.4 rad/1.0 s, quadruped 0.35/1.2, bird 0.28/0.8, dinosaur 0.4/1.1, arachnid 0.22/0.9, crocodile 0.22/1.6 |
+| `sway` | merged into `Walk` (and remaining-rig `Idle1`) | travelling yaw down `Tail`/`Tail1`/`Tail2`/`Tail3` with lag and decay so a crocodile or dinosaur tail follows the body rather than pivoting as one stick |
 | `attack` | `Attack1` | a bite: the `Head` jabs forward and returns (0.5 rad at mid-clip, 0.8 s) while the `Chest` pitches a quarter as much — a half-sine, so it never swings past rest (that overshoot is the nervous-bob look). The pitch is on the chest, *not* the pelvis: the legs hang from the pelvis, so a pelvis rotation swings the feet into the ground on every lunge |
 | `death` | `Death` | the body rolls over about its own axis and stays down — `loop: false`, so the clip plays once rather than wrapping (1.2 s) |
 | `jump` | `Jump` | a hop: the body rises 0.2 m and lands (0.8 s) |
@@ -476,17 +498,14 @@ that clients see nothing.
 ## Reference renders — what a live frame should contain
 
 `examples/SelfTestMod/reference/creatures/` holds clay geometry reference
-renders of the original four generated rigs (`shamwaySelfTestCreature`,
-`_Bird`, `_Arachnid`, `_Dino`), each a 2×3 contact sheet of six views (front,
-3/4, side, back, back-3/4, other-side) rendered from the `.glb` with
-orthographic full-bounds framing — the shape that *should* be in a live
-frame. The remaining two shipped-rig references (`_Crocodile`, `_Humanoid`)
-are generated bundle members at the same construction bar (skinned GLB,
-atlas, Idle1/Walk, role-aware hide, spawnable XML) but do not yet have clay
-sheets. See that directory's `README.md` (and
-`reference/creatures/render_creatures.py` to regenerate). They are the ground
-truth to place next to the in-game `--look` frames. A load is not a look:
-nobody has visually accepted the new stems.
+renders of every generated rig (`shamwaySelfTestCreature`, `_Bird`,
+`_Arachnid`, `_Dino`, `_Crocodile`, `_Humanoid`), each a 2×3 contact sheet of
+six views (front, 3/4, side, back, back-3/4, other-side) rendered from the
+`.glb` with orthographic full-bounds framing — the shape that *should* be in
+a live frame. See that directory's `README.md` (and
+`reference/creatures/render_creatures.py` to regenerate). A load is not a
+look: clay sheets are the offline silhouette, live `--look STEM` is the
+in-game picture.
 
 ## End-to-end confirmation
 
@@ -584,3 +603,15 @@ real engine-spawned creature rendered under d3d11, its collider and ground
 probes passed, and the looked-at moving result was signed off. The earlier
 clipping and one-metre apparent bumps were harness/animation defects described
 above, not a `Shamway/Unlit` skinned-renderer limitation.
+
+**Remaining-rig silhouette improvement, 2026-08-31.** Each remaining stem
+(`shamwaySelfTestBird`, `_Crocodile`, `_Dino`, `_Arachnid`, `_Humanoid`)
+had its own `playtest-synthesized --look STEM` (never mixed with a
+`*_block_*` suite). Every run reported `SUMMARY pass=1 fail=0` — the
+engine staged the prefab with a renderer. That is a load, not a look.
+Frames were harvested from the Proton `playtest-shots/` directory and
+filed with `shamway client capture --file` (no second client). Clay
+six-views (front, 3/4, side, back, back-3/4, other-side) sit next to
+them in `examples/SelfTestMod/reference/creatures/` so a live frame that
+catches the 360-rotation on the front of a dinosaur can still be judged
+against a side and a back. What those pictures show is a person's call.

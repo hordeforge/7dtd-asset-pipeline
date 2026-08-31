@@ -14,6 +14,16 @@ tag has no changelog section.
 
 ### Added
 
+- **Improved remaining-rig silhouettes** — bird body is a Z-keel (not a
+  stack of Y-cylinders) with a neck that reaches the head and legs that
+  reach the feet; dinosaur is a horizontal theropod (chest/neck/head
+  forward, overlapping tail, thighs that meet the shins); crocodile is one
+  overlapping low hull; arachnid abdomen is a flat box and legs splay
+  outboard; humanoid arms are X-boxes along the shoulder chain (a Y-cylinder
+  at the joint was a vertical can). Remaining-rig Idle1 marches in place
+  and sways the tail so a staged look shows gait, not a T-pose. Parts accept
+  a local `offset` so a primitive can sit off its joint.
+  `docs/authoring/entities.md` now opens with the `generate creature` on-ramp.
 - **Shipped-rig reference creatures at the quadruped construction bar** —
   bird, arachnid, dinosaur, crocodile and humanoid now generate as a skinned
   mesh, a per-part UV atlas, spawnable `entityclasses.xml` (`Prefab` + `Mesh` +

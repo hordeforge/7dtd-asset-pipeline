@@ -28,7 +28,9 @@ recorded in `docs/research/research-provenance.md` ("Config XML patch
 application"). Selectors are evaluated with **lxml** (full XPath 1.0, matching
 the engine's `XPathEvaluate`) when the optional `patch` extra is installed; an
 XPath the available evaluator cannot run is reported as *not checked* rather
-than guessed, so the gate never claims a verdict it did not take. `--json` for
+than guessed, so the gate never claims a verdict it did not take. It runs as
+**part of `validate`** (a zero-node patch now fails the default gate), and is
+also `shamway check-patches` for a standalone/`--json` pass. `--json` for
 scripts; requires the game dir (skips with a note otherwise).
 
 ## 2. Localization keys are not reconciled  — **done (2026-08-31)**

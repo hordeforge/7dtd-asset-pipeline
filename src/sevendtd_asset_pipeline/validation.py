@@ -10,6 +10,7 @@ from .config import PipelineConfig
 from .engine_classes import block_classes, declared_block_classes
 from .errors import PipelineError
 from .game import game_unity_version
+from .patch_check import check_patches
 from .references import (
     AssetReference,
     check_mod_info_schema,
@@ -172,10 +173,18 @@ def validate_mod(
         )
     mod_schema = check_mod_info_schema(config.mod_root / "ModInfo.xml")
     class_messages = check_block_classes(config)
+    # A Config/ patch XPath that selects zero nodes is a silent no-op in the
+    # engine (see research-provenance); the patch gate is part of validate so
+    # the default gate catches it, not only `shamway check-patches`. Needs the
+    # game dir; without it (or without a stock file) check_patches reports and
+    # adds no problems.
+    patch_problems = list(
+        check_patches(config.mod_root, config.config_dir, config.game_dir).problems
+    )
     if not config.has_bundle:
         report = _validate_bundle_free(config)
         return ValidationReport(
-            report.messages + tuple(mod_schema) + tuple(class_messages),
+            report.messages + tuple(mod_schema) + tuple(class_messages) + tuple(patch_problems),
             report.reference_count,
         )
     if game_version is not None:
@@ -197,6 +206,7 @@ def validate_mod(
     messages += [_check_code_reference(config, stem, stems) for stem in config.code_references]
     messages += mod_schema
     messages += class_messages
+    messages += patch_problems
     return ValidationReport(tuple(messages), len(references) + len(config.code_references))
 
 

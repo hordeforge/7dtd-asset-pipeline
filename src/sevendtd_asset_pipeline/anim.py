@@ -248,6 +248,23 @@ def _quat_z(angle: float) -> dict[str, float]:
     return {"x": 0.0, "y": 0.0, "z": math.sin(half), "w": math.cos(half)}
 
 
+def _quat_mul(left: dict[str, float], right: dict[str, float]) -> dict[str, float]:
+    """Hamilton product `left * right` (apply `right`, then `left`)."""
+    lx, ly, lz, lw = left["x"], left["y"], left["z"], left["w"]
+    rx, ry, rz, rw = right["x"], right["y"], right["z"], right["w"]
+    return {
+        "x": lw * rx + lx * rw + ly * rz - lz * ry,
+        "y": lw * ry - lx * rz + ly * rw + lz * rx,
+        "z": lw * rz + lx * ry - ly * rx + lz * rw,
+        "w": lw * rw - lx * rx - ly * ry - lz * rz,
+    }
+
+
+# T-pose arms extend along local X; this many radians about Z drops them
+# toward the hips (left +, right -). Composed with the Y swing so Idle1
+# is an A-pose march, not a frozen T.
+ARM_DROP = 0.7
+
 _QUAT = {"x": _quat_x, "y": _quat_y, "z": _quat_z}
 
 # Arachnid locomotor bones are `LeftLeg3Upper` — a digit after `Leg`.
@@ -308,18 +325,26 @@ def walk_phase(upper: str) -> float:
 
 
 def _rotation_keyframes(
-    axis: str, amplitude: float, seconds: float, phase: float = 0.0
+    axis: str,
+    amplitude: float,
+    seconds: float,
+    phase: float = 0.0,
+    cycles: int = 1,
 ) -> list[dict[str, Any]]:
-    """One loop of `amplitude·sin(2πt/seconds + phase)` about an axis.
+    """`cycles` loops of `amplitude·sin(2πt/seconds + phase)` about an axis.
 
-    Eight samples per cycle: enough for a smooth loop, cheap to serialize.
-    A sine loop starts and ends at the same value with matching slopes, so
-    the clip loops without a seam.
+    Eight samples per cycle. A sine loop starts and ends at the same value
+    with matching slopes, so the clip loops without a seam. `cycles` > 1
+    tiles the gait across a longer clip (Idle1 spin is 8 s; a 2 s walk
+    must keep stepping the whole turn).
     """
     quat = _QUAT[axis]
+    cycles = max(1, int(cycles))
+    samples = 8 * cycles
+    duration = seconds * cycles
     return [
         {
-            "time": seconds * index / 8.0,
+            "time": duration * index / samples,
             "value": quat(amplitude * math.sin(2 * math.pi * index / 8.0 + phase)),
             "inSlope": quat(0.0),
             "outSlope": quat(0.0),
@@ -327,7 +352,7 @@ def _rotation_keyframes(
             "inWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
             "outWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
         }
-        for index in range(9)
+        for index in range(samples + 1)
     ]
 
 
@@ -349,6 +374,7 @@ def walk_curves(
     seconds: float = 1.2,
     body_dip: float = 0.03,
     body_rest: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    cycles: int = 1,
 ) -> list[dict[str, Any]]:
     """A trot gait: upper legs swing, knees bend, the body dips.
 
@@ -365,17 +391,43 @@ def walk_curves(
 
     for upper, lower in legs:
         phi = walk_phase(upper)
-        curves.append(rotation_curve(upper, _rotation_keyframes("x", stride, seconds, phi)))
+        if is_arm_upper(upper):
+            # T-pose local X is twist along the arm. Drop about Z (A-pose)
+            # then swing about Y in that dropped frame. A Z-only pose clip
+            # melted the torso when chest verts were on Arm; bind now pins
+            # those to Chest and this composition is the rest pose + swing.
+            leaf = upper.rsplit("/", 1)[-1]
+            drop = _quat_z(-ARM_DROP if leaf.startswith("Right") else ARM_DROP)
+            swung = _rotation_keyframes("y", stride, seconds, phi, cycles=cycles)
+            for key in swung:
+                key["value"] = _quat_mul(drop, key["value"])
+            curves.append(rotation_curve(upper, swung))
+            if lower:
+                curves.append(
+                    rotation_curve(
+                        lower,
+                        _rotation_keyframes("y", -0.5 * stride, seconds, phi, cycles=cycles),
+                    )
+                )
+            continue
+        curves.append(
+            rotation_curve(upper, _rotation_keyframes("x", stride, seconds, phi, cycles=cycles))
+        )
         if lower:
             curves.append(
-                rotation_curve(lower, _rotation_keyframes("x", -0.6 * stride, seconds, phi))
+                rotation_curve(
+                    lower, _rotation_keyframes("x", -0.6 * stride, seconds, phi, cycles=cycles)
+                )
             )
     # The body dips twice per stride, at the weight transfers (quarter and
     # three-quarter points), never at the stride's end where a foot lands.
     zero_slope = {"x": 0.0, "y": 0.0, "z": 0.0}
+    cycles = max(1, int(cycles))
+    samples = 8 * cycles
+    duration = seconds * cycles
     keyframes = [
         {
-            "time": seconds * index / 8.0,
+            "time": duration * index / samples,
             "value": {
                 "x": body_rest[0],
                 "y": body_rest[1] - body_dip * (0.5 - 0.5 * math.cos(4 * math.pi * index / 8.0)),
@@ -387,27 +439,58 @@ def walk_curves(
             "inWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
             "outWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
         }
-        for index in range(9)
+        for index in range(samples + 1)
     ]
     curves.append(position_curve(body_bone, keyframes))
     return curves
 
 
 def tail_sway_curves(
-    tails: list[str], amplitude: float = 0.28, seconds: float = 1.2
+    tails: list[str],
+    amplitude: float = 0.28,
+    seconds: float = 1.2,
+    cycles: int = 1,
 ) -> list[dict[str, Any]]:
     """A travelling yaw wave down the tail: each segment lags and decays.
 
     Side-to-side (local Y), not a roll — a crocodile/theropod tail while
     walking. Amplitude falls along the chain so the tip flicks more than it
-    wags the hips.
+    wags the hips. `cycles` tiles the wave across a longer spin clip.
     """
     curves: list[dict[str, Any]] = []
     for index, path in enumerate(tails):
         amp = amplitude * (0.75**index)
         phase = index * 0.55
-        curves.append(rotation_curve(path, _rotation_keyframes("y", amp, seconds, phase)))
+        curves.append(
+            rotation_curve(path, _rotation_keyframes("y", amp, seconds, phase, cycles=cycles))
+        )
     return curves
+
+
+def spin_curves(bone: str, seconds: float = 8.0) -> list[dict[str, Any]]:
+    """One full yaw turn about local Y, loopable.
+
+    Eight 45° steps so quaternion interpolation never takes the long way
+    around. The last key matches the first (identity) so a looping Idle1
+    turns in place without a snap. Combined with a walk on the same clip,
+    the legs pump while the body circles — not a harness Rotate of the
+    whole prefab.
+    """
+    steps = 8
+    rest = _quat_y(0.0)
+    keyframes = [
+        {
+            "time": seconds * index / steps,
+            "value": _quat_y(2 * math.pi * index / steps) if index < steps else rest,
+            "inSlope": rest,
+            "outSlope": rest,
+            "weightedMode": 0,
+            "inWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+            "outWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+        }
+        for index in range(steps + 1)
+    ]
+    return [rotation_curve(bone, keyframes)]
 
 
 def _jab_keyframes(axis: str, amplitude: float, seconds: float) -> list[dict[str, Any]]:
@@ -434,7 +517,7 @@ def _jab_keyframes(axis: str, amplitude: float, seconds: float) -> list[dict[str
 
 
 def flap_curves(
-    wings: list[str], amplitude: float = 0.22, seconds: float = 1.6
+    wings: list[str], amplitude: float = 0.22, seconds: float = 1.6, cycles: int = 1
 ) -> list[dict[str, Any]]:
     """A perched-bird wing fold: both wings drop and rise together.
 
@@ -447,7 +530,7 @@ def flap_curves(
     for path in wings:
         leaf = path.rsplit("/", 1)[-1]
         amp = amplitude if leaf.startswith("Left") else -amplitude
-        curves.append(rotation_curve(path, _rotation_keyframes("z", amp, seconds)))
+        curves.append(rotation_curve(path, _rotation_keyframes("z", amp, seconds, cycles=cycles)))
     return curves
 
 
@@ -529,6 +612,40 @@ def jump_curves(
     return [position_curve(body_bone, keyframes)]
 
 
+def pose_curves(bone: str, angle: float = 0.7, seconds: float = 8.0) -> list[dict[str, Any]]:
+    """A constant local-Z rotation that holds for `seconds` (no oscillation).
+
+    T-pose arm bones extend along local X; +Z on the left / -Z on the
+    right drops them toward the hips. The Right* leaf flips the sign.
+    Two identical keys so a looping Idle1 does not snap.
+    """
+    leaf = bone.rsplit("/", 1)[-1]
+    signed = -angle if leaf.startswith("Right") else angle
+    quat = _quat_z(signed)
+    rest_slope = _quat_z(0.0)
+    keyframes = [
+        {
+            "time": 0.0,
+            "value": quat,
+            "inSlope": rest_slope,
+            "outSlope": rest_slope,
+            "weightedMode": 0,
+            "inWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+            "outWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+        },
+        {
+            "time": seconds,
+            "value": quat,
+            "inSlope": rest_slope,
+            "outSlope": rest_slope,
+            "weightedMode": 0,
+            "inWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+            "outWeight": dict.fromkeys(("x", "y", "z", "w"), 0.3333333432674408),
+        },
+    ]
+    return [rotation_curve(bone, keyframes)]
+
+
 @dataclass(frozen=True)
 class AnimClip:
     """One legacy clip a `.anim.json` declaration asks for.
@@ -605,10 +722,21 @@ def parse_anim(path: Path) -> AnimDeclaration:
         kind = item.get("kind")
         if not isinstance(name, str) or not name:
             raise PipelineError(f'anim declaration {path} clip {index} needs a "name"')
-        if kind not in ("bob", "head", "walk", "flap", "sway", "attack", "death", "jump"):
+        if kind not in (
+            "bob",
+            "head",
+            "walk",
+            "flap",
+            "sway",
+            "spin",
+            "pose",
+            "attack",
+            "death",
+            "jump",
+        ):
             raise PipelineError(
                 f"anim declaration {path} clip {name!r} kind must be bob, head, walk, "
-                "flap, sway, attack, death or jump"
+                "flap, sway, spin, pose, attack, death or jump"
             )
         for key, default in (("amplitude", 0.03), ("seconds", 1.5)):
             value = item.get(key, default)
@@ -740,6 +868,7 @@ def clip_fields(
         rotations: list[dict[str, Any]] = []
         positions: list[dict[str, Any]] = []
         scales: list[dict[str, Any]] = []
+        spin_s = max((entry.seconds for entry in entries if entry.kind == "spin"), default=0.0)
         for clip in entries:
             if clip.kind == "bob":
                 _, bob_positions, _ = idle_bob_curves(
@@ -771,22 +900,34 @@ def clip_fields(
                 )
             elif clip.kind == "flap":
                 paths = list(clip.bones) if clip.bones else [clip.bone]
-                rotations += rescaled(flap_curves(paths, clip.amplitude, clip.seconds), 1.0)
+                cycles = max(1, round(spin_s / clip.seconds)) if spin_s else 1
+                rotations += rescaled(
+                    flap_curves(paths, clip.amplitude, clip.seconds, cycles=cycles), 1.0
+                )
             elif clip.kind == "sway":
                 paths = list(clip.bones) if clip.bones else [clip.bone]
-                rotations += rescaled(tail_sway_curves(paths, clip.amplitude, clip.seconds), 1.0)
+                cycles = max(1, round(spin_s / clip.seconds)) if spin_s else 1
+                rotations += rescaled(
+                    tail_sway_curves(paths, clip.amplitude, clip.seconds, cycles=cycles), 1.0
+                )
+            elif clip.kind == "spin":
+                rotations += rescaled(spin_curves(clip.bone, clip.seconds), 1.0)
+            elif clip.kind == "pose":
+                rotations += rescaled(pose_curves(clip.bone, clip.amplitude, clip.seconds), 1.0)
             else:  # walk — rotation curves on the legs, a position curve on the body
                 legs = [
                     (upper, lower)
                     for upper, lower in zip(clip.bones, clip.lower_bones, strict=False)
                     if lower
                 ]
+                cycles = max(1, round(spin_s / clip.seconds)) if spin_s else 1
                 for curve in walk_curves(
                     legs,
                     clip.body_bone,
                     clip.amplitude,
                     clip.seconds,
                     body_rest=rest_positions.get(clip.body_bone, (0.0, 0.0, 0.0)),
+                    cycles=cycles,
                 ):
                     is_rotation = len(curve["curve"]["m_Curve"][0]["value"]) == 4
                     (rotations if is_rotation else positions).append(rescaled([curve], 1.0)[0])

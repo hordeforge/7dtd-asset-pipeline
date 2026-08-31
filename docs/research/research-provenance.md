@@ -2847,9 +2847,108 @@ pack. Tool: the generator itself, on the packaged `data/rigs/*.json`.
 Idle on a bird also emits a `flap` kind on both `WingUpper` bones (local Z,
 Right inverted so identity-bound wings drop together). Arachnid tarsi have
 no `Foot`/`Paw` token; `part_role` classifies a `*Leg*Lower` as `paw` so a
-role-aware hide can still paint the contact segment dark.
+role-aware hide can still paint the contact segment dark. The default
+arachnid part set no longer meshes Middle or Lower — those bones hang in Y
+under the body, so a primitive there was a second set of eight legs.
 
 This is authoring-curve selection, not an engine fact. The engine still
 plays `Walk` / `Idle1` by name through `GameObjectAnimalAnimation` (or the
 mod-owned `ShamwayAnimalController`); what changed is which transforms those
 clips name.
+
+## Remeshed reference creatures (2026-08-31)
+
+SelfTestMod's humanoid, dinosaur and arachnid fixtures are modelled meshes
+bound to the shipped shamway rigs, not the primitive `generate entity`
+output. `generate creature` still writes primitives for those rigs; the
+self-test GLBs replace that mesh so a live `--look` reads as a person, a
+theropod, and a spider. Idle1 walk+spin keeps the shamway bone names.
+Authored sources for those binds are not in the tree.
+
+Tool: Blender 5.2 headless; clay via
+`examples/SelfTestMod/reference/creatures/render_creatures.py`. A load is
+not a look — these are the offline silhouettes; live `--look STEM` is the
+in-game picture.
+
+A modelled shell with **no UV layer** smart-projected into island gutters
+that sampled as black facet seams in the live look. Bind now `uv.reset()`s
+so each face fills 0-1 — the wrapping UVs `generate hide` is built for.
+The first arachnid `--look` (session shamway-20260831-150314-eebe0636c798)
+is the seamed frame; the re-look is the filled hide.
+
+Blender's glTF exporter wraps bones under the armature object, so bind
+paths were `arachnid/Root/Prosoma/...` while Idle1 names `Root/Prosoma/...`.
+The staged look instantiated the prefab (`play_automatically` Idle1) and
+the clips hit no transforms — the spider sat still. Bind now lifts `Root`
+to the glTF scene root and parents the mesh to it, matching
+`generate entity`. Tool: parse of the bound GLB (`scene.roots == [Root]`,
+`Root` has no parent).
+
+An **open-surface** shell (thousands of boundary edges, non-manifold)
+drew as a wire cage: Unity's Unlit pass culls back-faces (`culling` 2),
+so terrain showed through (look session shamway-20260831-151715-29528149bcf4).
+`shamway generate bind --solidify 0.012` is that step. Same flags produce
+the same GLB (`tests/test_bind.py`). Tool: `bmesh` boundary-edge count.
+
+The dinosaur fixture was the same class (thousands of boundary edges). The
+2026-08-31 dino look showed terrain through the body. Bind with
+`--solidify 0.02 --stretch-x 1.22 --height 2.2`; dinosaur Idle1 walk uses
+the full 0.55 rad stride so a staged look reads as legs.
+
+## Humanoid walk: zombie `walkForward` is muscle, T-pose local X is twist (2026-08-31)
+
+The first remeshed humanoid look (`shamway-20260831-155404-683613a8469c`)
+was a frozen T-pose with a broken neck. Two independent findings:
+
+1. **Neck.** A head-local extra has its origin in the neck, not at the
+   chin. Adding `torso_max − 0.02` to every head vertex parks the origin
+   in the hole and the chin inside the chest. The packaged `--head-lift`
+   now uses the head's **lowest vertex**; `--neck` fills the remaining
+   gap with a cylinder. Live look session
+   `shamway-20260831-155404-683613a8469c`.
+
+2. **Walk.** `$SEVEN_DAYS_TO_DIE_DIR/Data/Addressables/Standalone/animations_assets_animations/zombie.bundle`
+   clip `walkForward`, read with UnityPy in this checkout's `.venv`:
+   `m_Legacy = False`, `m_MuscleClipSize = 36496`, **empty**
+   `m_RotationCurves` / `m_PositionCurves`, 130 genericBindings typeID=95
+   (Mecanim muscles). `m_MuscleClip.m_StopTime = 3.533 s`,
+   `m_AverageSpeed.z = 0.515 m/s`, start hip Y 0.943 m, root translation
+   Z 0 → 1.819 m. That clip cannot drop into shamway `.anim.json` (legacy
+   transform curves via `kind` walk). `automatic_assets_entities/animals.bundle`
+   has 14 legacy clips with real Rotation/PositionCurves (`Walk`, `Idle1`,
+   `Run`, `Death` on rabbit/pig paths) — usable remap for animals, not a
+   biped. Synthesized humanoid gait is 0.55 rad / 1.0 s, distinct from
+   the 3.53 s zombie shuffle.
+
+   The shipped humanoid rig's arm bones extend along **local X** (identity
+   rest, `LeftArm` pos `[-0.1, 0, 0]`). A walk rotation about X is **twist
+   along the arm**, not a sagittal swing — that is the frozen T-pose. Legs
+   hang along −Y, so X *is* the thigh swing. `walk_curves` now drops T-pose
+   arms ~40° about Z and swings them about Y, opposite the same-side thigh
+   (`walk_phase` already treated an Arm as rear). Tool: UnityPy on
+   `zombie.bundle` / `animals.bundle`; `data/rigs/humanoid.json`.
+
+`7dtd-engine-research/docs/entity-movement.md`: `GameObjectAnimalAnimation.Awake`
+plays legacy `Idle1` by name; the collision capsule is independent of
+animated bone translation. Generated entities stay on that controller.
+
+Blender `parent_set(ARMATURE_AUTO)` on **joined** intersecting extras
+(+ `--neck` cylinder) assigned **0 of 8049** vertices (heat-weight fails
+on intersecting shells). A nearest-bone fallback then crumpled the mesh
+(look session `shamway-20260831-162951-868c1d7abbf0`). Bind now
+heat-weights **each part alone** before joining. Tool: blender probe vs
+`generate rig --rig humanoid`.
+
+Heat-weight assigns waist/glute verts to Thigh and chest verts to Arm.
+Bind walks child heads for leg shafts (glTF tails on this rig point at
+the parent), pins the pelvis, paints thigh/shin/foot, rejects
+contralateral webbing, and strips Arm from the chest so Idle1 can drop
+the T-pose about Z without melting the torso. `walk_curves` composes
+that Z drop (`ARM_DROP` 0.7) with the Y swing; Idle1 includes the arms
+(rest z 0.34, mid-swing y 0.25). The self-test humanoid is
+`generate bind --head-lift --neck --height 1.75 --stretch-x 1.12 --anim`
+(BIND_HEAD_LIFT, BIND_NECK 0.04; mesh node `Bound`). Feet still
+deferred. Hide is peach
+(`--base 198,142,108 --fur 220,168,132 --limb 170,118,88 --paw 96,62,48
+--outline 56,36,28 --seed 11 --size 256`); tan vanished into dirt,
+charcoal was contrast only.

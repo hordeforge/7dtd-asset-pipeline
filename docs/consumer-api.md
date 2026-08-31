@@ -340,7 +340,7 @@ These two are argv-passthrough commands rather than JSON operations, and they
 exist so a consuming mod needs nothing from this repository's filesystem:
 
 - `shamway generate --list` — sound, audio, cutout, particle-card, icon,
-  texture-maps, mesh, mesh-optimize, mesh-icon
+  texture-maps, mesh, mesh-optimize, mesh-icon, bind
 - `shamway generate sound --help` — each generator's own options
 - `shamway docs` — the topics
 - `shamway docs art-direction` — one page, in full

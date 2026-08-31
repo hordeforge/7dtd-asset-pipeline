@@ -268,8 +268,13 @@ class EntityGeneratorTests(unittest.TestCase):
                 self.assertEqual(len(scene.skins), 1)
                 rig = load_rig(name)
                 parts = default_parts_for(rig)
-                # Root gets no part; every other bone of the rig has one.
-                self.assertEqual(len(parts), len(rig.bones) - 1, name)
+                # Root gets no part. Other bones may be joints without a
+                # mesh (arachnid Middle, crocodile Lower) so they do not
+                # hang a second set of limbs.
+                bone_names = {bone.name for bone in rig.bones}
+                self.assertNotIn("Root", parts, name)
+                self.assertTrue(parts, name)
+                self.assertTrue(set(parts) <= bone_names, name)
 
     def test_size_variant_scales_the_parts_with_the_bones(self) -> None:
         from sevendtd_asset_pipeline.generators.entity import default_parts_for
@@ -731,6 +736,29 @@ class RemainingRigConstructionTests(unittest.TestCase):
         tail, pelvis = verts("Tail1"), verts("Pelvis")
         self.assertTrue(tail and pelvis)
         self.assertGreaterEqual(max(p[2] for p in tail), min(p[2] for p in pelvis) - 0.02)
+        pelvis_x = max(abs(p[0]) for p in pelvis)
+        pelvis_y = max(p[1] for p in pelvis) - min(p[1] for p in pelvis)
+        self.assertGreater(pelvis_x * 2, pelvis_y)
+        upper = verts("LeftFrontUpper")
+        self.assertTrue(upper)
+        self.assertGreater(max(abs(p[0]) for p in upper), pelvis_x)
+        self.assertFalse(verts("LeftFrontLower"))
+        foot = verts("LeftFrontFoot")
+        self.assertTrue(foot)
+        self.assertGreater(max(abs(p[0]) for p in foot), pelvis_x)
+        fang, head = verts("LeftFang"), verts("Head")
+        self.assertTrue(fang and head)
+        self.assertLess(min(p[1] for p in fang), min(p[1] for p in head))
+        chest = verts("Chest")
+        self.assertTrue(chest)
+        self.assertLess(abs(max(p[1] for p in chest) - max(p[1] for p in pelvis)), 0.15)
+        tail = verts("Tail1")
+        tail_y = max(p[1] for p in tail) - min(p[1] for p in tail)
+        tail_x = max(p[0] for p in tail) - min(p[0] for p in tail)
+        self.assertGreater(tail_y, tail_x)
+        scute = verts("LeftScute1")
+        self.assertTrue(scute)
+        self.assertGreater(max(p[1] for p in scute), max(p[1] for p in pelvis) - 0.02)
 
     def test_crocodile_head_is_a_forward_snout_not_a_vertical_tube(self) -> None:
         """The improved crocodile head is elongated in Z (a snout), not Y."""
@@ -803,8 +831,47 @@ class RemainingRigConstructionTests(unittest.TestCase):
         kinds = {c["kind"] for c in idle}
         self.assertIn("walk", kinds)
         self.assertIn("sway", kinds)
+        self.assertIn("spin", kinds)
+        spin = next(c for c in idle if c["kind"] == "spin")
+        self.assertEqual(spin["bone"].rsplit("/", 1)[-1], "Root")
         walk = next(c for c in anim["clips"] if c["name"] == "Walk" and c["kind"] == "sway")
         self.assertTrue(any("Tail" in path for path in walk["bones"]))
+
+    def test_dinosaur_idle_walk_uses_a_full_stride(self) -> None:
+        """A staged dino look plays Idle1; 0.75 of 0.4 rad did not read as legs."""
+        out = self.root / "dino-gait.glb"
+        self.assertEqual(
+            run("entity", [str(out), "--rig", "dinosaur", "--anim", "idle,head,walk"]), 0
+        )
+        anim = json.loads((self.root / "dino-gait.anim.json").read_text(encoding="utf-8"))
+        idle_walk = next(
+            clip for clip in anim["clips"] if clip["name"] == "Idle1" and clip["kind"] == "walk"
+        )
+        self.assertGreaterEqual(idle_walk["amplitude"], 0.5)
+        walk = next(
+            clip for clip in anim["clips"] if clip["name"] == "Walk" and clip["kind"] == "walk"
+        )
+        self.assertGreaterEqual(walk["amplitude"], 0.5)
+
+    def test_humanoid_idle_walk_uses_a_full_stride(self) -> None:
+        """A staged humanoid look plays Idle1; 0.3 rad of T-pose twist did not read as a walk."""
+        out = self.root / "human-gait.glb"
+        self.assertEqual(
+            run("entity", [str(out), "--rig", "humanoid", "--anim", "idle,head,walk"]), 0
+        )
+        anim = json.loads((self.root / "human-gait.anim.json").read_text(encoding="utf-8"))
+        idle_walk = next(
+            clip for clip in anim["clips"] if clip["name"] == "Idle1" and clip["kind"] == "walk"
+        )
+        self.assertGreaterEqual(idle_walk["amplitude"], 0.5)
+        self.assertTrue(any("Thigh" in path for path in idle_walk["bones"]))
+        self.assertTrue(any("Shin" in path for path in idle_walk["lower_bones"]))
+        self.assertTrue(any(path.rsplit("/", 1)[-1].endswith("Arm") for path in idle_walk["bones"]))
+        walk = next(
+            clip for clip in anim["clips"] if clip["name"] == "Walk" and clip["kind"] == "walk"
+        )
+        self.assertGreaterEqual(walk["amplitude"], 0.5)
+        self.assertTrue(any(path.rsplit("/", 1)[-1].endswith("Arm") for path in walk["bones"]))
 
     def test_humanoid_arms_extend_along_x(self) -> None:
         """Arm boxes follow the X-chain, not a Y-cylinder standing on the shoulder."""
@@ -881,6 +948,14 @@ class RemainingRigConstructionTests(unittest.TestCase):
         abdomen_x = [abs(p[0]) for p in abdomen]
         self.assertTrue(leg_x and abdomen_x)
         self.assertGreater(max(leg_x), max(abdomen_x) * 1.3)
+        # Middle/Lower hang in Y under the body; meshing them doubled the
+        # legs (outboard uppers + hanging children = 16).
+        extra = [
+            position
+            for position, joint_row in zip(primitive.positions, joints, strict=True)
+            if "Middle" in scene.nodes[skin_joints[joint_row[0]]].name
+        ]
+        self.assertFalse(extra)
 
     def test_creature_one_shot_calls_entity_and_hide(self) -> None:
         """`generate creature` is the easy on-ramp: atlas + anim + hide."""

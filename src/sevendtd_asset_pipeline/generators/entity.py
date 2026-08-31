@@ -79,47 +79,94 @@ from ..rigs import Rig, glb_bytes, load_rig, mat_inverse, scaled, world_matrices
 # base name (`quadruped-small` → `quadruped`). A bird's wings are not legs;
 # its walk is a quicker two-step, idle carries the flap.
 _WALK_GAIT: dict[str, tuple[float, float]] = {
-    "humanoid": (0.4, 1.0),
+    # Humanoid numbers are synthesized from the shipped zombie `walkForward`
+    # muscle clip (3.53 s, 0.52 m/s, hip Y 0.94 m) — not a drop-in of that
+    # clip, which has empty RotationCurves. 0.55 rad (~31°) at 1.0 s is a
+    # distinct, readable in-place march; 0.4 rad Idle1 did not read as legs.
+    "humanoid": (0.55, 1.0),
     "quadruped": (0.35, 1.2),
     "bird": (0.28, 0.8),
-    "dinosaur": (0.4, 1.1),
+    "dinosaur": (0.55, 1.0),
     "arachnid": (0.22, 0.9),
     "crocodile": (0.22, 1.6),
 }
 
 
 def _arachnid_leg_parts() -> dict[str, dict[str, Any]]:
-    """The 24 leg segments of the arachnid rig, as one part per joint.
-
-    The rig's middle/lower bones hang straight down in Y, which reads as a
-    table. Uppers and middles are X-boxes that splay outboard of the
-    prosoma; lowers drop from that knee so the stance is a spider, not posts
-    under a box. Leg 1 is anterior.
+    """Eight spider legs. No mesh on Middle — that hung a second set of
+    eight sticks under the body. Lower is a tarsus on the upper bar's tip.
     """
     parts: dict[str, dict[str, Any]] = {}
-    z_nudge = {1: 0.04, 2: 0.01, 3: -0.01, 4: -0.04}
+    z_nudge = {1: 0.06, 2: 0.02, 3: -0.02, 4: -0.06}
     for side in ("Left", "Right"):
         out = -1.0 if side == "Left" else 1.0
         for index in range(1, 5):
             parts[f"{side}Leg{index}Upper"] = {
                 "shape": "box",
-                "width": 0.24,
-                "depth": 0.06,
-                "height": 0.06,
-                "offset": [out * 0.08, -0.02, z_nudge[index]],
+                "width": 0.42,
+                "depth": 0.04,
+                "height": 0.04,
+                "offset": [out * 0.26, -0.02, z_nudge[index]],
             }
-            parts[f"{side}Leg{index}Middle"] = {
-                "shape": "box",
-                "width": 0.18,
-                "depth": 0.05,
-                "height": 0.05,
-                "offset": [out * 0.12, -0.05, 0.0],
-            }
+            # No mesh on Middle: it hangs in Y under the body. A tiny tarsus
+            # on Lower is offset back up onto the upper bar's tip so it
+            # reads as a foot, not a second hanging leg.
             parts[f"{side}Leg{index}Lower"] = {
-                "shape": "cylinder",
-                "radius": 0.016,
-                "height": 0.16,
-                "offset": [out * 0.05, -0.07, 0.0],
+                "shape": "box",
+                "width": 0.08,
+                "depth": 0.06,
+                "height": 0.05,
+                "offset": [out * 0.48, 0.14, 0.0],
+            }
+    return parts
+
+
+def _crocodile_leg_parts() -> dict[str, dict[str, Any]]:
+    """Four short sprawled legs. No mesh on Lower — that hung a second set
+    of four sticks under the belly (side uppers + bottom lowers = eight).
+    """
+    parts: dict[str, dict[str, Any]] = {}
+    drop = {"Front": -0.32, "Rear": -0.14}
+    for side, out in (("Left", -1.0), ("Right", 1.0)):
+        for station in ("Front", "Rear"):
+            parts[f"{side}{station}Upper"] = {
+                "shape": "box",
+                "width": 0.28,
+                "depth": 0.16,
+                "height": 0.12,
+                "offset": [out * 0.24, drop[station], 0.0],
+            }
+            parts[f"{side}{station}Foot"] = {
+                "shape": "box",
+                "width": 0.16,
+                "depth": 0.18,
+                "height": 0.07,
+                "offset": [out * 0.28, -0.04, 0.05],
+            }
+    return parts
+
+
+def _crocodile_scute_parts() -> dict[str, dict[str, Any]]:
+    """Two rows of osteoderms along the back — the rough bony armour."""
+    parts: dict[str, dict[str, Any]] = {}
+    # Hull top sits near world Y 0.31; scute joints are ~0.14 above their
+    # parent. Offset Y so the plates sit on the back, not in the body.
+    drop = {
+        1: -0.06,
+        2: -0.16,
+        3: -0.22,
+        4: -0.28,
+        5: -0.12,
+        6: -0.14,
+    }
+    for index in range(1, 7):
+        for side, out in (("Left", -1.0), ("Right", 1.0)):
+            parts[f"{side}Scute{index}"] = {
+                "shape": "box",
+                "width": 0.10,
+                "depth": 0.16,
+                "height": 0.08,
+                "offset": [out * 0.02, drop[index], 0.0],
             }
     return parts
 
@@ -375,86 +422,86 @@ PARTS_BY_RIG: dict[str, dict[str, Any]] = {
         # box spans to the next joint (Neck is 0.45 Z from Chest, Head 0.55
         # from Neck, Tail1 0.45 Z aft of Pelvis) so the live side view is
         # one animal, not a dashed line of floating blocks.
-        "Pelvis": {"shape": "box", "width": 0.42, "depth": 0.50, "height": 0.40},
+        "Pelvis": {"shape": "box", "width": 0.50, "depth": 0.55, "height": 0.38},
         "Spine": {
             "shape": "box",
-            "width": 0.36,
-            "depth": 0.40,
-            "height": 0.36,
-            "offset": [0.0, 0.12, 0.08],
+            "width": 0.44,
+            "depth": 0.58,
+            "height": 0.32,
+            "offset": [0.0, -0.06, 0.22],
         },
         "Chest": {
             "shape": "box",
-            "width": 0.32,
-            "depth": 0.58,
-            "height": 0.30,
-            "offset": [0.0, 0.08, 0.20],
+            "width": 0.40,
+            "depth": 0.72,
+            "height": 0.28,
+            "offset": [0.0, -0.14, 0.34],
         },
         "Neck": {
             "shape": "box",
-            "width": 0.14,
-            "depth": 1.10,
-            "height": 0.16,
-            "offset": [0.0, 0.10, 0.05],
+            "width": 0.20,
+            "depth": 1.20,
+            "height": 0.20,
+            "offset": [0.0, 0.0, 0.18],
         },
         "Head": {
             "shape": "box",
-            "width": 0.16,
-            "depth": 0.80,
-            "height": 0.14,
-            "offset": [0.0, 0.02, -0.12],
+            "width": 0.30,
+            "depth": 0.95,
+            "height": 0.24,
+            "offset": [0.0, 0.04, 0.08],
         },
         "Tail1": {
             "shape": "box",
-            "width": 0.24,
-            "depth": 1.10,
-            "height": 0.22,
-            "offset": [0.0, 0.02, -0.05],
+            "width": 0.34,
+            "depth": 1.20,
+            "height": 0.28,
+            "offset": [0.0, 0.0, -0.08],
         },
         "Tail2": {
             "shape": "box",
-            "width": 0.14,
-            "depth": 1.00,
-            "height": 0.14,
-            "offset": [0.0, -0.04, -0.05],
+            "width": 0.22,
+            "depth": 1.10,
+            "height": 0.18,
+            "offset": [0.0, -0.04, -0.10],
         },
         "Tail3": {
             "shape": "box",
-            "width": 0.08,
-            "depth": 0.70,
-            "height": 0.08,
-            "offset": [0.0, -0.06, -0.18],
+            "width": 0.12,
+            "depth": 0.90,
+            "height": 0.10,
+            "offset": [0.0, -0.06, -0.22],
         },
         "LeftThigh": {
             "shape": "cylinder",
-            "radius": 0.14,
-            "height": 0.80,
-            "offset": [0.0, -0.38, 0.0],
+            "radius": 0.22,
+            "height": 0.78,
+            "offset": [0.0, -0.36, 0.04],
         },
         "LeftShin": {
             "shape": "cylinder",
-            "radius": 0.10,
-            "height": 0.78,
-            "offset": [0.0, -0.36, 0.0],
+            "radius": 0.14,
+            "height": 0.70,
+            "offset": [0.0, -0.32, 0.0],
         },
         "LeftFoot": {
             "shape": "box",
-            "width": 0.22,
-            "depth": 0.45,
-            "height": 0.10,
-            "offset": [0.0, -0.04, 0.12],
+            "width": 0.28,
+            "depth": 0.50,
+            "height": 0.12,
+            "offset": [0.0, -0.04, 0.14],
         },
         "RightThigh": {
             "shape": "cylinder",
-            "radius": 0.14,
-            "height": 0.80,
-            "offset": [0.0, -0.38, 0.0],
+            "radius": 0.22,
+            "height": 0.78,
+            "offset": [0.0, -0.36, 0.04],
         },
         "RightShin": {
             "shape": "cylinder",
-            "radius": 0.10,
-            "height": 0.78,
-            "offset": [0.0, -0.36, 0.0],
+            "radius": 0.14,
+            "height": 0.70,
+            "offset": [0.0, -0.32, 0.0],
         },
         "RightFoot": {
             "shape": "box",
@@ -492,13 +539,13 @@ PARTS_BY_RIG: dict[str, dict[str, Any]] = {
         # Flattened cephalothorax + abdomen (not two spheres). Pedipalps
         # reach forward; legs splay outboard of the prosoma (the rig bones
         # hang in Y, so the parts offset in X).
-        "Prosoma": {"shape": "box", "width": 0.32, "depth": 0.30, "height": 0.12},
+        "Prosoma": {"shape": "box", "width": 0.36, "depth": 0.32, "height": 0.14},
         "Abdomen": {
             "shape": "box",
-            "width": 0.40,
-            "depth": 0.48,
-            "height": 0.12,
-            "offset": [0.0, 0.01, -0.12],
+            "width": 0.44,
+            "depth": 0.52,
+            "height": 0.16,
+            "offset": [0.0, 0.02, -0.14],
         },
         "LeftPedipalp": {
             "shape": "box",
@@ -517,141 +564,102 @@ PARTS_BY_RIG: dict[str, dict[str, Any]] = {
         **_arachnid_leg_parts(),
     },
     "crocodile": {
-        # One overlapping hull along +Z: snout, body, tail. Segment gaps
-        # read as a broken log, not a crocodile. Legs offset down onto the feet.
-        "Pelvis": {"shape": "box", "width": 0.36, "depth": 0.44, "height": 0.15},
+        # Nile-crocodile silhouette: one low wide hull (offsets cancel the
+        # rig's upward stair), a laterally compressed paddle tail, a long
+        # flat snout with a tooth row, short side-legs, osteoderms on top.
+        "Pelvis": {
+            "shape": "box",
+            "width": 0.70,
+            "depth": 0.60,
+            "height": 0.22,
+            "offset": [0.0, -0.10, 0.0],
+        },
         "Spine1": {
             "shape": "box",
-            "width": 0.34,
-            "depth": 0.36,
-            "height": 0.15,
-            "offset": [0.0, 0.0, 0.02],
+            "width": 0.68,
+            "depth": 0.52,
+            "height": 0.22,
+            "offset": [0.0, -0.18, 0.02],
         },
         "Spine2": {
             "shape": "box",
-            "width": 0.32,
-            "depth": 0.36,
-            "height": 0.14,
-            "offset": [0.0, 0.0, 0.02],
+            "width": 0.66,
+            "depth": 0.52,
+            "height": 0.22,
+            "offset": [0.0, -0.24, 0.02],
         },
         "Chest": {
             "shape": "box",
-            "width": 0.30,
-            "depth": 0.38,
-            "height": 0.14,
-            "offset": [0.0, 0.0, 0.04],
+            "width": 0.62,
+            "depth": 0.56,
+            "height": 0.22,
+            "offset": [0.0, -0.30, 0.04],
         },
         "Neck": {
             "shape": "box",
-            "width": 0.16,
-            "depth": 0.40,
-            "height": 0.11,
-            "offset": [0.0, 0.0, 0.12],
+            "width": 0.40,
+            "depth": 0.48,
+            "height": 0.18,
+            "offset": [0.0, -0.32, 0.08],
         },
         "Head": {
             "shape": "box",
-            "width": 0.14,
-            "depth": 0.44,
-            "height": 0.09,
-            "offset": [0.0, 0.0, 0.10],
+            "width": 0.28,
+            "depth": 0.72,
+            "height": 0.12,
+            "offset": [0.0, -0.40, 0.16],
+        },
+        "LeftFang": {
+            "shape": "box",
+            "width": 0.04,
+            "depth": 0.08,
+            "height": 0.10,
+            "offset": [0.0, -0.42, 0.0],
+        },
+        "RightFang": {
+            "shape": "box",
+            "width": 0.04,
+            "depth": 0.08,
+            "height": 0.10,
+            "offset": [0.0, -0.42, 0.0],
+        },
+        "LeftFang2": {
+            "shape": "box",
+            "width": 0.04,
+            "depth": 0.08,
+            "height": 0.10,
+            "offset": [0.0, -0.42, 0.0],
+        },
+        "RightFang2": {
+            "shape": "box",
+            "width": 0.04,
+            "depth": 0.08,
+            "height": 0.10,
+            "offset": [0.0, -0.42, 0.0],
         },
         "Tail1": {
             "shape": "box",
-            "width": 0.22,
-            "depth": 0.50,
-            "height": 0.13,
-            "offset": [0.0, 0.0, -0.08],
+            "width": 0.18,
+            "depth": 0.70,
+            "height": 0.36,
+            "offset": [0.0, -0.08, -0.08],
         },
         "Tail2": {
             "shape": "box",
-            "width": 0.14,
-            "depth": 0.48,
-            "height": 0.10,
-            "offset": [0.0, 0.0, -0.10],
+            "width": 0.12,
+            "depth": 0.65,
+            "height": 0.28,
+            "offset": [0.0, -0.10, -0.08],
         },
         "Tail3": {
             "shape": "box",
             "width": 0.08,
-            "depth": 0.44,
-            "height": 0.07,
-            "offset": [0.0, 0.0, -0.10],
-        },
-        "LeftFrontUpper": {
-            "shape": "cylinder",
-            "radius": 0.035,
-            "height": 0.22,
-            "offset": [0.0, -0.11, 0.0],
-        },
-        "LeftFrontLower": {
-            "shape": "cylinder",
-            "radius": 0.028,
+            "depth": 0.55,
             "height": 0.18,
-            "offset": [0.0, -0.09, 0.0],
+            "offset": [0.0, -0.08, -0.10],
         },
-        "LeftFrontFoot": {
-            "shape": "box",
-            "width": 0.08,
-            "depth": 0.12,
-            "height": 0.03,
-            "offset": [0.0, -0.01, 0.04],
-        },
-        "RightFrontUpper": {
-            "shape": "cylinder",
-            "radius": 0.035,
-            "height": 0.22,
-            "offset": [0.0, -0.11, 0.0],
-        },
-        "RightFrontLower": {
-            "shape": "cylinder",
-            "radius": 0.028,
-            "height": 0.18,
-            "offset": [0.0, -0.09, 0.0],
-        },
-        "RightFrontFoot": {
-            "shape": "box",
-            "width": 0.08,
-            "depth": 0.12,
-            "height": 0.03,
-            "offset": [0.0, -0.01, 0.04],
-        },
-        "LeftRearUpper": {
-            "shape": "cylinder",
-            "radius": 0.04,
-            "height": 0.18,
-            "offset": [0.0, -0.09, 0.0],
-        },
-        "LeftRearLower": {
-            "shape": "cylinder",
-            "radius": 0.03,
-            "height": 0.16,
-            "offset": [0.0, -0.08, 0.0],
-        },
-        "LeftRearFoot": {
-            "shape": "box",
-            "width": 0.08,
-            "depth": 0.12,
-            "height": 0.03,
-            "offset": [0.0, -0.01, 0.04],
-        },
-        "RightRearUpper": {
-            "shape": "cylinder",
-            "radius": 0.04,
-            "height": 0.18,
-            "offset": [0.0, -0.09, 0.0],
-        },
-        "RightRearLower": {
-            "shape": "cylinder",
-            "radius": 0.03,
-            "height": 0.16,
-            "offset": [0.0, -0.08, 0.0],
-        },
-        "RightRearFoot": {
-            "shape": "box",
-            "width": 0.08,
-            "depth": 0.12,
-            "height": 0.03,
-            "offset": [0.0, -0.01, 0.04],
-        },
+        **_crocodile_leg_parts(),
+        **_crocodile_scute_parts(),
     },
 }
 
@@ -799,7 +807,7 @@ def part_role(part_names: list[str]) -> dict[str, str]:
             roles[name] = "paw"
         elif "tail" in folded or "wingtip" in folded:
             roles[name] = "tail"
-        elif "head" in folded:
+        elif "head" in folded or "fang" in folded or "tooth" in folded:
             roles[name] = "head"
         elif any(
             token in folded
@@ -1538,18 +1546,31 @@ def main(argv: list[str] | None = None) -> int:
                 "seconds": seconds,
             }
             clips.append(walk_clip)
-            # Remaining references are judged on a staged turntable that plays
-            # Idle1 automatically: march in place (and sway the tail) so the
-            # look shows legs, not a frozen bind pose. The signed-off
+            # Remaining references are judged on a staged look that plays
+            # Idle1 automatically: march in place, yaw the root through a
+            # full turn (the creature turns with its legs, not a harness
+            # Rotate of the prefab), and sway the tail. The signed-off
             # quadruped Idle1 stays a bob+head.
             remaining = plan in {"bird", "arachnid", "dinosaur", "crocodile", "humanoid"}
             if "idle" in kinds and remaining:
+                # Staged Idle1 is the only motion a look plays. A dinosaur
+                # and a humanoid need a full stride or the thighs barely
+                # tick; other remaining rigs stay at three-quarters so they
+                # do not skate.
+                idle_stride = stride if plan in {"dinosaur", "humanoid"} else stride * 0.75
+                idle_walk = {
+                    **walk_clip,
+                    "name": "Idle1",
+                    "amplitude": idle_stride,
+                    "seconds": seconds * 1.3,
+                }
+                clips.append(idle_walk)
                 clips.append(
                     {
-                        **walk_clip,
                         "name": "Idle1",
-                        "amplitude": stride * 0.5,
-                        "seconds": seconds * 1.3,
+                        "kind": "spin",
+                        "bone": _bone_path(rig, rig.root().name),
+                        "seconds": 8.0,
                     }
                 )
             tails = [

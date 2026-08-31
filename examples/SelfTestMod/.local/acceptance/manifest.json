@@ -49,30 +49,6 @@
   },
   {
     "backend": "provided",
-    "bytes": 6258252,
-    "captured_at": "2026-08-31T13:37:12Z",
-    "file": "shamwaySelfTestDino.png",
-    "label": "shamwaySelfTestDino",
-    "notes": [],
-    "observable": "connected theropod: neck and tail along Z, thighs meet shins, olive hide. Live frame is a front-3/4 of the rotating staged look; clay six-view has side and back. A load is not a look.",
-    "session": "wayland",
-    "sha256": "7a4458747a0176d56e149eba2c5229db33c713bd2dae33752e16660a768d9d15",
-    "verdict": null
-  },
-  {
-    "backend": "provided",
-    "bytes": 5806106,
-    "captured_at": "2026-08-31T13:39:10Z",
-    "file": "shamwaySelfTestArachnid.png",
-    "label": "shamwaySelfTestArachnid",
-    "notes": [],
-    "observable": "flat abdomen (not a sphere), legs splayed outboard of the prosoma, pedipalps forward, charcoal hide. A load is not a look.",
-    "session": "wayland",
-    "sha256": "aa5d5a1c6e4ec2096ebf304582ddabd19a0dbbe32d9948dfe794404fe7973791",
-    "verdict": null
-  },
-  {
-    "backend": "provided",
     "bytes": 6127496,
     "captured_at": "2026-08-31T13:41:06Z",
     "file": "shamwaySelfTestHumanoid.png",
@@ -81,6 +57,30 @@
     "observable": "T-pose person: X-arm boxes, sphere head, legs with feet, tan hide. Reads more like a 7DTD player character than stacked Y-cylinders. A load is not a look.",
     "session": "wayland",
     "sha256": "860489e130389ff2c1d0225617533e5576478e4c011ab4767a8bcc82a06f9aac",
+    "verdict": null
+  },
+  {
+    "backend": "provided",
+    "bytes": 5487341,
+    "captured_at": "2026-08-31T15:27:34Z",
+    "file": "shamwaySelfTestArachnid.png",
+    "label": "shamwaySelfTestArachnid",
+    "notes": [],
+    "observable": "solid charcoal spider, 8 legs, Idle1 walk+spin; signed 2026-08-31",
+    "session": "wayland",
+    "sha256": "eac47116d52a236151f0fdca2e1cd115409579429d7aa05e9aaade5458bd0fe2",
+    "verdict": null
+  },
+  {
+    "backend": "provided",
+    "bytes": 6250132,
+    "captured_at": "2026-08-31T15:53:46Z",
+    "file": "shamwaySelfTestDino.png",
+    "label": "shamwaySelfTestDino",
+    "notes": [],
+    "observable": "chunky distinct theropod, rust hide, Idle1 walk+spin; signed 2026-08-31",
+    "session": "wayland",
+    "sha256": "2e087523efb48ac3644af4647edf5467e519535bd7634549cd7f566987917cc1",
     "verdict": null
   }
 ]

@@ -447,6 +447,7 @@ Machine-readable output for agents and CI:
 | `shamway generate entity OUT.glb` | a skinned entity procedurally: primitives bound to a rig (its own default part set, or `--parts`), plus its `entityclasses.xml` patch (`--mod`/`--bundle`/`--xml`); `--anim [KINDS]` (idle, head, walk) writes the `{stem}.anim.json` legacy clips — an Idle1 bob + head turn, a Walk whose legs follow the body plan (biped / four-leg / eight-leg / perched bird — wings are never walk legs) — and sets `AvatarController=GameObjectAnimalAnimation` so the entity moves in game; `--atlas` remaps each part into its own UV cell and writes a manifest (with per-part roles) that a role-aware hide reads; the writer emits the `Physics` child node (feet-aligned `CapsuleCollider`) the engine grounds the entity by |
 | `shamway generate hide OUT.png` | draw a seeded fur/hide albedo for a generated entity — mottled patches, fur clumps, hair grain, no image model (`--seed` reproduces it byte-for-byte); `--atlas` reads `generate entity --atlas`' manifest and paints each part its role colour (`--paw`/`--limb`/`--outline`) so paws/legs/body read apart, with gutters outlined; `--coat NAME` is a named palette (moss, brown, cream, slate, olive, rust, charcoal, tan) |
 | `shamway generate creature OUT.glb` | one-shot reusable creature from a shipped rig: calls `generate entity` (`--atlas`, `--anim idle,head,walk`) then `generate hide`; `--scale` and `--coat` are the size and coat morphs, `--parts` still overrides primitives |
+| `shamway generate bind MESH OUT.glb` | skin an authored mesh (glTF/OBJ) onto a shipped rig so Idle1/Walk bone names still match; `--solidify` for open shells, `--head-lift` for a head-local OBJ (lowest vertex onto the body's max Z), `--neck [M]` fills that gap with a cylinder, `--voxel M` remeshes overlapping extras into one surface, `--anim` writes the sibling clips. After AUTO, the pelvis pins to Hips and thigh/shin/foot shafts keep those bones so Idle1 walk cannot crumple the butt or freeze the shins. Same flags, same bytes |
 | `shamway generate --list` | the packaged asset generators, callable from any mod |
 | `shamway prompt --list` | the house-style image prompts, rendered with the lane that consumes them |
 | `shamway docs [TOPIC]` | this repository's documentation, served from the package |
@@ -529,7 +530,7 @@ nothing and a particle-only "environment" is the standard failure.
 
 `shamway generate` ships working generators for the
 sound, audio-conversion, cutout, particle-card, icon, texture, mesh,
-mesh-icon, and mesh-optimize lanes, and the
+mesh-icon, mesh-optimize, and bind lanes, and the
 scaffolded Unity project ships `GeneratedAsset.cs` for asset-as-code prefabs,
 materials, imports, particles, and audio, plus `IconRenderer.cs`. Extend those
 rather than starting a new pattern. A consuming mod's particles are a

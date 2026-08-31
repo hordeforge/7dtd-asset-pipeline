@@ -15,11 +15,47 @@ A size and coat morph of that same rig, no mesh edit:
 shamway generate creature myRaptorTiny.glb --rig dinosaur --scale 0.5 --coat rust
 ```
 
+Skin a modelled mesh onto the same rig so Idle1
+walk+spin still plays. Same flags, same bytes:
+
+```bash
+shamway generate bind spider.glb --rig arachnid --height 0.42 --solidify 0.012 --stretch-x 1.16 mySpider.glb --anim
+shamway generate hide mySpider_albedo.png --coat charcoal --seed 7
+```
+
+A coat swap is not a distinct mesh. `--stretch-x`/`--stretch-y`/`--warp` and
+`--decimate` change the vertex set; `--double-sided` duplicates flipped
+faces so Unlit back-face cull cannot punch holes in an open shell:
+
+```bash
+shamway generate bind trex.glb --rig dinosaur --height 2.15 --stretch-x 1.30 \
+    --stretch-y 0.82 --warp 0.12 --solidify 0.025 --double-sided --anim myDino.glb
+```
+
+A split humanoid (torso + head-local OBJ) needs `--head-lift --neck` so the
+head sits on a filled neck, not in the torso hole. To fuse overlapping
+extras, join them and `--voxel` remesh:
+
+```bash
+shamway generate bind body.obj --extra head.obj --extra hands.obj --extra feet.obj \
+    --rig humanoid --head-lift --neck --stretch-x 1.12 --anim myHuman.glb
+shamway generate bind a.glb --extra b.glb --rig humanoid \
+    --height 1.75 --voxel 0.02 --anim myHuman.glb
+```
+
 `--rig` is one of `humanoid`, `quadruped`, `quadruped-small`, `quadruped-large`,
 `bird`, `dinosaur`, `arachnid`, `crocodile`. `--coat` is `moss`, `brown`,
 `cream`, `slate`, `olive`, `rust`, `charcoal`, or `tan`. Put the GLB and the
 sibling `{stem}_albedo.png` in `assets-src/bundle/`, then `shamway build`.
 Everything below is detail.
+
+SelfTestMod's remaining-rig fixtures mix both lanes. Bird and crocodile are
+the primitive `generate creature` output. Humanoid, dinosaur and arachnid
+are `generate bind` output on the same shipped rigs (so Idle1 walk+spin
+still matches the bone names). `generate creature` still writes primitives
+for those rigs; `generate bind` is the modelled-mesh on-ramp. See
+[research-provenance.md](../research/research-provenance.md) "Remeshed
+reference creatures".
 
 A custom in-game entity is the one 3D asset class that is never one object.
 A block is a static mesh; an item is a mesh and a prefab. An entity is a
@@ -52,7 +88,7 @@ writer emits the `Physics` child node (with a feet-aligned `CapsuleCollider`)
 the engine reads to settle the creature on the ground (see "What the engine
 requires of the model").
 
-## The two ways in
+## The three ways in
 
 1. **Model it yourself, against a template.** `shamway generate rig` writes
    an armature — the bone hierarchy plus inverse bind matrices — as a GLB.
@@ -65,7 +101,23 @@ requires of the model").
    shamway generate rig armature.glb --rig myRig.json
    ```
 
-2. **Generate it fully.** `shamway generate entity` skins procedural
+2. **Bind a modelled mesh onto a shipped rig.** `shamway generate bind`
+   does the skinning without a Blender GUI: same bone names Idle1 and Walk
+   already play, `--solidify` for open shells, `--head-lift` for a
+   head-local OBJ (lowest vertex onto the body's max Z), `--neck [M]` to
+   fill that gap with a cylinder, `--voxel M` to fuse overlapping extras,
+   `--anim` for the sibling clips. After AUTO it pins the pelvis to Hips
+   and paints thigh/shin/foot shafts to those bones so Idle1 walk cannot
+   crumple the butt or freeze the shins. Same flags, same bytes.
+
+   ```bash
+   shamway generate bind spider.glb --rig arachnid --height 0.42 \
+       --solidify 0.012 --anim mySpider.glb
+   shamway generate bind body.obj --extra head.obj --rig humanoid \
+       --head-lift --neck --anim myHuman.glb
+   ```
+
+3. **Generate it fully.** `shamway generate entity` skins procedural
    primitives to a rig — no Blender anywhere — and writes the
    `entityclasses.xml` patch beside the mesh:
 
@@ -339,10 +391,12 @@ from the rig's own names):
 
 | Kind | Clip | What moves |
 |---|---|---|
-| `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma). On a bird, also a `flap` of both `WingUpper` bones (they beat together; inverted so identity-bound left/right wings drop in the same world direction). On remaining rigs (`bird`, `arachnid`, `dinosaur`, `crocodile`, `humanoid`) `--anim walk` also merges a half-amplitude in-place walk into Idle1, because a staged look plays Idle1 automatically |
+| `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma). On a bird, also a `flap` of both `WingUpper` bones (they beat together; inverted so identity-bound left/right wings drop in the same world direction). On remaining rigs (`bird`, `arachnid`, `dinosaur`, `crocodile`, `humanoid`) `--anim walk` also merges an in-place walk into Idle1, because a staged look plays Idle1 automatically. Humanoid Idle1/Walk drop the T-pose arms ~40° about Z and swing them about Y (bind pins chest off Arm so the drop does not melt the torso) |
 | `head` | merged into `Idle1` | a slow side-to-side yaw of the `Head` bone (≈20°, 4 s) |
-| `walk` | `Walk` | a body-plan gait: locomotor uppers only (`is_locomotor_upper` — `Thigh`, or `Upper` with `Leg`/`Front`/`Rear`; **not** `Wing` or `Arm` as legs). The knee (`Lower`/`Shin`/`Middle` child) bends the other way, the body dips between steps. Phase: quadruped/crocodile trot on diagonals; humanoid/dinosaur/bird alternate left/right; arachnid alternating tetrapod (odd left + even right). Biped `Arm` bones swing opposite the same-side thigh. A Tail* chain also gets a travelling yaw (`sway`). Per-rig stride/period: humanoid 0.4 rad/1.0 s, quadruped 0.35/1.2, bird 0.28/0.8, dinosaur 0.4/1.1, arachnid 0.22/0.9, crocodile 0.22/1.6 |
+| `walk` | `Walk` | a body-plan gait: locomotor uppers only (`is_locomotor_upper` — `Thigh`, or `Upper` with `Leg`/`Front`/`Rear`; **not** `Wing` or `Arm` as legs). The knee (`Lower`/`Shin`/`Middle` child) bends the other way, the body dips between steps. Phase: quadruped/crocodile trot on diagonals; humanoid/dinosaur/bird alternate left/right; arachnid alternating tetrapod (odd left + even right). Biped `Arm` bones drop ~40° off T-pose (local Z) and swing opposite the same-side thigh about **local Y** — T-pose local X is twist along the arm, which is the frozen-T look. A Tail* chain also gets a travelling yaw (`sway`). Per-rig stride/period: humanoid 0.55 rad/1.0 s, quadruped 0.35/1.2, bird 0.28/0.8, dinosaur 0.55/1.0, arachnid 0.22/0.9, crocodile 0.22/1.6. Remaining-rig Idle1 marches at 0.75 of that stride, except dinosaur and humanoid which use the full stride so a staged look reads as legs. Humanoid numbers are synthesized from the shipped zombie `walkForward` muscle clip (3.53 s, 0.52 m/s, empty RotationCurves — not a drop-in) |
 | `sway` | merged into `Walk` (and remaining-rig `Idle1`) | travelling yaw down `Tail`/`Tail1`/`Tail2`/`Tail3` with lag and decay so a crocodile or dinosaur tail follows the body rather than pivoting as one stick |
+| `spin` | merged into remaining-rig `Idle1` | one full yaw of `Root` over 8 s, looped, so the staged look turns in place on the legs instead of a harness `Rotate` of the prefab |
+| `pose` | available | a constant local-Z rotation that holds (no sine). Not used on the self-test humanoid Idle1 — that drop melted the torso |
 | `attack` | `Attack1` | a bite: the `Head` jabs forward and returns (0.5 rad at mid-clip, 0.8 s) while the `Chest` pitches a quarter as much — a half-sine, so it never swings past rest (that overshoot is the nervous-bob look). The pitch is on the chest, *not* the pelvis: the legs hang from the pelvis, so a pelvis rotation swings the feet into the ground on every lunge |
 | `death` | `Death` | the body rolls over about its own axis and stays down — `loop: false`, so the clip plays once rather than wrapping (1.2 s) |
 | `jump` | `Jump` | a hop: the body rises 0.2 m and lands (0.8 s) |

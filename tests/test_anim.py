@@ -165,7 +165,7 @@ class AnimDeclarationTests(unittest.TestCase):
         for body, fragment in (
             (
                 '{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}',
-                "bob, head, walk, flap, sway, attack, death or jump",
+                "bob, head, walk, flap, sway, spin, pose, attack, death or jump",
             ),
             ('{"clips": [{"name": "Walk", "kind": "walk", "bone": "Root"}]}', '"bones"'),
             ('{"clips": [{"name": "Idle1", "kind": "bob"}]}', '"bone"'),
@@ -350,7 +350,7 @@ class LimbAnimTests(unittest.TestCase):
             '{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}', encoding="utf-8"
         )
         with self.assertRaisesRegex(
-            PipelineError, "bob, head, walk, flap, sway, attack, death or jump"
+            PipelineError, "bob, head, walk, flap, sway, spin, pose, attack, death or jump"
         ):
             parse_anim(path)
 
@@ -389,6 +389,56 @@ class LimbAnimTests(unittest.TestCase):
         ys = [kf["value"]["y"] for kf in body["curve"]["m_Curve"]]
         self.assertLess(min(ys), -0.01)
         self.assertAlmostEqual(ys[0], 0.0, places=6)
+
+    def test_walk_curves_tile_across_a_spin(self) -> None:
+        from sevendtd_asset_pipeline.anim import walk_curves
+
+        legs = [("Root/Pelvis/LeftFrontUpper", "Root/Pelvis/LeftFrontLower")]
+        one = walk_curves(legs, "Root/Pelvis", stride=0.3, seconds=2.0, cycles=1)
+        tiled = walk_curves(legs, "Root/Pelvis", stride=0.3, seconds=2.0, cycles=4)
+        self.assertAlmostEqual(one[0]["curve"]["m_Curve"][-1]["time"], 2.0)
+        self.assertAlmostEqual(tiled[0]["curve"]["m_Curve"][-1]["time"], 8.0)
+
+    def test_walk_curves_swing_humanoid_arms_on_y_not_x(self) -> None:
+        """T-pose arm bones extend along local X; an X walk is twist, not swing."""
+        from sevendtd_asset_pipeline.anim import walk_curves
+
+        legs = [
+            (
+                "Root/Hips/Spine/Chest/LeftShoulder/LeftArm",
+                "Root/Hips/Spine/Chest/LeftShoulder/LeftArm/LeftForearm",
+            ),
+            ("Root/Hips/LeftThigh", "Root/Hips/LeftThigh/LeftShin"),
+        ]
+        curves = walk_curves(legs, "Root/Hips", stride=0.5, seconds=1.0)
+        arm = next(
+            curve
+            for curve in curves
+            if curve["path"].endswith("LeftArm") and "Forearm" not in curve["path"]
+        )
+        thigh = next(curve for curve in curves if curve["path"].endswith("LeftThigh"))
+        thigh_mid = thigh["curve"]["m_Curve"][2]["value"]
+        self.assertGreater(abs(thigh_mid["x"]), 0.2)
+        self.assertAlmostEqual(thigh_mid["y"], 0.0, places=5)
+        rest = arm["curve"]["m_Curve"][0]["value"]
+        swung = arm["curve"]["m_Curve"][2]["value"]
+        self.assertGreater(rest["z"], 0.3)
+        self.assertGreater(abs(swung["y"]), 0.1)
+
+    def test_pose_curves_hold_a_constant_z_drop(self) -> None:
+        """A T-pose arm drop is a held Z rotation, not a swing."""
+        from sevendtd_asset_pipeline.anim import pose_curves
+
+        left = pose_curves("Root/Hips/Spine/Chest/LeftShoulder/LeftArm", 0.7, 8.0)[0]
+        right = pose_curves("Root/Hips/Spine/Chest/RightShoulder/RightArm", 0.7, 8.0)[0]
+        left_keys = left["curve"]["m_Curve"]
+        right_keys = right["curve"]["m_Curve"]
+        self.assertEqual(len(left_keys), 2)
+        self.assertAlmostEqual(left_keys[0]["value"]["z"], left_keys[-1]["value"]["z"])
+        self.assertGreater(left_keys[0]["value"]["z"], 0.3)
+        self.assertLess(right_keys[0]["value"]["z"], -0.3)
+        self.assertAlmostEqual(left_keys[0]["time"], 0.0)
+        self.assertAlmostEqual(left_keys[-1]["time"], 8.0)
 
     @needs_unitypy
     def test_position_curves_preserve_the_bones_rest_translation(self) -> None:

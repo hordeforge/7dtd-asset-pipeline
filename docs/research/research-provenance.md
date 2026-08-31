@@ -2373,6 +2373,27 @@ reference (a Unity-built skinned mesh's shader, or Unity's documented skinning
 bindings), and is the remaining open item. Reproducing the *classic* cbuffer
 bone-matrix vertex stage is the wrong route for this engine — 2022.3 uses the
 ShaderGraph/runtime `Unity_LinearBlendSkinning` path.
+
+**Refinement (2026-08-31): `Unity_LinearBlendSkinning` is DOTS-only, and the
+non-DOTS path may be CPU-skinned — so the invisibility might be bind-channel
+alignment, not GPU skinning.** Unity's own docs say the
+[Linear Blend Skinning node] is **Entities Graphics (DOTS) only** (you provide
+skinned matrices in a `_SkinMatrices` buffer), i.e. not the standard
+`SkinnedMeshRenderer` path at all. For a standard (non-DOTS) `SkinnedMeshRenderer`,
+Unity performs skinning **on the CPU** in the common case — the vertex shader
+receives already-transformed vertices ([Unity discussion]). That reframes the
+fix: if the mesh is CPU-skinned, a *plain* vertex shader should draw it, so
+`Shamway/Unlit` drawing nothing is more likely a **bind-channel alignment**
+failure (its declared POSITION/NORMAL/UV0 channels not matching the
+`SkinnedMeshRenderer` mesh's vertex layout) than a missing GPU-skinning shader.
+Next diagnostic before authoring anything: compare the mesh's vertex channel
+sources (the writer emits POSITION 0, NORMAL 1, UV0 4, blend 12/13) against
+`Shamway/Unlit`'s bind-channel block; a misalignment there is the smaller,
+fully-editorless fix. Also verify whether the creature is CPU- or GPU-skinned at
+runtime (e.g. whether the SkinnedMeshRenderer updates the mesh each frame).
+
+[Linear Blend Skinning node]: https://docs.unity3d.com/Packages/com.unity.shadergraph@14.0/manual/Linear-Blend-Skinning-Node.html
+[Unity discussion]: https://discussions.unity.com/t/how-would-you-access-skinned-mesh-pre-skinned-vertex-positions-in-shaders-these-days/918845
 - **Fall / grounding (separate, the walk-instability).** With the mesh finally
   drawn, the creature "fell off the world" to
   `pos=(512.2, -2.5, 940.6)` while the case reported `y[60.05..63.07]`

@@ -137,6 +137,25 @@ this writer does not declare; a mod that needs one wants `unity` or
 noise, lights, sub-emitters, mesh particles) are the same. "Shaders work"
 would be a wider claim than the evidence supports.
 
+**Skinned meshes are not rendered by `Shamway/Unlit` (2026-08-31, TODO).**
+`Shamway/Unlit`'s vertex stage is `mul(unity_ObjectToWorld, input.vertex)`
+with no bone-matrix skinning (`shader_blob.py` `UNLIT_VERTEX_HLSL`): it draws a
+`MeshRenderer` (the block prop) but renders **nothing** on a
+`SkinnedMeshRenderer`. So a generated **entity** (`shamwaySelfTestCreature`,
+bird, arachnid, dino) is invisible even though its mesh is healthy (verts
+1382, meshSize 0.33/1.04/0.83, renderer + mesh + root active). Confirmed in a
+live client by swapping the creature's material to the player's skinning
+shader `Game/SDCS/Skin`: the creature drew. The fix is one of:
+(1) add per-vertex bone-indices/weights input and sample the
+`SkinnedMeshRenderer` bone matrices (`unity_SkinnedMeshBoneMatrix`) in
+`UNLIT_VERTEX_HLSL` and recompile (the vkd3d/GLSL/Vulkan sources too), or
+(2) have the entity lane assign a stock skinning shader such as `Game/SDCS/Skin`
+to the generated entity material instead of `Shamway/Unlit`. Option 1 is the
+general fix; see the handover note in
+[research-provenance.md](../research/research-provenance.md) and
+`docs/authoring/entities.md`. Note the creature also "fell off the world"
+separately — the grounding item is `docs/authoring/entities.md`.
+
 **Settled since this entry was written:**
 
 1. **whether 7DTD's own rendering path accepts this pass.** It does. The

@@ -2392,6 +2392,23 @@ sources (the writer emits POSITION 0, NORMAL 1, UV0 4, blend 12/13) against
 fully-editorless fix. Also verify whether the creature is CPU- or GPU-skinned at
 runtime (e.g. whether the SkinnedMeshRenderer updates the mesh each frame).
 
+**Decisive (2026-08-31, `verify-bundle --draw` in stock Unity 2022.3.62f2): the
+mesh is GPU-skinned and the shader must skin — the bind channels align and are
+not the issue.** Running the local editor
+(`UNITY_EDITOR=.../2022.3.62f2/Editor/Unity xvfb-run -a shamway verify-bundle
+--draw Resources/shamwayselftest.unity3d`) shows the skinned prefabs (`gear`,
+and the four entity prefabs) **loaded but rasterized nothing** — `problem:
+VERIFY-FAIL: gear loaded but rasterized nothing, while a built-in cube in the
+same frame drew 8.4%` — while the block prop (`MeshRenderer`) draws. So the
+failure is **Unity-general** (not 7DTD-modified-engine), the mesh is
+**GPU-skinned** (a plain shader would draw a CPU-skinned mesh, and it draws
+nothing), and the shader **must** perform the skinning. Bind-channel alignment
+is ruled out (they match), which leaves the missing **skinning vertex stage +
+bone-matrix binding** as the fix. Authoring it requires the Unity 2022.3
+GPU-skinning convention, which is now reachable with the local editor: compile a
+shader in a Unity project and dump the Shader blob (bind channels +
+`unity_SkinnedMeshBoneMatrix`/bone binding).
+
 [Linear Blend Skinning node]: https://docs.unity3d.com/Packages/com.unity.shadergraph@14.0/manual/Linear-Blend-Skinning-Node.html
 [Unity discussion]: https://discussions.unity.com/t/how-would-you-access-skinned-mesh-pre-skinned-vertex-positions-in-shaders-these-days/918845
 - **Fall / grounding (separate, the walk-instability).** With the mesh finally

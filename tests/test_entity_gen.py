@@ -521,5 +521,44 @@ class EntityBundleTests(unittest.TestCase):
         self.assertIn(hier2["Physics"]["transform_id"], root2_child_paths)
 
 
+class CylinderWindingTests(unittest.TestCase):
+    """A generated entity's primitive cylinders must be wound facing OUTWARD.
+
+    The `_cylinder` builder produces side faces plus two cap fans. With the
+    material shader's default back-face culling, a side face wound CW from
+    outside is culled, so the cylinder's curved body vanishes and only the two
+    cap discs draw — a generated quadruped (legs, body, spine and tail are
+    cylinders) renders as a couple of floating discs. This pins the side faces
+    to outward (CCW from outside, radial normal agrees with the face normal).
+    """
+
+    @staticmethod
+    def _outward_fraction() -> float:
+        from sevendtd_asset_pipeline.generators.entity import _SEGMENTS, _cylinder
+
+        positions, _normals, _uvs, indices = _cylinder(0.5, 1.0)
+        faces = indices[: 2 * _SEGMENTS]  # the side faces, before the cap fans
+        outward = 0
+        for a, b, c in faces:
+            ax, ay, az = positions[a]
+            bx, by, bz = positions[b]
+            cx, _cy, cz = positions[c]
+            ux, uy, uz = bx - ax, by - ay, bz - az
+            vx, vy, vz = cx - ax, _cy - ay, cz - az
+            nx, _ny, nz = uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx
+            fx, _fy, fz = (ax + bx + cx) / 3.0, (ay + by + _cy) / 3.0, (az + bz + cz) / 3.0
+            # Outward at this face is the radial direction (x, 0, z).
+            dot = nx * fx + nz * fz
+            if dot > 0:
+                outward += 1
+        return outward / len(faces)
+
+    def test_cylinder_side_faces_face_outward(self) -> None:
+        # Before the fix the side faces were wound inward (0% outward); now
+        # every side face must agree with its outward radial direction.
+        frac = self._outward_fraction()
+        self.assertGreaterEqual(frac, 0.99, f"cylinder side faces outward fraction {frac:.3f}")
+
+
 if __name__ == "__main__":
     unittest.main()

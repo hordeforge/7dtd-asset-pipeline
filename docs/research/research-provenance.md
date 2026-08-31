@@ -2352,6 +2352,27 @@ separate failures**.
   assigns a stock skinning shader such as `Game/SDCS/Skin`). This is the
   handover task; see `docs/status/improvements.md` and
   `docs/authoring/entities.md`.
+
+**RE of 7DTD's skinning shader — it is engine-provided, not authorable from the
+bundles (2026-08-31).** The fix is **shader-only** (the material swap proved the
+generated `SkinnedMeshRenderer` carries per-vertex blend weights, so the mesh
+is fine). But the skinning shader to copy is **not in any asset bundle**: the
+engine-research `shader_blob_dump.py` decode found **zero** shaders with more
+than the four base vertex bind channels across `data.unity3d` (199 shaders,
+5472 d3d11 sub-programs) and the 118 Addressables `automatic_assets_*` bundles,
+and no shader named `Game/SDCS/Skin`. So it is a **built-in / always-included**
+shader. Unity 2022.3's own `CGIncludes/UnityCG.cginc` and
+`UnityShaderVariables.cginc` likewise carry **no `unity_SkinnedMeshBoneMatrix`**
+and no skinning macro, and the skinning function (`Unity_LinearBlendSkinning`,
+ShaderGraph's linear-blend node) is **runtime-provided** (compiled into Unity's
+shader library, no source in the editor install). Conclusion: the GPU-skinning
+convention (`unity_SkinnedMeshBoneMatrix` / the bone texture + blend inputs) is
+**engine internals**, not derivable from 7DTD's bundles or the editor's source.
+Authoring a compatible skinning shader needs that runtime convention as a
+reference (a Unity-built skinned mesh's shader, or Unity's documented skinning
+bindings), and is the remaining open item. Reproducing the *classic* cbuffer
+bone-matrix vertex stage is the wrong route for this engine — 2022.3 uses the
+ShaderGraph/runtime `Unity_LinearBlendSkinning` path.
 - **Fall / grounding (separate, the walk-instability).** With the mesh finally
   drawn, the creature "fell off the world" to
   `pos=(512.2, -2.5, 940.6)` while the case reported `y[60.05..63.07]`

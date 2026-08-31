@@ -2409,6 +2409,22 @@ GPU-skinning convention, which is now reachable with the local editor: compile a
 shader in a Unity project and dump the Shader blob (bind channels +
 `unity_SkinnedMeshBoneMatrix`/bone binding).
 
+**Addressables lead (2026-08-31): `Game/SDCS/Skin` is a real Addressables
+asset — its reference is now known.** The game's own shader registry
+(`StreamingAssets/aa/shaders.json`) lists
+`{'name': 'Game/SDCS/Skin', 'address': 'Assets/Shaders/SDCS/Skin.shader'}`.
+So the skinning shader is shipped as an Addressables asset (a `.shader`
+submitted to the Addressables catalog), NOT a bundle-embedded Shader under
+`automatic_assets_*` — which is why 285 Addressables bundles + `data.unity3d`'s
+199 shaders (by name) never showed it. To obtain the compiled blob, resolve
+that address through the Addressables catalog (`StreamingAssets/aa/catalog.json`,
+whose `m_InternalIds[26811]` is `Assets/Shaders/SDCS/Skin.shader`; the
+asset-to-bundle mapping is in the base64 `m_EntryDataString`/`m_KeyDataString`
+bundle data), locate the bundle, and read the `Shader` object's `m_Script`
+(compiled sub-program blobs) with the engine-research `shader_blob_dump.py`.
+That yields the exact bind-channel sources + bone-matrix binding to replicate
+in `Shamway/Unlit`.
+
 [Linear Blend Skinning node]: https://docs.unity3d.com/Packages/com.unity.shadergraph@14.0/manual/Linear-Blend-Skinning-Node.html
 [Unity discussion]: https://discussions.unity.com/t/how-would-you-access-skinned-mesh-pre-skinned-vertex-positions-in-shaders-these-days/918845
 - **Fall / grounding (separate, the walk-instability).** With the mesh finally

@@ -10,7 +10,12 @@ agents can both drive. Pin versions in each mod when output stability matters.
 Install them with `scripts/install-tools.sh --with-authoring`. That takes each
 tool from the distribution when it packages one, and falls back to the official
 checksum-verified build for Blender and the Khronos glTF validator, which
-several distributions omit or ship well behind upstream. Ask what is usable
+several distributions omit or ship well behind upstream. The optional reference
+tools below (gltfpack, AssetRipper, Compressonator) have no distribution package
+on the supported managers and are installed by
+`scripts/install-tools.sh --with-extras` (gltfpack + `compressonatorcli` +
+`assetripper`); `bc7enc_rdo` is a source build and `fsb5` is the Python `audio`
+extra. Ask what is usable
 right now with `shamway capabilities --json`.
 `shamway generate` already ships working generators
 built on this stack — sound synthesis and audio conversion (standard library

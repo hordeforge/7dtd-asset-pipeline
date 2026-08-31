@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -241,6 +242,71 @@ def _quat_y(angle: float) -> dict[str, float]:
     return {"x": 0.0, "y": math.sin(half), "z": 0.0, "w": math.cos(half)}
 
 
+def _quat_z(angle: float) -> dict[str, float]:
+    """A rotation about the local Z axis, as a quaternion dict."""
+    half = angle / 2.0
+    return {"x": 0.0, "y": 0.0, "z": math.sin(half), "w": math.cos(half)}
+
+
+_QUAT = {"x": _quat_x, "y": _quat_y, "z": _quat_z}
+
+# Arachnid locomotor bones are `LeftLeg3Upper` — a digit after `Leg`.
+_ARACHNID_LEG = re.compile(r"Leg(\d)")
+
+
+def is_locomotor_upper(bone_name: str) -> bool:
+    """True if this bone is a walk-cycle upper leg, not a wing or arm.
+
+    Wings share the `Upper` suffix with quadruped and bird legs, so a naive
+    `Thigh or Upper` match puts the bird's wings on the Walk clip. Arms on
+    the humanoid and dinosaur are not locomotor either — they may swing
+    opposite a stride, but they are not walk legs.
+    """
+    leaf = bone_name.rsplit("/", 1)[-1].lower()
+    if "wing" in leaf or "arm" in leaf:
+        return False
+    if "thigh" in leaf:
+        return True
+    return "upper" in leaf and any(token in leaf for token in ("leg", "front", "rear"))
+
+
+def is_arm_upper(bone_name: str) -> bool:
+    """True if this bone is a swinging arm (humanoid / dinosaur), not a wing."""
+    leaf = bone_name.rsplit("/", 1)[-1]
+    return leaf.endswith("Arm") and "Forearm" not in leaf and "Wing" not in leaf
+
+
+def is_wing_upper(bone_name: str) -> bool:
+    """True if this bone is a bird's inner wing (the flap pivot)."""
+    return bone_name.rsplit("/", 1)[-1].endswith("WingUpper")
+
+
+def walk_phase(upper: str) -> float:
+    """Opposite-leg phase for a walk-cycle upper-bone path.
+
+    Quadruped / crocodile trot: LeftFront + RightRear at 0, RightFront +
+    LeftRear at π. Biped (`Thigh`) and bird (`LegUpper`, no Front/Rear):
+    Left at 0, Right at π. Arachnid (`LegN`): alternating tetrapod — odd
+    left + even right at 0, the other four at π. Arms use the residual
+    Front/Rear branch (no Front → treated as rear), which is π out of
+    phase with the same-side thigh — the opposite-arm swing a biped walk
+    needs.
+    """
+    leaf = upper.rsplit("/", 1)[-1]
+    left = leaf.startswith("Left")
+    match = _ARACHNID_LEG.search(leaf)
+    if match:
+        odd = int(match.group(1)) % 2 == 1
+        if left:
+            return 0.0 if odd else math.pi
+        return 0.0 if not odd else math.pi
+    if "Thigh" in leaf or ("Leg" in leaf and "Front" not in leaf and "Rear" not in leaf):
+        return 0.0 if left else math.pi
+    if "Front" in leaf:
+        return 0.0 if left else math.pi
+    return 0.0 if not left else math.pi
+
+
 def _rotation_keyframes(
     axis: str, amplitude: float, seconds: float, phase: float = 0.0
 ) -> list[dict[str, Any]]:
@@ -250,7 +316,7 @@ def _rotation_keyframes(
     A sine loop starts and ends at the same value with matching slopes, so
     the clip loops without a seam.
     """
-    quat = _quat_x if axis == "x" else _quat_y
+    quat = _QUAT[axis]
     return [
         {
             "time": seconds * index / 8.0,
@@ -289,24 +355,21 @@ def walk_curves(
     One rotation curve per upper leg (`stride` half-swing about its local X)
     and one per lower leg bending the knee the opposite way (`0.6·stride`),
     so the paw stays roughly under the hip instead of sweeping a rigid arc —
-    a rigid whole-leg rotation is the wind-up-toy look. Diagonal pairs move
-    together (`LeftFront` with `RightRear`, `RightFront` with `LeftRear`),
-    and a position curve on `body_bone` dips the body twice per stride as
-    the weight transfers.
+    a rigid whole-leg rotation is the wind-up-toy look. Phase is body-plan
+    aware (`walk_phase`): a quadruped trots on diagonals, a biped and a
+    bird alternate left/right, an arachnid uses an alternating tetrapod.
+    A position curve on `body_bone` dips the body twice per stride as the
+    weight transfers.
     """
     curves: list[dict[str, Any]] = []
 
-    def phase(upper: str) -> float:
-        front = "Front" in upper
-        left = "/Left" in upper or upper.startswith("Left")
-        if front:
-            return 0.0 if left else math.pi
-        return 0.0 if not left else math.pi
-
     for upper, lower in legs:
-        phi = phase(upper)
+        phi = walk_phase(upper)
         curves.append(rotation_curve(upper, _rotation_keyframes("x", stride, seconds, phi)))
-        curves.append(rotation_curve(lower, _rotation_keyframes("x", -0.6 * stride, seconds, phi)))
+        if lower:
+            curves.append(
+                rotation_curve(lower, _rotation_keyframes("x", -0.6 * stride, seconds, phi))
+            )
     # The body dips twice per stride, at the weight transfers (quarter and
     # three-quarter points), never at the stride's end where a foot lands.
     zero_slope = {"x": 0.0, "y": 0.0, "z": 0.0}
@@ -351,6 +414,24 @@ def _jab_keyframes(axis: str, amplitude: float, seconds: float) -> list[dict[str
         }
         for index in range(9)
     ]
+
+
+def flap_curves(
+    wings: list[str], amplitude: float = 0.22, seconds: float = 1.6
+) -> list[dict[str, Any]]:
+    """A perched-bird wing fold: both wings drop and rise together.
+
+    The shipped bird rig extends wings along local X with identity bind
+    rotation, so the same local-Z angle lifts one side and drops the other.
+    Invert amplitude on `Right*` so they beat in the same world direction.
+    Idle, not Walk: a walking bird's wings are not locomotor legs.
+    """
+    curves: list[dict[str, Any]] = []
+    for path in wings:
+        leaf = path.rsplit("/", 1)[-1]
+        amp = amplitude if leaf.startswith("Left") else -amplitude
+        curves.append(rotation_curve(path, _rotation_keyframes("z", amp, seconds)))
+    return curves
 
 
 def attack_curves(
@@ -437,11 +518,11 @@ class AnimClip:
 
     `kind` selects the curve builder: `bob` (a position bob on `bone`),
     `head` (a yaw turn on `bone`), `walk` (a trot gait across `bones`),
-    `attack` (a lunge on `bone` with a body pitch on `body_bone`), `death`
-    (a one-shot roll on `bone`), or `jump` (a hop on `bone`).
-    `amplitude`/`seconds` scale the motion; a `walk` entry uses `bones`
-    (the upper-leg paths) instead of `bone`, and `loop=False` makes the
-    clip play once rather than wrap (a `Death` should not loop).
+    `flap` (a wing fold across `bones`), `attack` (a lunge on `bone` with
+    a body pitch on `body_bone`), `death` (a one-shot roll on `bone`), or
+    `jump` (a hop on `bone`). `amplitude`/`seconds` scale the motion; a
+    `walk`/`flap` entry uses `bones` instead of `bone`, and `loop=False`
+    makes the clip play once rather than wrap (a `Death` should not loop).
     """
 
     name: str
@@ -507,10 +588,10 @@ def parse_anim(path: Path) -> AnimDeclaration:
         kind = item.get("kind")
         if not isinstance(name, str) or not name:
             raise PipelineError(f'anim declaration {path} clip {index} needs a "name"')
-        if kind not in ("bob", "head", "walk", "attack", "death", "jump"):
+        if kind not in ("bob", "head", "walk", "flap", "attack", "death", "jump"):
             raise PipelineError(
                 f"anim declaration {path} clip {name!r} kind must be bob, head, walk, "
-                "attack, death or jump"
+                "flap, attack, death or jump"
             )
         for key, default in (("amplitude", 0.03), ("seconds", 1.5)):
             value = item.get(key, default)
@@ -549,6 +630,27 @@ def parse_anim(path: Path) -> AnimDeclaration:
                     body_bone=body_bone,
                     amplitude=float(item.get("amplitude", 0.35)),
                     seconds=float(item.get("seconds", 1.2)),
+                )
+            )
+            continue
+        if kind == "flap":
+            bones = item.get("bones")
+            bone = item.get("bone", "")
+            if isinstance(bones, list) and bones and all(isinstance(b, str) and b for b in bones):
+                wing_bones = tuple(bones)
+            elif isinstance(bone, str) and bone:
+                wing_bones = (bone,)
+            else:
+                raise PipelineError(
+                    f'anim declaration {path} clip {name!r} needs a "bones" list or a "bone"'
+                )
+            clips.append(
+                AnimClip(
+                    name=name,
+                    kind=kind,
+                    bones=wing_bones,
+                    amplitude=float(item.get("amplitude", 0.22)),
+                    seconds=float(item.get("seconds", 1.6)),
                 )
             )
             continue
@@ -650,6 +752,9 @@ def clip_fields(
                     ),
                     1.0,
                 )
+            elif clip.kind == "flap":
+                paths = list(clip.bones) if clip.bones else [clip.bone]
+                rotations += rescaled(flap_curves(paths, clip.amplitude, clip.seconds), 1.0)
             else:  # walk — rotation curves on the legs, a position curve on the body
                 legs = [
                     (upper, lower)

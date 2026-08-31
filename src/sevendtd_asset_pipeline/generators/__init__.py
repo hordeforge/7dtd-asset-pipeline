@@ -72,7 +72,8 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
         "hide",
         "draw a seeded fur/hide albedo for a generated entity: mottled patches,"
         " anisotropic fur clumps, hair grain — no image model; --atlas paints"
-        " each part of a per-part-UV entity its role colour (paws dark, body light)",
+        " each part of a per-part-UV entity its role colour (paws dark, body light);"
+        " --coat NAME is a size/coat morph palette",
         ("pillow", "numpy"),
     ),
     "mesh": (
@@ -100,8 +101,16 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
         "entity",
         "generate a skinned entity: primitives bound to a rig, plus its"
         " entityclasses.xml patch; --atlas gives each part its own UV cell"
-        " (and writes the manifest a role-aware hide reads)",
+        " (and writes the manifest a role-aware hide reads); --anim walk is"
+        " body-plan-aware (biped / four-leg / eight-leg / perched bird)",
         (),
+    ),
+    "creature": (
+        "creature",
+        "one-shot reusable creature from a shipped rig: generate entity"
+        " (--atlas, --anim idle,head,walk) then generate hide (--coat palette)."
+        " Size/coat morphs are --scale and --coat; calls those same generators",
+        ("pillow", "numpy"),
     ),
 }
 

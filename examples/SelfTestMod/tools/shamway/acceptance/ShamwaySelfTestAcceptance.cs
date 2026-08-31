@@ -32,7 +32,9 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             yield return "shamwayselftest_shamwayselftestbird_look";
             yield return "shamwayselftest_shamwayselftestcreature_look";
             yield return "shamwayselftest_shamwayselftestcreature_prefab_look";
+            yield return "shamwayselftest_shamwayselftestcrocodile_look";
             yield return "shamwayselftest_shamwayselftestdino_look";
+            yield return "shamwayselftest_shamwayselftesthumanoid_look";
             yield return "shamwayselftest_shamwayselftestprop_look";
             yield return "shamwayselftest_timednuke_look";
         }
@@ -841,6 +843,164 @@ if (suite == "shamwayselftest_shamwayselftestcreature_prefab_look")
             fail: "could not stage shamwaySelfTestCreature in front of the camera"));
             return;
         }
+if (suite == "shamwayselftest_shamwayselftestcrocodile_look")
+        {
+
+        GameObject shamwaySelfTestCrocodileStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestCrocodile", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestCrocodile");
+                if (prefab == null)
+                {
+                    Report.Info("shamwaySelfTestCrocodile: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "shamwaySelfTestCrocodile: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                shamwaySelfTestCrocodileStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestCrocodileStaged);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                shamwaySelfTestCrocodileStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
+                var renderers = shamwaySelfTestCrocodileStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    shamwaySelfTestCrocodileStaged, out posedBounds);
+                if (hasPosedBounds)
+                {
+                    lowest = posedBounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                shamwaySelfTestCrocodileStaged.transform.position = placed;
+                Report.Info("shamwaySelfTestCrocodile: staged at " + shamwaySelfTestCrocodileStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
+                    + ", with " + renderers.Length + " renderer(s)");
+                // Live renderer probe (SMR-PROBE): under the live graphics
+                // device, log every renderer so a d3d11-only invisibility is
+                // diagnosed rather than guessed. SetPass(0)+isSupported answer
+                // "can the pass be set up", bounds+pos answer "is it where the
+                // camera looks", vertexCount answers "did the (skinned) upload
+                // survive". Only fires when this provider regenerated after the
+                // SMR-PROBE block was added; always goes to the client log.
+                foreach (var renderer in shamwaySelfTestCrocodileStaged.GetComponentsInChildren<Renderer>(true))
+                {
+                    var smr = renderer as SkinnedMeshRenderer;
+                    var mat = renderer.sharedMaterial;
+                    var shader = mat != null ? mat.shader : null;
+                    var setPass = false;
+                    if (mat != null)
+                    {
+                        try { setPass = mat.SetPass(0); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
+                    }
+                    Mesh mesh = null;
+                    if (smr != null) mesh = smr.sharedMesh;
+                    else if (renderer is MeshRenderer) {
+                        var mf = renderer.GetComponent<MeshFilter>();
+                        if (mf != null) mesh = mf.sharedMesh;
+                    }
+                    Report.Info("SMR-PROBE: " + renderer.name
+                        + " type=" + renderer.GetType().Name
+                        + " active=" + renderer.gameObject.activeInHierarchy
+                        + " enabled=" + renderer.enabled
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " shader=" + (shader != null ? shader.name : "<null>")
+                        + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
+                        + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
+                        + " SetPass0=" + setPass
+                        + " bounds=" + renderer.bounds.ToString("F2")
+                        + " pos=" + renderer.transform.position.ToString("F2")
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
+                }
+                // A prefab with no renderer cannot be photographed into evidence.
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, shamwaySelfTestCrocodileStaged);
+            },
+            holdSeconds: 12f,
+            fail: "could not stage shamwaySelfTestCrocodile in front of the camera"));
+            return;
+        }
 if (suite == "shamwayselftest_shamwayselftestdino_look")
         {
 
@@ -997,6 +1157,164 @@ if (suite == "shamwayselftest_shamwayselftestdino_look")
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestDino in front of the camera"));
+            return;
+        }
+if (suite == "shamwayselftest_shamwayselftesthumanoid_look")
+        {
+
+        GameObject shamwaySelfTestHumanoidStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestHumanoid", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestHumanoid");
+                if (prefab == null)
+                {
+                    Report.Info("shamwaySelfTestHumanoid: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "shamwaySelfTestHumanoid: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                shamwaySelfTestHumanoidStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestHumanoidStaged);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                shamwaySelfTestHumanoidStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
+                var renderers = shamwaySelfTestHumanoidStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    shamwaySelfTestHumanoidStaged, out posedBounds);
+                if (hasPosedBounds)
+                {
+                    lowest = posedBounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                shamwaySelfTestHumanoidStaged.transform.position = placed;
+                Report.Info("shamwaySelfTestHumanoid: staged at " + shamwaySelfTestHumanoidStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
+                    + ", with " + renderers.Length + " renderer(s)");
+                // Live renderer probe (SMR-PROBE): under the live graphics
+                // device, log every renderer so a d3d11-only invisibility is
+                // diagnosed rather than guessed. SetPass(0)+isSupported answer
+                // "can the pass be set up", bounds+pos answer "is it where the
+                // camera looks", vertexCount answers "did the (skinned) upload
+                // survive". Only fires when this provider regenerated after the
+                // SMR-PROBE block was added; always goes to the client log.
+                foreach (var renderer in shamwaySelfTestHumanoidStaged.GetComponentsInChildren<Renderer>(true))
+                {
+                    var smr = renderer as SkinnedMeshRenderer;
+                    var mat = renderer.sharedMaterial;
+                    var shader = mat != null ? mat.shader : null;
+                    var setPass = false;
+                    if (mat != null)
+                    {
+                        try { setPass = mat.SetPass(0); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
+                    }
+                    Mesh mesh = null;
+                    if (smr != null) mesh = smr.sharedMesh;
+                    else if (renderer is MeshRenderer) {
+                        var mf = renderer.GetComponent<MeshFilter>();
+                        if (mf != null) mesh = mf.sharedMesh;
+                    }
+                    Report.Info("SMR-PROBE: " + renderer.name
+                        + " type=" + renderer.GetType().Name
+                        + " active=" + renderer.gameObject.activeInHierarchy
+                        + " enabled=" + renderer.enabled
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " shader=" + (shader != null ? shader.name : "<null>")
+                        + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
+                        + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
+                        + " SetPass0=" + setPass
+                        + " bounds=" + renderer.bounds.ToString("F2")
+                        + " pos=" + renderer.transform.position.ToString("F2")
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
+                }
+                // A prefab with no renderer cannot be photographed into evidence.
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, shamwaySelfTestHumanoidStaged);
+            },
+            holdSeconds: 12f,
+            fail: "could not stage shamwaySelfTestHumanoid in front of the camera"));
             return;
         }
 if (suite == "shamwayselftest_shamwayselftestprop_look")
@@ -1453,6 +1771,23 @@ if (suite == "shamwayselftest_timednuke_look")
             },
             fail: "the game did not load gear_mat from the staged bundle"));
 
+        TextAsset shamwaySelfTestArachnidanimLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestArachnid.anim", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestArachnidanimLoaded = DataLoader.LoadAsset<TextAsset>(Bundle + "?shamwaySelfTestArachnid.anim");
+                var loaded = shamwaySelfTestArachnidanimLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestArachnid.anim: LoadAsset<TextAsset> returned null"
+                    : "shamwaySelfTestArachnid.anim: " + loaded.name + " bytes=" + loaded.bytes.Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestArachnidanimLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestArachnid.anim" && loaded.text != null;
+            },
+            fail: "the game did not load shamwaySelfTestArachnid.anim from the staged bundle"));
+
         GameObject shamwaySelfTestArachnidLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestArachnid", new[] { "bundle" },
             act: ctx =>
@@ -1504,6 +1839,40 @@ if (suite == "shamwayselftest_timednuke_look")
             },
             fail: "the game did not load shamwaySelfTestArachnid_mat from the staged bundle"));
 
+        Texture2D shamwaySelfTestArachnid_albedoLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestArachnid_albedo", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestArachnid_albedoLoaded = DataLoader.LoadAsset<Texture2D>(Bundle + "?shamwaySelfTestArachnid_albedo");
+                var loaded = shamwaySelfTestArachnid_albedoLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestArachnid_albedo: LoadAsset<Texture2D> returned null"
+                    : "shamwaySelfTestArachnid_albedo: " + loaded.name + " " + loaded.width + "x" + loaded.height + " " + loaded.format);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestArachnid_albedoLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestArachnid_albedo" && loaded.width > 0 && loaded.height > 0;
+            },
+            fail: "the game did not load shamwaySelfTestArachnid_albedo from the staged bundle"));
+
+        TextAsset shamwaySelfTestBirdanimLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestBird.anim", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestBirdanimLoaded = DataLoader.LoadAsset<TextAsset>(Bundle + "?shamwaySelfTestBird.anim");
+                var loaded = shamwaySelfTestBirdanimLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestBird.anim: LoadAsset<TextAsset> returned null"
+                    : "shamwaySelfTestBird.anim: " + loaded.name + " bytes=" + loaded.bytes.Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestBirdanimLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestBird.anim" && loaded.text != null;
+            },
+            fail: "the game did not load shamwaySelfTestBird.anim from the staged bundle"));
+
         GameObject shamwaySelfTestBirdLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestBird", new[] { "bundle" },
             act: ctx =>
@@ -1554,6 +1923,23 @@ if (suite == "shamwayselftest_timednuke_look")
                 return loaded != null && loaded.name == "shamwaySelfTestBird_mat" && loaded.shader != null;
             },
             fail: "the game did not load shamwaySelfTestBird_mat from the staged bundle"));
+
+        Texture2D shamwaySelfTestBird_albedoLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestBird_albedo", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestBird_albedoLoaded = DataLoader.LoadAsset<Texture2D>(Bundle + "?shamwaySelfTestBird_albedo");
+                var loaded = shamwaySelfTestBird_albedoLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestBird_albedo: LoadAsset<Texture2D> returned null"
+                    : "shamwaySelfTestBird_albedo: " + loaded.name + " " + loaded.width + "x" + loaded.height + " " + loaded.format);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestBird_albedoLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestBird_albedo" && loaded.width > 0 && loaded.height > 0;
+            },
+            fail: "the game did not load shamwaySelfTestBird_albedo from the staged bundle"));
 
         TextAsset shamwaySelfTestCreatureanimLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCreature.anim", new[] { "bundle" },
@@ -1640,6 +2026,108 @@ if (suite == "shamwayselftest_timednuke_look")
             },
             fail: "the game did not load shamwaySelfTestCreature_albedo from the staged bundle"));
 
+        TextAsset shamwaySelfTestCrocodileanimLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCrocodile.anim", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCrocodileanimLoaded = DataLoader.LoadAsset<TextAsset>(Bundle + "?shamwaySelfTestCrocodile.anim");
+                var loaded = shamwaySelfTestCrocodileanimLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCrocodile.anim: LoadAsset<TextAsset> returned null"
+                    : "shamwaySelfTestCrocodile.anim: " + loaded.name + " bytes=" + loaded.bytes.Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCrocodileanimLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCrocodile.anim" && loaded.text != null;
+            },
+            fail: "the game did not load shamwaySelfTestCrocodile.anim from the staged bundle"));
+
+        GameObject shamwaySelfTestCrocodileLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCrocodile", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCrocodileLoaded = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestCrocodile");
+                var loaded = shamwaySelfTestCrocodileLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCrocodile: LoadAsset<GameObject> returned null"
+                    : "shamwaySelfTestCrocodile: " + loaded.name + " children=" + loaded.transform.childCount + " renderers=" + loaded.GetComponentsInChildren<Renderer>(true).Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCrocodileLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCrocodile" && loaded.transform != null;
+            },
+            fail: "the game did not load shamwaySelfTestCrocodile from the staged bundle"));
+
+        Mesh shamwaySelfTestCrocodile_meshLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCrocodile_mesh", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCrocodile_meshLoaded = DataLoader.LoadAsset<Mesh>(Bundle + "?shamwaySelfTestCrocodile_mesh");
+                var loaded = shamwaySelfTestCrocodile_meshLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCrocodile_mesh: LoadAsset<Mesh> returned null"
+                    : "shamwaySelfTestCrocodile_mesh: " + loaded.name + " vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount + " bounds=" + loaded.bounds.size);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCrocodile_meshLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCrocodile_mesh" && loaded.vertexCount > 0 && loaded.triangles.Length > 0;
+            },
+            fail: "the game did not load shamwaySelfTestCrocodile_mesh from the staged bundle"));
+
+        Material shamwaySelfTestCrocodile_matLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCrocodile_mat", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCrocodile_matLoaded = DataLoader.LoadAsset<Material>(Bundle + "?shamwaySelfTestCrocodile_mat");
+                var loaded = shamwaySelfTestCrocodile_matLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCrocodile_mat: LoadAsset<Material> returned null"
+                    : "shamwaySelfTestCrocodile_mat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCrocodile_matLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCrocodile_mat" && loaded.shader != null;
+            },
+            fail: "the game did not load shamwaySelfTestCrocodile_mat from the staged bundle"));
+
+        Texture2D shamwaySelfTestCrocodile_albedoLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestCrocodile_albedo", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestCrocodile_albedoLoaded = DataLoader.LoadAsset<Texture2D>(Bundle + "?shamwaySelfTestCrocodile_albedo");
+                var loaded = shamwaySelfTestCrocodile_albedoLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestCrocodile_albedo: LoadAsset<Texture2D> returned null"
+                    : "shamwaySelfTestCrocodile_albedo: " + loaded.name + " " + loaded.width + "x" + loaded.height + " " + loaded.format);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestCrocodile_albedoLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestCrocodile_albedo" && loaded.width > 0 && loaded.height > 0;
+            },
+            fail: "the game did not load shamwaySelfTestCrocodile_albedo from the staged bundle"));
+
+        TextAsset shamwaySelfTestDinoanimLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestDino.anim", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestDinoanimLoaded = DataLoader.LoadAsset<TextAsset>(Bundle + "?shamwaySelfTestDino.anim");
+                var loaded = shamwaySelfTestDinoanimLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestDino.anim: LoadAsset<TextAsset> returned null"
+                    : "shamwaySelfTestDino.anim: " + loaded.name + " bytes=" + loaded.bytes.Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestDinoanimLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestDino.anim" && loaded.text != null;
+            },
+            fail: "the game did not load shamwaySelfTestDino.anim from the staged bundle"));
+
         GameObject shamwaySelfTestDinoLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestDino", new[] { "bundle" },
             act: ctx =>
@@ -1690,6 +2178,108 @@ if (suite == "shamwayselftest_timednuke_look")
                 return loaded != null && loaded.name == "shamwaySelfTestDino_mat" && loaded.shader != null;
             },
             fail: "the game did not load shamwaySelfTestDino_mat from the staged bundle"));
+
+        Texture2D shamwaySelfTestDino_albedoLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestDino_albedo", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestDino_albedoLoaded = DataLoader.LoadAsset<Texture2D>(Bundle + "?shamwaySelfTestDino_albedo");
+                var loaded = shamwaySelfTestDino_albedoLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestDino_albedo: LoadAsset<Texture2D> returned null"
+                    : "shamwaySelfTestDino_albedo: " + loaded.name + " " + loaded.width + "x" + loaded.height + " " + loaded.format);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestDino_albedoLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestDino_albedo" && loaded.width > 0 && loaded.height > 0;
+            },
+            fail: "the game did not load shamwaySelfTestDino_albedo from the staged bundle"));
+
+        TextAsset shamwaySelfTestHumanoidanimLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestHumanoid.anim", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestHumanoidanimLoaded = DataLoader.LoadAsset<TextAsset>(Bundle + "?shamwaySelfTestHumanoid.anim");
+                var loaded = shamwaySelfTestHumanoidanimLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestHumanoid.anim: LoadAsset<TextAsset> returned null"
+                    : "shamwaySelfTestHumanoid.anim: " + loaded.name + " bytes=" + loaded.bytes.Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestHumanoidanimLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestHumanoid.anim" && loaded.text != null;
+            },
+            fail: "the game did not load shamwaySelfTestHumanoid.anim from the staged bundle"));
+
+        GameObject shamwaySelfTestHumanoidLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestHumanoid", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestHumanoidLoaded = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestHumanoid");
+                var loaded = shamwaySelfTestHumanoidLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestHumanoid: LoadAsset<GameObject> returned null"
+                    : "shamwaySelfTestHumanoid: " + loaded.name + " children=" + loaded.transform.childCount + " renderers=" + loaded.GetComponentsInChildren<Renderer>(true).Length);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestHumanoidLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestHumanoid" && loaded.transform != null;
+            },
+            fail: "the game did not load shamwaySelfTestHumanoid from the staged bundle"));
+
+        Mesh shamwaySelfTestHumanoid_meshLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestHumanoid_mesh", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestHumanoid_meshLoaded = DataLoader.LoadAsset<Mesh>(Bundle + "?shamwaySelfTestHumanoid_mesh");
+                var loaded = shamwaySelfTestHumanoid_meshLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestHumanoid_mesh: LoadAsset<Mesh> returned null"
+                    : "shamwaySelfTestHumanoid_mesh: " + loaded.name + " vertices=" + loaded.vertexCount + " submeshes=" + loaded.subMeshCount + " bounds=" + loaded.bounds.size);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestHumanoid_meshLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestHumanoid_mesh" && loaded.vertexCount > 0 && loaded.triangles.Length > 0;
+            },
+            fail: "the game did not load shamwaySelfTestHumanoid_mesh from the staged bundle"));
+
+        Material shamwaySelfTestHumanoid_matLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestHumanoid_mat", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestHumanoid_matLoaded = DataLoader.LoadAsset<Material>(Bundle + "?shamwaySelfTestHumanoid_mat");
+                var loaded = shamwaySelfTestHumanoid_matLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestHumanoid_mat: LoadAsset<Material> returned null"
+                    : "shamwaySelfTestHumanoid_mat: " + loaded.name + " shader=" + loaded.shader.name);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestHumanoid_matLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestHumanoid_mat" && loaded.shader != null;
+            },
+            fail: "the game did not load shamwaySelfTestHumanoid_mat from the staged bundle"));
+
+        Texture2D shamwaySelfTestHumanoid_albedoLoaded = null;
+        queue.Add(CaseDef.Live(label, "load_shamwaySelfTestHumanoid_albedo", new[] { "bundle" },
+            act: ctx =>
+            {
+                shamwaySelfTestHumanoid_albedoLoaded = DataLoader.LoadAsset<Texture2D>(Bundle + "?shamwaySelfTestHumanoid_albedo");
+                var loaded = shamwaySelfTestHumanoid_albedoLoaded;
+                Report.Info(loaded == null
+                    ? "shamwaySelfTestHumanoid_albedo: LoadAsset<Texture2D> returned null"
+                    : "shamwaySelfTestHumanoid_albedo: " + loaded.name + " " + loaded.width + "x" + loaded.height + " " + loaded.format);
+            },
+            assert: ctx =>
+            {
+                var loaded = shamwaySelfTestHumanoid_albedoLoaded;
+                return loaded != null && loaded.name == "shamwaySelfTestHumanoid_albedo" && loaded.width > 0 && loaded.height > 0;
+            },
+            fail: "the game did not load shamwaySelfTestHumanoid_albedo from the staged bundle"));
 
         GameObject shamwaySelfTestPropLoaded = null;
         queue.Add(CaseDef.Live(label, "load_shamwaySelfTestProp", new[] { "bundle" },

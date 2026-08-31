@@ -1,0 +1,38 @@
+{
+  "clips": [
+    {
+      "name": "Idle1",
+      "kind": "bob",
+      "bone": "Root/Pelvis",
+      "amplitude": 0.03,
+      "seconds": 1.5
+    },
+    {
+      "name": "Idle1",
+      "kind": "head",
+      "bone": "Root/Pelvis/Spine1/Spine2/Chest/Neck/Head",
+      "amplitude": 0.35,
+      "seconds": 4.0
+    },
+    {
+      "name": "Walk",
+      "kind": "walk",
+      "bones": [
+        "Root/Pelvis/Spine1/Spine2/Chest/LeftFrontUpper",
+        "Root/Pelvis/Spine1/Spine2/Chest/RightFrontUpper",
+        "Root/Pelvis/LeftRearUpper",
+        "Root/Pelvis/RightRearUpper"
+      ],
+      "lower_bones": [
+        "Root/Pelvis/Spine1/Spine2/Chest/LeftFrontUpper/LeftFrontLower",
+        "Root/Pelvis/Spine1/Spine2/Chest/RightFrontUpper/RightFrontLower",
+        "Root/Pelvis/LeftRearUpper/LeftRearLower",
+        "Root/Pelvis/RightRearUpper/RightRearLower"
+      ],
+      "body_bone": "Root/Pelvis",
+      "amplitude": 0.22,
+      "seconds": 1.6
+    }
+  ],
+  "play_automatically": true
+}

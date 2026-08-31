@@ -1,0 +1,141 @@
+{
+  "stem": "shamwaySelfTestHumanoid",
+  "grid": 5,
+  "parts": {
+    "Hips": [
+      0.0,
+      0.8,
+      0.2,
+      1.0
+    ],
+    "Spine": [
+      0.2,
+      0.8,
+      0.4,
+      1.0
+    ],
+    "Chest": [
+      0.4,
+      0.8,
+      0.6,
+      1.0
+    ],
+    "Neck": [
+      0.6,
+      0.8,
+      0.8,
+      1.0
+    ],
+    "Head": [
+      0.8,
+      0.8,
+      1.0,
+      1.0
+    ],
+    "LeftShoulder": [
+      0.0,
+      0.6,
+      0.2,
+      0.8
+    ],
+    "LeftArm": [
+      0.2,
+      0.6,
+      0.4,
+      0.8
+    ],
+    "LeftForearm": [
+      0.4,
+      0.6,
+      0.6,
+      0.8
+    ],
+    "LeftHand": [
+      0.6,
+      0.6,
+      0.8,
+      0.8
+    ],
+    "RightShoulder": [
+      0.8,
+      0.6,
+      1.0,
+      0.8
+    ],
+    "RightArm": [
+      0.0,
+      0.4,
+      0.2,
+      0.6
+    ],
+    "RightForearm": [
+      0.2,
+      0.4,
+      0.4,
+      0.6
+    ],
+    "RightHand": [
+      0.4,
+      0.4,
+      0.6,
+      0.6
+    ],
+    "LeftThigh": [
+      0.6,
+      0.4,
+      0.8,
+      0.6
+    ],
+    "LeftShin": [
+      0.8,
+      0.4,
+      1.0,
+      0.6
+    ],
+    "LeftFoot": [
+      0.0,
+      0.19999999999999996,
+      0.2,
+      0.4
+    ],
+    "RightThigh": [
+      0.2,
+      0.19999999999999996,
+      0.4,
+      0.4
+    ],
+    "RightShin": [
+      0.4,
+      0.19999999999999996,
+      0.6,
+      0.4
+    ],
+    "RightFoot": [
+      0.6,
+      0.19999999999999996,
+      0.8,
+      0.4
+    ]
+  },
+  "roles": {
+    "Hips": "body",
+    "Spine": "body",
+    "Chest": "body",
+    "Neck": "body",
+    "Head": "head",
+    "LeftShoulder": "body",
+    "LeftArm": "limb",
+    "LeftForearm": "limb",
+    "LeftHand": "paw",
+    "RightShoulder": "body",
+    "RightArm": "limb",
+    "RightForearm": "limb",
+    "RightHand": "paw",
+    "LeftThigh": "limb",
+    "LeftShin": "limb",
+    "LeftFoot": "paw",
+    "RightThigh": "limb",
+    "RightShin": "limb",
+    "RightFoot": "paw"
+  }
+}

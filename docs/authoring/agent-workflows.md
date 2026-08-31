@@ -75,6 +75,9 @@ lit or normal-mapped shading, SDCS extras, or Mecanim animation — none of
 which the writer's unlit mesh pass covers. Named glTF children, glTF skins,
 `.vfx` ParticleSystems, and legacy animation clips
 (`anim.py`, see `docs authoring entities`) are synthesized without an editor.
+`shamway generate creature` is the one-shot on-ramp for a reusable entity
+from a shipped rig (atlas + idle/head/walk + hide); `--scale` and `--coat`
+morph size and palette without editing the mesh.
 
 ## Texture/material lane
 

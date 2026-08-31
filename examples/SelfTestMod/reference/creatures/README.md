@@ -11,7 +11,11 @@ the spawn-area car) can be judged against what actually should be there.
 > It answers *does the in-game frame contain this body shape?*, not *does the
 > colour read right?*.
 
-## The four rigs
+## The four clay sheets
+
+Crocodile and humanoid ship as generated bundle members at the same
+construction bar (atlas, Idle1+Walk, role-aware hide) but do not yet have
+clay contact sheets. The four below are the original live-look references.
 
 | Stem | Rig | Source | Rendered |
 |---|---|---|---|

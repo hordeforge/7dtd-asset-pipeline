@@ -33,6 +33,12 @@
 			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestBird"/>
 			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestBird"/>
 			<property name="UserSpawnType" value="Menu"/>
+			<property name="AvatarController" value="ShamwaySelfTest.ShamwayAnimalController, ShamwaySelfTestCreature"/>
+			<property name="Class" value="ShamwaySelfTest.ShamwaySelfTestCreature, ShamwaySelfTestCreature"/>
+			<property name="IsAnimalEntity" value="true"/>
+			<property name="EntityFlags" value="animal"/>
+			<property name="Faction" value="animals"/>
+			<property name="MoveSpeed" value="1.5"/>
 		</entity_class>
 	</append>
 <append xpath="/entity_classes">
@@ -40,6 +46,12 @@
 			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestArachnid"/>
 			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestArachnid"/>
 			<property name="UserSpawnType" value="Menu"/>
+			<property name="AvatarController" value="ShamwaySelfTest.ShamwayAnimalController, ShamwaySelfTestCreature"/>
+			<property name="Class" value="ShamwaySelfTest.ShamwaySelfTestCreature, ShamwaySelfTestCreature"/>
+			<property name="IsAnimalEntity" value="true"/>
+			<property name="EntityFlags" value="animal"/>
+			<property name="Faction" value="animals"/>
+			<property name="MoveSpeed" value="1.5"/>
 		</entity_class>
 	</append>
 <append xpath="/entity_classes">
@@ -47,6 +59,38 @@
 			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestDino"/>
 			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestDino"/>
 			<property name="UserSpawnType" value="Menu"/>
+			<property name="AvatarController" value="ShamwaySelfTest.ShamwayAnimalController, ShamwaySelfTestCreature"/>
+			<property name="Class" value="ShamwaySelfTest.ShamwaySelfTestCreature, ShamwaySelfTestCreature"/>
+			<property name="IsAnimalEntity" value="true"/>
+			<property name="EntityFlags" value="animal"/>
+			<property name="Faction" value="animals"/>
+			<property name="MoveSpeed" value="1.5"/>
+		</entity_class>
+	</append>
+<append xpath="/entity_classes">
+		<entity_class name="shamwaySelfTestCrocodile">
+			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCrocodile"/>
+			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestCrocodile"/>
+			<property name="UserSpawnType" value="Menu"/>
+			<property name="AvatarController" value="ShamwaySelfTest.ShamwayAnimalController, ShamwaySelfTestCreature"/>
+			<property name="Class" value="ShamwaySelfTest.ShamwaySelfTestCreature, ShamwaySelfTestCreature"/>
+			<property name="IsAnimalEntity" value="true"/>
+			<property name="EntityFlags" value="animal"/>
+			<property name="Faction" value="animals"/>
+			<property name="MoveSpeed" value="1.5"/>
+		</entity_class>
+	</append>
+<append xpath="/entity_classes">
+		<entity_class name="shamwaySelfTestHumanoid">
+			<property name="Prefab" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestHumanoid"/>
+			<property name="Mesh" value="#@modfolder(ShamwaySelfTest):Resources/shamwayselftest.unity3d?shamwaySelfTestHumanoid"/>
+			<property name="UserSpawnType" value="Menu"/>
+			<property name="AvatarController" value="ShamwaySelfTest.ShamwayAnimalController, ShamwaySelfTestCreature"/>
+			<property name="Class" value="ShamwaySelfTest.ShamwaySelfTestCreature, ShamwaySelfTestCreature"/>
+			<property name="IsAnimalEntity" value="true"/>
+			<property name="EntityFlags" value="animal"/>
+			<property name="Faction" value="animals"/>
+			<property name="MoveSpeed" value="1.5"/>
 		</entity_class>
 	</append>
 </configs>

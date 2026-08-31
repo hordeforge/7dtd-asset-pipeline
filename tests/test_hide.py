@@ -108,6 +108,11 @@ class HideAtlasTests(unittest.TestCase):
         self.assertEqual(roles["Head"], "head")
         self.assertEqual(roles["Tail"], "tail")
         self.assertEqual(roles["LeftThigh"], "limb")
+        arachnid = part_role(["Prosoma", "LeftLeg1Upper", "LeftLeg1Middle", "LeftLeg1Lower"])
+        self.assertEqual(arachnid["LeftLeg1Lower"], "paw")
+        self.assertEqual(arachnid["LeftLeg1Upper"], "limb")
+        self.assertEqual(arachnid["LeftLeg1Middle"], "limb")
+        self.assertEqual(arachnid["Prosoma"], "body")
 
     def test_paws_are_dark_and_body_light(self) -> None:
         albedo, manifest = self._hide()
@@ -181,6 +186,63 @@ class HideAtlasTests(unittest.TestCase):
         with contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit) as raised:
             run("hide", [str(albedo), "--atlas", str(manifest)])
         self.assertIn("no per-part cells", str(raised.exception))
+
+    def test_remaining_rig_hide_paints_distinct_paw_limb_body(self) -> None:
+        """A dinosaur (remaining biped) atlased hide keeps paw/limb/body apart."""
+        out = self.root / "dino.glb"
+        manifest = self.root / "dino.atlas.json"
+        self.assertEqual(
+            run("entity", [str(out), "--rig", "dinosaur", "--atlas", str(manifest)]), 0
+        )
+        albedo = self.root / "dino_albedo.png"
+        self.assertEqual(
+            run(
+                "hide",
+                [
+                    str(albedo),
+                    "--atlas",
+                    str(manifest),
+                    "--coat",
+                    "olive",
+                    "--seed",
+                    "7",
+                    "--size",
+                    "128",
+                ],
+            ),
+            0,
+        )
+        rgb = np.asarray(Image.open(albedo).convert("RGB")).astype(float)
+        document = json.loads(manifest.read_text(encoding="utf-8"))
+        roles = document["roles"]
+        cells = document["parts"]
+        means = {}
+        for name, cell in cells.items():
+            x0, y0, x1, y1 = cell_rect(cell, 128)
+            means[name] = rgb[y0:y1, x0:x1].reshape(-1, 3).mean(axis=0)
+        paw = np.asarray([means[n] for n, r in roles.items() if r == "paw"]).mean(axis=0)
+        limb = np.asarray([means[n] for n, r in roles.items() if r == "limb"]).mean(axis=0)
+        body = np.asarray([means[n] for n, r in roles.items() if r == "body"]).mean(axis=0)
+        self.assertLess(paw.sum(), body.sum() * 0.7)
+        self.assertNotEqual(tuple(paw.round()), tuple(limb.round()))
+        self.assertNotEqual(tuple(limb.round()), tuple(body.round()))
+
+    def test_coat_palette_morph_differs_in_colour(self) -> None:
+        """`--coat` is the coat morph of a shipped rig; same atlas, different palette."""
+        out = self.root / "bird.glb"
+        manifest = self.root / "bird.atlas.json"
+        self.assertEqual(run("entity", [str(out), "--rig", "bird", "--atlas", str(manifest)]), 0)
+        slate = self.root / "bird_slate.png"
+        rust = self.root / "bird_rust.png"
+        shared = ["--atlas", str(manifest), "--seed", "7", "--size", "64"]
+        self.assertEqual(run("hide", [str(slate), *shared, "--coat", "slate"]), 0)
+        self.assertEqual(run("hide", [str(rust), *shared, "--coat", "rust"]), 0)
+        self.assertNotEqual(slate.read_bytes(), rust.read_bytes())
+        self.assertEqual(
+            run("hide", [str(self.root / "bird_slate2.png"), *shared, "--coat", "slate"]),
+            0,
+        )
+        self.assertEqual(slate.read_bytes(), (self.root / "bird_slate2.png").read_bytes())
 
 
 if __name__ == "__main__":

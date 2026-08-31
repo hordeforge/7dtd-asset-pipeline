@@ -14,6 +14,17 @@ tag has no changelog section.
 
 ### Added
 
+- **Shipped-rig reference creatures at the quadruped construction bar** —
+  bird, arachnid, dinosaur, crocodile and humanoid now generate as a skinned
+  mesh, a per-part UV atlas, spawnable `entityclasses.xml` (`Prefab` + `Mesh` +
+  `UserSpawnType`), and Idle1/Walk clips. SelfTestMod ships those five as
+  bundle members with role-aware hides (slate / charcoal / olive / rust / tan).
+  `--anim walk` is body-plan-aware: biped thighs on humanoid/dinosaur, four
+  legs on crocodile (and quadruped), eight legs on arachnid, perched legs on
+  bird — wings are never Walk legs; idle on a bird also flaps. `shamway
+  generate creature` is the one-shot on-ramp (calls `generate entity` then
+  `generate hide`); `--scale` and `--coat NAME` (moss, brown, cream, slate,
+  olive, rust, charcoal, tan) are the size and coat morphs.
 - **`compress_audio`: the editorless writer encodes Vorbis** — a clip becomes an
   FSB5 Vorbis bank (mode 15) instead of PCM16, measured 44x smaller on a
   one-second tone (57x stereo). `compress_audio = true` in `.shamway.toml` or

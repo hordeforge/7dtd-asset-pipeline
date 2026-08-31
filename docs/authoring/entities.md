@@ -20,9 +20,13 @@ every shipped rig has been staged in a live client (see "End-to-end
 confirmation"). Movement ships too: `--anim` wires a legacy `Animation`
 component with synthesized clips and `AvatarController =
 GameObjectAnimalAnimation` (see "Making it move"), proven live by the
-self-test creature's signed-off turntable clip. `--atlas` gives each part
+self-test creature's signed-off turntable clip. Walk is body-plan-aware:
+biped thighs, four-leg trot, eight-leg tetrapod, perched bird legs (wings
+are never Walk legs; idle flaps them). `--atlas` gives each part
 its own UV cell so a `generate hide --atlas` can paint the paws apart from
-the body (see "The skin is a sibling albedo"). Grounding ships too: the
+the body (see "The skin is a sibling albedo"). `shamway generate creature`
+is the one-shot on-ramp (entity then hide; `--scale` and `--coat` morph a
+shipped rig). Grounding ships too: the
 writer emits the `Physics` child node (with a feet-aligned `CapsuleCollider`)
 the engine reads to settle the creature on the ground (see "What the engine
 requires of the model").
@@ -55,6 +59,30 @@ requires of the model").
    parts.json` replaces the default part set — each part is a primitive
    rigidly bound to one bone, and the generated GLB is a normal skinned mesh
    a mod can re-skin or replace later.
+
+   **The easy on-ramp is one command.** `shamway generate creature` calls
+   `generate entity` (`--atlas`, `--anim idle,head,walk`) then
+   `generate hide` and writes the sibling albedo the writer binds. `--scale`
+   and `--coat NAME` are the size and coat morphs of a shipped rig — no
+   hand-edit of the reference mesh.
+
+   A dinosaur with an olive coat and its XML patch:
+
+   ```bash
+   shamway generate creature myRaptor.glb --rig dinosaur --coat olive --mod MyMod --bundle myMod --xml myRaptor-entityclasses.xml
+   ```
+
+   A half-size quadruped in the brown palette (a size and coat morph):
+
+   ```bash
+   shamway generate creature myWolf.glb --rig quadruped --scale 0.5 --coat brown
+   ```
+
+   `--coat` names a palette (`moss`, `brown`, `cream`, `slate`, `olive`,
+   `rust`, `charcoal`, `tan`); `--base` / `--paw` still override. `--parts`
+   still replaces the default primitive set. Atlas, anim and hide are on by
+   default — that is the construction bar the self-test quadruped already
+   meets.
 
    **The skin is a sibling albedo.** The writer binds `<stem>_albedo.png`
    to the prefab's material when one sits beside the mesh, and a flat
@@ -290,9 +318,9 @@ from the rig's own names):
 
 | Kind | Clip | What moves |
 |---|---|---|
-| `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma) |
+| `idle` | `Idle1` | a 0.03 m bob of the body's first bone (Hips/Pelvis/Prosoma). On a bird, also a `flap` of both `WingUpper` bones (they beat together; inverted so identity-bound left/right wings drop in the same world direction) |
 | `head` | merged into `Idle1` | a slow side-to-side yaw of the `Head` bone (≈20°, 4 s) |
-| `walk` | `Walk` | a trot: each upper leg (`Thigh`/`Upper` bones) swings about its local X, the knee (`Lower`/`Shin` child) bends the other way, and the body dips between steps; diagonal pairs move together (0.35 rad, 1.2 s) |
+| `walk` | `Walk` | a body-plan gait: locomotor uppers only (`is_locomotor_upper` — `Thigh`, or `Upper` with `Leg`/`Front`/`Rear`; **not** `Wing` or `Arm` as legs). The knee (`Lower`/`Shin`/`Middle` child) bends the other way, the body dips between steps. Phase: quadruped/crocodile trot on diagonals; humanoid/dinosaur/bird alternate left/right; arachnid alternating tetrapod (odd left + even right). Biped `Arm` bones swing opposite the same-side thigh. Per-rig stride/period: humanoid 0.4 rad/1.0 s, quadruped 0.35/1.2, bird 0.28/0.8, dinosaur 0.4/1.1, arachnid 0.22/0.9, crocodile 0.22/1.6 |
 | `attack` | `Attack1` | a bite: the `Head` jabs forward and returns (0.5 rad at mid-clip, 0.8 s) while the `Chest` pitches a quarter as much — a half-sine, so it never swings past rest (that overshoot is the nervous-bob look). The pitch is on the chest, *not* the pelvis: the legs hang from the pelvis, so a pelvis rotation swings the feet into the ground on every lunge |
 | `death` | `Death` | the body rolls over about its own axis and stays down — `loop: false`, so the clip plays once rather than wrapping (1.2 s) |
 | `jump` | `Jump` | a hop: the body rises 0.2 m and lands (0.8 s) |
@@ -326,20 +354,23 @@ so an `Idle1` can combine a bob and a head turn:
 }
 ```
 
-`kind` selects the curve builder (`bob` position, `head` yaw, `attack`
-lunge, `death` one-shot roll, `jump` hop, `walk` trot); `bone` is the rig's
-own slash-separated path (`Root/Hips` on the humanoid); an `attack` entry
-also takes `body_bone` (the body-pitch target); a `death` or `jump` entry
-points `bone` at the body; `loop: false` makes a clip play once (a `Death`
-should stay down — the serialized `m_WrapMode` is 1 instead of 2); a `walk`
-entry takes `bones` (the upper-leg paths, which the generator picks as every
-`Thigh`/`Upper` bone), `lower_bones` (each upper leg's child, so the knee
-bends), and `body_bone` (the body-dip target). Why this works at all: **legacy
-clips carry their curves directly** (`m_MuscleClipSize = 0`, measured from
-the game's `animals.bundle` `_Take 001`) — no compiled `m_Clip` stream,
-unlike Mecanim clips. `anim.py` builds the type-tree dicts and
-`tests/test_anim.py` round-trips them through `build_bundle` and back
-through UnityPy.
+`kind` selects the curve builder (`bob` position, `head` yaw, `flap` wing
+fold, `attack` lunge, `death` one-shot roll, `jump` hop, `walk` gait);
+`bone` is the rig's own slash-separated path (`Root/Hips` on the humanoid);
+an `attack` entry also takes `body_bone` (the body-pitch target); a `death`
+or `jump` entry points `bone` at the body; `loop: false` makes a clip play
+once (a `Death` should stay down — the serialized `m_WrapMode` is 1 instead
+of 2); a `walk` entry takes `bones` (the locomotor upper-leg paths, never
+wings), `lower_bones` (each upper's first child, so the knee bends), and
+`body_bone` (the body-dip target); a `flap` entry takes `bones` (the
+`WingUpper` paths). Why this works at all: **legacy clips carry their curves
+directly** (`m_MuscleClipSize = 0`, measured from the game's
+`animals.bundle` `_Take 001`) — no compiled `m_Clip` stream, unlike Mecanim
+clips. `anim.py` builds the type-tree dicts and `tests/test_anim.py`
+round-trips them through `build_bundle` and back through UnityPy. Walk
+selection is pinned without packing a bundle: `tests/test_anim.py`
+`BodyPlanWalkTests` drives `generate entity --anim` and reads the sibling
+`.anim.json`.
 
 To prove motion in a live client, give the entity's look suite a motion
 kind in the mod's `.shamway.toml`, so the look run captures a frame
@@ -371,9 +402,10 @@ that clients see nothing.
 
 ## What is still unbuilt
 
-- **More clip kinds.** `bob`, `head`, `walk`, `attack`, `death` and `jump`
-  are built in; swims are the remaining curve set, not a format change — the
-  declaration already accepts any name the controller plays.
+- **More clip kinds.** `bob`, `head`, `walk`, `flap`, `attack`, `death` and
+  `jump` are built in; swims are the remaining curve set, not a format change
+  — the declaration already accepts any name the controller plays. Walk is
+  body-plan-aware (biped / four-leg / eight-leg / perched bird).
 - **Mecanim / complex locomotion.** `Animator` + controller + compiled
   clips remain the hard lane; the legacy path covers an animal that idles,
   walks and attacks by name. In this engine revision the shipped animals use a
@@ -444,14 +476,17 @@ that clients see nothing.
 ## Reference renders — what a live frame should contain
 
 `examples/SelfTestMod/reference/creatures/` holds clay geometry reference
-renders of the four generated rigs (`shamwaySelfTestCreature`, `_Bird`,
-`_Arachnid`, `_Dino`), each a 2×3 contact sheet of six views (front, 3/4, side,
-back, back-3/4, other-side) rendered from the `.glb` with orthographic
-full-bounds framing — the shape that *should* be in a live frame. See that
-directory's `README.md` (and `reference/creatures/render_creatures.py` to
-regenerate). They are the ground truth to place next to the in-game `--look`
-frames, which currently show only terrain/player/car because the generated
-`SkinnedMeshRenderer` does not rasterize in the live Proton/d3d11 client.
+renders of the original four generated rigs (`shamwaySelfTestCreature`,
+`_Bird`, `_Arachnid`, `_Dino`), each a 2×3 contact sheet of six views (front,
+3/4, side, back, back-3/4, other-side) rendered from the `.glb` with
+orthographic full-bounds framing — the shape that *should* be in a live
+frame. The remaining two shipped-rig references (`_Crocodile`, `_Humanoid`)
+are generated bundle members at the same construction bar (skinned GLB,
+atlas, Idle1/Walk, role-aware hide, spawnable XML) but do not yet have clay
+sheets. See that directory's `README.md` (and
+`reference/creatures/render_creatures.py` to regenerate). They are the ground
+truth to place next to the in-game `--look` frames. A load is not a look:
+nobody has visually accepted the new stems.
 
 ## End-to-end confirmation
 
@@ -472,8 +507,10 @@ staged every prefab at the same camera offset stacks unrelated pictures:
 - the default run asserts the game **reads** the bundle: every entity
   prefab comes back with its `SkinnedMeshRenderer`, its weighted mesh with
   its vertex stream, and its albedo texture at its authored size
-  (`examples/SelfTestMod` carries generated creatures from the quadruped,
-  bird, arachnid and dinosaur rigs for exactly this);
+  (`examples/SelfTestMod` carries generated creatures from every shipped
+  base rig — quadruped, bird, arachnid, dinosaur, crocodile, humanoid —
+  for exactly this; `quadruped-small` / `quadruped-large` stay scale
+  variants of quadruped, not extra fixtures);
 - `playtest-synthesized --look STEM` runs that one entity look suite
   (`<mod>_<stem>_look`) alone. A `walk-entity` stem is spawned through
   `EntityFactory.CreateEntity` + `SpawnEntityInWorld` and photographed while

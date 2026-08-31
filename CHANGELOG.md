@@ -14,6 +14,9 @@ tag has no changelog section.
 
 ### Added
 
+- **`validate` runs the patch gate** — `check_patches` is folded into
+  `validate_mod`, so a Config/ patch XPath selecting zero nodes fails the
+  default gate (it was already `shamway check-patches` standalone).
 - **`check-patches` evaluates selectors with lxml (full XPath 1.0)** when the
   optional `patch` extra is installed — matching the engine's `XPathEvaluate` —
   and falls back to the standard-library subset otherwise. `lxml` is a new

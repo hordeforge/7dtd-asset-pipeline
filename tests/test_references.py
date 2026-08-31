@@ -8,9 +8,11 @@ from fixtures import filesystem_is_case_insensitive
 
 from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.references import (
+    check_mod_info_schema,
     discover_references,
     manifest_assets,
     parse_reference,
+    read_mod_info,
     read_mod_name,
     resolve_case_insensitive,
 )
@@ -162,6 +164,66 @@ class ReferenceTests(unittest.TestCase):
         directory = self.root / "Resources" / "thing.unity3d"
         directory.mkdir(parents=True)
         self.assertIsNone(resolve_case_insensitive(self.root, "resources/thing.unity3d"))
+
+
+class ModInfoSchemaTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.mod_info = self.root / "ModInfo.xml"
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _write(
+        self,
+        name: str,
+        version: str | None = None,
+        description: str | None = None,
+        display_name: str | None = None,
+    ) -> None:
+        lines = ['<?xml version="1.0" encoding="UTF-8"?>', "<xml>"]
+        attrs = [("Name", name), ("DisplayName", display_name or "a mod")]
+        if version is not None:
+            attrs.append(("Version", version))
+        if description is not None:
+            attrs.append(("Description", description))
+        for key, value in attrs:
+            lines.append(f'    <{key} value="{value}" />')
+        lines.append("</xml>")
+        self.mod_info.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_a_complete_mod_info_passes(self) -> None:
+        self._write("myMod", version="1.2.3", description="Does things.")
+        self.assertEqual([], check_mod_info_schema(self.mod_info))
+        info = read_mod_info(self.mod_info)
+        self.assertEqual(
+            ("myMod", "1.2.3", "Does things."), (info.name, info.version, info.description)
+        )
+
+    def test_missing_version_is_a_problem(self) -> None:
+        self._write("myMod", description="Does things.")
+        problems = check_mod_info_schema(self.mod_info)
+        self.assertTrue(any("Version" in p for p in problems))
+
+    def test_malformed_version_is_a_problem(self) -> None:
+        self._write("myMod", version="banana", description="Does things.")
+        problems = check_mod_info_schema(self.mod_info)
+        self.assertTrue(any("Version" in p and "banana" in p for p in problems))
+
+    def test_missing_description_is_a_problem(self) -> None:
+        self._write("myMod", version="1.0.0")
+        problems = check_mod_info_schema(self.mod_info)
+        self.assertTrue(any("Description" in p for p in problems))
+
+    def test_no_name_still_raises(self) -> None:
+        self._write("myMod", version="1.0.0", description="x")
+        # drop the Name element
+        text = self.mod_info.read_text()
+        text = text.replace('<Name value="myMod" />', "")
+        self.mod_info.write_text(text)
+        with self.assertRaisesRegex(PipelineError, "no <Name"):
+            read_mod_info(self.mod_info)
 
 
 if __name__ == "__main__":

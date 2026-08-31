@@ -52,12 +52,16 @@ key itself on a miss — is recorded in `docs/research/research-provenance.md`.
 shown as-is on a miss), so only bare tokens (single, no spaces/commas) are
 reconciled as keys.
 
-## 3. ModInfo.xml Version is unread
+## 3. ModInfo.xml Version is unread  — **done (2026-08-31)**
 
-Only `<Name>` is compared with `.shamway.toml`. A stale `Version` attribute
-ships silently; the client logs it and nothing here notices. Cheap fix, low
-value alone — worth doing together with a `ModInfo.xml` schema check
-(required attributes present, `Description` non-empty) rather than alone.
+**Closed.** `validate` now runs `check_mod_info_schema` on `ModInfo.xml`
+(`references.py`): `<Version>` must be present and a dotted-numeric version
+(`N.N` / `N.N.N`), and `<Description>` must be present and non-empty. A missing
+or malformed `Version` ships a stale mod version (the client logs it, a mod
+manager shows it); a missing `Description` shows a blank row in the server
+list. Neither errors anywhere in the game, which is why the gate is here.
+`<Name>` is still compared with the configuration. `read_mod_info` (a small
+`ModInfo` dataclass covering Name/DisplayName/Version/Description) backs both.
 
 ## 4. The synthesized lanes are uncompressed
 

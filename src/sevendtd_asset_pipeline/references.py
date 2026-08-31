@@ -31,7 +31,19 @@ class AssetReference:
         return Path(self.asset_name.replace("\\", "/")).stem
 
 
-def read_mod_name(mod_info: Path) -> str:
+# A dotted-numeric version, the shape the client and mod managers expect.
+VERSION_RE = re.compile(r"^[0-9]+(\.[0-9]+){1,2}$")
+
+
+@dataclass(frozen=True)
+class ModInfo:
+    name: str
+    display_name: str | None = None
+    version: str | None = None
+    description: str | None = None
+
+
+def read_mod_info(mod_info: Path) -> ModInfo:
     try:
         # Parses XML from inside the mod being validated, never from the network
         # or a game install; defusedxml would add the first runtime dependency
@@ -39,10 +51,50 @@ def read_mod_name(mod_info: Path) -> str:
         root = ET.parse(mod_info).getroot()  # noqa: S314
     except (OSError, ET.ParseError) as exc:
         raise PipelineError(f"cannot parse {mod_info}: {exc}") from exc
+    values: dict[str, str] = {}
     for element in root.iter():
-        if element.tag.lower() == "name" and element.get("value"):
-            return element.get("value", "")
-    raise PipelineError(f'{mod_info} has no <Name value="..."> element')
+        tag = element.tag.lower()
+        if tag in ("name", "displayname", "version", "description") and element.get("value"):
+            values[tag] = element.get("value", "").strip()
+    if "name" not in values:
+        raise PipelineError(f'{mod_info} has no <Name value="..."> element')
+    return ModInfo(
+        name=values["name"],
+        display_name=values.get("displayname"),
+        version=values.get("version"),
+        description=values.get("description"),
+    )
+
+
+def check_mod_info_schema(mod_info: Path) -> list[str]:
+    """`ModInfo.xml` schema problems: Version and Description must be present.
+
+    `validate` already compares `<Name>` with the configuration; this is the
+    rest of the schema. A missing or malformed `Version` ships a stale mod
+    version that the client logs and the mod manager shows; a missing
+    `Description` shows a blank row in the server list. Neither errors anywhere.
+    """
+    info = read_mod_info(mod_info)
+    problems: list[str] = []
+    if not info.version:
+        problems.append(
+            'ModInfo.xml has no <Version value="...">; the client reads it for the mod '
+            "version, so a missing one ships a stale/empty version"
+        )
+    elif not VERSION_RE.match(info.version):
+        problems.append(
+            f"ModInfo.xml Version {info.version!r} is not a dotted numeric version (e.g. 1.0.0)"
+        )
+    if not info.description:
+        problems.append(
+            'ModInfo.xml has no <Description value="...">; the in-game mod list shows a '
+            "blank row for it"
+        )
+    return problems
+
+
+def read_mod_name(mod_info: Path) -> str:
+    return read_mod_info(mod_info).name
 
 
 def parse_reference(source: Path, uri: str) -> AssetReference:

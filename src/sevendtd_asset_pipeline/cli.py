@@ -42,6 +42,7 @@ from .icon_render import (
     render_icon,
 )
 from .localization_check import check_localization
+from .patch_check import check_patches
 from .mesh_check import DEFAULT_MAX_EXTENT, check_mesh
 from .operations import manifest
 from .prompts import main as prompt_main
@@ -355,6 +356,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     loc.add_argument("--no-vanilla-keys", action="store_true", help="fail vanilla keys too")
     loc.add_argument("--json", action="store_true")
+
+    patches = commands.add_parser(
+        "check-patches",
+        help="replay Config/ patch XPaths against the game's stock configs and fail "
+        "the ones that select zero nodes (the engine silently no-ops those)",
+    )
+    patches.add_argument("--json", action="store_true")
 
     render = commands.add_parser(
         "render-icon", help="render a bundle prefab into an atlas icon with the editor"
@@ -987,6 +995,18 @@ def run(args: argparse.Namespace) -> int:
                 print(f"problem: {problem}")
             print("OK" if loc_report.ok else "FAILED")
         return 0 if loc_report.ok else 1
+    if args.command == "check-patches":
+        patch_report = check_patches(config.mod_root, config.config_dir, config.game_dir)
+        if args.json:
+            print(json.dumps(patch_report.as_dict(), indent=2, sort_keys=True))
+        else:
+            print(f"checked: {len(patch_report.checked)}  resolved: {len(patch_report.resolved)}")
+            for note in patch_report.notes:
+                print(f"note: {note}")
+            for problem in patch_report.problems:
+                print(f"problem: {problem}")
+            print("OK" if patch_report.ok else "FAILED")
+        return 0 if patch_report.ok else 1
     if args.command == "render-icon":
         result = render_icon(
             config,

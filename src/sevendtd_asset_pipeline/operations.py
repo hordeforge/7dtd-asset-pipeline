@@ -379,6 +379,18 @@ _DEFINITIONS: tuple[Operation, ...] = (
         needs_config=True,
     ),
     Operation(
+        name="check_patches",
+        summary="Replay every Config/*.xml patch XPath against the installed game's "
+        "read-only Data/Config copy and fail the structural operations that select "
+        "zero nodes — the engine silently no-ops a zero-match XPath, so a typo'd "
+        "selector ships unapplied with no error.",
+        parameters=_schema({}),
+        returns="PatchReport: checked[], resolved[], problems, notes, ok",
+        cost=INSTANT,
+        writes=False,
+        needs_config=True,
+    ),
+    Operation(
         name="render_icon",
         summary="Photograph a bundle prefab into an atlas icon with the editor, so the icon "
         "cannot drift from the mesh. Needs a graphics device; never uses -nographics.",

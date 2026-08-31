@@ -14,6 +14,13 @@ tag has no changelog section.
 
 ### Added
 
+- **`shamway check-patches`** replays every structural operation XPath in
+  `Config/*.xml` against the installed game's read-only `Data/Config/<stem>.xml`
+  and fails the ones selecting zero nodes. The engine silently no-ops a
+  zero-match XPath (`XmlFile.GetXpathResultsInList` returns false, the operation
+  returns 0), so a typo'd/renamed selector ships unapplied with no error; the
+  decompiled rules are in research-provenance. An XPath the standard-library
+  subset cannot evaluate is reported as not checked rather than guessed.
 - **`ModInfo.xml` schema is gated** — `validate` now checks `<Version>` is
   present and a dotted-numeric version and `<Description>` is non-empty
   (`references.check_mod_info_schema`). A missing/malformed version ships a

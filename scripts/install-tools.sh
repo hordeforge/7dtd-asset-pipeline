@@ -24,6 +24,7 @@ WITH_UNITY_PREREQS=0
 WITH_RESEARCH=0
 WITH_DESKTOP_CAPTURE=0
 WITH_VKD3D_SOURCE=0
+WITH_EXTRAS=0
 CHECK_ONLY=0
 # Pinned rather than tracking master: this is what the shader lane was measured
 # against, and a compiler that changes under a build changes the bytes it emits.
@@ -110,6 +111,18 @@ WITH --with-research
   monodis            Mono's IL disassembler, the second opinion on a method
                      body (and mcs, for compiling a throwaway check)
 
+WITH --with-extras
+  Optional reference/lane tools from docs/authoring/authoring-tools.md, not
+  wired to any command. Installed (downloaded) where a Linux release exists:
+  gltfpack           meshoptimizer's mesh optimizer (quantize + vertex-cache
+                     order before import)
+  compressonatorcli  GPUOpen command-line BC1-7/ATC compressor for measuring
+                     what block compression would save a texture/clip set
+  AssetRipper        export a vanilla prefab/material/graph set for reference
+                     reading (read-only against the install)
+  Reported (not auto-installed): fsb5 (the Python 'audio' extra already provides
+  it) and bc7enc_rdo (a source build; see authoring-tools.md).
+
 NOTES
   vkd3d differs by distribution, and only the version matters
     The shader lane needs vkd3d >= 1.3, which is when vkd3d-shader learned to
@@ -156,6 +169,7 @@ while (($#)); do
 		--with-research) WITH_RESEARCH=1; shift ;;
 		--with-desktop-capture) WITH_DESKTOP_CAPTURE=1; shift ;;
 		--with-vkd3d-source) WITH_VKD3D_SOURCE=1; shift ;;
+		--with-extras) WITH_EXTRAS=1; shift ;;
 		--check) CHECK_ONLY=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) echo "ERROR: unknown option $1" >&2; usage >&2; exit 1 ;;
@@ -264,6 +278,13 @@ run_check() {
 		report dotnet "8.x SDK, hosts ilspycmd" has_dotnet_8_sdk
 		report ilspycmd "decompile Assembly-CSharp.dll" has_ilspycmd
 		report monodis "Mono IL disassembler" have monodis
+	fi
+	if ((WITH_EXTRAS)); then
+		report gltfpack "meshop optimizer (mesh lane)" have gltfpack
+		report compressonatorcli "BC1-7 compressor (texture lane)" have compressonatorcli
+		report AssetRipper "vanilla export for reference" have assetripper
+		report fsb5 "decode an FSB5 bank (Python audio extra)" has_module fsb5
+		report bc7enc_rdo "BC7 encoder (source build)" have bc7enc_rdo
 	fi
 }
 
@@ -727,6 +748,66 @@ install_gltf_validator() {
 	rm -rf "$staging"
 }
 
+# Download a Linux x86_64 GitHub release asset, extract it, and install the
+# named executable to ~/.local/bin. These §7 tools (docs/authoring/authoring-tools.md)
+# have no distribution package on the supported managers, so they are fetched
+# the way gltf_validator is. bc7enc_rdo and fsb5 are not fetched here: the
+# first is a source build and the second is the Python 'audio' extra.
+install_binary_release() {
+	local tool="$1" repo="$2" suffix="$3" binary="$4"
+	local url archive staging dest found
+	dest="${HOME}/.local/bin"
+	if have "$tool"; then
+		echo "OK: $tool is already installed ($(command -v "$tool"))"
+		return
+	fi
+	if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
+		echo "note: automatic $tool setup supports Linux x86_64 only; see $repo"
+		return
+	fi
+	for required in curl tar python3 unzip; do
+		have "$required" || { echo "note: $required missing; skipped $tool"; return; }
+	done
+	url="$(curl --fail --location --silent --show-error --max-time 30 \
+		"https://api.github.com/repos/$repo/releases/latest" 2>/dev/null |
+		python3 "$ROOT/scripts/github_asset_url.py" --suffix="$suffix" || true)"
+	if [[ -z "$url" ]]; then
+		echo "note: could not resolve a $tool release; skipped"
+		return
+	fi
+	archive="$(mktemp)"
+	staging="$(mktemp -d)"
+	echo "Installing $tool from $url"
+	if curl --fail --location --silent --show-error --max-time 180 "$url" -o "$archive"; then
+		case "$suffix" in
+			*.zip) unzip -q "$archive" -d "$staging" ;;
+			*.tar.gz) tar -xzf "$archive" -C "$staging" ;;
+			*.tar.xz) tar -xJf "$archive" -C "$staging" ;;
+		esac
+		found="$(find "$staging" -type f -name "$binary" -perm -u+x 2>/dev/null | head -n1)"
+		if [[ -n "$found" ]]; then
+			mkdir -p "$dest"
+			install -m 755 "$found" "$dest/$tool"
+			echo "OK: installed $dest/$tool"
+		else
+			echo "note: $tool release extracted but no '$binary' executable found; skipped"
+		fi
+	else
+		echo "note: $tool download failed; skipped"
+	fi
+	rm -f "$archive"
+	rm -rf "$staging"
+}
+
+install_extras() {
+	# gltfpack's Linux asset is a manylinux zip; the others are tar.gz / tar.xz.
+	install_binary_release gltfpack "zeux/meshoptimizer" "-ubuntu.zip" "gltfpack"
+	install_binary_release compressonatorcli "GPUOpen-Tools/compressonator" "-Linux.tar.gz" "compressonatorcli"
+	install_binary_release assetripper "AssetRipper/AssetRipper" "_linux_x64.tar.xz" "assetripper"
+	echo "note: bc7enc_rdo is a source build (see docs/authoring/authoring-tools.md);"
+	echo "      fsb5 comes from the Python 'audio' extra (shamway capabilities --missing)."
+}
+
 install_python_extras() {
 	# Capabilities, not requirements: the pipeline core stays dependency-free
 	# and each command says what to install when a capability is missing.
@@ -844,6 +925,9 @@ if ((WITH_AUTHORING)); then
 fi
 if ((WITH_RESEARCH)); then
 	install_ilspycmd
+fi
+if ((WITH_EXTRAS)); then
+	install_extras
 fi
 if ((WITH_VKD3D_SOURCE)); then
 	build_vkd3d_from_source

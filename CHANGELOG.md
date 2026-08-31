@@ -14,6 +14,22 @@ tag has no changelog section.
 
 ### Added
 
+- **`compress_audio`: the editorless writer encodes Vorbis** — a clip becomes an
+  FSB5 Vorbis bank (mode 15) instead of PCM16, measured 44x smaller on a
+  one-second tone (57x stereo). `compress_audio = true` in `.shamway.toml` or
+  `shamway pack --compress-audio`; **off by default** because it is lossy and
+  because no live client has played one yet. Needs FFmpeg (`transcode.as_vorbis`)
+  to encode and the `fsb5` capability for the setup-header catalogue.
+  An FSB5 Vorbis bank carries no setup header — the decoder rebuilds it from a
+  CRC-32 — so the writer verifies per clip that the header libvorbis produced is
+  one FMOD can rebuild, and that its blocksizes match the ones the decoder would
+  derive, and **refuses** otherwise rather than writing a bank that decodes to
+  noise. 96000 Hz has no catalogued header and is refused; PCM still takes it.
+  The container layout, the CRC-32 mechanism and the measurements (164/164
+  catalogued headers reproduce as `zlib.crc32` of libvorbis' setup packet; 198
+  of 198 rate × channel × quality combinations usable; round trip through
+  `python-fsb5` at 40.1 dB SNR) are in `docs/research/research-provenance.md`,
+  "FSB5 Vorbis". Closes improvements §4's audio half.
 - **Environment-lane runtime helper: documented-and-per-mod** — `docs/authoring/environment-effects.md`
   gains a copy-paste reference implementation of the capture/clamp/restore
   discipline, and the §6 RFC call is decided (option a) in

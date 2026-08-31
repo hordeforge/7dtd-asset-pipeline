@@ -441,6 +441,7 @@ class Pipeline:
         game_dir: Path | str | None = None,
         manifest: Path | str | None = None,
         compress_textures: bool = False,
+        compress_audio: bool = False,
     ) -> dict[str, Any]:
         """Synthesize a bundle from a directory of assets, with no editor."""
         return _pack(
@@ -451,6 +452,7 @@ class Pipeline:
                 "game_dir": str(game_dir) if game_dir else None,
                 "manifest": str(manifest) if manifest else None,
                 "compress_textures": compress_textures,
+                "compress_audio": compress_audio,
             },
             self.config.game_dir,
         )
@@ -726,7 +728,11 @@ def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
             "claims to be for, and the installed game is what has to load it"
         )
     bundle, manifest_text = pack_directory(
-        source, output.name, version, compress_textures=params.get("compress_textures", False)
+        source,
+        output.name,
+        version,
+        compress_textures=params.get("compress_textures", False),
+        compress_audio=params.get("compress_audio", False),
     )
     # Published through the package's one staged-write pattern: a body written
     # straight to the destination that dies midway (disk full, Ctrl+C) leaves a

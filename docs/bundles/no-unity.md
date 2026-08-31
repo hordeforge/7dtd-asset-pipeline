@@ -207,7 +207,7 @@ asset, named by its file stem — the name 7DTD's URIs ask for:
 | Source file | Becomes | Loaded as |
 |---|---|---|
 | `myModPanel.png`, `.jpg`, `.tga`, `.bmp` | `Texture2D`, RGBA32 (or DXT1/DXT5) | `LoadAsset<Texture2D>` |
-| `myModBlast.wav` | `AudioClip`, 16-bit PCM in an FSB5 bank | `sounds.xml`, `LoadAsset<AudioClip>` |
+| `myModBlast.wav` | `AudioClip`, 16-bit PCM in an FSB5 bank (Vorbis with `compress_audio`) | `sounds.xml`, `LoadAsset<AudioClip>` |
 | `myModData.json`, `.txt`, `.csv` | `TextAsset` | `LoadAsset<TextAsset>` |
 | `myModThing.glb`, `.gltf`, `.obj`, `.stl`, `.ply` | a **prefab** with its `Mesh`, `Material` and `Shader` | `Meshfile`, block `Model`, `LoadAsset<GameObject>` |
 | `burst.vfx` (next to its card PNGs) | a **prefab** of ParticleSystem children | `LoadAsset<GameObject>`; look suite `<mod>_<stem>_look` |
@@ -451,12 +451,46 @@ was read out of a real artifact rather than guessed:
 - for audio, an FSB5 bank in a `.resource` stream beside the serialized file,
   because an `AudioClip` holds no samples — it holds an offset into a bank FMOD
   reads. The bank's layout was read out of the `.resource` stream of a bundle
-  this repository's editor built from the same WAV.
+  this repository's editor built from the same WAV. PCM16 (mode 2) is the
+  default; `compress_audio` writes Vorbis (mode 15) instead, which is a
+  different bank in one respect worth knowing — see below.
 
 Provenance for each of those is in
 [research-provenance.md](../research/research-provenance.md); the design record, the prior
 art surveyed, and what is not attempted are in
 [ADR 0001, synthesize bundles without an editor](../adrs/0001-synthesize-bundles-without-an-editor.md).
+
+### The Vorbis lane, and why it can refuse
+
+`compress_audio = true` in `.shamway.toml`, or `shamway pack --compress-audio`,
+encodes each clip through FFmpeg's libvorbis and stores it as an FSB5 Vorbis
+bank: what Unity's own importer would have written, and 44x smaller than PCM on
+a measured one-second tone. It is **off by default** because it is lossy, and
+because the strongest evidence for it so far is construction plus an
+independent decoder — no client has played one yet.
+
+The part that matters when it fails: an FSB5 Vorbis bank does **not** carry the
+Vorbis setup header. The decoder rebuilds it, and the bank only names *which*
+one by a CRC-32. So there is a fixed set of setup headers FMOD can rebuild, and
+a bank naming anything else decodes to noise rather than erroring. The writer
+therefore checks, per clip, that the header FFmpeg produced is one of them (and
+that its blocksizes match what the decoder would derive) and **refuses** if it
+is not — measured across all 198 combinations of FMOD's rates, mono/stereo and
+`-q:a` 0-10, every one of which is usable. What that means in practice:
+
+- it needs FFmpeg to encode, and the `fsb5` capability for the catalogue that
+  says whether a header is one FMOD knows. Missing either is an error naming
+  the install line, not a silent fall back to PCM;
+- 96000 Hz is refused: it is in FMOD's frequency table but in no catalogued
+  Vorbis header. PCM still takes it, or resample with
+  `shamway generate audio convert`;
+- the quality is fixed at FFmpeg's `-q:a 5`. Every value 0-10 is usable, so
+  this is a taste choice rather than a compatibility one, and one knob is
+  enough until a mod's audio budget says otherwise.
+
+The container details, the CRC-32 mechanism and every measurement behind that
+paragraph are in
+[research-provenance.md](../research/research-provenance.md), "FSB5 Vorbis".
 
 ### What it does not write yet, and why none of it is a law
 

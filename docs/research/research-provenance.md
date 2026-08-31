@@ -2641,3 +2641,84 @@ never claims a verdict it did not take. `lxml` is registered in
 `capabilities.REGISTRY`.
 
 
+## FSB5 Vorbis: the setup header is not stored, it is named by a CRC-32 (2026-08-31)
+
+An `AudioClip` in a synthesized bundle points into an FSB5 bank, and until now
+that bank was always PCM16 (mode 2). Vorbis is mode **15**, and the reason it
+stayed open so long is that an FSB5 Vorbis bank is **not** an Ogg file with a
+different wrapper. Two things are missing from it, deliberately, and a writer
+that does not reproduce that omission produces a bank FMOD decodes to noise.
+
+**Source.** `python-fsb5` 1.0 (HearthSim, MIT) in this checkout's `.venv`
+(`.venv/lib/python3.13/site-packages/fsb5/`: `__init__.py`, `vorbis.py`,
+`vorbis_headers.py`). It is a *reader*, which is what makes it a specification:
+every field it reads is a field FMOD wrote. No vanilla Vorbis bank was extracted
+for comparison — the clips in `7DaysToDie_Data/*.resource` are streamed and
+UnityPy resolved zero of them (`clips=0`) — so the layout below comes from the
+reader and from measurement, not from a shipped reference bank.
+
+**The container.** The same 60-byte header as the PCM path (`_fsb5_pcm16`), with
+`mode = 15`. Two differences past it:
+
+- the 64-bit sample header sets its **next-chunk bit** (bit 0) and is followed by
+  metadata chunks, each an `<I` of `next_chunk(1) | size << 1 | type << 25`.
+  Vorbis needs type **11** (`VORBISDATA`), whose payload is a `<I` CRC-32
+  followed by `size - 4` further bytes;
+- the data section is not a PCM run. It is the stream's **audio packets**, each
+  prefixed with its own `<H` length. The Ogg container is discarded: page
+  headers, segment tables, granule positions, all of it.
+
+**What is missing, and the mechanism.** The bank carries neither the Vorbis
+identification header nor the **setup header** (the codebooks). The decoder
+rebuilds both: the identification header from the sample's own channel count and
+frequency, and the setup header by looking the `VORBISDATA` CRC-32 up in a table
+of known headers (`vorbis.rebuild` → `vorbis_header_lookup[crc32]` →
+`get_header_info(quality, channels, rate)`, which re-derives the packet through
+`vorbis_encode_setup_vbr` plus `OV_ECTL_COUPLING_SET`). A CRC the table does not
+hold is undecodable — `python-fsb5` raises `Could not find header info for
+crc32=N`, and FMOD's own table has the same shape.
+
+**Measurement 1 — the CRC is `zlib.crc32` over the setup packet.** For all 164
+entries of `fsb5.vorbis_headers.lookup`, `zlib.crc32(get_header_info(q, ch,
+rate)[2])` equals the catalogue key: **164 match, 0 mismatch**, on this host's
+libvorbis. So the key is not an FMOD-private hash, and the catalogued setup
+packets are exactly what libvorbis' VBR encoder emits here. A different
+libvorbis build could disagree, and that would show up as a mismatch in this
+same check.
+
+**Measurement 2 — FFmpeg's libvorbis output is always catalogued.** For every
+rate in FMOD's table up to 48000 (8000, 11000, 11025, 16000, 22050, 24000,
+32000, 44100, 48000) × mono and stereo × `ffmpeg -c:a libvorbis -q:a 0..10`, the
+setup header FFmpeg produced was in the catalogue **and** its identification
+header's two blocksizes matched the ones `get_header_info` derives for the
+catalogued entry: **198 cases, 198 usable, 0 rejected**. The blocksize half
+matters because the decoder rebuilds the identification header from the
+*catalogued* parameters — a clip whose blocksizes disagreed with them would
+decode at the wrong block size rather than fail. Both halves are re-checked per
+clip at write time (`_vorbis_setup_crc`), so a host whose libvorbis differs gets
+a refusal rather than a broken bank.
+
+96000 Hz is in FMOD's frequency table (index 10) and in no catalogue entry, so
+`compress_audio` refuses it and PCM keeps it.
+
+**Measurement 3 — the round trip.** A 1 s 440 Hz mono 44100 Hz tone: PCM bank
+88320 bytes, Vorbis bank **2016 bytes (44x)**; `python-fsb5` parses it
+(`mode=15 freq=44100 ch=1 samples=44100`), `rebuild_sample` returns a playable
+`OggS` stream, and decoding that stream with FFmpeg recovers the tone at
+**40.1 dB SNR** against the original samples. Stereo: 176512 → 3072 bytes (57x).
+The hard sawtooth the unit-test fixture uses measures 5.9x, which is what the
+assertion in `tests/test_bundle_writer.py` is set to rather than the good case.
+
+**No seek table is written.** The `VORBISDATA` chunk is written at `size = 4`,
+CRC only. The trailing bytes FMOD may put there are a seek table, which is what
+it seeks *within* a clip by, and a modlet sound is played from its start. This is
+the one part of the chunk inferred from purpose rather than measured against a
+shipped bank, and it is the first thing to suspect if a real client ever
+mis-seeks a compressed clip.
+
+**What this does not prove.** No Unity runtime and no live client has loaded a
+synthesized Vorbis bank. The evidence above is construction plus an independent
+decoder — the same grade `_fsb5_pcm16` had before a real editor loaded one, and
+the same grade `block_compress` had before `verify-bundle`. So `compress_audio`
+is off by default for a second reason on top of being lossy, and the acceptance
+step is unchanged: a fresh client and a human **listening** to the clip.

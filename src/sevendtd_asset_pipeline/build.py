@@ -328,6 +328,7 @@ def synthesize_bundle(config: PipelineConfig, probe: bool = False) -> Path:
         version,
         _build_target(config),
         compress_textures=config.compress_textures,
+        compress_audio=config.compress_audio,
     )
     built = output / config.bundle_name
     atomic.write(built, bundle_bytes)

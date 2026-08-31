@@ -2425,6 +2425,33 @@ bundle data), locate the bundle, and read the `Shader` object's `m_Script`
 That yields the exact bind-channel sources + bone-matrix binding to replicate
 in `Shamway/Unlit`.
 
+**Convention found (2026-08-31): Unity 2022.3's non-DOTS GPU skinning is
+engine-injected via TEXCOORD + a bone cbuffer — no blend-weight bind channels.**
+Resolving the Addressables catalog gave the physical bundle
+(`Data/Addressables/Standalone/shaders_assets_all.bundle`), and
+`shader_blob_dump.py --shader "Game/SDCS/Skin"` decoded it:
+
+- `expected_channels=[(0,0),(2,2),(1,1),(4,5),(5,6),(6,7),(7,8),(3,3)]`,
+  `source_map=255` — the vertex input binds POSITION(0), TANGENT(2), NORMAL(1),
+  **TEXCOORD0/1/2/3 (sources 4,5,6,7)** and COLOR(3). The blend weights/indices
+  are carried in the **TEXCOORD channels (sources 5,6,7)**, not dedicated
+  `BLENDINDICES`/`BLENDWEIGHT` semantics.
+- d3d11 header `cbuffer=3/4/5`, `srv=0`, `sampler=0` — the **bone matrices are a
+  constant buffer** (the sub-program's param blob has 4 buffers, 3 cbuffer-bind
+  entries).
+- So the skinning vertex stage reads the blend weights/indices out of TEXCOORD
+  channels, samples the bone matrices from the cbuffer, and accumulates
+  `sum(boneMatrix[index[i]] * vertex * weight[i])`. `source_map` must be 255.
+
+**To make `Shamway/Unlit` skin:** (1) author that vertex stage in the HLSL (and
+the GLSL/Vulkan sources), (2) set `source_map=255` + the 8 expected bind
+channels (POSITION/NORMAL/TANGENT/TEXCOORD0/1/2/3/COLOR) in the sub-program,
+(3) bind the bone-matrix cbuffer in the parameter blob, (4) recompile through
+vkd3d. Also confirm the pipeline's synthesized mesh feeds blend weights/indices
+into TEXCOORD sources 5/6/7 (it writes VertexAttribute 12/13; verify the
+VertexAttribute → bind-channel-source mapping). The mesh is otherwise fine; this
+is the remaining shader-side change.
+
 [Linear Blend Skinning node]: https://docs.unity3d.com/Packages/com.unity.shadergraph@14.0/manual/Linear-Blend-Skinning-Node.html
 [Unity discussion]: https://discussions.unity.com/t/how-would-you-access-skinned-mesh-pre-skinned-vertex-positions-in-shaders-these-days/918845
 - **Fall / grounding (separate, the walk-instability).** With the mesh finally

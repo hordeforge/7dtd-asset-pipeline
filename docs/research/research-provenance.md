@@ -2544,3 +2544,29 @@ in a fresh Proton/d3d11 client (the shader's d3d11 cbuffer layout is ruled out �
 the `MeshRenderer` prop uses the same shader and draws 81.4%; a cbuffer-offset
 bug would break both).
 
+**What the generated creature mesh carries (measured, UnityPy on the same
+bundle).** `shamwaySelfTestCreature_mesh` channels, read from
+`m_VertexData.m_Channels` (index = VertexAttribute):
+
+```
+POSITION    dim=3
+NORMAL      dim=3
+TEXCOORD0   dim=2
+BlendWeight     dim=4  (VertexAttribute 12)
+BlendIndices    dim=4  (VertexAttribute 13)
+```
+
+So it is a standard skinned mesh with per-vertex blend weights/indices — as the
+older text said — and `Shamway/Unlit` (POSITION/TEXCOORD0 only) binds none of
+the blend sources. The decisive unknown for the next session is **which of CPU
+vs GPU skinning the 7DTD engine applies to a spawned animal's SkinnedMeshRenderer
+and what, if anything, it requires of the material's shader on d3d11**. The
+editor's GLCore path draws the unskinned mesh (15.2%); the live Proton/d3d11
+client draws nothing for the creature while drawing the same shader on the prop —
+so the split is platform-or-engine-specific, not a missing skinning stage. Next
+probe: a live client with a debug line that logs the creature's `SkinnedMeshRenderer`
+`isActiveAndEnabled`, its `sharedMaterial.shader`, and whether `SetPass(0)`/
+`isSupported` hold there — or a game-side deobfuscation of the engine's
+`SkinnedMeshRenderer`/`Material` handling under d3d11.
+
+

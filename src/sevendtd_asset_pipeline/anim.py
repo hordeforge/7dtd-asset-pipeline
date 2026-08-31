@@ -393,6 +393,23 @@ def walk_curves(
     return curves
 
 
+def tail_sway_curves(
+    tails: list[str], amplitude: float = 0.28, seconds: float = 1.2
+) -> list[dict[str, Any]]:
+    """A travelling yaw wave down the tail: each segment lags and decays.
+
+    Side-to-side (local Y), not a roll — a crocodile/theropod tail while
+    walking. Amplitude falls along the chain so the tip flicks more than it
+    wags the hips.
+    """
+    curves: list[dict[str, Any]] = []
+    for index, path in enumerate(tails):
+        amp = amplitude * (0.75**index)
+        phase = index * 0.55
+        curves.append(rotation_curve(path, _rotation_keyframes("y", amp, seconds, phase)))
+    return curves
+
+
 def _jab_keyframes(axis: str, amplitude: float, seconds: float) -> list[dict[str, Any]]:
     """One forward jab and back: `amplitude·sin(πt/T)`, never past rest.
 
@@ -588,10 +605,10 @@ def parse_anim(path: Path) -> AnimDeclaration:
         kind = item.get("kind")
         if not isinstance(name, str) or not name:
             raise PipelineError(f'anim declaration {path} clip {index} needs a "name"')
-        if kind not in ("bob", "head", "walk", "flap", "attack", "death", "jump"):
+        if kind not in ("bob", "head", "walk", "flap", "sway", "attack", "death", "jump"):
             raise PipelineError(
                 f"anim declaration {path} clip {name!r} kind must be bob, head, walk, "
-                "flap, attack, death or jump"
+                "flap, sway, attack, death or jump"
             )
         for key, default in (("amplitude", 0.03), ("seconds", 1.5)):
             value = item.get(key, default)
@@ -633,7 +650,7 @@ def parse_anim(path: Path) -> AnimDeclaration:
                 )
             )
             continue
-        if kind == "flap":
+        if kind in ("flap", "sway"):
             bones = item.get("bones")
             bone = item.get("bone", "")
             if isinstance(bones, list) and bones and all(isinstance(b, str) and b for b in bones):
@@ -755,6 +772,9 @@ def clip_fields(
             elif clip.kind == "flap":
                 paths = list(clip.bones) if clip.bones else [clip.bone]
                 rotations += rescaled(flap_curves(paths, clip.amplitude, clip.seconds), 1.0)
+            elif clip.kind == "sway":
+                paths = list(clip.bones) if clip.bones else [clip.bone]
+                rotations += rescaled(tail_sway_curves(paths, clip.amplitude, clip.seconds), 1.0)
             else:  # walk — rotation curves on the legs, a position curve on the body
                 legs = [
                     (upper, lower)

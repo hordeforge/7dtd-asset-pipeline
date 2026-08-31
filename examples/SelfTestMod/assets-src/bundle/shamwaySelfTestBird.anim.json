@@ -14,7 +14,7 @@
         "Root/Pelvis/Spine/Chest/LeftWingUpper",
         "Root/Pelvis/Spine/Chest/RightWingUpper"
       ],
-      "amplitude": 0.22,
+      "amplitude": 0.35,
       "seconds": 1.6
     },
     {
@@ -38,6 +38,39 @@
       "body_bone": "Root/Pelvis",
       "amplitude": 0.28,
       "seconds": 0.8
+    },
+    {
+      "name": "Idle1",
+      "kind": "walk",
+      "bones": [
+        "Root/Pelvis/LeftLegUpper",
+        "Root/Pelvis/RightLegUpper"
+      ],
+      "lower_bones": [
+        "Root/Pelvis/LeftLegUpper/LeftLegLower",
+        "Root/Pelvis/RightLegUpper/RightLegLower"
+      ],
+      "body_bone": "Root/Pelvis",
+      "amplitude": 0.14,
+      "seconds": 1.04
+    },
+    {
+      "name": "Walk",
+      "kind": "sway",
+      "bones": [
+        "Root/Pelvis/Tail"
+      ],
+      "amplitude": 0.28,
+      "seconds": 0.8
+    },
+    {
+      "name": "Idle1",
+      "kind": "sway",
+      "bones": [
+        "Root/Pelvis/Tail"
+      ],
+      "amplitude": 0.18,
+      "seconds": 1.04
     }
   ],
   "play_automatically": true

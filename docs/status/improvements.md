@@ -244,17 +244,18 @@ A mod with a prefab or a material needs no editor: `bundle_source =
 line is everything [deliberately not built](#4b-the-editorless-writers-shader-scope)
 above, plus the Vulkan parameter records below.
 
-## 5. No property-based testing of the parser
+## 5. No property-based testing of the parser  — **done (2026-08-31)**
 
-`unityfs.py`'s rejection fixtures are hand-built vectors — good ones, but
-fixed. The parser is the foundation every gate stands on, and a format reader
-is exactly the code where generated inputs pay: random truncations, flipped
-lengths, hostile string tables.
-
-**Close it with:** [Hypothesis](https://hypothesis.readthedocs.io/) strategies
-built on `tests/fixtures.py`'s field-controlled builders — corrupt one field
-at a time, assert a bounded error naming the field, never a traceback. No new
-dependency in the core: it belongs in a dev extra.
+**Closed.** `tests/test_property.py` drives the UnityFS/SerializedFile reader
+with [Hypothesis](https://hypothesis.readthedocs.io/). Four properties, one
+invariant each: `inspect_bundle` must either succeed or raise the reader's own
+bounded `PipelineError` — never a leaked `struct.error`/`IndexError`/raw
+exception, which a caller turns into a traceback instead of a named gate
+failure. The strategies generate arbitrary bytes, hostile class IDs, hostile
+file node sizes / archive flags / truncation (a valid bundle cut at a
+Hypothesis-chosen byte), and hostile LZ4 block payloads. Hypothesis is a
+`dependency-group dev` member; without it the class is skipped so a bare
+`make test` still passes.
 
 ## 6. No runtime helper for the environment lane
 

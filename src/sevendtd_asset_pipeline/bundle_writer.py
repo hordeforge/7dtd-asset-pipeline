@@ -2065,13 +2065,15 @@ def mesh_source_objects(path: Path, texture_stems: set[str]) -> list[BundleObjec
     scene = parse_gltf(path)
     if scene.has_skin():
         objects = skinned_prefab_objects(path.stem, scene, texture_stems)
-        return attach_anim_objects(path, objects)
+        return attach_anim_objects(path, objects, scene)
     if scene.needs_hierarchy():
         return hierarchy_prefab_objects(path.stem, scene, texture_stems)
     return prefab_objects(path, texture_stems)
 
 
-def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleObject]:
+def attach_anim_objects(
+    path: Path, objects: list[BundleObject], scene: GltfScene | None = None
+) -> list[BundleObject]:
     """Add the legacy Animation component and clips a sibling `.anim.json` asks for.
 
     A `.anim.json` beside a skinned source (written by
@@ -2084,7 +2086,17 @@ def attach_anim_objects(path: Path, objects: list[BundleObject]) -> list[BundleO
     if not declaration_path.is_file():
         return objects
     declaration = anim.parse_anim(declaration_path)
-    fields_list = anim.clip_fields(declaration)
+    rest_positions: dict[str, tuple[float, float, float]] = {}
+    if scene is not None:
+        for skin in scene.skins:
+            for joint in skin.joints:
+                node = scene.nodes[joint]
+                rest_positions[bone_transform_path(scene, joint)] = (
+                    -node.translation[0],
+                    node.translation[1],
+                    node.translation[2],
+                )
+    fields_list = anim.clip_fields(declaration, rest_positions)
     # clip_fields merges same-name entries into one clip, so the object list
     # is per clip *name*, not per declaration entry.
     clip_objects = [

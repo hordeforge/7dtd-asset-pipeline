@@ -225,7 +225,10 @@ shamway script playtest-acceptance
 For **this** repository's synthesized writer, `shamway script
 playtest-synthesized` is the live regression (load + block on a voxel +
 editorless mechanical). A picture of one prefab is a second invocation:
-`playtest-synthesized --look` (burst) or `--look STEM`. Load is not look.
+`playtest-synthesized --look` (burst) or `--look STEM`. A walk-entity stem is
+engine-spawned; `--prefab-look STEM` is its raw-prefab diagnostic control, and
+`--trace-entity` adds per-second pose/render/collision evidence. Load is not
+look.
 
 A bare launch proves the mod loads, not that anything read the bundle. It
 refuses to start over a client that is already running, because a reused

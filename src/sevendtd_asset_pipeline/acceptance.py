@@ -417,12 +417,12 @@ def _stage_body(stem: str) -> str:
                 var renderers = {variable}Staged.GetComponentsInChildren<Renderer>(true);
                 float lowest = 0f;
                 float ground = 0f;
-                if (renderers.Length > 0)
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    {variable}Staged, out posedBounds);
+                if (hasPosedBounds)
                 {{
-                    var bounds = renderers[0].bounds;
-                    for (int i = 1; i < renderers.Length; i++)
-                        bounds.Encapsulate(renderers[i].bounds);
-                    lowest = bounds.min.y;
+                    lowest = posedBounds.min.y;
                     var world = GameManager.Instance != null ? GameManager.Instance.World : null;
                     if (world != null)
                     {{
@@ -454,6 +454,7 @@ def _stage_body(stem: str) -> str:
                 Report.Info("{name}: staged at " + {variable}Staged.transform.position
                     + ", camera at " + camera.position
                     + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
                     + ", with " + renderers.Length + " renderer(s)");
                 // Live renderer probe (SMR-PROBE): under the live graphics
                 // device, log every renderer so a d3d11-only invisibility is
@@ -499,7 +500,12 @@ def _stage_body(stem: str) -> str:
                                 ? smr.rootBone.name : "<null>") : ""));
                 }}
                 // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;"""
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, {variable}Staged);"""
 
 
 def _staged_case(prefab_stem: str) -> str:
@@ -669,6 +675,20 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
         look_branch_parts.append(
             f'if (suite == "{look_id}")\n        {{\n{body}            return;\n        }}\n'
         )
+        if motion == "walk-entity":
+            # A moving entity and its raw bundle prefab answer different
+            # questions and therefore get separate invocations. The first
+            # includes EntityAlive, the avatar controller, grounding and live
+            # skin deformation. The second keeps the identical prefab and
+            # SkinnedMeshRenderer but removes that engine wrapper, which is the
+            # control that separates an asset draw failure from entity setup.
+            prefab_look_id = f"{prefix}_{_cs_body(stem).lower()}_prefab_look"
+            look_yields_parts.append(f'yield return "{prefab_look_id}";')
+            prefab_body = _staged_case(stem)
+            look_branch_parts.append(
+                f'if (suite == "{prefab_look_id}")\n        {{\n'
+                f"{prefab_body}            return;\n        }}\n"
+            )
     look_yields = "\n            ".join(look_yields_parts)
     look_branch = "".join(look_branch_parts)
     mod_name = _cs_body(plan_.mod_name)

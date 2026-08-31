@@ -474,14 +474,54 @@ staged every prefab at the same camera offset stacks unrelated pictures:
   its vertex stream, and its albedo texture at its authored size
   (`examples/SelfTestMod` carries generated creatures from the quadruped,
   bird, arachnid and dinosaur rigs for exactly this);
-- `playtest-synthesized --look STEM` runs that one prefab's look suite
-  (`<mod>_<stem>_look`) alone — the prefab instantiated in front of the
-  camera with a renderer, one picture, a frame to judge. Without `STEM` it
-  runs the looping VFX prefab's suite:
+- `playtest-synthesized --look STEM` runs that one entity look suite
+  (`<mod>_<stem>_look`) alone. A `walk-entity` stem is spawned through
+  `EntityFactory.CreateEntity` + `SpawnEntityInWorld` and photographed while
+  its controller runs; other stems use their staged-prefab look. Without
+  `STEM` it runs the looping VFX prefab's suite:
 
   ```bash
   shamway script playtest-synthesized --look shamwaySelfTestBird
   ```
+
+- `playtest-synthesized --prefab-look STEM` is the separate raw-prefab
+  control for a walk-entity stem (`<mod>_<stem>_prefab_look`). It keeps the
+  same bundle `SkinnedMeshRenderer`, mesh, material, shader and bones, but
+  removes `EntityAlive`, grounding and the avatar controller. Use the pair to
+  isolate a bundle-prefab draw failure from a spawned-entity or animation
+  failure; never comma-list them into one invocation.
+
+- `playtest-synthesized --look STEM --trace-entity` keeps the same single
+  spawned-entity concern and adds one diagnostic sample per second: posed
+  baked bounds, root/feet offset, shader support and `SetPass(0)`, the authored
+  `Physics` capsule, active solid colliders, camera line of sight, and a physics
+  ray that must hit the entity. The normal run emits one sample and stays
+  concise.
+
+Legacy position curves are absolute local transforms, not offsets. The writer
+therefore reads each animated bone's rest translation from the glTF and adds a
+bob, walk dip, or jump to that base. A pelvis whose rest Y is 0.60 must bob at
+`0.60..0.63`, not `0.00..0.03`; the latter moves the whole skin below a
+correctly authored root-level collision capsule.
+
+The live look grounds the root from the loaded voxel column, not the terrain
+generator: `World.GetHeight(x,z) + 1` is the current top-block face, while
+`World.GetHeightAt` can be a block lower under a road or differ after terrain
+edits. The probe compares that surface to the baked skin's absolute bottom and
+fails on negative clearance, so a renderer-plus-collider green result cannot
+hide a creature forced into the floor.
+
+For slopes and partial blocks, that top-block face is only a fallback: the
+occupied voxel's ceiling can be well above its shaped collider. The moving
+look therefore raycasts the traversable surface and logs the difference as
+`voxelMinusSurface`; otherwise a scripted orbit produces invisible one-metre
+bumps even though ordinary character-motor movement would follow collision.
+
+The fresh d3d11 acceptance run measured the distinction directly: one sample
+reported `voxelTop=62.000 surfaceRay=61.000 voxelMinusSurface=1.000` while the
+posed skin remained `0.032` m above that physics surface. It also reported
+`collisionReady=True groundReady=True`, completed `pass=1 fail=0`, and the
+moving creature was visually signed off without the excessive bump rise.
 
 **A load is not a look, and a staged prefab is not a sign-off.** A look
 suite proves the prefab renders *something*; that it reads as its rig is a
@@ -501,3 +541,9 @@ animated creature's turntable clip — 48 frames, muxed to
 `/home/yannick/motion_creature.mp4` — was **signed off for motion the same
 day**: it spins on the turntable and bobs on the `Idle1` legacy clip, so
 the movement lane is confirmed in a live client.
+
+**Ran live again on 2026-08-31** after the rest-pose and grounding fixes: the
+real engine-spawned creature rendered under d3d11, its collider and ground
+probes passed, and the looked-at moving result was signed off. The earlier
+clipping and one-metre apparent bumps were harness/animation defects described
+above, not a `Shamway/Unlit` skinned-renderer limitation.

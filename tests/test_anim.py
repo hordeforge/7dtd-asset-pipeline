@@ -389,6 +389,35 @@ class LimbAnimTests(unittest.TestCase):
         self.assertAlmostEqual(ys[0], 0.0, places=6)
 
     @needs_unitypy
+    def test_position_curves_preserve_the_bones_rest_translation(self) -> None:
+        from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
+
+        path = self.root / "rest.anim.json"
+        path.write_text(
+            '{"clips": ['
+            '{"name": "Idle1", "kind": "bob", "bone": "Root/Pelvis"},'
+            '{"name": "Walk", "kind": "walk",'
+            ' "bones": ["Root/Pelvis/LeftUpper"],'
+            ' "lower_bones": ["Root/Pelvis/LeftUpper/LeftLower"],'
+            ' "body_bone": "Root/Pelvis"},'
+            '{"name": "Jump", "kind": "jump", "bone": "Root/Pelvis",'
+            ' "amplitude": 0.2}'
+            "]}"
+        )
+        rest = {"Root/Pelvis": (-0.2, 0.6, 0.4)}
+        clips = {item["m_Name"]: item for item in clip_fields(parse_anim(path), rest)}
+
+        idle_values = clips["Idle1"]["m_PositionCurves"][0]["curve"]["m_Curve"]
+        self.assertEqual(idle_values[0]["value"], {"x": -0.2, "y": 0.6, "z": 0.4})
+        self.assertAlmostEqual(max(key["value"]["y"] for key in idle_values), 0.63)
+        walk_values = clips["Walk"]["m_PositionCurves"][0]["curve"]["m_Curve"]
+        self.assertEqual(walk_values[0]["value"], {"x": -0.2, "y": 0.6, "z": 0.4})
+        self.assertAlmostEqual(min(key["value"]["y"] for key in walk_values), 0.57)
+        jump_values = clips["Jump"]["m_PositionCurves"][0]["curve"]["m_Curve"]
+        self.assertEqual(jump_values[0]["value"], {"x": -0.2, "y": 0.6, "z": 0.4})
+        self.assertAlmostEqual(jump_values[4]["value"]["y"], 0.8)
+
+    @needs_unitypy
     def test_same_name_entries_merge_into_one_clip(self) -> None:
         from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
 

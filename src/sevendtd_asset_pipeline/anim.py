@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -202,7 +203,10 @@ def animation_component(
 
 
 def idle_bob_curves(
-    rig: Any, pelvis_bone: str = "Pelvis", bob: float = 0.03
+    rig: Any,
+    pelvis_bone: str = "Pelvis",
+    bob: float = 0.03,
+    rest_position: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """A looping whole-body bob for the rig, as rotation/position/scale curves.
 
@@ -210,8 +214,8 @@ def idle_bob_curves(
     `bob` metres over a 1.5 s cycle. The engine's `GameObjectAnimalAnimation`
     plays `Idle1` by name; this is the clip it would play.
     """
-    up = {"x": 0.0, "y": bob, "z": 0.0}
-    rest = {"x": 0.0, "y": 0.0, "z": 0.0}
+    rest = {"x": rest_position[0], "y": rest_position[1], "z": rest_position[2]}
+    up = {**rest, "y": rest_position[1] + bob}
     position = position_curve(
         pelvis_bone,
         [
@@ -278,6 +282,7 @@ def walk_curves(
     stride: float = 0.35,
     seconds: float = 1.2,
     body_dip: float = 0.03,
+    body_rest: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> list[dict[str, Any]]:
     """A trot gait: upper legs swing, knees bend, the body dips.
 
@@ -304,17 +309,17 @@ def walk_curves(
         curves.append(rotation_curve(lower, _rotation_keyframes("x", -0.6 * stride, seconds, phi)))
     # The body dips twice per stride, at the weight transfers (quarter and
     # three-quarter points), never at the stride's end where a foot lands.
-    rest = {"x": 0.0, "y": 0.0, "z": 0.0}
+    zero_slope = {"x": 0.0, "y": 0.0, "z": 0.0}
     keyframes = [
         {
             "time": seconds * index / 8.0,
             "value": {
-                "x": 0.0,
-                "y": -body_dip * (0.5 - 0.5 * math.cos(4 * math.pi * index / 8.0)),
-                "z": 0.0,
+                "x": body_rest[0],
+                "y": body_rest[1] - body_dip * (0.5 - 0.5 * math.cos(4 * math.pi * index / 8.0)),
+                "z": body_rest[2],
             },
-            "inSlope": rest,
-            "outSlope": rest,
+            "inSlope": zero_slope,
+            "outSlope": zero_slope,
             "weightedMode": 0,
             "inWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
             "outWeight": dict.fromkeys(("x", "y", "z"), 0.3333333432674408),
@@ -395,7 +400,12 @@ def death_curves(
     return [rotation_curve(body_bone, keyframes)]
 
 
-def jump_curves(body_bone: str, height: float = 0.2, seconds: float = 0.8) -> list[dict[str, Any]]:
+def jump_curves(
+    body_bone: str,
+    height: float = 0.2,
+    seconds: float = 0.8,
+    body_rest: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> list[dict[str, Any]]:
     """A hop: the body rises `height` metres and lands, over `seconds`.
 
     A single smooth up-and-down on `body_bone`; the engine plays `Jump`
@@ -405,7 +415,11 @@ def jump_curves(body_bone: str, height: float = 0.2, seconds: float = 0.8) -> li
     keyframes = [
         {
             "time": seconds * index / 8.0,
-            "value": {"x": 0.0, "y": height * math.sin(math.pi * index / 8.0), "z": 0.0},
+            "value": {
+                "x": body_rest[0],
+                "y": body_rest[1] + height * math.sin(math.pi * index / 8.0),
+                "z": body_rest[2],
+            },
             "inSlope": rest,
             "outSlope": rest,
             "weightedMode": 0,
@@ -566,7 +580,10 @@ def parse_anim(path: Path) -> AnimDeclaration:
     return AnimDeclaration(clips=tuple(clips), play_automatically=play)
 
 
-def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
+def clip_fields(
+    declaration: AnimDeclaration,
+    rest_positions: Mapping[str, tuple[float, float, float]] | None = None,
+) -> tuple[dict[str, Any], ...]:
     """One `AnimationClip` type-tree dict per declared clip name.
 
     Entries sharing a name merge into one clip (an `Idle1` can combine a
@@ -577,6 +594,7 @@ def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
     loop wraps (`WRAP_LOOP`); one with any non-looping entry (a `Death`)
     plays once (`WRAP_ONCE`).
     """
+    rest_positions = rest_positions or {}
     grouped: dict[str, list[AnimClip]] = {}
     for clip in declaration.clips:
         grouped.setdefault(clip.name, []).append(clip)
@@ -606,7 +624,10 @@ def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
         for clip in entries:
             if clip.kind == "bob":
                 _, bob_positions, _ = idle_bob_curves(
-                    None, pelvis_bone=clip.bone, bob=clip.amplitude
+                    None,
+                    pelvis_bone=clip.bone,
+                    bob=clip.amplitude,
+                    rest_position=rest_positions.get(clip.bone, (0.0, 0.0, 0.0)),
                 )
                 positions += rescaled(bob_positions, clip.seconds / 1.5)
             elif clip.kind == "head":
@@ -620,14 +641,28 @@ def clip_fields(declaration: AnimDeclaration) -> tuple[dict[str, Any], ...]:
             elif clip.kind == "death":
                 rotations += rescaled(death_curves(clip.bone, clip.amplitude, clip.seconds), 1.0)
             elif clip.kind == "jump":
-                positions += rescaled(jump_curves(clip.bone, clip.amplitude, clip.seconds), 1.0)
+                positions += rescaled(
+                    jump_curves(
+                        clip.bone,
+                        clip.amplitude,
+                        clip.seconds,
+                        body_rest=rest_positions.get(clip.bone, (0.0, 0.0, 0.0)),
+                    ),
+                    1.0,
+                )
             else:  # walk — rotation curves on the legs, a position curve on the body
                 legs = [
                     (upper, lower)
                     for upper, lower in zip(clip.bones, clip.lower_bones, strict=False)
                     if lower
                 ]
-                for curve in walk_curves(legs, clip.body_bone, clip.amplitude, clip.seconds):
+                for curve in walk_curves(
+                    legs,
+                    clip.body_bone,
+                    clip.amplitude,
+                    clip.seconds,
+                    body_rest=rest_positions.get(clip.body_bone, (0.0, 0.0, 0.0)),
+                ):
                     is_rotation = len(curve["curve"]["m_Curve"][0]["value"]) == 4
                     (rotations if is_rotation else positions).append(rescaled([curve], 1.0)[0])
         wrap = WRAP_LOOP if all(clip.loop for clip in entries) else 1

@@ -196,45 +196,75 @@ diagnose why the same bundle that draws in the editor draws nothing in a fresh
 Proton/d3d11 client (the d3d11 `Shamway/Unlit` cbuffer layout is ruled out by
 the prop drawing 81.4% through the same shader).
 
-**TODO (2026-08-31): the synthesized `SkinnedMeshRenderer` + `Shamway/Unlit`
-does not rasterize in the live client. Diagnose it as a d3d11-specific draw
-failure.** This is the live step the entity lane's invisibility reduces to, and
-everything else has been measured and ruled out. Do NOT re-hunt the shader,
-skin, bone, or grounding paths — each is closed:
+**DIAGNOSED (2026-08-31): this is not a d3d11 draw failure. The capture was
+occluded, then the animation moved the skin 0.60 m below its collision root.**
+The earlier TODO over-generalized an empty picture into a graphics-API failure.
+The corrected live sequence separated the spawned entity from a raw-prefab
+control and measured each layer:
 
-- **Repro:** `SEVEN_DAYS_TO_DIE_DIR=/home/yannick/Games/Steam/steamapps/common/7 Days To Die SEVEN_DAYS_TO_DIE_SERVER_DIR=/home/yannick/steam-server-build-3.2 SHAMWAY=.../shamway examples/SelfTestMod/scripts/playtest-synthesized.sh --look shamwaySelfTestCreature` (run from the fixture, env from `.local.env`). Then
-  `grep frame-div "…/logs/output_log_client_7dtd_connect.txt"`.
-- **What the `frame-div` line says (measured 2026-08-31):** the creature is
-  grounded and healthy but absent from every captured frame —
-  `getpos=(510.56, 60.05, 942.90)` `tf=(-1.35, 12.05, 14.62)`
-  `meshCenter=(-1.35, 12.55, 14.79)` `meshSize=(0.33, 1.04, 0.83)`
-  `smrEnabled=True` `verts=1382` `meshActive=True` `rootActive=True`.
-  `getpos` vs `tf` is just `World.Origin` (save-frame vs render-frame), NOT a
-  drop — the creature is on the terrain at world y≈60 (player at 61). So the
-  old "fell off the world / world-vs-render mismatch puts it under the floor"
-  theory is wrong.
-- **Already ruled out:** skinning (unityz `skin` reports all 59 game shaders
-  `skins:false`, so the engine CPU-skins and `Shamway/Unlit` needs no
-  bone-matrix stage); authored bones (SMR `m_Bones` all resolve, the mesh's 19
-  `m_BoneNameHashes` exactly equal `CRC32(path)`, root = `CRC32("Root")`, the
-  `m_BindPose` are the correct inverse-bind matrices, skeleton geometry +
-  `Physics` capsule coherent); shader/mesh (the same prefab draws ~15% in the
-  editor's `verify-bundle --draw`).
-- **The hypothesis to test: d3d11-specific draw failure of a
-  `SkinnedMeshRenderer`+`Shamway/Unlit`.** It draws on the editor's OpenGLCore
-  path and rasterizes nothing in the live Proton path. To name the API, re-run
-  the same `--look shamwaySelfTestCreature` with the client forced onto the
-  other graphics backends — **OpenGL (`-force-glcore`) and Vulkan
-  (`-force-vulkan`)** via the client launch (7dtd-fastconnect
-  `launch_client.sh` / the 7DTD client arg), and compare coverage + the frames.
-  If it rasterizes under GL or Vulkan, the defect is isolated to the d3d11
-  sub-program; if absent on all three, it is the engine's `SkinnedMeshRenderer`
-  path, not the shader.
-- **Extend the live probe** (in `7dtd-playtest` `CaseDef.WalkEntity`'s assert,
-  or the generated provider) to also log the creature SMR's `sharedMaterial.shader`,
-  `shader.isSupported`, `shader.passCount`, and `material.SetPass(0)` — the
-  frame-div block already reports bounds/active/verts, so add the shader/draw
-  values and re-run to see whether the pass can be set up at all.
+- The original walk case was absent under both d3d11 and forced OpenGLCore.
+  The first detailed probe found `Shamway/Unlit supported=True passes=1
+  SetPass0=True`, 1,382 baked vertices, and a camera ray that hit
+  `terrainCollider@4.11` before the mesh at 5.44 m. A fixed world-axis camera
+  had photographed terrain and a car, not a failed renderer.
+- A detached camera with a clear target ray then produced
+  `ray=Physics@3.19 target=True`; the live shader/pass and skin were still
+  healthy. A separate `<mod>_<stem>_prefab_look` control removed `EntityAlive`,
+  grounding and the avatar controller while retaining the exact prefab,
+  material, shader, bones and `SkinnedMeshRenderer`.
+- With that camera, the forced-OpenGL raw prefab visibly rasterized. The human
+  observation was precise: the creature was present but clipped into the
+  ground. The log supplied the matching numbers. The authored/shared mesh AABB
+  had minimum Y about `-0.02`; `SkinnedMeshRenderer.BakeMesh` after `Idle1` had
+  minimum Y about `-0.60`.
+- The source GLB's `Pelvis` rest local translation is `(0, 0.60, 0)`, but the
+  synthesized bob curve wrote absolute local Y values `0.00..0.03`. Unity
+  position curves replace local position; they are not deltas. The clip thus
+  shifted the whole visible body down roughly 0.60 m while the root-level
+  `Physics` capsule remained correctly feet-aligned. This is why renderer and
+  collision health could both be green while the visible legs were buried.
+- The first corrected D3D11 spawned-entity rerun proved the curve correction
+  reached the live bundle: baked center Y returned from `-0.08` to
+  `0.50..0.52`, baked bottom matched the authored AABB and capsule at about
+  `-0.02`, all 40 colliders were active, and the collision ray hit
+  `Root@0.35 target=True`. The creature was nevertheless still visibly buried.
+  The trace exposed a second, independent harness defect: `WalkEntity` assigned
+  root world Y `60.05` from `World.GetHeightAt`, while the loaded road's top
+  voxel face was Y `61`. The harness forced the correctly aligned entity almost
+  one full block into the road every tick.
+
+The asset correction is in the animation writer: bob, walk-dip and jump position
+curves retain each target bone's glTF rest translation and add their motion to
+it. The harness now frames baked posed bounds, reports bind versus baked bounds,
+shader/pass state, the `Physics` capsule dimensions and bottom, active solid
+colliders, and a physics ray that must hit the spawned entity. `--trace-entity`
+emits those samples once per second when a single snapshot is not enough.
+The harness correction grounds on `World.GetHeight(int,int) + 1`, the loaded
+top voxel face used by stock spawn samplers, and subtracts the live authored
+capsule bottom when placing the root. The trace now reports `voxelTop`,
+`visualBottom`, `groundClearance` and `groundReady`; buried or floating skin
+fails the case even when collision itself works.
+
+**Follow-up from the looked-at corrected frame:** the creature was no longer
+buried and was a major visual improvement, but it rose too high over apparent
+small bumps. `GetHeight + 1` is only the ceiling of the top occupied one-metre
+voxel. A sloped or partial road shape can have a lower collider surface inside
+that cell, so the harness created invisible full-block steps while forcing Y.
+`WalkEntity` now raycasts the game's traversable-surface mask, ignores the
+entity's own colliders, and places the capsule bottom on that actual hit.
+`voxelTop`, `surfaceRay` and `voxelMinusSurface` remain in the trace so this
+distinction is visible; the height-map value is fallback evidence, not the
+precision surface.
+
+**Accepted live on 2026-08-31.** The fresh d3d11 run spawned the real
+`EntityAlive`, not the prefab control, and completed `pass=1 fail=0`. At a road
+sample where the voxel ceiling jumped to `62`, the raycast surface remained
+`61`: `voxelMinusSurface=1.000`. The harness kept the posed visible bottom at
+`61.032`, reported `groundClearance=0.032 groundReady=True`, and the independent
+collision probe reported `collisionRay=Root@0.35 target=True
+collisionReady=True`. The user looked at the moving entity and signed off that
+the excessive bump rise was gone. This closes the spawned render, collision,
+pose and grounding concern; the trace remains as the regression diagnostic.
 
 **Settled since this entry was written:**
 

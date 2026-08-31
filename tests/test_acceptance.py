@@ -388,7 +388,8 @@ class MotionKindTests(unittest.TestCase):
             self.assertNotIn("Quaternion.LookRotation", source)
             self.assertIn("ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f", source)
             self.assertIn("placed.y = ground - Origin.position.y - lowest", source)
-            self.assertIn("bounds.Encapsulate(renderers[i].bounds)", source)
+            self.assertIn("Helpers.TryGetRenderedBounds", source)
+            self.assertIn("posedBounds.min.y", source)
             self.assertLess(
                 source.index('if (suite == "examplemod_prop_look")'),
                 source.index("Instantiate"),
@@ -416,6 +417,7 @@ class MotionKindTests(unittest.TestCase):
             alpha_block = source[alpha_at:beta_at] if alpha_at < beta_at else source[alpha_at:]
             self.assertEqual(alpha_block.count("Object.Instantiate"), 1)
             self.assertIn("CaseDef.RegisterStaged", alpha_block)
+            self.assertIn("Helpers.FrameStagedObject", alpha_block)
 
     def test_absent_motion_kinds_leave_generation_byte_identical(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -467,9 +469,18 @@ class MotionKindTests(unittest.TestCase):
             self.assertIn('"motion_prop"', source)
             self.assertIn('"prop", new Vector3(1.5f, 3f, 1.5f)', source)
             self.assertIn("speed: 0.8f", source)
-            # Never a prefab staged in the player's face.
-            self.assertNotIn("Object.Instantiate", source)
-            self.assertNotIn("CaseDef.StagedClip", source)
+            self.assertIn('yield return "examplemod_prop_look"', source)
+            self.assertIn('yield return "examplemod_prop_prefab_look"', source)
+            walk_at = source.index('if (suite == "examplemod_prop_look")')
+            prefab_at = source.index('if (suite == "examplemod_prop_prefab_look")')
+            walk_block = source[walk_at:prefab_at]
+            prefab_block = source[prefab_at:]
+            # The moving entity look never hangs a prefab in the player's face.
+            self.assertNotIn("Object.Instantiate", walk_block)
+            self.assertNotIn("CaseDef.StagedClip", walk_block)
+            # The separate control look instantiates only the raw bundle prefab.
+            self.assertIn("Object.Instantiate", prefab_block)
+            self.assertIn("CaseDef.Staged", prefab_block)
 
     def test_a_kind_on_a_non_prefab_member_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

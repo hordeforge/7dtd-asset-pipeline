@@ -185,6 +185,9 @@ machine**. Only three ever do, and `build` only when the mod set
 `<mod>_bundle,<mod>_block_model,<mod>_editorless` with
 `PLAYTEST_CONCERN_SUITES` set to that same list. `--look [STEM]` replaces
 it with one `<mod>_<stem>_look` (no STEM: `shamwayselftest_burst_look`).
+For a walk-entity stem, `--prefab-look STEM` selects the separate raw-prefab
+control and `--trace-entity` adds per-second posed-bounds, shader, grounding
+capsule, collider and physics-hit evidence to the spawned-entity run.
 `playtest-acceptance --suite ID` is the same orchestrator for a consuming
 mod. `acceptance-provider` emits **one look suite per prefab** and
 `CaseDef.RegisterStaged` on each camera-staged instance. Mix of `*_look`

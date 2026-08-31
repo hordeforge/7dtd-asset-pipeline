@@ -22,6 +22,7 @@ lists what each assertion catches.
 
 | Path | Why |
 |---|---|
+| `reference/creatures/` | clay geometry reference renders of the four generated rigs (6 views each) — the shape a live frame *should* contain, to compare against the in-game `--look` frames. See its `README.md`; `render_creatures.py` regenerates them (Blender) |
 | `assets-src/bundle/shamwaySelfTestProp.glb` | the mesh, a full 1 × 1 × 1 m block so it fills the voxel it is placed into, carrying UV0 so a texture can map; orientation is carried by the albedo's arrows and markers |
 | `assets-src/bundle/timedNuke.glb` | named hierarchy with an `armedLamp` child |
 | `assets-src/bundle/gear.glb` | two-bone skinned mesh (`Origin/Hips`, `Origin/Hips/Spine`) |

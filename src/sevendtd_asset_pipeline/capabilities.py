@@ -223,6 +223,16 @@ REGISTRY: tuple[_Spec, ...] = (
         install=extra_install("audio"),
     ),
     _Spec(
+        name="lxml",
+        kind="module",
+        probe="lxml",
+        unlocks=("shamway check-patches (full XPath 1.0)",),
+        purpose="evaluate Config/ patch XPaths with the full XPath 1.0 the engine's "
+        "XPathEvaluate uses. Without it check-patches falls back to the standard-library "
+        "subset and reports selectors it cannot run as not checked",
+        install=extra_install("patch"),
+    ),
+    _Spec(
         name="gltf_validator",
         kind="command",
         probe="gltf_validator",

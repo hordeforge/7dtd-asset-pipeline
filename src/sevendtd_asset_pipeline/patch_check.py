@@ -23,7 +23,18 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
+
+try:  # Full XPath 1.0, matching .NET XPathEvaluate. Optional: the standard
+    # library subset is the fallback, and the gate says so when it cannot run
+    # a selector. lxml is an untyped optional module; pyproject's mypy override
+    # lists it so the import is not a type error.
+    from lxml import etree as _LX
+
+    _HAS_LXML = True
+except ImportError:  # pragma: no cover - a venv without the patch extra
+    _LX = None
+    _HAS_LXML = False
 
 from .errors import PipelineError
 
@@ -61,15 +72,31 @@ class PatchReport:
 def _iter_patch_operations(root: ET.Element) -> Iterator[tuple[str, str]]:
     """Yield (operation_name, xpath, path) for every structural op with an xpath."""
     for element in root.iter():
-        name = element.tag.lower()
+        tag = element.tag
+        if not isinstance(tag, str):
+            continue  # lxml yields comments/PIs whose tag is a callable, not a name
+        name = tag.lower()
         xpath = element.get("xpath")
         if name in STRUCTURAL_OPS and xpath:
             yield name, xpath
 
 
-def _evaluate(target_root: ET.Element, xpath: str) -> int:
+def _evaluate(target_root: Any, xpath: str) -> int:
     """How many nodes `xpath` selects in the stock target, or -1 if unevaluable."""
     xpath = xpath.strip()
+    if _HAS_LXML:
+        try:
+            result = target_root.xpath(xpath)
+        except Exception:
+            return -1
+        # Full XPath 1.0 returns a node list for a node-set selector and a
+        # scalar (e.g. count() -> float, string() -> str) otherwise. A scalar is
+        # not a node-set, so the engine's GetXpathResultsInList returns false and
+        # the operation silently no-ops; report it as not checked rather than
+        # mislabelling it 'zero nodes'.
+        if not isinstance(result, list):
+            return -1
+        return len(result)
     try:
         if xpath.startswith("//"):
             # Pure descendant search. ElementTree rejects a leading '//' on an
@@ -139,8 +166,8 @@ def check_patches(
             count = _evaluate(target_root, xpath)
             if count < 0:
                 notes.append(
-                    f"{patch_file.name}: cannot evaluate XPath {xpath!r} with the "
-                    "standard-library subset; not checked"
+                    f"{patch_file.name}: cannot evaluate XPath {xpath!r} with the available "
+                    "XPath evaluator; not checked"
                 )
             elif count == 0:
                 problems.append(
@@ -155,8 +182,10 @@ def check_patches(
     return PatchReport(tuple(checked), tuple(resolved), problems, notes)
 
 
-def _parse_xml(path: Path, source: Path) -> ET.Element:
+def _parse_xml(path: Path, source: Path) -> Any:
     try:
+        if _HAS_LXML:
+            return _LX.parse(str(path)).getroot()
         return ET.parse(path).getroot()
-    except (OSError, ET.ParseError) as exc:
+    except (OSError, ET.ParseError, ValueError) as exc:
         raise PipelineError(f"cannot parse {source}: {exc}") from exc

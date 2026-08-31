@@ -25,10 +25,11 @@ GetXpathResultsInList` returns false on a zero-count list and the operation
 returns 0 with no error or log line. The decompiled rules (from
 `ilspycmd` on the installed `Assembly-CSharp.dll`) and the consequence are
 recorded in `docs/research/research-provenance.md` ("Config XML patch
-application"). An XPath the standard-library subset cannot evaluate is reported
-as *not checked* rather than guessed, so the gate never claims a verdict it did
-not run. `--json` for scripts; requires the game dir (skips with a note
-otherwise).
+application"). Selectors are evaluated with **lxml** (full XPath 1.0, matching
+the engine's `XPathEvaluate`) when the optional `patch` extra is installed; an
+XPath the available evaluator cannot run is reported as *not checked* rather
+than guessed, so the gate never claims a verdict it did not take. `--json` for
+scripts; requires the game dir (skips with a note otherwise).
 
 ## 2. Localization keys are not reconciled  — **done (2026-08-31)**
 

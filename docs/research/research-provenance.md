@@ -2632,10 +2632,12 @@ but zero-match one is invisible.
 case — a structural operation (`append`/`prepend`/`set`/`setattribute`/
 `remove`/`removeattribute`/`insertafter`/`insertbefore`) whose XPath selects no
 node in the stock file — because that is the bug the engine will not report.
-It is implemented with the standard library's XPath subset (ElementTree
-`findall`), which covers the descendant/attribute/predicate selectors mod
-patches actually use; an XPath the subset cannot evaluate is reported as
-"not checked" rather than guessed, so the gate never claims an invalid-guess
-verdict.
+It evaluates each selector with **lxml** (full XPath 1.0, matching
+`XPathEvaluate`) when the optional `patch` extra is installed, and falls back to
+the standard library's XPath subset otherwise; a selector the available
+evaluator cannot run (e.g. a scalar like `count()`, or a union on a host
+without lxml) is reported as "not checked" rather than guessed, so the gate
+never claims a verdict it did not take. `lxml` is registered in
+`capabilities.REGISTRY`.
 
 

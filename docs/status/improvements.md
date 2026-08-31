@@ -78,7 +78,7 @@ list. Neither errors anywhere in the game, which is why the gate is here.
 `<Name>` is still compared with the configuration. `read_mod_info` (a small
 `ModInfo` dataclass covering Name/DisplayName/Version/Description) backs both.
 
-## 4. The synthesized lanes are uncompressed
+## 4. The synthesized lanes are uncompressed  — **done (2026-08-31)**
 
 **Textures: closed 2026-08-24.** `block_compress.py` encodes BC1 (`DXT1`, 8x)
 and BC3 (`DXT5`, 4x) in NumPy with no new dependency, and `texture_2d`
@@ -114,12 +114,33 @@ packaged on Arch, Debian or Fedora, so wiring one means asking a user to build
 from source — worth doing when a mod's texture budget actually demands BC7,
 not before.
 
-**Audio: still open.** FSB5+Vorbis needs a Vorbis encoder plus FMOD's
-seek-table quirks — [Fmod5Sharp](https://github.com/SamboyCoding/Fmod5Sharp)
-rebuilds banks and is prior art; harder than textures, still bounded. Until
-then: big or quality-critical audio goes through the `unity`/`external` path
-where Unity's importer encodes Vorbis, and the synth path carries short clips
-and utility sounds.
+**Audio: closed 2026-08-31.** `compress_audio` in `.shamway.toml`, or
+`shamway pack --compress-audio`, encodes each clip through FFmpeg's libvorbis
+and writes an FSB5 Vorbis bank (mode 15). Measured 44x smaller than PCM on a
+one-second tone (88320 → 2016 bytes), 57x in stereo. **Off by default**, for the
+same reason `compress_textures` is and one more: it is lossy, and no client has
+played one yet.
+
+The thing that made it look harder than textures was not the encoder. An FSB5
+Vorbis bank carries neither the identification nor the **setup** header: the
+decoder rebuilds both, and the bank names *which* setup header by a CRC-32 it
+looks up in a fixed table. Guess that wrong and the bank decodes to noise
+instead of failing. Two measurements turned that into a gate rather than a
+hazard — the CRC is `zlib.crc32` over libvorbis' own setup packet (all 164
+catalogued headers reproduce byte-for-byte here), and every one of the 198
+combinations of FMOD's rates × mono/stereo × `-q:a` 0-10 produces a catalogued,
+blocksize-consistent header. Both are re-checked per clip, so a host whose
+libvorbis differs gets a refusal. The seek table is the one part written from
+purpose rather than measurement: `VORBISDATA` is emitted CRC-only, because a
+seek table is what FMOD seeks *within* a clip by and a modlet sound plays from
+its start.
+
+Evidence: `python-fsb5` — a decoder none of this repository's code touches —
+parses the bank, rebuilds the headers from the CRC alone, and returns a playable
+Ogg stream that FFmpeg decodes back to the tone at 40.1 dB SNR. That is the
+same grade the PCM bank had before a real client played one, and no better: the
+acceptance step is a fresh client and a human **listening**. Details in
+`docs/research/research-provenance.md`, "FSB5 Vorbis".
 
 ## 4b. The editorless writer's shader scope
 

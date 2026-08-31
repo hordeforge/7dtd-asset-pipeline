@@ -217,9 +217,12 @@ REGISTRY: tuple[_Spec, ...] = (
         unlocks=(
             "shamway generate audio from-bank",
             "the writer's own FSB5 round-trip check",
+            "compress_audio (the Vorbis setup-header gate)",
         ),
         purpose="decode an FSB5 bank back to PCM — the independent reader for the "
-        "banks this project hand-writes, and for hearing a vanilla clip",
+        "banks this project hand-writes, and for hearing a vanilla clip. Its Vorbis "
+        "header catalogue is also what says whether a bank FMOD is handed is one its "
+        "decoder can rebuild the setup header for",
         install=extra_install("audio"),
     ),
     _Spec(
@@ -333,6 +336,7 @@ REGISTRY: tuple[_Spec, ...] = (
         probe="ffmpeg",
         unlocks=(
             "shamway pack (.ogg/.mp3/.flac/.aiff/.m4a/.opus/.wma clips)",
+            "compress_audio (Vorbis encoding for the FSB5 bank)",
             "a mod's own audio scripts",
         ),
         purpose="decode the compressed containers the standard library cannot open, "

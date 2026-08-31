@@ -522,7 +522,19 @@ FSB5_FREQUENCIES = {
     96000: 10,
 }
 FSB5_PCM16 = 2
+FSB5_VORBIS = 15
+# The metadata-chunk type that carries the CRC-32 naming a Vorbis setup header,
+# read out of the `fsb5` decoder's `MetadataChunkType`.
+FSB5_VORBISDATA = 11
+# FFmpeg's `-q:a`. Every value 0-10 was measured to produce a catalogued header
+# for every rate and channel count below, so this is a quality choice, not a
+# compatibility one (research-provenance.md, "FSB5 Vorbis").
+VORBIS_QUALITY = 5
+# The rates FMOD's Vorbis header catalogue covers. 96000 is in FSB5's own
+# frequency table and absent here: PCM takes it, Vorbis refuses it.
+VORBIS_RATES = frozenset(rate for rate in FSB5_FREQUENCIES if rate <= 48000)
 AUDIO_PCM = 0
+AUDIO_VORBIS = 1
 TEXTURE_RGBA32 = 4
 
 # VertexData always declares the engine's full channel table and leaves the
@@ -2320,6 +2332,142 @@ def _empty_compressed_mesh() -> dict[str, Any]:
     }
 
 
+def _ogg_packets(stream: bytes) -> list[bytes]:
+    """Split an Ogg container into the logical packets it carries.
+
+    Each page ends in a segment table: a 255-byte segment continues a packet
+    (possibly onto the next page) and anything shorter ends one. FMOD's bank
+    stores the packets, not the container, so they have to come back out.
+    """
+    packets: list[bytes] = []
+    current = b""
+    offset = 0
+    while offset < len(stream):
+        if stream[offset : offset + 4] != b"OggS":
+            raise PipelineError("the Vorbis encoder produced something that is not an Ogg stream")
+        count = stream[offset + 26]
+        table = stream[offset + 27 : offset + 27 + count]
+        body = offset + 27 + count
+        for length in table:
+            current += stream[body : body + length]
+            body += length
+            if length < 255:
+                packets.append(current)
+                current = b""
+        offset = body
+    if current:
+        packets.append(current)
+    if len(packets) < 4:
+        raise PipelineError("the Vorbis stream carries no audio packets")
+    return packets
+
+
+def _vorbis_blocksizes(identification: bytes) -> tuple[int, int]:
+    """The two blocksizes a Vorbis identification header declares.
+
+    They sit as two 4-bit exponents in the byte after the packet's six 32-bit
+    fields (version, rate, three bitrates), past `\\x01vorbis` and the channel
+    count. The decoder rebuilds this header from the *catalogued* parameters, so
+    a mismatch here is a clip that decodes at the wrong block size.
+    """
+    if len(identification) < 29 or identification[:7] != b"\x01vorbis":
+        raise PipelineError("the Vorbis stream has no identification header")
+    packed = identification[28]
+    return 1 << (packed & 0xF), 1 << (packed >> 4)
+
+
+def _vorbis_setup_crc(identification: bytes, setup: bytes) -> int:
+    """The CRC-32 that names this setup header to FMOD, or a refusal.
+
+    FMOD's Vorbis banks carry neither the identification nor the setup header:
+    the decoder rebuilds both, and names which setup header (which codebooks)
+    to rebuild by a CRC-32 in the sample's VORBISDATA chunk. The CRC is
+    `zlib.crc32` over the setup packet libvorbis' VBR encoder emits — measured
+    against every one of the 164 catalogued headers, all 164 reproduced
+    byte-for-byte (research-provenance.md, "FSB5 Vorbis").
+
+    So a bank is only decodable when its setup header is one the catalogue
+    knows, and this refuses rather than writing a bank that decodes to noise.
+    The catalogue comes from `fsb5`, which is also the independent reader the
+    tests grade the bank with.
+    """
+    try:
+        from fsb5 import vorbis
+        from fsb5.vorbis_headers import lookup
+    except ImportError as exc:
+        raise PipelineError(
+            "writing a Vorbis bank needs the 'fsb5' capability: FMOD names the setup "
+            "header by CRC-32 and this refuses to write one its decoder cannot rebuild. "
+            f"Install it with 'uv sync --extra audio' ({exc})."
+        ) from exc
+    except OSError as exc:  # pragma: no cover - depends on the host's libvorbis
+        raise PipelineError(f"the 'fsb5' capability cannot load libvorbis: {exc}") from exc
+    crc = zlib.crc32(setup)
+    catalogued = lookup.get(crc)
+    if catalogued is None:
+        raise PipelineError(
+            "the Vorbis setup header this encoder produced is not one FMOD's decoder "
+            "knows, so the bank would decode to noise. Leave compress_audio off, or "
+            "encode at a quality between 0 and 10 with the host FFmpeg."
+        )
+    short, long, known = vorbis.get_header_info(*catalogued)
+    if known != setup:
+        raise PipelineError(  # pragma: no cover - a CRC-32 collision in the catalogue
+            "the Vorbis setup header collides with a catalogued CRC-32 without matching "
+            "it; refusing to write a bank whose codebooks the decoder would guess wrong"
+        )
+    if (short, long) != _vorbis_blocksizes(identification):
+        raise PipelineError(  # pragma: no cover - no measured combination hits this
+            "the Vorbis blocksizes disagree with the catalogued header FMOD would "
+            "rebuild; the clip would decode at the wrong block size"
+        )
+    return crc
+
+
+def _vorbis_target(channels: int, rate: int) -> int:
+    """The FSB5 frequency index for a clip Vorbis can carry, or a refusal.
+
+    Checked before the encode as well as inside the bank writer, so a rate
+    nothing can carry costs an error rather than an FFmpeg run.
+    """
+    index = FSB5_FREQUENCIES.get(rate)
+    if index is None or rate not in VORBIS_RATES:
+        supported = ", ".join(str(value) for value in sorted(VORBIS_RATES))
+        raise PipelineError(
+            f"{rate} Hz has no catalogued Vorbis header; FMOD's Vorbis rates are "
+            f"{supported}. Resample first, with no extra tool:\n"
+            "  shamway generate audio convert in.wav out.wav --rate 44100"
+        )
+    if channels not in (1, 2):
+        raise PipelineError(f"{channels}-channel audio needs a channel chunk; write mono or stereo")
+    return index
+
+
+def _vorbis_bank(encoded: bytes, channels: int, rate: int, samples: int) -> bytes:
+    """Wrap Vorbis packets in the FSB5 bank FMOD reads, mode 15.
+
+    Same container as `_fsb5_pcm16`, with two differences read out of the
+    `fsb5` decoder, which is the format's specification here: the sample header
+    sets its next-chunk bit and is followed by a VORBISDATA metadata chunk
+    (`next_chunk | size << 1 | type << 25`, then the CRC-32), and the data
+    section is the audio packets each prefixed with its own 16-bit length
+    rather than a PCM run. No seek table is written: it is what FMOD seeks
+    *within* a clip by, and a modlet clip is played from its start.
+    """
+    index = _vorbis_target(channels, rate)
+    packets = _ogg_packets(encoded)
+    crc = _vorbis_setup_crc(packets[0], packets[2])
+    data = b"".join(struct.pack("<H", len(packet)) + packet for packet in packets[3:])
+    sample_header = struct.pack("<Q", 1 | (index << 1) | ((channels - 1) << 5) | (samples << 34))
+    sample_header += struct.pack("<I", (4 << 1) | (FSB5_VORBISDATA << 25)) + struct.pack("<I", crc)
+    padding = (-(60 + len(sample_header))) % 32
+    headers_size = len(sample_header) + padding
+    payload = data + b"\x00" * ((-len(data)) % 32)
+    header = b"FSB5" + struct.pack("<IIIIII", 1, 1, headers_size, 0, len(payload), FSB5_VORBIS)
+    header += struct.pack("<I", 1) + bytes(4) + bytes(16) + bytes(8)
+    return header + sample_header + bytes(padding) + payload
+
+
 def _fsb5_pcm16(pcm: bytes, channels: int, rate: int) -> bytes:
     """Wrap raw PCM in the FMOD sound bank Unity's audio resource always is.
 
@@ -2351,12 +2499,15 @@ def _fsb5_pcm16(pcm: bytes, channels: int, rate: int) -> bytes:
     return header + sample_header + bytes(padding) + data
 
 
-def audio_clip(name: str, wav: Path) -> BundleObject:
-    """An AudioClip from a mono/stereo 16-bit WAV, stored uncompressed.
+def audio_clip(name: str, wav: Path, compress: bool = False) -> BundleObject:
+    """An AudioClip from a mono/stereo 16-bit WAV.
 
-    `shamway check-sound` gates the clip itself; this only carries it. Unity
-    would encode to Vorbis, which needs an encoder and changes the samples a
-    listener signed off on. PCM is larger and is exactly what was authored.
+    `shamway check-sound` gates the clip itself; this only carries it. Stored
+    uncompressed by default, because Vorbis is lossy and changes the samples a
+    listener signed off on. With `compress`, the clip goes through libvorbis
+    into an FSB5 Vorbis bank (mode 15) — the same encoding Unity's importer
+    would apply, roughly 40x smaller on a measured one-second tone, and the
+    header FMOD rebuilds is gated in `_vorbis_setup_crc`.
     """
     import wave
 
@@ -2374,6 +2525,15 @@ def audio_clip(name: str, wav: Path) -> BundleObject:
             f"  shamway generate audio convert {wav.name} out.wav"
         )
     samples = len(frames) // (2 * channels)
+    if compress:
+        _vorbis_target(channels, rate)
+        with transcode.as_vorbis(wav, VORBIS_QUALITY) as encoded:
+            stream = encoded.read_bytes()
+        resource = _vorbis_bank(stream, channels, rate, samples)
+        compression = AUDIO_VORBIS
+    else:
+        resource = _fsb5_pcm16(frames, channels, rate)
+        compression = AUDIO_PCM
     return BundleObject(
         AUDIO_CLIP,
         name,
@@ -2391,9 +2551,9 @@ def audio_clip(name: str, wav: Path) -> BundleObject:
             "m_LoadInBackground": False,
             "m_Legacy3D": True,
             "m_Resource": {"m_Source": "", "m_Offset": 0, "m_Size": 0},
-            "m_CompressionFormat": AUDIO_PCM,
+            "m_CompressionFormat": compression,
         },
-        resource=_fsb5_pcm16(frames, channels, rate),
+        resource=resource,
         resource_field=("m_Resource",),
     )
 
@@ -2481,7 +2641,9 @@ def collect_sources(source_dir: Path) -> list[Path]:
     return found
 
 
-def object_for(path: Path, compress_textures: bool = False) -> BundleObject:
+def object_for(
+    path: Path, compress_textures: bool = False, compress_audio: bool = False
+) -> BundleObject:
     """Turn one source file into the object its extension names.
 
     A source the standard library cannot read is converted to one it can,
@@ -2495,7 +2657,7 @@ def object_for(path: Path, compress_textures: bool = False) -> BundleObject:
             return texture_2d(stem, rasterized, compress=compress_textures)
     if ASSET_KINDS.get(suffix) == "AudioClip":
         with transcode.as_wav(path) as decoded:
-            return audio_clip(stem, decoded)
+            return audio_clip(stem, decoded, compress=compress_audio)
     if suffix in MESH_SUFFIXES:
         return mesh(stem, path)
     if suffix == ".vfx":
@@ -2636,6 +2798,7 @@ def pack_directory(
     unity_version: str,
     target: int = STANDALONE_WINDOWS64,
     compress_textures: bool = False,
+    compress_audio: bool = False,
 ) -> tuple[bytes, str]:
     """Build a bundle from a directory of source files, with no editor.
 
@@ -2662,7 +2825,9 @@ def pack_directory(
     skip = set(vfx_paths)
     if prefabs:
         skip.update(meshes)
-    objects = [object_for(path, compress_textures) for path in sources if path not in skip]
+    objects = [
+        object_for(path, compress_textures, compress_audio) for path in sources if path not in skip
+    ]
     particle_shaders: set[str] = set()
     if prefabs:
         for path in meshes:

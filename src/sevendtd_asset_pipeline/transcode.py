@@ -16,6 +16,11 @@ actually has on disk.
 The conversion is always to a temporary file, never over the source: the
 editable original is the thing a person signed off on, and a lane that
 overwrites it has destroyed the only copy at the higher quality.
+
+One lane runs the other way. `as_vorbis` *encodes*, because an FSB5 Vorbis bank
+needs packets from libvorbis specifically — FMOD rebuilds the setup header from
+a CRC-32 instead of reading one out of the bank, so only libvorbis' own headers
+are decodable (`bundle_writer._vorbis_setup_crc`).
 """
 
 from __future__ import annotations
@@ -84,6 +89,32 @@ def as_wav(source: Path, rate: int | None = None) -> Iterator[Path]:
         if not decoded.is_file():
             raise PipelineError(f"ffmpeg reported success but wrote no audio for {source.name}")
         yield decoded
+
+
+@contextmanager
+def as_vorbis(source: Path, quality: int) -> Iterator[Path]:
+    """Yield `source` encoded to Ogg Vorbis by FFmpeg's libvorbis.
+
+    The FSB5 writer needs Vorbis *packets*, and it needs them from libvorbis
+    specifically: FMOD's bank format drops the setup header and names it by a
+    CRC-32 its decoder looks up, so only a setup header libvorbis produces is
+    one FMOD can rebuild (`bundle_writer._vorbis_bank`). `quality` is FFmpeg's
+    `-q:a`, 0-10.
+    """
+    if not shutil.which("ffmpeg"):
+        raise PipelineError(
+            f"encoding {source.name} to Vorbis needs FFmpeg, which is not installed. "
+            "Install it (shamway script install-tools --with-authoring), or leave "
+            "compress_audio off and ship the clip as PCM."
+        )
+    with scratch_dir("vorbis-") as directory:
+        encoded = directory / f"{source.stem}.ogg"
+        command = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(source)]
+        command += ["-c:a", "libvorbis", "-q:a", str(quality), str(encoded)]
+        _run(command, FFMPEG_TIMEOUT, source.name)
+        if not encoded.is_file():
+            raise PipelineError(f"ffmpeg reported success but wrote no Vorbis for {source.name}")
+        yield encoded
 
 
 @contextmanager

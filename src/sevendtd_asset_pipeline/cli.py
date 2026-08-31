@@ -130,6 +130,12 @@ def _parser() -> argparse.ArgumentParser:
         help="block-compress textures to DXT1/DXT5 (8x/4x smaller, lossy); "
         "both sides must be a multiple of 4",
     )
+    pack.add_argument(
+        "--compress-audio",
+        action="store_true",
+        help="encode clips to Vorbis in an FSB5 bank (~40x smaller, lossy); "
+        "needs FFmpeg and the 'fsb5' capability",
+    )
 
     verify = commands.add_parser(
         "verify-bundle",
@@ -716,7 +722,11 @@ def run(args: argparse.Namespace) -> int:
             "it claims to be for, and the installed game is what has to load it",
         )
         bundle, manifest_text = pack_directory(
-            args.source, args.output.name, version, compress_textures=args.compress_textures
+            args.source,
+            args.output.name,
+            version,
+            compress_textures=args.compress_textures,
+            compress_audio=args.compress_audio,
         )
         # Atomic writes: a pack interrupted midway must not leave a truncated
         # .unity3d at the path a later deploy would ship.

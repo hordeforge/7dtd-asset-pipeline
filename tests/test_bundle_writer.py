@@ -52,15 +52,17 @@ needs_lz4 = unittest.skipUnless(
 )
 
 
-def write_wav(path: Path, *, rate: int = 44100, channels: int = 1, width: int = 2) -> Path:
+def write_wav(
+    path: Path, *, rate: int = 44100, channels: int = 1, width: int = 2, frames: int = 200
+) -> Path:
     with wave.open(str(path), "wb") as handle:
         handle.setnchannels(channels)
         handle.setsampwidth(width)
         handle.setframerate(rate)
-        frames = b"".join(
-            struct.pack("<h", (index * 137) % 8000 - 4000) for index in range(200 * channels)
+        content = b"".join(
+            struct.pack("<h", (index * 137) % 8000 - 4000) for index in range(frames * channels)
         )
-        handle.writeframes(frames if width == 2 else bytes(len(frames)))
+        handle.writeframes(content if width == 2 else bytes(len(content)))
     return path
 
 
@@ -164,6 +166,33 @@ class WriterTests(unittest.TestCase):
         self.assertEqual(b"FSB5", data[:4])
         self.assertGreaterEqual(len(data), clip["m_Resource"]["m_Size"])
 
+    @unittest.skipUnless(has_capability("ffmpeg"), "the Vorbis lane encodes through FFmpeg")
+    @unittest.skipUnless(has_capability("fsb5"), "the Vorbis lane gates the header through fsb5")
+    def test_pack_carries_compress_audio_all_the_way_to_the_resource(self) -> None:
+        # A flag that is threaded but ignored is the failure this checks: the
+        # bank in the packed stream has to be mode 15, read back by UnityPy
+        # rather than by this repository's own parser.
+        import UnityPy
+
+        sources = self.root / "bundle"
+        sources.mkdir()
+        write_wav(sources / "myModBlast.wav", frames=44100)
+        bundle, _ = pack_directory(sources, "mod.unity3d", REVISION, compress_audio=True)
+        written = self.root / "mod.unity3d"
+        written.write_bytes(bundle)
+
+        environment = UnityPy.load(str(written))
+        clip = next(obj.read_typetree() for obj in environment.objects if obj.type.value == 83)
+        self.assertEqual(1, clip["m_CompressionFormat"], "the packed clip should declare Vorbis")
+        data = next(
+            bytes(reader.bytes)
+            for file in environment.files.values()
+            for name, reader in file.files.items()
+            if name.endswith(".resource")
+        )
+        self.assertEqual(b"FSB5", data[:4])
+        self.assertEqual(15, struct.unpack_from("<I", data, 24)[0], "the bank should be Vorbis")
+
     def test_two_builds_of_unchanged_input_are_byte_identical(self) -> None:
         # A rebuild that moves bytes makes every review of the artifact useless.
         objects = [text_asset("myModNote", "hello")]
@@ -199,6 +228,15 @@ class WriterTests(unittest.TestCase):
         clip = write_wav(self.root / "odd.wav", rate=12345)
         with self.assertRaisesRegex(PipelineError, "frequency chunk"):
             audio_clip("myModOdd", clip)
+
+    def test_vorbis_refuses_a_rate_with_no_catalogued_header(self) -> None:
+        # 96000 is in FMOD's frequency table, so PCM takes it, but no
+        # catalogued Vorbis setup header covers it: the encode is refused
+        # before FFmpeg is spent rather than after.
+        clip = write_wav(self.root / "high.wav", rate=96000)
+        self.assertIsNotNone(audio_clip("myModHigh", clip).resource)
+        with self.assertRaisesRegex(PipelineError, "no catalogued Vorbis header"):
+            audio_clip("myModHigh", clip, compress=True)
 
     def test_an_eight_bit_clip_is_refused(self) -> None:
         clip = write_wav(self.root / "eight.wav", width=1)
@@ -538,6 +576,38 @@ class FsbRoundTripTests(unittest.TestCase):
         source = write_wav(self.root / "stereo.wav", channels=2)
         parsed = fsb5.FSB5(audio_clip("myModStereo", source).resource)
         self.assertEqual(2, parsed.samples[0].channels)
+
+    @unittest.skipUnless(has_capability("ffmpeg"), "the Vorbis lane encodes through FFmpeg")
+    def test_a_compressed_clip_is_a_vorbis_bank_the_reader_rebuilds(self) -> None:
+        # The bank carries neither the identification nor the setup header, so
+        # this is the whole gate: the reader has to rebuild both from the
+        # CRC-32 alone and hand back a playable Ogg stream. A bank whose CRC
+        # named nothing, or named the wrong codebooks, fails right here.
+        import fsb5
+
+        source = write_wav(self.root / "blast.wav", frames=44100)
+        clip = audio_clip("myModBlast", source, compress=True)
+        self.assertEqual(1, clip.fields["m_CompressionFormat"], "the clip should declare Vorbis")
+
+        parsed = fsb5.FSB5(clip.resource)
+        self.assertEqual(15, parsed.header.mode, "the bank should declare Vorbis")
+        sample = parsed.samples[0]
+        self.assertEqual(44100, sample.frequency)
+        self.assertEqual(1, sample.channels)
+        self.assertEqual(44100, sample.samples, "the sample count decoded wrong")
+
+        rebuilt = bytes(parsed.rebuild_sample(sample))
+        self.assertEqual(b"OggS", rebuilt[:4], "the reader could not rebuild the headers")
+
+        uncompressed = audio_clip("myModBlast", source).resource
+        # The fixture is a hard sawtooth, which is close to worst case for a
+        # perceptual encoder: it measures 5.9x here where a real tone measures
+        # 44x. The bound is what the harsh case is worth, not the good one.
+        self.assertLess(
+            len(clip.resource) * 3,
+            len(uncompressed),
+            "a Vorbis bank should be several times smaller than PCM",
+        )
 
 
 class ManifestTests(unittest.TestCase):

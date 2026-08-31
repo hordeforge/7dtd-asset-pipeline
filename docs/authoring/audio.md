@@ -14,12 +14,21 @@ and exactly the samples that were authored and signed off on, with no encoder
 in between. FMOD in a real Unity runtime decodes it (see
 [research-provenance.md](../research/research-provenance.md) for the measurement).
 
+It can encode Vorbis too, into the same bank format Unity's importer produces:
+`compress_audio = true` in `.shamway.toml`, or `shamway pack --compress-audio`,
+runs the clip through FFmpeg's libvorbis and writes an FSB5 Vorbis bank —
+measured 44x smaller on a one-second tone. Off by default, because it is lossy
+and because no client has played one yet;
+[no-unity.md](../bundles/no-unity.md) owns the lane, including the setup-header
+gate that makes it refuse rather than write a bank FMOD would decode to noise.
+
 Two constraints come from FMOD's own sample header, and both are refused rather
 than worked around, because a clip that plays at the wrong pitch passes every
 other gate:
 
 - the sample rate must be one FMOD's table names — 8000, 11000, 11025, 16000,
-  22050, 24000, 32000, 44100, 48000 or 96000;
+  22050, 24000, 32000, 44100, 48000 or 96000. With `compress_audio` the top of
+  that list drops: 96000 has no catalogued Vorbis header and is refused;
 - the clip must be 16-bit, mono or stereo.
 
 ```bash
@@ -462,9 +471,10 @@ clip is committed with its `.meta`, and the import settings matter:
 `GeneratedAsset.ImportAudioClip(...)` sets the ones the pipeline wants —
 Vorbis compression, force-to-mono, `preloadAudioData` off, and streaming for
 anything long, because a bundle opens lazily and a multi-megabyte clip
-decompressed at load stalls the frame it lands on. That encoder is the reason
-to take this route for a large or quality-critical clip; the editorless bank is
-PCM16 and therefore bigger.
+decompressed at load stalls the frame it lands on. What is left that only this
+route gives is **streaming** — the editorless writer stores a whole clip to be
+decompressed on load, so a long one still belongs here even with
+`compress_audio` on.
 
 Keep source generators **outside** the membership folder either way. The `.wav`
 that ships is a copy; the generator and its full-length source stay in

@@ -468,6 +468,11 @@ _DEFINITIONS: tuple[Operation, ...] = (
                     "description": "block-compress textures to DXT1/DXT5 (8x/4x smaller, lossy); "
                     "both sides must be a multiple of 4",
                 },
+                "compress_audio": {
+                    "type": "boolean",
+                    "description": "encode clips to Vorbis in an FSB5 bank (~40x smaller, lossy); "
+                    "needs FFmpeg and the 'fsb5' capability",
+                },
             },
             required=["source", "output"],
         ),

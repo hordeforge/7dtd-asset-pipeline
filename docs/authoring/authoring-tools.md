@@ -216,6 +216,16 @@ Both sides must be a multiple of four; a block format cannot express anything
 else, and the writer refuses rather than padding, since padding moves every
 atlas cell built on the old size.
 
+The audio counterpart is `compress_audio = true`, or
+`shamway pack --compress-audio`, which encodes each clip to Vorbis in an FSB5
+bank (44x smaller on a measured tone). It needs FFmpeg and the `fsb5`
+capability, and it is documented with its refusal rules in
+[no-unity.md](../bundles/no-unity.md).
+
+```bash
+shamway pack assets-src/bundle build/mymod.unity3d --compress-audio --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
+```
+
 **BC7 is the one worth an external tool.** It has eight block modes and a
 partition table, so a mediocre Python encoder would be worse than the good BC1
 one already here. These are the current CLIs, none of them packaged by Arch,
@@ -252,6 +262,13 @@ back at all. The suite decodes our own output with python-fsb5 and asserts the
 PCM returns byte-identical, the same independent-reader rule the block
 compressor follows with `texture2ddecoder`.
 
+There is a third job, and it is not a test: python-fsb5 carries the catalogue of
+Vorbis setup headers FMOD's decoder can rebuild, so `compress_audio` asks it
+whether the header FFmpeg just produced is one of them and **refuses** when it
+is not. Without that catalogue the writer cannot tell a decodable Vorbis bank
+from one that decodes to noise, which is why the Vorbis lane requires the
+capability rather than degrading past it.
+
 - Official repository: <https://github.com/HearthSim/python-fsb5>
 
 ## Audio
@@ -264,9 +281,12 @@ decoded to 16-bit PCM in a temporary file and becomes an `AudioClip` from
 there; the lossy original stays exactly as authored. A `.wav` skips FFmpeg
 entirely, so the lane still works on a host without it.
 
-Note the asymmetry: FFmpeg is used to get audio **in**, never to get it out.
-The bundle always carries PCM, because `AudioClip` Vorbis encoding needs
-FMOD's own seek tables ([improvements](../status/improvements.md) 4).
+Note what FFmpeg is *not* only used for any more. It decodes source audio in,
+and with `compress_audio` it also encodes the clip **out**: an FSB5 Vorbis bank
+needs packets from libvorbis specifically, because FMOD rebuilds the setup
+header from a CRC-32 rather than reading one out of the bank
+([no-unity.md](../bundles/no-unity.md), the Vorbis lane). PCM is still the
+default, and a host without FFmpeg still builds every PCM clip.
 
 Beyond that, FFmpeg provides scriptable resampling, channel layout,
 normalization, filtering, fades, mixing and convolution for a mod's own

@@ -122,6 +122,8 @@ below is what the four rules compile to; paste it into your mod's Harmony
 assembly and adapt the values per effect. The exact member names are the
 engine's statics the previous section names; a helper that "resets to zero"
 pins the sky clear and dry, which is the whole failure this exists to prevent.
+The same class lives, as a worked example, at
+`examples/SelfTestMod/tools/shamway/environment/WeatherCapture.cs`.
 
 ```csharp
 // Capture once on entry, clamp against the baseline each frame, restore the

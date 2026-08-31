@@ -156,6 +156,24 @@ general fix; see the handover note in
 `docs/authoring/entities.md`. Note the creature also "fell off the world"
 separately — the grounding item is `docs/authoring/entities.md`.
 
+**RE status (2026-08-31): the fix is shader-only, and it is Unity *standard*
+skinning.** The shader-material swap proved the generated creature's
+`SkinnedMeshRenderer` **does** carry per-vertex bone blend weights/indices
+(a skinning shader rendered it), so the mesh needs no change — only the
+shader's vertex stage. Reverse-engineering 7DTD's own skinning shader
+(`Game/SDCS/Skin`) to copy its exact bind channels is **not possible from the
+bundles**: decoding the shader sub-program blobs (`tools/shader_blob_dump.py` in
+`hordeforge/7dtd-engine-research`) found **zero** shaders with more than the four
+base vertex bind channels (POSITION/NORMAL/TANGENT/COLOR) across `data.unity3d`
+(199 shaders) and 33 Addressables `automatic_assets_*` bundles. So
+`Game/SDCS/Skin` is a **built-in engine shader**, and the convention to reproduce
+is Unity's standard GPU skinning: per-vertex `BLENDWEIGHT`/`BLENDINDICES` inputs
++ the `SkinnedMeshRenderer`'s bone matrices (`unity_SkinnedMeshBoneMatrix`).
+The one genuinely open RE item is the **exact bind-channel source indices and
+bone-matrix binding Unity's built-in skinning uses in 2022.3** — not derivable
+from 7DTD's bundles, so it must come from Unity's documented skinning convention
+(or a reference material with a built-in skinning shader).
+
 **Settled since this entry was written:**
 
 1. **whether 7DTD's own rendering path accepts this pass.** It does. The

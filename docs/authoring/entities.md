@@ -381,6 +381,20 @@ that clients see nothing.
   `automatic_assets_entities/animals.bundle`), while `GameObjectAnimalAnimation`
   (the `AvatarController` the generator wires) drives a **legacy** `Animation`
   by clip name — a legacy-animal path.
+- **The synthesized entity shader does not skin (2026-08-31).** A generated
+  entity's `SkinnedMeshRenderer` carries the `Shamway/Unlit` material, whose
+  vertex stage (`mul(unity_ObjectToWorld, input.vertex)`, `shader_blob.py`)
+  applies no bone-matrix skinning, so the creature is invisible in-game even
+  though its mesh is valid (verts 1382, meshSize 0.33/1.04/0.83, renderer +
+  mesh + root active). The block prop is unaffected (it is a `MeshRenderer`).
+  Confirmed live by swapping the creature's material to the player's skinning
+  shader `Game/SDCS/Skin` — the creature then drew (before it fell through
+  the floor, a separate grounding item). Fix: teach `Shamway/Unlit` to skin
+  (per-vertex bone indices/weights + `unity_SkinnedMeshBoneMatrix`) or have
+  the entity lane assign a stock skinning shader such as `Game/SDCS/Skin` to
+  generated entity materials. See
+  [improvements.md §4b](../status/improvements.md) and
+  [research-provenance.md](../research/research-provenance.md).
 - **Grounding and the controller must be the mod's own.** A generated creature
   spawns as a real `EntityAlive` (its own mod-owned class, not a borrowed stock
   one — `Class` resolves via `Type.GetType`, and the mod DLL at the mod root

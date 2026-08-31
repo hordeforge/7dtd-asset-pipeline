@@ -268,6 +268,17 @@ than flattened if it cannot be encoded. One static mesh file is one
 material's worth of geometry, and a normal-mapped material would find no
 tangents. Both are consequences of the paragraph below rather than of effort.
 
+**Skinned meshes need a *skinning* shader (2026-08-31, TODO).** The
+`SkinnedMeshRenderer` lane writes the mesh, bind poses, weights and bone-name
+hashes, and its material uses the same `Shamway/Unlit` as the static lane — but
+that shader's vertex stage (`mul(unity_ObjectToWorld, input.vertex)`) applies
+no bone-matrix skinning, so in a live client a generated entity's skinned mesh
+draws **nothing**, while a `MeshRenderer` (the block prop) draws fine.
+Confirmed by swapping the entity material to the player's `Game/SDCS/Skin`: the
+creature drew. The entity lane needs either a skinning-capable `Shamway/Unlit`
+(per-vertex bone indices/weights + `unity_SkinnedMeshBoneMatrix`) or a stock
+skinning shader; see [improvements.md §4b](../status/improvements.md).
+
 A `Mesh` is a mesh, not a model. 7DTD's `Meshfile` and block `Model` resolve
 through `DataLoader.LoadAsset<GameObject>` — a **prefab**, which needs a
 renderer, which needs a material, which needs a shader. This writer now builds

@@ -2326,3 +2326,44 @@ groundwork is now written up where the stock facts belong:
 constants). A generated creature can now be modelled against those facts instead
 of guessing; the live-slice tuning and the detached-camera framing are the
 remaining work.
+
+## The generated creature is invisible because Shamway/Unlit does not skin (2026-08-31)
+
+The walk-entity look that "should" show the creature showed only terrain: the
+`Shamway/Unlit` material on the creature's `SkinnedMeshRenderer` renders
+**nothing**. Verified live on V 3.2.0 by a runtime material swap in the walk
+case: assigning the player's own skinned material (`Game/SDCS/Skin`) to the
+creature's renderer made the creature **draw** (seen for a moment in the clip),
+then it fell through the floor — so the invisibility and the fall are **two
+separate failures**.
+
+- **Invisibility (confirmed, root cause).** `Shamway/Unlit`'s vertex stage is
+  `mul(unity_ObjectToWorld, input.vertex)` with **no bone-matrix skinning**
+  (`shader_blob.unlit_textured` -> `UNLIT_VERTEX_HLSL`, `shader_blob.py:181`);
+  its cbuffers carry `unity_ObjectToWorld`/`unity_MatrixVP` but no per-mesh
+  bone matrices. It renders a `MeshRenderer` (the block prop) correctly, so the
+  block lane is not affected. On a `SkinnedMeshRenderer` a vertex shader must
+  apply the bone matrices or the mesh is degenerate / draws nothing: the
+  creature's mesh is otherwise **healthy** — the probe read
+  `verts=1382`, `meshSize=(0.33, 1.04, 0.83)`, `smrEnabled=True`,
+  `meshActive=True`, `rootActive=True`, and the world AABB centred on the
+  entity transform. A generated **entity** therefore needs a **skinning-capable**
+  shader (either `Shamway/Unlit` gains bone-matrix support, or the entity lane
+  assigns a stock skinning shader such as `Game/SDCS/Skin`). This is the
+  handover task; see `docs/status/improvements.md` and
+  `docs/authoring/entities.md`.
+- **Fall / grounding (separate, the walk-instability).** With the mesh finally
+  drawn, the creature "fell off the world" to
+  `pos=(512.2, -2.5, 940.6)` while the case reported `y[60.05..63.07]`
+  (`travelled=4.26 m`). The entity's `GetPosition()` (save/world frame) and its
+  `transform.position` (Unity render frame) diverge by `World.Origin` —
+  `getpos=(512,60,940)` vs `tf=(1.5,15,15.5)` in the probe — so the walk case
+  must frame and ground on `transform.position`, not `GetPosition()`: the
+  camera framing was corrected to `e.transform.position` (the render frame) and
+  the creature is then followed. The motor/capsule grounding that still drops
+  it is the engine-physics item already documented above.
+
+Also measured in the same session: the spawn-area "car" that occluded the shot
+is a **static world prop**, not an `EntityVehicle`, so despawning vehicles
+(`Helpers.Vehicles`, `EntityVehicle`) does not remove it; a clear spawn or a
+vehicle-agnostic camera vantage is needed for a clean look.

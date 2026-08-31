@@ -42,9 +42,9 @@ from .icon_render import (
     render_icon,
 )
 from .localization_check import check_localization
-from .patch_check import check_patches
 from .mesh_check import DEFAULT_MAX_EXTENT, check_mesh
 from .operations import manifest
+from .patch_check import check_patches
 from .prompts import main as prompt_main
 from .providers import resolve_provider
 from .references import discover_references

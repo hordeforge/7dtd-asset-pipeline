@@ -331,6 +331,7 @@ class HierarchyTests(unittest.TestCase):
         written.write_bytes(payload)
         return payload, read_objects(written)
 
+    @needs_vkd3d
     def test_named_children_survive_with_authored_names_and_parenting(self) -> None:
         source = write_hierarchy_glb(self.root / "timedNuke.glb")
         _payload, objects = self.pack(source)
@@ -373,6 +374,7 @@ class HierarchyTests(unittest.TestCase):
         self.assertIn("timednuke", container)
         self.assertNotIn("armedlamp", container)
 
+    @needs_vkd3d
     def test_mesh_stays_on_the_authored_node_not_the_root_when_the_mesh_is_a_child(self) -> None:
         blob, views, accessors = triangle_blob()
         document = {
@@ -507,6 +509,7 @@ class SkinnedTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    @needs_vkd3d
     def test_a_skinned_mesh_writes_smr_bones_weights_and_bind_poses(self) -> None:
         source = write_skinned_glb(self.root / "gear.glb")
         objects = mesh_source_objects(source, set())

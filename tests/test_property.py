@@ -21,7 +21,8 @@ import unittest
 from pathlib import Path
 
 try:
-    from hypothesis import given, settings, strategies as st
+    from hypothesis import given, settings
+    from hypothesis import strategies as st
 
     HAS_HYPOTHESIS = True
 except ImportError:  # pragma: no cover - a bare env without the dev group
@@ -44,7 +45,9 @@ def _assert_bounded(case: unittest.TestCase, data: bytes) -> None:
             unityfs.inspect_bundle(path)
         except PipelineError:
             return  # the reader's own bounded error; the good case
-        except Exception as exc:  # a leaked non-named error is the bug
+        # Deliberately catch the universe: this property exists to turn any
+        # unexpected parser exception into a named assertion failure.
+        except Exception as exc:  # noqa: BLE001
             case.fail(
                 f"inspect_bundle raised {type(exc).__name__} on {len(data)} input "
                 f"bytes (not a PipelineError): {exc}"

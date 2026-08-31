@@ -227,7 +227,7 @@ def hide_atlas_rgb(
             fill = paw_array[None, None, :] * field[..., None]
         elif role == "limb":
             fill = limb_array[None, None, :] * field[..., None]
-        elif role == "head" or role == "tail":
+        elif role in {"head", "tail"}:
             fill = fur_array[None, None, :] * field[..., None]
         else:
             fill = base_array[None, None, :] * field[..., None]

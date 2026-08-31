@@ -56,7 +56,6 @@ from .doctor import Check, run_doctor
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .icon_check import DEFAULT_ATLAS_ROOT, DEFAULT_CELL, IconReport, check_icons
-from .patch_check import PatchReport, check_patches
 from .icon_render import (
     DEFAULT_ATLAS,
     DEFAULT_PADDING,
@@ -69,6 +68,7 @@ from .localization_check import LocalizationReport, check_localization
 from .mesh_check import DEFAULT_MAX_EXTENT, MeshReport, check_mesh
 from .operations import Operation
 from .operations import get as get_operation
+from .patch_check import PatchReport, check_patches
 from .prompts import PromptResult
 from .prompts import render as render_prompt
 from .providers import resolve_provider

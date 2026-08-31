@@ -445,7 +445,8 @@ def _stage_body(stem: str) -> str:
                         ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
                         if (ground > 1f)
                             placed.y = ground - Origin.position.y - lowest;
-                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
                             placed.y = groundHit.point.y - lowest;
                     }}
                 }}
@@ -470,7 +471,10 @@ def _stage_body(stem: str) -> str:
                     if (mat != null)
                     {{
                         try {{ setPass = mat.SetPass(0); }}
-                        catch (System.Exception e) {{ Report.Info("SMR-PROBE: " + renderer.name + " SetPass threw " + e.GetType().Name); }}
+                        catch (System.Exception e) {{
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }}
                     }}
                     Mesh mesh = null;
                     if (smr != null) mesh = smr.sharedMesh;
@@ -482,14 +486,17 @@ def _stage_body(stem: str) -> str:
                         + " type=" + renderer.GetType().Name
                         + " active=" + renderer.gameObject.activeInHierarchy
                         + " enabled=" + renderer.enabled
-                        + " mesh=" + (mesh != null ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
                         + " shader=" + (shader != null ? shader.name : "<null>")
                         + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
                         + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
                         + " SetPass0=" + setPass
                         + " bounds=" + renderer.bounds.ToString("F2")
                         + " pos=" + renderer.transform.position.ToString("F2")
-                        + (smr != null ? " bones=" + smr.bones.Length + " root=" + (smr.rootBone != null ? smr.rootBone.name : "<null>") : ""));
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
                 }}
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;"""

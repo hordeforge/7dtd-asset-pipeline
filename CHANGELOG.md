@@ -153,6 +153,17 @@ tag has no changelog section.
 
 ### Fixed
 
+- The entity lane's "the generated creature is invisible because `Shamway/Unlit`
+  does not skin" conclusion was **refuted** (research-provenance, improvements,
+  entities, no-unity). A re-run of `verify-bundle --draw` (editor 2022.3.62f2)
+  shows the four generated entities draw 6–26% with `Shamway/Unlit` as-is; only
+  the flat two-bone `gear` fixture rasterizes nothing, and its own material
+  draws on a built-in cube. `Game/SDCS/Skin` (the shader the earlier live swap
+  called "the player's skinning shader") binds **no** blend channels in any of
+  its 198 d3d11 vertex sub-programs — it draws the mesh in bind pose and does
+  not skin — so that swap proved the mesh is renderable, not that a shader must
+  skin. Authoring GPU skinning into `Shamway/Unlit` is therefore not the fix;
+  the live-client creature invisibility is a separate, un-diagnosed problem.
 - `docs/authoring/environment-effects.md` no longer tells a mod to set
   `bundle_source = "unity"` for the particle character layer. That layer is a
   `.vfx` declaration on the synthesized path; weather itself still needs no

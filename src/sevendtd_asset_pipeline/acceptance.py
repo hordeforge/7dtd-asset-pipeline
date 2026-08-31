@@ -454,6 +454,43 @@ def _stage_body(stem: str) -> str:
                     + ", camera at " + camera.position
                     + ", ground=" + ground + " lowest=" + lowest
                     + ", with " + renderers.Length + " renderer(s)");
+                // Live renderer probe (SMR-PROBE): under the live graphics
+                // device, log every renderer so a d3d11-only invisibility is
+                // diagnosed rather than guessed. SetPass(0)+isSupported answer
+                // "can the pass be set up", bounds+pos answer "is it where the
+                // camera looks", vertexCount answers "did the (skinned) upload
+                // survive". Only fires when this provider regenerated after the
+                // SMR-PROBE block was added; always goes to the client log.
+                foreach (var renderer in {variable}Staged.GetComponentsInChildren<Renderer>(true))
+                {{
+                    var smr = renderer as SkinnedMeshRenderer;
+                    var mat = renderer.sharedMaterial;
+                    var shader = mat != null ? mat.shader : null;
+                    var setPass = false;
+                    if (mat != null)
+                    {{
+                        try {{ setPass = mat.SetPass(0); }}
+                        catch (System.Exception e) {{ Report.Info("SMR-PROBE: " + renderer.name + " SetPass threw " + e.GetType().Name); }}
+                    }}
+                    Mesh mesh = null;
+                    if (smr != null) mesh = smr.sharedMesh;
+                    else if (renderer is MeshRenderer) {{
+                        var mf = renderer.GetComponent<MeshFilter>();
+                        if (mf != null) mesh = mf.sharedMesh;
+                    }}
+                    Report.Info("SMR-PROBE: " + renderer.name
+                        + " type=" + renderer.GetType().Name
+                        + " active=" + renderer.gameObject.activeInHierarchy
+                        + " enabled=" + renderer.enabled
+                        + " mesh=" + (mesh != null ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " shader=" + (shader != null ? shader.name : "<null>")
+                        + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
+                        + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
+                        + " SetPass0=" + setPass
+                        + " bounds=" + renderer.bounds.ToString("F2")
+                        + " pos=" + renderer.transform.position.ToString("F2")
+                        + (smr != null ? " bones=" + smr.bones.Length + " root=" + (smr.rootBone != null ? smr.rootBone.name : "<null>") : ""));
+                }}
                 // A prefab with no renderer cannot be photographed into evidence.
                 return renderers.Length > 0;"""
 

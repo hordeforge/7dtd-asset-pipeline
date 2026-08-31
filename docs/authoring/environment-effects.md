@@ -115,6 +115,62 @@ with a visible failure when it is skipped:
   the player tick is the mirror image: it cannot run while no world is loaded,
   so it lands on the first tick of the *next* world. Keep both.
 
+**Reference implementation — copy it, don't vendor it.** This pipeline ships
+tooling, not game-runtime code (see the ADR: the environment lane stays
+documented-and-per-mod), so there is no vendored helper to import. The shape
+below is what the four rules compile to; paste it into your mod's Harmony
+assembly and adapt the values per effect. The exact member names are the
+engine's statics the previous section names; a helper that "resets to zero"
+pins the sky clear and dry, which is the whole failure this exists to prevent.
+
+```csharp
+// Capture once on entry, clamp against the baseline each frame, restore the
+// sentinels on exit AND on world change. Copy + adapt; do not ship from the
+// pipeline. Guarded by GameManager.IsDedicatedServer (client-only).
+internal static class WeatherCapture
+{
+    private static bool _entered;
+    private static float _cloud, _rain, _fog, _light;
+    private static Color _fogColor;
+
+    public static void OnEnter()          // once, never per-frame
+    {
+        if (_entered) return;
+        _entered = true;
+        _cloud = WeatherManager.GetCurrentCloudThicknessPercent();
+        _rain = WeatherManager.GetCurrentRainfallPercent();
+        _fog = SkyManager.fogDebugDensity;
+        _fogColor = SkyManager.fogDebugColor;
+        _light = WeatherManager.weatherLightScale;
+    }
+
+    public static void Apply(float cloud, float rain, float fog, float light)
+    {
+        if (_entered) return;
+        if (GameManager.IsDedicatedServer) return;
+        OnEnter();
+        // Max: never erase a stronger storm that existed at entry.
+        WeatherManager.forceClouds  = Mathf.Max(_cloud,  cloud);
+        WeatherManager.forceRain    = Mathf.Max(_rain,   rain);
+        SkyManager.fogDebugDensity  = Mathf.Max(_fog,    fog);
+        // Min: a thunderstorm must stay at least as bright as it was.
+        WeatherManager.weatherLightScale = Mathf.Min(_light, light);
+    }
+
+    public static void OnExit()          // walking out; the engine won't do it
+    {
+        WeatherManager.forceClouds = -1f;                    // sentinels, not 0
+        WeatherManager.forceRain = -1f;
+        SkyManager.fogDebugDensity = -1f;
+        SkyManager.fogDebugColor = new Color(0f, 0f, 0f, 0f);
+        WeatherManager.weatherLightScale = 1f;
+        _entered = false;
+    }
+    // Call OnExit() from both your effect-end path AND your world-change
+    // (player-tick teardown) hook; the engine's Cleanup runs on teardown only.
+}
+```
+
 ## Where it attaches
 
 Client only. `EntityPlayerLocal.OnUpdateLive` is the local player's own

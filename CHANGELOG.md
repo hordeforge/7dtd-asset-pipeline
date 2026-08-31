@@ -14,6 +14,11 @@ tag has no changelog section.
 
 ### Added
 
+- **Environment-lane runtime helper: documented-and-per-mod** — `docs/authoring/environment-effects.md`
+  gains a copy-paste reference implementation of the capture/clamp/restore
+  discipline, and the §6 RFC call is decided (option a) in
+  `docs/adrs/0007`; the pipeline does not ship game-runtime C# (it is tooling,
+  not mod content, and `make check` cannot compile a runtime assembly).
 - **`validate` runs the patch gate** — `check_patches` is folded into
   `validate_mod`, so a Config/ patch XPath selecting zero nodes fails the
   default gate (it was already `shamway check-patches` standalone).

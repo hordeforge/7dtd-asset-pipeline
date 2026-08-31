@@ -262,24 +262,21 @@ Hypothesis-chosen byte), and hostile LZ4 block payloads. Hypothesis is a
 `dependency-group dev` member; without it the class is skipped so a bare
 `make test` still passes.
 
-## 6. No runtime helper for the environment lane
+## 6. No runtime helper for the environment lane  — **decided: documented-and-per-mod (2026-08-31)**
 
-[environment-effects.md](../authoring/environment-effects.md) documents the
-capture/clamp/restore discipline the weather and sky controls need, and the
-sentinel values (`-1f` for the force fields, alpha `0` for the fog colour)
-that make a naive reset pin the sky clear and dry. Documented is not enforced:
-every mod that ships an environment effect re-implements the same twenty
-lines, and the failure mode is invisible — nothing logs, and the player is
-left under permanent forced weather.
-
-**Close it with:** a vendored runtime helper, the way the editor scripts in
-`scaffold.PIPELINE_EDITOR_SCRIPTS` are vendored — capture once, clamp against
-the entry baseline, restore the sentinels, and reset on a world change. The
-open question is whether this repository should ship *runtime* C# at all: it
-ships editor scripts today, `make check` can only compile against an editor's
-assemblies, and a helper that lands inside a mod's Harmony assembly is closer
-to mod content than to tooling. Decide that before writing it — it is an
-[RFC](../rfcs/), not a patch.
+**Closed — decision (a), recorded in [ADR 0007](../adrs/0007-environment-lane-runtime-helper-documented-per-mod.md).**
+The open question (should this repository ship *runtime* C#?) is answered: it
+does **not**. The pipeline is tooling, not mod content; a runtime helper lives
+inside a mod's Harmony assembly, and `make check` can only compile editor
+assemblies, so a vendored runtime helper would claim a grade it cannot reach.
+Closure is the docs carrying a **copy-paste reference implementation** in
+[environment-effects.md](../authoring/environment-effects.md) under
+"Save, clamp, restore" — the capture-once / clamp-against-baseline /
+restore-sentinels shape as runnable code, which a mod adapts. The discipline is
+still not *enforced* mechanically (that would be a per-mod test or a doc-side
+contract, not a vendored helper); the adoption barrier is removed, however,
+and the silent-failure modes the four rules name are spelled out next to the
+code that avoids them.
 
 ## 7. Tool additions worth their install
 

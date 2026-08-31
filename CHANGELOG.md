@@ -14,6 +14,11 @@ tag has no changelog section.
 
 ### Added
 
+- **Property-based tests for the UnityFS reader** (`tests/test_property.py`,
+  Hypothesis, dev-group dep). `inspect_bundle` must succeed or raise the
+  reader's own `PipelineError` on arbitrary bytes, hostile class IDs, hostile
+  node sizes / archive flags / truncation, and hostile LZ4 payloads — never a
+  leaked `struct.error`/raw exception that a caller turns into a traceback.
 - **`shamway check-localization`** reconciles every localization key Config/
   references (item/block/entity_class names plus bare-token
   `display_name`/`Description`/`desc_key`/`tooltip` values) with the mod's

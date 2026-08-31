@@ -441,6 +441,18 @@ that clients see nothing.
 - **SDCS extras** (`GearBoneMap`, `Morphable`) — the editor bakes those; see
   [skinned-gear.md](skinned-gear.md).
 
+## Reference renders — what a live frame should contain
+
+`examples/SelfTestMod/reference/creatures/` holds clay geometry reference
+renders of the four generated rigs (`shamwaySelfTestCreature`, `_Bird`,
+`_Arachnid`, `_Dino`), each a 2×3 contact sheet of six views (front, 3/4, side,
+back, back-3/4, other-side) rendered from the `.glb` with orthographic
+full-bounds framing — the shape that *should* be in a live frame. See that
+directory's `README.md` (and `reference/creatures/render_creatures.py` to
+regenerate). They are the ground truth to place next to the in-game `--look`
+frames, which currently show only terrain/player/car because the generated
+`SkinnedMeshRenderer` does not rasterize in the live Proton/d3d11 client.
+
 ## End-to-end confirmation
 
 The unit suite proves the construction half end to end with no editor and no

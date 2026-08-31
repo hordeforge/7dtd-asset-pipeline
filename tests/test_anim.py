@@ -28,6 +28,9 @@ REVISION = "2022.3.62f2"
 needs_unitypy = unittest.skipUnless(
     has_capability("UnityPy"), "the writer needs UnityPy for the engine's type trees"
 )
+needs_vkd3d = unittest.skipUnless(
+    has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
+)
 
 
 def read_objects(bundle: Path) -> dict[int, list[dict[str, Any]]]:
@@ -217,6 +220,7 @@ class AnimOnPrefabTests(unittest.TestCase):
             xml.read_text(encoding="utf-8"),
         )
 
+    @needs_vkd3d
     def test_the_prefab_carries_the_animation_component_and_clip(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
 
@@ -241,6 +245,7 @@ class AnimOnPrefabTests(unittest.TestCase):
         self.assertEqual(len(animation["m_Animations"]), 1)
         self.assertNotEqual(animation["m_GameObject"]["m_PathID"], 0)
 
+    @needs_vkd3d
     def test_the_animation_sits_on_a_figure_under_the_model_root(self) -> None:
         """GameObjectAnimalAnimation reads the legacy Animation off the model
         root's first *active child*, not off the root: spawned entities NRE'd
@@ -291,6 +296,7 @@ class AnimOnPrefabTests(unittest.TestCase):
         ]
         self.assertEqual(root_bone_go["m_Name"], "Root")
 
+    @needs_vkd3d
     def test_a_source_without_a_declaration_gets_no_animation(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
 
@@ -484,6 +490,7 @@ class LimbAnimBundleTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    @needs_vkd3d
     def test_anim_kinds_round_trip_through_the_bundle(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
         from sevendtd_asset_pipeline.generators import run
@@ -506,6 +513,7 @@ class LimbAnimBundleTests(unittest.TestCase):
         animation = trees[111][0]
         self.assertEqual(len(animation["m_Animations"]), 2)
 
+    @needs_vkd3d
     def test_attack_death_jump_round_trip_with_wrap(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
         from sevendtd_asset_pipeline.generators import run
@@ -549,6 +557,7 @@ class BoneColliderTests(unittest.TestCase):
     PhysicsBodyNullCollider and the creature floats)."""
 
     @needs_unitypy
+    @needs_vkd3d
     def test_every_bone_has_a_collider_component(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader
 

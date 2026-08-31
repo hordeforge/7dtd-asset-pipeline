@@ -90,9 +90,10 @@ class PatchCheckTests(unittest.TestCase):
         report = check_patches(self.mod, self.config, self.game)
         if _HAS_LXML:
             self.assertFalse(report.ok)
-        else:
-            self.assertTrue(report.ok)
-            self.assertTrue(any("cannot evaluate" in n for n in report.notes))
+        with mock.patch("sevendtd_asset_pipeline.patch_check._HAS_LXML", False):
+            fallback = check_patches(self.mod, self.config, self.game)
+        self.assertTrue(fallback.ok)
+        self.assertTrue(any("cannot evaluate" in n for n in fallback.notes))
 
     def test_validate_reports_a_zero_match_patch(self) -> None:
         """`validate` folds the patch gate in, not only `shamway check-patches`."""

@@ -45,7 +45,7 @@ check: lint typecheck locked
 # PATH, hard-fail in CI, and say so plainly when skipped on a dev host.
 lint:
 	@if command -v ruff >/dev/null 2>&1; then \
-		ruff check .; \
+		ruff check . && \
 		ruff format --check .; \
 	elif [ -n "$${CI:-}" ]; then \
 		echo "ERROR: CI requires ruff; e.g. uv tool install ruff" >&2; \

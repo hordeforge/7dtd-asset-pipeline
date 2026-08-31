@@ -8,6 +8,20 @@ has since been done. Verification-shaped gaps live separately in
 
 Closed recently, kept here so the pattern is visible:
 
+- *The local lint target masked a failed ruff check* — its shell branch ran
+  `ruff check` and then `ruff format --check` with `;`, so a clean format check
+  replaced the earlier non-zero status. Closed by chaining those two gates
+  with `&&`; a rule violation can no longer print an error and still let
+  `make check` exit zero. The patch-check/property-test changes already on
+  `main` were cleaned under the corrected gate in the same repair. Its
+  standard-library XPath fallback also refuses union expressions explicitly;
+  ElementTree otherwise accepts the `|` token as part of a tag name and
+  misreports an unevaluable union as a zero-match patch. Bundle round-trip
+  tests that compile a shader are now marked with the shader-compiler
+  capability they actually require, so the no-optional-tools CI lane skips
+  them instead of failing halfway through compilation. The macOS doctor test
+  compares canonical paths, because its `/var` temporary directory is the
+  `/private/var` filesystem path the implementation reports.
 - *Packaged docs drifting from repo docs* — an agent in a mod reads
   `src/sevendtd_asset_pipeline/docs/`, this repository edits `docs/`, and the
   copies had drifted within a day of both existing. Closed by a suite test

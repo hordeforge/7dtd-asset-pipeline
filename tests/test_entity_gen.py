@@ -560,5 +560,97 @@ class CylinderWindingTests(unittest.TestCase):
         self.assertGreaterEqual(frac, 0.99, f"cylinder side faces outward fraction {frac:.3f}")
 
 
+class RemainingRigConstructionTests(unittest.TestCase):
+    """Each remaining shipped rig meets the quadruped construction bar.
+
+    Skinned GLB, per-part UV atlas with a role map a hide can paint, spawnable
+    XML (`Prefab` + `Mesh` + `UserSpawnType`), and `--anim` writing Idle1 + Walk
+    beside the mesh. Size morph is `--scale` on the same generator.
+    """
+
+    REMAINING = ("bird", "arachnid", "dinosaur", "crocodile", "humanoid")
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_each_remaining_rig_is_skinned_atlased_animated_and_spawnable(self) -> None:
+        for name in self.REMAINING:
+            with self.subTest(name):
+                out = self.root / f"{name}.glb"
+                manifest = self.root / f"{name}.atlas.json"
+                xml = self.root / f"{name}-entityclasses.xml"
+                self.assertEqual(
+                    run(
+                        "entity",
+                        [
+                            str(out),
+                            "--rig",
+                            name,
+                            "--atlas",
+                            str(manifest),
+                            "--anim",
+                            "idle,head,walk",
+                            "--mod",
+                            "MyMod",
+                            "--bundle",
+                            "myMod",
+                            "--xml",
+                            str(xml),
+                        ],
+                    ),
+                    0,
+                )
+                scene = parse_gltf(out)
+                self.assertEqual(len(scene.skins), 1, name)
+                self.assertTrue(scene.skins[0].joints)
+                document = json.loads(manifest.read_text(encoding="utf-8"))
+                roles = document["roles"]
+                self.assertIn("paw", set(roles.values()), name)
+                self.assertIn("limb", set(roles.values()), name)
+                self.assertIn("body", set(roles.values()), name)
+                anim = json.loads((self.root / f"{name}.anim.json").read_text(encoding="utf-8"))
+                clip_names = {clip["name"] for clip in anim["clips"]}
+                self.assertIn("Idle1", clip_names, name)
+                self.assertIn("Walk", clip_names, name)
+                text = xml.read_text(encoding="utf-8")
+                self.assertIn('name="Prefab"', text)
+                self.assertIn('name="Mesh"', text)
+                self.assertIn('name="UserSpawnType" value="Menu"', text)
+
+    def test_scale_morph_of_a_shipped_rig_differs_in_size(self) -> None:
+        """`--scale` on generate entity is the size morph; no mesh edit."""
+        base = self.root / "dino.glb"
+        tiny = self.root / "dino-tiny.glb"
+        self.assertEqual(run("entity", [str(base), "--rig", "dinosaur"]), 0)
+        self.assertEqual(run("entity", [str(tiny), "--rig", "dinosaur", "--scale", "0.4"]), 0)
+        base_scene = parse_gltf(base)
+        tiny_scene = parse_gltf(tiny)
+        base_pelvis = next(node for node in base_scene.nodes if node.name == "Pelvis")
+        tiny_pelvis = next(node for node in tiny_scene.nodes if node.name == "Pelvis")
+        self.assertAlmostEqual(tiny_pelvis.translation[1], base_pelvis.translation[1] * 0.4)
+
+    def test_creature_one_shot_calls_entity_and_hide(self) -> None:
+        """`generate creature` is the easy on-ramp: atlas + anim + hide."""
+        if not has_capability("pillow"):
+            self.skipTest("the hide half needs Pillow")
+        out = self.root / "raptor.glb"
+        self.assertEqual(
+            run("creature", [str(out), "--rig", "dinosaur", "--coat", "olive", "--seed", "7"]),
+            0,
+        )
+        self.assertTrue(out.is_file())
+        self.assertTrue((self.root / "raptor.atlas.json").is_file())
+        self.assertTrue((self.root / "raptor.anim.json").is_file())
+        albedo = self.root / "raptor_albedo.png"
+        self.assertTrue(albedo.is_file())
+        self.assertGreater(albedo.stat().st_size, 0)
+        anim = json.loads((self.root / "raptor.anim.json").read_text(encoding="utf-8"))
+        self.assertEqual({clip["name"] for clip in anim["clips"]}, {"Idle1", "Walk"})
+
+
 if __name__ == "__main__":
     unittest.main()

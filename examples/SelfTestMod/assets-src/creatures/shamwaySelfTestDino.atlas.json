@@ -1,0 +1,134 @@
+{
+  "stem": "shamwaySelfTestDino",
+  "grid": 5,
+  "parts": {
+    "Pelvis": [
+      0.0,
+      0.8,
+      0.2,
+      1.0
+    ],
+    "Spine": [
+      0.2,
+      0.8,
+      0.4,
+      1.0
+    ],
+    "Chest": [
+      0.4,
+      0.8,
+      0.6,
+      1.0
+    ],
+    "Neck": [
+      0.6,
+      0.8,
+      0.8,
+      1.0
+    ],
+    "Head": [
+      0.8,
+      0.8,
+      1.0,
+      1.0
+    ],
+    "Tail1": [
+      0.0,
+      0.6,
+      0.2,
+      0.8
+    ],
+    "Tail2": [
+      0.2,
+      0.6,
+      0.4,
+      0.8
+    ],
+    "Tail3": [
+      0.4,
+      0.6,
+      0.6,
+      0.8
+    ],
+    "LeftThigh": [
+      0.6,
+      0.6,
+      0.8,
+      0.8
+    ],
+    "LeftShin": [
+      0.8,
+      0.6,
+      1.0,
+      0.8
+    ],
+    "LeftFoot": [
+      0.0,
+      0.4,
+      0.2,
+      0.6
+    ],
+    "RightThigh": [
+      0.2,
+      0.4,
+      0.4,
+      0.6
+    ],
+    "RightShin": [
+      0.4,
+      0.4,
+      0.6,
+      0.6
+    ],
+    "RightFoot": [
+      0.6,
+      0.4,
+      0.8,
+      0.6
+    ],
+    "LeftArm": [
+      0.8,
+      0.4,
+      1.0,
+      0.6
+    ],
+    "LeftForearm": [
+      0.0,
+      0.19999999999999996,
+      0.2,
+      0.4
+    ],
+    "RightArm": [
+      0.2,
+      0.19999999999999996,
+      0.4,
+      0.4
+    ],
+    "RightForearm": [
+      0.4,
+      0.19999999999999996,
+      0.6,
+      0.4
+    ]
+  },
+  "roles": {
+    "Pelvis": "body",
+    "Spine": "body",
+    "Chest": "body",
+    "Neck": "body",
+    "Head": "head",
+    "Tail1": "tail",
+    "Tail2": "tail",
+    "Tail3": "tail",
+    "LeftThigh": "limb",
+    "LeftShin": "limb",
+    "LeftFoot": "paw",
+    "RightThigh": "limb",
+    "RightShin": "limb",
+    "RightFoot": "paw",
+    "LeftArm": "limb",
+    "LeftForearm": "limb",
+    "RightArm": "limb",
+    "RightForearm": "limb"
+  }
+}

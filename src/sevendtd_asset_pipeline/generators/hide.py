@@ -71,6 +71,62 @@ except ImportError as error:  # pragma: no cover - depends on host packages
     # what this needs before installing anything.
     MISSING = str(error)
 
+# Named palettes for a size/coat morph. `--coat NAME` fills --base/--fur/--paw
+# /--limb/--outline unless the caller passed those flags itself. `moss` is the
+# historical hide default (the self-test creature later switched to `brown`).
+COATS: dict[str, dict[str, str]] = {
+    "moss": {"base": "85,109,73"},
+    "brown": {
+        "base": "118,96,66",
+        "fur": "150,124,86",
+        "paw": "22,16,12",
+        "limb": "74,58,40",
+        "outline": "12,10,8",
+    },
+    "cream": {
+        "base": "205,196,170",
+        "fur": "224,214,188",
+        "paw": "58,42,32",
+        "limb": "150,132,108",
+        "outline": "40,34,28",
+    },
+    "slate": {
+        "base": "72,88,108",
+        "fur": "110,124,140",
+        "paw": "28,24,20",
+        "limb": "56,68,84",
+        "outline": "18,16,14",
+    },
+    "olive": {
+        "base": "90,110,62",
+        "fur": "120,138,78",
+        "paw": "36,32,20",
+        "limb": "70,82,48",
+        "outline": "22,20,14",
+    },
+    "rust": {
+        "base": "110,78,48",
+        "fur": "140,104,64",
+        "paw": "40,32,22",
+        "limb": "86,62,40",
+        "outline": "24,18,12",
+    },
+    "charcoal": {
+        "base": "48,42,38",
+        "fur": "72,64,56",
+        "paw": "22,18,16",
+        "limb": "62,52,44",
+        "outline": "12,10,8",
+    },
+    "tan": {
+        "base": "160,124,96",
+        "fur": "188,152,118",
+        "paw": "90,70,50",
+        "limb": "140,108,84",
+        "outline": "40,32,24",
+    },
+}
+
 
 def require_imaging() -> None:
     """Fail with the install command, at the point the dependency is used."""
@@ -276,6 +332,10 @@ def main(argv: list[str] | None = None) -> int:
             "      a brown-grey hide with lighter fur clumps\n"
             "  shamway generate hide assets-src/bundle/myWolf_albedo.png --size 512\n"
             "      a 512 px skin for a large entity\n"
+            "  shamway generate hide assets-src/bundle/myRaptor_albedo.png "
+            "--atlas myRaptor.atlas.json --coat olive --seed 7\n"
+            "      a named coat palette (moss, brown, cream, slate, olive, rust, "
+            "charcoal, tan); --base/--paw still override\n"
         ),
     )
     parser.add_argument("output", type=Path, help="write the albedo PNG here")
@@ -286,9 +346,18 @@ def main(argv: list[str] | None = None) -> int:
         "--seed", type=int, default=0, help="pattern seed; the same seed is the same skin"
     )
     parser.add_argument(
+        "--coat",
+        default=None,
+        metavar="NAME",
+        help="named palette (moss, brown, cream, slate, olive, rust, charcoal, tan)."
+        " Fills --base/--fur/--paw/--limb/--outline unless those flags are passed."
+        " A size/coat morph of a shipped rig is --scale on generate entity plus"
+        " --coat here, with no mesh edit",
+    )
+    parser.add_argument(
         "--base",
-        default="85,109,73",
-        help="base hide colour as R,G,B (default 85,109,73, the self-test creature's green)",
+        default=None,
+        help="base hide colour as R,G,B (default 85,109,73 moss, or the --coat base)",
     )
     parser.add_argument(
         "--fur",
@@ -368,14 +437,22 @@ def main(argv: list[str] | None = None) -> int:
     ):
         if not 0.0 <= value <= 1.0:
             raise SystemExit(f"ERROR: {name} must be in [0, 1], got {value}")
-    base = parse_colour(args.base)
+    if args.coat is not None and args.coat not in COATS:
+        known = ", ".join(sorted(COATS))
+        raise SystemExit(f"ERROR: unknown --coat {args.coat!r}; expected one of: {known}")
+    palette = COATS[args.coat] if args.coat is not None else COATS["moss"]
+    base = parse_colour(args.base or palette["base"])
     fur = (
         parse_colour(args.fur)
         if args.fur is not None
         else (
-            min(255, int(base[0] * 1.3)),
-            min(255, int(base[1] * 1.3)),
-            min(255, int(base[2] * 1.3)),
+            parse_colour(palette["fur"])
+            if "fur" in palette
+            else (
+                min(255, int(base[0] * 1.3)),
+                min(255, int(base[1] * 1.3)),
+                min(255, int(base[2] * 1.3)),
+            )
         )
     )
     patch = (
@@ -399,27 +476,39 @@ def main(argv: list[str] | None = None) -> int:
             parse_colour(args.paw)
             if args.paw is not None
             else (
-                max(0, int(base[0] * 0.35)),
-                max(0, int(base[1] * 0.35)),
-                max(0, int(base[2] * 0.35)),
+                parse_colour(palette["paw"])
+                if "paw" in palette
+                else (
+                    max(0, int(base[0] * 0.35)),
+                    max(0, int(base[1] * 0.35)),
+                    max(0, int(base[2] * 0.35)),
+                )
             )
         )
         limb = (
             parse_colour(args.limb)
             if args.limb is not None
             else (
-                int(max(base[0], fur[0]) * 0.7),
-                int(max(base[1], fur[1]) * 0.7),
-                int(max(base[2], fur[2]) * 0.7),
+                parse_colour(palette["limb"])
+                if "limb" in palette
+                else (
+                    int(max(base[0], fur[0]) * 0.7),
+                    int(max(base[1], fur[1]) * 0.7),
+                    int(max(base[2], fur[2]) * 0.7),
+                )
             )
         )
         outline = (
             parse_colour(args.outline)
             if args.outline is not None
             else (
-                max(0, int(base[0] * 0.2)),
-                max(0, int(base[1] * 0.2)),
-                max(0, int(base[2] * 0.2)),
+                parse_colour(palette["outline"])
+                if "outline" in palette
+                else (
+                    max(0, int(base[0] * 0.2)),
+                    max(0, int(base[1] * 0.2)),
+                    max(0, int(base[2] * 0.2)),
+                )
             )
         )
         rgb = hide_atlas_rgb(

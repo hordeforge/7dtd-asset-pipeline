@@ -1,0 +1,38 @@
+{
+  "clips": [
+    {
+      "name": "Idle1",
+      "kind": "bob",
+      "bone": "Root/Hips",
+      "amplitude": 0.03,
+      "seconds": 1.5
+    },
+    {
+      "name": "Idle1",
+      "kind": "head",
+      "bone": "Root/Hips/Spine/Chest/Neck/Head",
+      "amplitude": 0.35,
+      "seconds": 4.0
+    },
+    {
+      "name": "Walk",
+      "kind": "walk",
+      "bones": [
+        "Root/Hips/Spine/Chest/LeftShoulder/LeftArm",
+        "Root/Hips/Spine/Chest/RightShoulder/RightArm",
+        "Root/Hips/LeftThigh",
+        "Root/Hips/RightThigh"
+      ],
+      "lower_bones": [
+        "Root/Hips/Spine/Chest/LeftShoulder/LeftArm/LeftForearm",
+        "Root/Hips/Spine/Chest/RightShoulder/RightArm/RightForearm",
+        "Root/Hips/LeftThigh/LeftShin",
+        "Root/Hips/RightThigh/RightShin"
+      ],
+      "body_bone": "Root/Hips",
+      "amplitude": 0.4,
+      "seconds": 1.0
+    }
+  ],
+  "play_automatically": true
+}

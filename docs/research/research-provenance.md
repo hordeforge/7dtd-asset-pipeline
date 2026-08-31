@@ -2822,3 +2822,34 @@ decoder — the same grade `_fsb5_pcm16` had before a real editor loaded one, an
 the same grade `block_compress` had before `verify-bundle`. So `compress_audio`
 is off by default for a second reason on top of being lossy, and the acceptance
 step is unchanged: a fresh client and a human **listening** to the clip.
+
+## Body-plan walk selection is from each rig's bone names (2026-08-31)
+
+`--anim walk` used to pick every bone whose name contained `Thigh` or
+`Upper`. That is correct for the quadruped (`LeftFrontUpper` …) and wrong
+for the bird: `LeftWingUpper` / `RightWingUpper` share the suffix, so the
+Walk clip rotated the wings as if they were legs. The remaining shipped
+rigs need a body-plan gait, not a quadruped trot with extra bones.
+
+The selection is now data-driven from the leaf bone name
+(`anim.is_locomotor_upper`, `walk_phase`), pinned by
+`tests/test_anim.py` `BodyPlanWalkTests` driving `shamway generate entity`
+(via `generators.run`) and reading the sibling `.anim.json` — no bundle
+pack. Tool: the generator itself, on the packaged `data/rigs/*.json`.
+
+| Rig | Walk uppers | Phase |
+|---|---|---|
+| humanoid, dinosaur | `LeftThigh` / `RightThigh` (2). `Arm` bones swing opposite the same-side thigh — they are not locomotor | Left 0, Right π |
+| quadruped, crocodile | `Left/Right` `Front/Rear` `Upper` (4) | LeftFront+RightRear 0, RightFront+LeftRear π |
+| arachnid | `Left/RightLeg{1-4}Upper` (8) | alternating tetrapod: odd left + even right at 0 |
+| bird | `Left/RightLegUpper` (2). `WingUpper` is excluded | Left 0, Right π |
+
+Idle on a bird also emits a `flap` kind on both `WingUpper` bones (local Z,
+Right inverted so identity-bound wings drop together). Arachnid tarsi have
+no `Foot`/`Paw` token; `part_role` classifies a `*Leg*Lower` as `paw` so a
+role-aware hide can still paint the contact segment dark.
+
+This is authoring-curve selection, not an engine fact. The engine still
+plays `Walk` / `Idle1` by name through `GameObjectAnimalAnimation` (or the
+mod-owned `ShamwayAnimalController`); what changed is which transforms those
+clips name.

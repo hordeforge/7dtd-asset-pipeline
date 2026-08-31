@@ -1,0 +1,46 @@
+{
+  "clips": [
+    {
+      "name": "Idle1",
+      "kind": "bob",
+      "bone": "Root/Prosoma",
+      "amplitude": 0.03,
+      "seconds": 1.5
+    },
+    {
+      "name": "Idle1",
+      "kind": "head",
+      "bone": "Root/Prosoma",
+      "amplitude": 0.35,
+      "seconds": 4.0
+    },
+    {
+      "name": "Walk",
+      "kind": "walk",
+      "bones": [
+        "Root/Prosoma/LeftLeg1Upper",
+        "Root/Prosoma/LeftLeg2Upper",
+        "Root/Prosoma/LeftLeg3Upper",
+        "Root/Prosoma/LeftLeg4Upper",
+        "Root/Prosoma/RightLeg1Upper",
+        "Root/Prosoma/RightLeg2Upper",
+        "Root/Prosoma/RightLeg3Upper",
+        "Root/Prosoma/RightLeg4Upper"
+      ],
+      "lower_bones": [
+        "Root/Prosoma/LeftLeg1Upper/LeftLeg1Middle",
+        "Root/Prosoma/LeftLeg2Upper/LeftLeg2Middle",
+        "Root/Prosoma/LeftLeg3Upper/LeftLeg3Middle",
+        "Root/Prosoma/LeftLeg4Upper/LeftLeg4Middle",
+        "Root/Prosoma/RightLeg1Upper/RightLeg1Middle",
+        "Root/Prosoma/RightLeg2Upper/RightLeg2Middle",
+        "Root/Prosoma/RightLeg3Upper/RightLeg3Middle",
+        "Root/Prosoma/RightLeg4Upper/RightLeg4Middle"
+      ],
+      "body_bone": "Root/Prosoma",
+      "amplitude": 0.22,
+      "seconds": 0.9
+    }
+  ],
+  "play_automatically": true
+}

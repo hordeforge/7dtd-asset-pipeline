@@ -1159,6 +1159,24 @@ class SelfTestFixtureTests(unittest.TestCase):
             "assets-src/bundle/shamwaySelfTestProp.glb",
             "assets-src/bundle/shamwaySelfTestProp_albedo.png",
             "assets-src/bundle/shamwaySelfTestCreature.glb",
+            "assets-src/bundle/shamwaySelfTestBird.glb",
+            "assets-src/bundle/shamwaySelfTestBird.anim.json",
+            "assets-src/bundle/shamwaySelfTestBird_albedo.png",
+            "assets-src/bundle/shamwaySelfTestArachnid.glb",
+            "assets-src/bundle/shamwaySelfTestArachnid.anim.json",
+            "assets-src/bundle/shamwaySelfTestArachnid_albedo.png",
+            "assets-src/bundle/shamwaySelfTestDino.glb",
+            "assets-src/bundle/shamwaySelfTestDino.anim.json",
+            "assets-src/bundle/shamwaySelfTestDino_albedo.png",
+            "assets-src/bundle/shamwaySelfTestCrocodile.glb",
+            "assets-src/bundle/shamwaySelfTestCrocodile.anim.json",
+            "assets-src/bundle/shamwaySelfTestCrocodile_albedo.png",
+            "assets-src/bundle/shamwaySelfTestHumanoid.glb",
+            "assets-src/bundle/shamwaySelfTestHumanoid.anim.json",
+            "assets-src/bundle/shamwaySelfTestHumanoid_albedo.png",
+            "assets-src/creatures/shamwaySelfTestBird.atlas.json",
+            "assets-src/creatures/shamwaySelfTestCrocodile.atlas.json",
+            "assets-src/creatures/shamwaySelfTestHumanoid.atlas.json",
             "Config/entityclasses.xml",
             "assets-src/bundle/timedNuke.glb",
             "assets-src/bundle/gear.glb",
@@ -1270,6 +1288,47 @@ class SelfTestFixtureTests(unittest.TestCase):
         self.assertNotIn("queue.Add(CaseDef.Staged", source)
         self.assertNotIn("stage_editorless_lineup", source)
         self.assertNotIn('yield return "shamwayselftest_look"', source)
+
+    def test_remaining_reference_creatures_meet_the_construction_bar(self) -> None:
+        """Bird, arachnid, dinosaur, crocodile and humanoid ship as the quadruped does:
+        skinned GLB, atlas, Idle1+Walk clips, spawnable XML, and a role-aware hide.
+        """
+        xml = (self.FIXTURE / "Config" / "entityclasses.xml").read_text(encoding="utf-8")
+        remaining = (
+            ("shamwaySelfTestBird", "bird"),
+            ("shamwaySelfTestArachnid", "arachnid"),
+            ("shamwaySelfTestDino", "dinosaur"),
+            ("shamwaySelfTestCrocodile", "crocodile"),
+            ("shamwaySelfTestHumanoid", "humanoid"),
+        )
+        for stem, _rig in remaining:
+            with self.subTest(stem=stem):
+                glb = self.FIXTURE / "assets-src" / "bundle" / f"{stem}.glb"
+                albedo = self.FIXTURE / "assets-src" / "bundle" / f"{stem}_albedo.png"
+                anim_path = self.FIXTURE / "assets-src" / "bundle" / f"{stem}.anim.json"
+                atlas_path = self.FIXTURE / "assets-src" / "creatures" / f"{stem}.atlas.json"
+                self.assertTrue(glb.is_file(), stem)
+                self.assertGreater(albedo.stat().st_size, 0, stem)
+                anim = json.loads(anim_path.read_text(encoding="utf-8"))
+                names = {clip["name"] for clip in anim["clips"]}
+                self.assertIn("Idle1", names, stem)
+                self.assertIn("Walk", names, stem)
+                walk = next(clip for clip in anim["clips"] if clip["name"] == "Walk")
+                if stem == "shamwaySelfTestBird":
+                    self.assertFalse(any("Wing" in path for path in walk["bones"]))
+                    self.assertTrue(any("LegUpper" in path for path in walk["bones"]))
+                    self.assertTrue(any(clip["kind"] == "flap" for clip in anim["clips"]))
+                atlas = json.loads(atlas_path.read_text(encoding="utf-8"))
+                roles = set(atlas["roles"].values())
+                self.assertIn("paw", roles, stem)
+                self.assertIn("limb", roles, stem)
+                self.assertIn("body", roles, stem)
+                self.assertIn(f'name="{stem}"', xml)
+                self.assertIn(
+                    f"Resources/shamwayselftest.unity3d?{stem}",
+                    xml,
+                )
+                self.assertIn('name="UserSpawnType" value="Menu"', xml)
 
     def test_the_vfx_fixture_loops_and_uses_generated_cards(self) -> None:
         vfx = json.loads((self.FIXTURE / "assets-src/bundle/burst.vfx").read_text(encoding="utf-8"))

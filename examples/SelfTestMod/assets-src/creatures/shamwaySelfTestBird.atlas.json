@@ -1,0 +1,134 @@
+{
+  "stem": "shamwaySelfTestBird",
+  "grid": 5,
+  "parts": {
+    "Pelvis": [
+      0.0,
+      0.8,
+      0.2,
+      1.0
+    ],
+    "Spine": [
+      0.2,
+      0.8,
+      0.4,
+      1.0
+    ],
+    "Chest": [
+      0.4,
+      0.8,
+      0.6,
+      1.0
+    ],
+    "Neck": [
+      0.6,
+      0.8,
+      0.8,
+      1.0
+    ],
+    "Head": [
+      0.8,
+      0.8,
+      1.0,
+      1.0
+    ],
+    "Tail": [
+      0.0,
+      0.6,
+      0.2,
+      0.8
+    ],
+    "LeftWingUpper": [
+      0.2,
+      0.6,
+      0.4,
+      0.8
+    ],
+    "LeftWingLower": [
+      0.4,
+      0.6,
+      0.6,
+      0.8
+    ],
+    "LeftWingTip": [
+      0.6,
+      0.6,
+      0.8,
+      0.8
+    ],
+    "RightWingUpper": [
+      0.8,
+      0.6,
+      1.0,
+      0.8
+    ],
+    "RightWingLower": [
+      0.0,
+      0.4,
+      0.2,
+      0.6
+    ],
+    "RightWingTip": [
+      0.2,
+      0.4,
+      0.4,
+      0.6
+    ],
+    "LeftLegUpper": [
+      0.4,
+      0.4,
+      0.6,
+      0.6
+    ],
+    "LeftLegLower": [
+      0.6,
+      0.4,
+      0.8,
+      0.6
+    ],
+    "LeftFoot": [
+      0.8,
+      0.4,
+      1.0,
+      0.6
+    ],
+    "RightLegUpper": [
+      0.0,
+      0.19999999999999996,
+      0.2,
+      0.4
+    ],
+    "RightLegLower": [
+      0.2,
+      0.19999999999999996,
+      0.4,
+      0.4
+    ],
+    "RightFoot": [
+      0.4,
+      0.19999999999999996,
+      0.6,
+      0.4
+    ]
+  },
+  "roles": {
+    "Pelvis": "body",
+    "Spine": "body",
+    "Chest": "body",
+    "Neck": "body",
+    "Head": "head",
+    "Tail": "tail",
+    "LeftWingUpper": "limb",
+    "LeftWingLower": "limb",
+    "LeftWingTip": "tail",
+    "RightWingUpper": "limb",
+    "RightWingLower": "limb",
+    "RightWingTip": "tail",
+    "LeftLegUpper": "limb",
+    "LeftLegLower": "paw",
+    "LeftFoot": "paw",
+    "RightLegUpper": "limb",
+    "RightLegLower": "paw",
+    "RightFoot": "paw"
+  }
+}

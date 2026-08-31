@@ -70,9 +70,22 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ..anim import is_arm_upper, is_locomotor_upper, is_wing_upper
 from ..atomic import write
 from ..errors import PipelineError
 from ..rigs import Rig, glb_bytes, load_rig, mat_inverse, scaled, world_matrices
+
+# Per-rig walk stride (rad) and cycle length (s). Size variants inherit the
+# base name (`quadruped-small` → `quadruped`). A bird's wings are not legs;
+# its walk is a quicker two-step, idle carries the flap.
+_WALK_GAIT: dict[str, tuple[float, float]] = {
+    "humanoid": (0.4, 1.0),
+    "quadruped": (0.35, 1.2),
+    "bird": (0.28, 0.8),
+    "dinosaur": (0.4, 1.1),
+    "arachnid": (0.22, 0.9),
+    "crocodile": (0.22, 1.6),
+}
 
 
 def _arachnid_leg_parts() -> dict[str, dict[str, Any]]:
@@ -336,11 +349,18 @@ def part_role(part_names: list[str]) -> dict[str, str]:
         folded = name.lower()
         if any(token in folded for token in ("paw", "foot", "hoof", "hand")):
             roles[name] = "paw"
+        elif folded.endswith("lower") and "leg" in folded:
+            # Arachnid tarsi have no Foot/Paw token; the contact segment is
+            # still the part a role-aware hide must paint dark.
+            roles[name] = "paw"
         elif "tail" in folded or "wingtip" in folded:
             roles[name] = "tail"
         elif "head" in folded:
             roles[name] = "head"
-        elif any(token in folded for token in ("thigh", "shin", "upper", "lower", "arm", "leg")):
+        elif any(
+            token in folded
+            for token in ("thigh", "shin", "upper", "lower", "arm", "leg", "middle", "wing")
+        ):
             roles[name] = "limb"
         else:
             roles[name] = "body"
@@ -888,7 +908,9 @@ def main(argv: list[str] | None = None) -> int:
         metavar="KINDS",
         help="write a {stem}.anim.json with legacy clips — comma list of"
         " idle, head, walk, attack, death, jump (default: idle). idle bobs"
-        " the body, head turns it, walk trots the legs, attack lunges the"
+        " the body (and flaps wings on a bird), head turns it, walk trots the"
+        " locomotor legs for that body plan (biped / four-leg / eight-leg /"
+        " perched bird — wings are never walk legs), attack lunges the"
         " head, death rolls the body over once (non-looping), jump hops;"
         " the clips are named Idle1/Walk/Attack1/Death/Jump for the engine's"
         " GameObjectAnimalAnimation, and AvatarController=GameObjectAnimalAnimation"
@@ -971,6 +993,17 @@ def main(argv: list[str] | None = None) -> int:
                     "seconds": 1.5,
                 }
             )
+            wings = [bone.name for bone in rig.bones if is_wing_upper(bone.name)]
+            if wings:
+                clips.append(
+                    {
+                        "name": "Idle1",
+                        "kind": "flap",
+                        "bones": [_bone_path(rig, bone) for bone in wings],
+                        "amplitude": 0.22,
+                        "seconds": 1.6,
+                    }
+                )
         head = next(
             (bone.name for bone in rig.bones if bone.name == "Head"),
             first_child,
@@ -1025,24 +1058,31 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
         if "walk" in kinds:
-            # Upper legs by name; each lower leg is its child (the knee).
-            legs = [bone.name for bone in rig.bones if "Thigh" in bone.name or "Upper" in bone.name]
-            lower = [
-                next(
-                    (child.name for child in rig.bones if child.parent == leg),
-                    "",
-                )
-                for leg in legs
+            # Locomotor uppers only — wings share the `Upper` suffix with
+            # quadruped legs, so a naive `Thigh or Upper` match put the bird's
+            # wings on the Walk clip. Biped arms swing opposite the same-side
+            # thigh (walk_phase treats an Arm as a rear bone). Each lower
+            # segment is the upper's first child (Shin / Lower / Middle).
+            uppers = [
+                bone.name
+                for bone in rig.bones
+                if is_locomotor_upper(bone.name) or is_arm_upper(bone.name)
             ]
+            lower = [
+                next((child.name for child in rig.bones if child.parent == leg), "")
+                for leg in uppers
+            ]
+            plan = rig.name.rsplit("-", 1)[0]
+            stride, seconds = _WALK_GAIT.get(plan, (0.35, 1.2))
             clips.append(
                 {
                     "name": "Walk",
                     "kind": "walk",
-                    "bones": [_bone_path(rig, bone) for bone in legs],
+                    "bones": [_bone_path(rig, bone) for bone in uppers],
                     "lower_bones": [_bone_path(rig, bone) for bone in lower if bone],
                     "body_bone": f"{rig.root().name}/{first_child}",
-                    "amplitude": 0.35,
-                    "seconds": 1.2,
+                    "amplitude": stride,
+                    "seconds": seconds,
                 }
             )
         declaration = {"clips": clips, "play_automatically": True}

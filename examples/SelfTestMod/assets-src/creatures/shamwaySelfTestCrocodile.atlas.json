@@ -1,0 +1,155 @@
+{
+  "stem": "shamwaySelfTestCrocodile",
+  "grid": 5,
+  "parts": {
+    "Pelvis": [
+      0.0,
+      0.8,
+      0.2,
+      1.0
+    ],
+    "Spine1": [
+      0.2,
+      0.8,
+      0.4,
+      1.0
+    ],
+    "Spine2": [
+      0.4,
+      0.8,
+      0.6,
+      1.0
+    ],
+    "Chest": [
+      0.6,
+      0.8,
+      0.8,
+      1.0
+    ],
+    "Neck": [
+      0.8,
+      0.8,
+      1.0,
+      1.0
+    ],
+    "Head": [
+      0.0,
+      0.6,
+      0.2,
+      0.8
+    ],
+    "Tail1": [
+      0.2,
+      0.6,
+      0.4,
+      0.8
+    ],
+    "Tail2": [
+      0.4,
+      0.6,
+      0.6,
+      0.8
+    ],
+    "Tail3": [
+      0.6,
+      0.6,
+      0.8,
+      0.8
+    ],
+    "LeftFrontUpper": [
+      0.8,
+      0.6,
+      1.0,
+      0.8
+    ],
+    "LeftFrontLower": [
+      0.0,
+      0.4,
+      0.2,
+      0.6
+    ],
+    "LeftFrontFoot": [
+      0.2,
+      0.4,
+      0.4,
+      0.6
+    ],
+    "RightFrontUpper": [
+      0.4,
+      0.4,
+      0.6,
+      0.6
+    ],
+    "RightFrontLower": [
+      0.6,
+      0.4,
+      0.8,
+      0.6
+    ],
+    "RightFrontFoot": [
+      0.8,
+      0.4,
+      1.0,
+      0.6
+    ],
+    "LeftRearUpper": [
+      0.0,
+      0.19999999999999996,
+      0.2,
+      0.4
+    ],
+    "LeftRearLower": [
+      0.2,
+      0.19999999999999996,
+      0.4,
+      0.4
+    ],
+    "LeftRearFoot": [
+      0.4,
+      0.19999999999999996,
+      0.6,
+      0.4
+    ],
+    "RightRearUpper": [
+      0.6,
+      0.19999999999999996,
+      0.8,
+      0.4
+    ],
+    "RightRearLower": [
+      0.8,
+      0.19999999999999996,
+      1.0,
+      0.4
+    ],
+    "RightRearFoot": [
+      0.0,
+      0.0,
+      0.2,
+      0.19999999999999996
+    ]
+  },
+  "roles": {
+    "Pelvis": "body",
+    "Spine1": "body",
+    "Spine2": "body",
+    "Chest": "body",
+    "Neck": "body",
+    "Head": "head",
+    "Tail1": "tail",
+    "Tail2": "tail",
+    "Tail3": "tail",
+    "LeftFrontUpper": "limb",
+    "LeftFrontLower": "limb",
+    "LeftFrontFoot": "paw",
+    "RightFrontUpper": "limb",
+    "RightFrontLower": "limb",
+    "RightFrontFoot": "paw",
+    "LeftRearUpper": "limb",
+    "LeftRearLower": "limb",
+    "LeftRearFoot": "paw",
+    "RightRearUpper": "limb",
+    "RightRearLower": "limb",
+    "RightRearFoot": "paw"
+  }
+}

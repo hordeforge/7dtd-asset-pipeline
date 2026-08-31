@@ -20,9 +20,9 @@ classes whose runtime behaviour makes a correct build silent or invisible.
   glTF skin; SDCS extras still want an editor; bone names bind with no error
   on a miss.
 - [entities.md](entities.md) — custom entities: eight shipped rigs,
-  `generate rig`/`generate entity` (parts, `--scale`, `--atlas` for a
-  per-part UV cell), the mandatory `Prefab`/`Mesh`/`UserSpawnType` wiring,
-  movement via legacy animation clips, the role-aware `generate hide`,
+  `generate rig`/`generate entity`/`generate creature` (parts, `--scale`,
+  `--atlas`, `--coat` palettes), the mandatory `Prefab`/`Mesh`/`UserSpawnType`
+  wiring, body-plan-aware walk clips, the role-aware `generate hide`,
   and the dedicated-server caveat.
 - [environment-effects.md](environment-effects.md) — weather, fog, and light:
   why a zone effect that ships only particles reads as a glitch, and the

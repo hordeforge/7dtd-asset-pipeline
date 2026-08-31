@@ -165,7 +165,7 @@ class AnimDeclarationTests(unittest.TestCase):
         for body, fragment in (
             (
                 '{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}',
-                "bob, head, walk, attack, death or jump",
+                "bob, head, walk, flap, attack, death or jump",
             ),
             ('{"clips": [{"name": "Walk", "kind": "walk", "bone": "Root"}]}', '"bones"'),
             ('{"clips": [{"name": "Idle1", "kind": "bob"}]}', '"bone"'),
@@ -349,7 +349,7 @@ class LimbAnimTests(unittest.TestCase):
         path.write_text(
             '{"clips": [{"name": "Run", "kind": "sprint", "bone": "Root"}]}', encoding="utf-8"
         )
-        with self.assertRaisesRegex(PipelineError, "bob, head, walk, attack, death or jump"):
+        with self.assertRaisesRegex(PipelineError, "bob, head, walk, flap, attack, death or jump"):
             parse_anim(path)
 
     def test_walk_curves_bend_knees_and_alternate_diagonally(self) -> None:
@@ -610,3 +610,113 @@ class BoneColliderTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+
+class BodyPlanWalkTests(unittest.TestCase):
+    """Walk/idle curve selection is data-driven from each rig's bone names.
+
+    Wings share the `Upper` suffix with quadruped legs; a naive match put them
+    on the Walk clip. These tests drive `shamway generate entity` (via
+    `generators.run`) and read the sibling `.anim.json` — no bundle pack.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _anim(self, rig: str, kinds: str = "idle,head,walk") -> dict[str, Any]:
+        import json
+
+        from sevendtd_asset_pipeline.generators import run
+
+        out = self.root / f"{rig}.glb"
+        self.assertEqual(run("entity", [str(out), "--rig", rig, "--anim", kinds]), 0)
+        loaded: dict[str, Any] = json.loads(
+            out.with_suffix(".anim.json").read_text(encoding="utf-8")
+        )
+        return loaded
+
+    def test_bird_walk_uses_legs_not_wings(self) -> None:
+        from sevendtd_asset_pipeline.anim import is_locomotor_upper, is_wing_upper, walk_phase
+
+        declaration = self._anim("bird")
+        walk = next(clip for clip in declaration["clips"] if clip["name"] == "Walk")
+        leaves = [path.rsplit("/", 1)[-1] for path in walk["bones"]]
+        self.assertTrue(any("LegUpper" in name for name in leaves), leaves)
+        self.assertFalse(any(is_wing_upper(name) for name in leaves), leaves)
+        self.assertTrue(all(is_locomotor_upper(name) for name in leaves), leaves)
+        idle = [clip for clip in declaration["clips"] if clip["name"] == "Idle1"]
+        flap = next(clip for clip in idle if clip["kind"] == "flap")
+        self.assertTrue(any("WingUpper" in path for path in flap["bones"]))
+        # Opposite legs: Left at 0, Right at π.
+        left = next(path for path in walk["bones"] if path.endswith("LeftLegUpper"))
+        right = next(path for path in walk["bones"] if path.endswith("RightLegUpper"))
+        self.assertAlmostEqual(walk_phase(left), 0.0)
+        self.assertAlmostEqual(walk_phase(right), math.pi)
+
+    def test_humanoid_and_dinosaur_walk_are_biped(self) -> None:
+        from sevendtd_asset_pipeline.anim import is_arm_upper, is_locomotor_upper, walk_phase
+
+        for rig in ("humanoid", "dinosaur"):
+            with self.subTest(rig):
+                walk = next(
+                    clip for clip in self._anim(rig, "walk")["clips"] if clip["name"] == "Walk"
+                )
+                leaves = [path.rsplit("/", 1)[-1] for path in walk["bones"]]
+                thighs = [name for name in leaves if "Thigh" in name]
+                self.assertEqual(len(thighs), 2, leaves)
+                self.assertTrue(
+                    all(is_locomotor_upper(name) or is_arm_upper(name) for name in leaves)
+                )
+                self.assertFalse(any("Wing" in name for name in leaves))
+                left = next(
+                    path
+                    for path in walk["bones"]
+                    if path.rsplit("/", 1)[-1].startswith("LeftThigh")
+                )
+                right = next(
+                    path
+                    for path in walk["bones"]
+                    if path.rsplit("/", 1)[-1].startswith("RightThigh")
+                )
+                self.assertAlmostEqual(walk_phase(left), 0.0)
+                self.assertAlmostEqual(walk_phase(right), math.pi)
+
+    def test_crocodile_walk_is_four_legs(self) -> None:
+        from sevendtd_asset_pipeline.anim import is_locomotor_upper, walk_phase
+
+        clips = self._anim("crocodile", "walk")["clips"]
+        walk = next(clip for clip in clips if clip["name"] == "Walk")
+        leaves = [path.rsplit("/", 1)[-1] for path in walk["bones"]]
+        self.assertEqual(len(leaves), 4, leaves)
+        self.assertTrue(all(is_locomotor_upper(name) for name in leaves), leaves)
+        left_front = next(path for path in walk["bones"] if path.endswith("LeftFrontUpper"))
+        right_rear = next(path for path in walk["bones"] if path.endswith("RightRearUpper"))
+        right_front = next(path for path in walk["bones"] if path.endswith("RightFrontUpper"))
+        left_rear = next(path for path in walk["bones"] if path.endswith("LeftRearUpper"))
+        self.assertAlmostEqual(walk_phase(left_front), 0.0)
+        self.assertAlmostEqual(walk_phase(right_rear), 0.0)
+        self.assertAlmostEqual(walk_phase(right_front), math.pi)
+        self.assertAlmostEqual(walk_phase(left_rear), math.pi)
+
+    def test_arachnid_walk_is_eight_legs_alternating(self) -> None:
+        from sevendtd_asset_pipeline.anim import is_locomotor_upper, walk_phase
+
+        clips = self._anim("arachnid", "walk")["clips"]
+        walk = next(clip for clip in clips if clip["name"] == "Walk")
+        leaves = [path.rsplit("/", 1)[-1] for path in walk["bones"]]
+        self.assertEqual(len(leaves), 8, leaves)
+        self.assertTrue(all(is_locomotor_upper(name) for name in leaves), leaves)
+        self.assertFalse(any("Wing" in name or "Arm" in name for name in leaves))
+        # Alternating tetrapod: odd left + even right at 0.
+        left1 = next(path for path in walk["bones"] if path.endswith("LeftLeg1Upper"))
+        left2 = next(path for path in walk["bones"] if path.endswith("LeftLeg2Upper"))
+        right1 = next(path for path in walk["bones"] if path.endswith("RightLeg1Upper"))
+        right2 = next(path for path in walk["bones"] if path.endswith("RightLeg2Upper"))
+        self.assertAlmostEqual(walk_phase(left1), 0.0)
+        self.assertAlmostEqual(walk_phase(left2), math.pi)
+        self.assertAlmostEqual(walk_phase(right1), math.pi)
+        self.assertAlmostEqual(walk_phase(right2), 0.0)

@@ -82,8 +82,8 @@ TOPICS: dict[str, tuple[str, str]] = {
     ),
     "entities": (
         "authoring/entities.md",
-        "custom entities: the rigs, generate rig/entity, the entityclasses.xml wiring,"
-        " the Physics-node grounding capsule, movement, the per-part UV atlas +"
+        "custom entities: the rigs, generate rig/entity/creature, the entityclasses.xml wiring,"
+        " the Physics-node grounding capsule, body-plan walk clips, the per-part UV atlas +"
         " role-aware hide, and the per-rig live sign-off",
     ),
     "environment-effects": (

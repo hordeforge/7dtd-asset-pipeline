@@ -64,6 +64,9 @@ OPTIONS
                          this host has no packaged one that reads HLSL. Needed
                          on Debian and Ubuntu, which package vkd3d 1.2; a no-op
                          where the distribution already ships 1.3 or newer
+  --all                 Install the full suite in one flag: --with-authoring,
+                        --with-research, --with-extras, --with-desktop-capture,
+                        --with-unity-prereqs and --with-vkd3d-source together
   --check                Report what is present or missing and install nothing
   -h, --help             Show this help
 
@@ -170,6 +173,10 @@ while (($#)); do
 		--with-desktop-capture) WITH_DESKTOP_CAPTURE=1; shift ;;
 		--with-vkd3d-source) WITH_VKD3D_SOURCE=1; shift ;;
 		--with-extras) WITH_EXTRAS=1; shift ;;
+		--all)
+			WITH_AUTHORING=1; WITH_RESEARCH=1; WITH_EXTRAS=1
+			WITH_DESKTOP_CAPTURE=1; WITH_UNITY_PREREQS=1; WITH_VKD3D_SOURCE=1
+			shift ;;
 		--check) CHECK_ONLY=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) echo "ERROR: unknown option $1" >&2; usage >&2; exit 1 ;;
@@ -799,11 +806,55 @@ install_binary_release() {
 	rm -rf "$staging"
 }
 
+# AssetRipper ships as a GUI whose executable needs its sibling libcapstone.so,
+# so it cannot be installed as a lone binary the way gltfpack / compressonatorcli
+# can. Install the whole extracted directory and symlink the executable.
+install_assetripper() {
+	local url archive staging dest bin
+	dest="${HOME}/.local/opt/assetripper"
+	if have assetripper; then
+		echo "OK: AssetRipper is already installed ($(command -v assetripper))"
+		return
+	fi
+	if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
+		echo "note: automatic AssetRipper setup supports Linux x86_64 only;"
+		echo "      see https://github.com/AssetRipper/AssetRipper"
+		return
+	fi
+	for required in curl tar python3; do
+		have "$required" || { echo "note: $required missing; skipped AssetRipper"; return; }
+	done
+	url="$(curl --fail --location --silent --show-error --max-time 30 \
+		"https://api.github.com/repos/AssetRipper/AssetRipper/releases/latest" 2>/dev/null |
+		python3 "$ROOT/scripts/github_asset_url.py" --suffix="_linux_x64.tar.xz" || true)"
+	if [[ -z "$url" ]]; then
+		echo "note: could not resolve an AssetRipper release; skipped"
+		return
+	fi
+	archive="$(mktemp)"
+	staging="$(mktemp -d)"
+	echo "Installing AssetRipper from $url"
+	if curl --fail --location --silent --show-error --max-time 180 "$url" -o "$archive" &&
+		tar -xJf "$archive" -C "$staging" &&
+		bin="$(find "$staging" -maxdepth 2 -type f -name 'AssetRipper*' -perm -u+x 2>/dev/null | head -n1)" &&
+		[[ -n "$bin" ]]; then
+		rm -rf "$dest"
+		mkdir -p "$dest" "$HOME/.local/bin"
+		cp -a "$staging"/. "$dest/"
+		ln -sf "$dest/$(basename "$bin")" "$HOME/.local/bin/assetripper"
+		echo "OK: installed $dest (launcher ~/.local/bin/assetripper)"
+	else
+		echo "note: AssetRipper download or extraction failed; skipped"
+	fi
+	rm -f "$archive"
+	rm -rf "$staging"
+}
+
 install_extras() {
-	# gltfpack's Linux asset is a manylinux zip; the others are tar.gz / tar.xz.
+	# gltfpack's Linux asset is a manylinux zip; compressonatorcli is a tar.gz.
 	install_binary_release gltfpack "zeux/meshoptimizer" "-ubuntu.zip" "gltfpack"
 	install_binary_release compressonatorcli "GPUOpen-Tools/compressonator" "-Linux.tar.gz" "compressonatorcli"
-	install_binary_release assetripper "AssetRipper/AssetRipper" "_linux_x64.tar.xz" "assetripper"
+	install_assetripper
 	echo "note: bc7enc_rdo is a source build (see docs/authoring/authoring-tools.md);"
 	echo "      fsb5 comes from the Python 'audio' extra (shamway capabilities --missing)."
 }

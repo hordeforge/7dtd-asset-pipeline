@@ -40,7 +40,7 @@
 | `scripts/compile-editor-scripts.sh` | compiles the vendored editor C# against a real editor's assemblies, without starting one |
 | `scripts/install-tools.sh` | host packages, including `vkd3d-compiler` for the writer's shader lane |
 | `scripts/install-unity-editor.sh` | *(opt-in)* the checksum-verified game-matched editor |
-| `generators/` (in the package) | reproducible sound, audio, cutout, particle-card, icon, texture-maps, mesh, mesh-optimize and mesh-icon generation, as `shamway generate` |
+| `generators/` (in the package) | reproducible sound, audio, cutout, particle-card, icon, texture-maps, mesh, mesh-optimize, mesh-icon and bind generation, as `shamway generate` |
 | consumer `AGENTS.md` | the agent contract, written into the mod by `init` |
 | UnityFS reader | signature, revision, block decompression, serialized type table |
 | tracked `.manifest` | complete build membership for offline exact-stem validation |

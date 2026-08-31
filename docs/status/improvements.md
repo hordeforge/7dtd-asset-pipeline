@@ -382,6 +382,17 @@ another offset. File the frame with
 `shamway client capture burst --observable "grey haze left, gold flash centre, orange streaks right"`.
 Do not claim the smoke layer works until that capture exists.
 
+## 9. Self-test humanoid feet still streak
+
+`shamwaySelfTestHumanoid` is `generate bind --head-lift --neck --anim`.
+Hips and thighs now read as a walk (pelvis pinned to Hips, thigh/shin
+shafts painted to those bones, contralateral webbing rejected). The
+feet do not: live looks still show thin blades and leftover shin/foot
+streaks (`shamway-20260831-173814-1da96f7c4034`). Not signed off.
+
+**Close it with:** a dedicated `--look shamwaySelfTestHumanoid` whose
+feet read as feet — not a web, not a spike. A load is not a look.
+
 ## Ordering
 
 If picked up in one pass: **1** (patch dry-run) buys the most silence removed

@@ -14,15 +14,36 @@ tag has no changelog section.
 
 ### Added
 
+- **`shamway generate bind`** — skin an authored glTF/OBJ onto a shipped
+  rig (`--rig`, `--height`, `--stretch-x`, `--solidify` for open shells,
+  `--head-lift` for a head-local OBJ, `--neck [M]` to fill the torso hole
+  with a cylinder, `--voxel M` to fuse overlapping extras, `--anim` for Idle1+Walk).
+  After AUTO it pins the pelvis to Hips and paints thigh/shin/foot shafts
+  to those bones so Idle1 walk cannot crumple the butt or freeze the shins.
+  `--head-lift` places the
+  head by its lowest vertex, not its origin (origin-lift parks a
+  head-local mesh in the neck hole). Same arguments produce the same bytes.
+  Lifts `Root` to the glTF scene root so clip paths resolve. SelfTestMod's
+  humanoid, dinosaur and arachnid fixtures are bind output, not one-off
+  remeshes.
+- **Remeshed humanoid, dinosaur and arachnid fixtures** — SelfTestMod's
+  `shamwaySelfTestHumanoid` is `generate bind --head-lift --neck --anim`
+  with Idle1 A-pose (Z drop composed with Y arm swing);
+  `shamwaySelfTestDino` and `shamwaySelfTestArachnid` are bind output on
+  the shipped shamway rigs so Idle1 walk+spin still plays. `generate entity`
+  still emits primitives; arachnid no longer meshes Middle/Lower (that was
+  the 16-leg look).
 - **Improved remaining-rig silhouettes** — bird body is a Z-keel (not a
   stack of Y-cylinders) with a neck that reaches the head and legs that
-  reach the feet; dinosaur is a horizontal theropod (chest/neck/head
-  forward, overlapping tail, thighs that meet the shins); crocodile is one
-  overlapping low hull; arachnid abdomen is a flat box and legs splay
-  outboard; humanoid arms are X-boxes along the shoulder chain (a Y-cylinder
-  at the joint was a vertical can). Remaining-rig Idle1 marches in place
-  and sways the tail so a staged look shows gait, not a T-pose. Parts accept
-  a local `offset` so a primitive can sit off its joint.
+  reach the feet; dinosaur is a horizontal theropod with a large forward
+  skull and a heavy tail; crocodile is a low wide hull with a laterally
+  compressed paddle tail, short side-legs, a toothed snout and two rows of
+  osteoderms; arachnid abdomen is a flat box and legs splay outboard;
+  humanoid arms are X-boxes along the shoulder chain. Remaining-rig Idle1
+  marches in place, yaws the root through a full turn (the creature turns
+  with its legs), and sways the tail. Humanoid Idle1/Walk use a 0.55 rad
+  stride on the thighs and drop the T-pose arms about Z while swinging
+  them about Y. Parts accept a local `offset`.
   `docs/authoring/entities.md` now opens with the `generate creature` on-ramp.
 - **Shipped-rig reference creatures at the quadruped construction bar** —
   bird, arachnid, dinosaur, crocodile and humanoid now generate as a skinned

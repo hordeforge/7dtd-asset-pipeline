@@ -51,8 +51,14 @@
         "Root/Pelvis/RightLegUpper/RightLegLower"
       ],
       "body_bone": "Root/Pelvis",
-      "amplitude": 0.14,
+      "amplitude": 0.21000000000000002,
       "seconds": 1.04
+    },
+    {
+      "name": "Idle1",
+      "kind": "spin",
+      "bone": "Root",
+      "seconds": 8.0
     },
     {
       "name": "Walk",

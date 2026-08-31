@@ -247,9 +247,10 @@ REGISTRY: tuple[_Spec, ...] = (
         name="blender",
         kind="command",
         probe="blender",
-        unlocks=("shamway generate mesh", "shamway generate mesh-icon"),
+        unlocks=("shamway generate mesh", "shamway generate mesh-icon", "shamway generate bind"),
         purpose="authored mesh lane: organic, rigged, and sculpted geometry, exported "
-        "as glTF straight into an editorless bundle, and the editorless icon render",
+        "as glTF straight into an editorless bundle, the editorless icon render, "
+        "and binding a modelled mesh onto a shipped rig",
         install="shamway script install-tools --with-authoring",
     ),
     _Spec(

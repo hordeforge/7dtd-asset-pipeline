@@ -112,6 +112,15 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
         " Size/coat morphs are --scale and --coat; calls those same generators",
         ("pillow", "numpy"),
     ),
+    "bind": (
+        "bind",
+        "skin an authored mesh (glTF/OBJ) onto a shipped rig so Idle1/Walk"
+        " bone names still match; --solidify for open shells, --head-lift for"
+        " a head-local OBJ, --neck to fill the torso hole, --voxel to fuse"
+        " overlapping extras, --anim writes the sibling clips; after AUTO"
+        " the pelvis pins to Hips and thigh/shin/foot shafts keep those bones",
+        ("blender",),
+    ),
 }
 
 

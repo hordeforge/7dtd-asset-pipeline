@@ -25,6 +25,7 @@ import sevendtd_asset_pipeline
 from sevendtd_asset_pipeline import Pipeline, PipelineError
 from sevendtd_asset_pipeline.assets_src import LANES, render_readme
 from sevendtd_asset_pipeline.capabilities import has_capability
+from sevendtd_asset_pipeline.gltf_scene import parse_gltf
 from sevendtd_asset_pipeline.icon_check import (
     check_icons,
     discover_icon_references,
@@ -1329,6 +1330,52 @@ class SelfTestFixtureTests(unittest.TestCase):
                     xml,
                 )
                 self.assertIn('name="UserSpawnType" value="Menu"', xml)
+
+    def test_remeshed_reference_creatures_read_as_their_body_plan(self) -> None:
+        """Humanoid head on the neck, dinosaur longer than tall, spider wider
+        than tall. These fixtures are bind output, not the primitive
+        generate-entity boxes.
+        """
+
+        def extents(stem: str) -> tuple[float, float, float, float, float, float]:
+            scene = parse_gltf(self.FIXTURE / "assets-src" / "bundle" / f"{stem}.glb")
+            xs, ys, zs = zip(*scene.meshes[0].primitive.positions, strict=True)
+            return min(xs), max(xs), min(ys), max(ys), min(zs), max(zs)
+
+        xmin, xmax, ymin, ymax, zmin, zmax = extents("shamwaySelfTestHumanoid")
+        self.assertGreater(ymin, -0.15)
+        self.assertGreater(ymax, 1.5)
+        self.assertLess(ymax - ymin, 2.2)
+
+        xmin, xmax, ymin, ymax, zmin, zmax = extents("shamwaySelfTestDino")
+        length = zmax - zmin
+        height = ymax - ymin
+        self.assertGreater(length, height * 1.2)
+
+        xmin, xmax, ymin, ymax, zmin, zmax = extents("shamwaySelfTestArachnid")
+        width = xmax - xmin
+        height = ymax - ymin
+        self.assertGreater(width, height)
+
+    def test_remeshed_fixtures_keep_generate_entity_bone_paths(self) -> None:
+        """Idle1 clips name `Root/...`. A Blender armature wrapper
+        (`arachnid/Root/...`) makes those clips miss every bone and the
+        staged look sits still.
+        """
+        parent_of: dict[int, int] = {}
+        for stem in (
+            "shamwaySelfTestArachnid",
+            "shamwaySelfTestDino",
+            "shamwaySelfTestHumanoid",
+        ):
+            scene = parse_gltf(self.FIXTURE / "assets-src" / "bundle" / f"{stem}.glb")
+            self.assertEqual([scene.nodes[i].name for i in scene.roots], ["Root"], stem)
+            parent_of.clear()
+            for node in scene.nodes:
+                for child in node.children:
+                    parent_of[child] = node.index
+            root = next(i for i, node in enumerate(scene.nodes) if node.name == "Root")
+            self.assertIsNone(parent_of.get(root), stem)
 
     def test_the_vfx_fixture_loops_and_uses_generated_cards(self) -> None:
         vfx = json.loads((self.FIXTURE / "assets-src/bundle/burst.vfx").read_text(encoding="utf-8"))

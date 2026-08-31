@@ -476,7 +476,7 @@ integration. This table says which is which, so nobody has to guess — and so
 |---|---|
 | **UnityPy** | **wired** — type trees for every class the editorless writer emits, `inspect --deep` |
 | **trimesh** | **wired** — `check-mesh`, and reads glTF/OBJ/STL/PLY into a bundle `Mesh` |
-| **Blender** | **wired** — `generate mesh` (GLB) and `generate mesh-icon` (headless Cycles render) |
+| **Blender** | **wired** — `generate mesh` (GLB), `generate mesh-icon` (headless Cycles render), `generate bind` (skin an authored mesh onto a shipped rig) |
 | **Pillow** | **wired** — cutouts, atlas cells, contact sheets, the texture lane |
 | **NumPy** | **wired** — `generate texture-maps`, and the BC1/BC3 block compressor |
 | **Khronos glTF Validator** | **wired** — `check-mesh --strict`; degrades to a `skipped:` line when absent |

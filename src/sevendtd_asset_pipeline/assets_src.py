@@ -110,6 +110,7 @@ Then gate each lane, build, and validate — from the mod root:
 - `shamway capabilities --json` — what is installed, and what it unlocks
 - `shamway check-icons` — every atlas PNG and CustomIcon key
 - `shamway generate mesh-icon` — photograph a mesh file into an icon, no editor
+- `shamway generate bind` — skin an authored mesh onto a shipped rig (`--neck` fills a split humanoid's torso hole)
 
 ```bash
 shamway capabilities --json

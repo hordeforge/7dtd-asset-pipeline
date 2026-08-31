@@ -306,11 +306,15 @@ class AnimalRigTests(unittest.TestCase):
 
     def test_crocodile_is_long_and_low(self) -> None:
         rig = load_rig("crocodile")
-        self.assertEqual(len(rig.bones), 22)
+        self.assertEqual(len(rig.bones), 38)
         by_name = {bone.name: bone for bone in rig.bones}
         self.assertEqual(by_name["Spine2"].parent, "Spine1")
         self.assertEqual(by_name["Chest"].parent, "Spine2")
         self.assertEqual(by_name["Head"].parent, "Neck")
+        self.assertEqual(by_name["LeftFang"].parent, "Head")
+        self.assertEqual(by_name["RightFang2"].parent, "Head")
+        self.assertEqual(by_name["LeftScute1"].parent, "Pelvis")
+        self.assertEqual(by_name["RightScute6"].parent, "Tail2")
         self.assertEqual(by_name["Tail3"].parent, "Tail2")
         self.assertEqual(by_name["LeftFrontUpper"].parent, "Chest")
         self.assertEqual(by_name["LeftRearUpper"].parent, "Pelvis")

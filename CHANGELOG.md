@@ -14,6 +14,11 @@ tag has no changelog section.
 
 ### Added
 
+- **`ModInfo.xml` schema is gated** — `validate` now checks `<Version>` is
+  present and a dotted-numeric version and `<Description>` is non-empty
+  (`references.check_mod_info_schema`). A missing/malformed version ships a
+  stale mod version and a missing description a blank mod-list row, neither of
+  which errors in game.
 - **Property-based tests for the UnityFS reader** (`tests/test_property.py`,
   Hypothesis, dev-group dep). `inspect_bundle` must succeed or raise the
   reader's own `PipelineError` on arbitrary bytes, hostile class IDs, hostile

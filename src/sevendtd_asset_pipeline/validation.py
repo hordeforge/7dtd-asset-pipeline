@@ -12,6 +12,7 @@ from .errors import PipelineError
 from .game import game_unity_version
 from .references import (
     AssetReference,
+    check_mod_info_schema,
     discover_references,
     manifest_assets,
     read_mod_name,
@@ -169,10 +170,14 @@ def validate_mod(
         raise PipelineError(
             f"ModInfo.xml Name is {actual_mod_name!r}, configuration says {config.mod_name!r}"
         )
+    mod_schema = check_mod_info_schema(config.mod_root / "ModInfo.xml")
     class_messages = check_block_classes(config)
     if not config.has_bundle:
         report = _validate_bundle_free(config)
-        return ValidationReport(report.messages + tuple(class_messages), report.reference_count)
+        return ValidationReport(
+            report.messages + tuple(mod_schema) + tuple(class_messages),
+            report.reference_count,
+        )
     if game_version is not None:
         expected_version: str | None = game_version[0]
     elif config.game_dir:
@@ -190,6 +195,7 @@ def validate_mod(
     resolved: dict[str, Path | None] = {}
     messages = [_check_reference(config, ref, stems, resolved, owned) for ref in references]
     messages += [_check_code_reference(config, stem, stems) for stem in config.code_references]
+    messages += mod_schema
     messages += class_messages
     return ValidationReport(tuple(messages), len(references) + len(config.code_references))
 

@@ -14,6 +14,12 @@ tag has no changelog section.
 
 ### Added
 
+- **`check-patches` evaluates selectors with lxml (full XPath 1.0)** when the
+  optional `patch` extra is installed — matching the engine's `XPathEvaluate` —
+  and falls back to the standard-library subset otherwise. `lxml` is a new
+  optional capability (in `capabilities.REGISTRY`, extra `patch`); a selector
+  the available evaluator cannot run is still reported as not checked, never
+  guessed.
 - **`shamway check-patches`** replays every structural operation XPath in
   `Config/*.xml` against the installed game's read-only `Data/Config/<stem>.xml`
   and fails the ones selecting zero nodes. The engine silently no-ops a

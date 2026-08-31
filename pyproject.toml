@@ -45,6 +45,10 @@ mesh = ["trimesh>=4"]
 # the independent decoder that keeps the audio lane from being graded only
 # by the code that wrote it.
 audio = ["fsb5>=1"]
+# Full XPath 1.0 for the Config/ patch gate; ElementTree's subset cannot run
+# every selector the engine's XPathEvaluate accepts (functions, unions), and a
+# selector the gate cannot run is reported as not checked. lxml closes that.
+patch = ["lxml>=5"]
 all = [
   "UnityPy==1.25.3",
   "lz4>=1",
@@ -53,6 +57,7 @@ all = [
   "numpy>=1.24",
   "trimesh>=4",
   "fsb5>=1",
+  "lxml>=5",
 ]
 
 # Lint and type-check versions are load-bearing: verdicts change between
@@ -211,6 +216,7 @@ module = [
   "fsb5", "fsb5.*",
   "lz4", "lz4.*",
   "texture2ddecoder",
+  "lxml", "lxml.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

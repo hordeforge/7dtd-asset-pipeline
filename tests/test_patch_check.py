@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sevendtd_asset_pipeline.patch_check import check_patches
+from sevendtd_asset_pipeline.patch_check import _HAS_LXML, check_patches
 
 
 class PatchCheckTests(unittest.TestCase):
@@ -71,6 +71,23 @@ class PatchCheckTests(unittest.TestCase):
         report = check_patches(self.mod, self.config, None)
         self.assertTrue(report.ok)
         self.assertTrue(any("no game directory" in n for n in report.notes))
+
+    def test_a_full_xpath_union_is_evaluated_when_lxml_is_present(self) -> None:
+        # A union of two node-sets is full XPath 1.0; the stdlib subset cannot
+        # run it. With lxml the gate evaluates it and fails the zero-node union;
+        # without lxml it reports the selector as not checked rather than guess.
+        self._stock("blocks", '<blocks><block name="a" /></blocks>')
+        self._patch(
+            "blocks",
+            "<configs><remove xpath=\"//block[@name='missing'] | //block[@name='nope']\" "
+            "/></configs>",
+        )
+        report = check_patches(self.mod, self.config, self.game)
+        if _HAS_LXML:
+            self.assertFalse(report.ok)
+        else:
+            self.assertTrue(report.ok)
+            self.assertTrue(any("cannot evaluate" in n for n in report.notes))
 
 
 if __name__ == "__main__":

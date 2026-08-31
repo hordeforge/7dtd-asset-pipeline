@@ -14,23 +14,21 @@ Closed recently, kept here so the pattern is visible:
   comparing every `TOPICS` page byte-for-byte (`tests/test_assets.py`,
   `DocumentationTests`); it caught seven drifted pages on its first run.
 
-## 1. XML patches are never applied, only scanned
+## 1. XML patches are never applied, only scanned  — **done (2026-08-31)**
 
-`validate` discovers every bundle URI in `Config/**/*.xml` and checks it
-against the tracked manifest, but it never parses a patch file as XML and
-never applies one. A patch whose XPath matches nothing — a typo'd attribute,
-a renamed parent, a mod load-order surprise — is a silent no-op in the game
-and passes every check here. This is the same failure class the stem gates
-exist for, on the other half of the Config lane.
-
-**Close it with:** a dry-run that loads the installed game's matching
-`Data/Config/*.xml` read-only, applies each mod patch with ElementTree +
-the engine's own match semantics, and fails on any `<patch>` selector that
-matches zero nodes. Needs the decompiled patch-application rules recorded in
-[research-provenance.md](../research/research-provenance.md) first, so the dry-run
-implements what the engine does rather than what seems natural. Until then:
-grep every XPath you author against `$SEVEN_DAYS_TO_DIE_DIR/Data/Config/`
-by hand.
+**Closed.** `shamway check-patches` replays every structural operation XPath in
+`Config/*.xml` (`append`/`prepend`/`set`/`setattribute`/`remove`/
+`removeattribute`/`insertafter`/`insertbefore`) against the installed game's
+read-only `Data/Config/<stem>.xml`, and fails the ones that select **zero
+nodes** — because that is a **silent no-op** in the engine: `XmlFile
+GetXpathResultsInList` returns false on a zero-count list and the operation
+returns 0 with no error or log line. The decompiled rules (from
+`ilspycmd` on the installed `Assembly-CSharp.dll`) and the consequence are
+recorded in `docs/research/research-provenance.md` ("Config XML patch
+application"). An XPath the standard-library subset cannot evaluate is reported
+as *not checked* rather than guessed, so the gate never claims a verdict it did
+not run. `--json` for scripts; requires the game dir (skips with a note
+otherwise).
 
 ## 2. Localization keys are not reconciled  — **done (2026-08-31)**
 

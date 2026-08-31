@@ -56,6 +56,7 @@ from .doctor import Check, run_doctor
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .icon_check import DEFAULT_ATLAS_ROOT, DEFAULT_CELL, IconReport, check_icons
+from .patch_check import PatchReport, check_patches
 from .icon_render import (
     DEFAULT_ATLAS,
     DEFAULT_PADDING,
@@ -344,6 +345,10 @@ class Pipeline:
             allow_vanilla_keys,
         )
 
+    def check_patches(self) -> PatchReport:
+        """Replay Config/ patch XPaths against the game's stock configs."""
+        return check_patches(self.config.mod_root, self.config.config_dir, self.config.game_dir)
+
     def client_where(self, game_dir: Path | str | None = None) -> dict[str, Any]:
         """The Proton client's per-user paths, derived from the game directory."""
         return client.where_info(Path(game_dir) if game_dir else self.config.game_dir)
@@ -580,6 +585,7 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "check_texture": lambda self, p: self.check_texture(**_texture_params(p)),
     "check_icons": lambda self, p: self.check_icons(p["atlas_root"], p["cell"]),
     "check_localization": lambda self, p: self.check_localization(p["allow_vanilla_keys"]),
+    "check_patches": lambda self, p: self.check_patches(),
     "render_icon": lambda self, p: self.render_icon(
         p["prefab"],
         p.get("output"),

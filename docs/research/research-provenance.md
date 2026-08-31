@@ -2590,4 +2590,52 @@ that every stock 7DTD character shader is also `skins:false`). The live-game
 creature invisibility therefore remains a separate d3d11/platform issue, still to
 be diagnosed live.
 
+## Config XML patch application: a zero-match XPath is a silent no-op (2026-08-31)
+
+The engine applies a mod's `Config/*.xml` patch to the matching
+`Data/Config/<stem>.xml` through `ModManager.XmlPatcher.PatchXml` →
+`singlePatch` → one `XmlPatchMethods.*` operation per child element. Decompiled
+with `ilspycmd` on the installed
+`7DaysToDie_Data/Managed/Assembly-CSharp.dll` (type `ModManager`, nested
+`XmlPatcher`/`XmlPatchMethods`; the raw IL is mirrored in
+`hordeforge/7dtd-engine-research/il/full-v3.1.0/_global/XmlFile.il.txt` and
+`XmlPatchMethods.il.txt`).
+
+**What decides a match.** `XmlFile.GetXpathResultsInList` (IL=29):
+
+```
+clear(matchList)
+result = XmlDoc.XPathEvaluate(xpath)
+if result is not IEnumerable: return false        # a scalar (e.g. count()) is not a node-set
+matchList.AddRange(result as IEnumerable<XObject>)
+if matchList.Count == 0: return false             # <-- zero matches
+return true
+```
+
+`XPathEvaluate` is .NET's `System.Xml.XPath` — full XPath 1.0, evaluated
+against the loaded stock document root.
+
+**What the operations do on a miss.** `GetXpathResults` (the bool wrapper, IL=23)
+returns that value; every structural operation branches on it and, on **false**,
+`return 0` with **no error and no log line**. `SetByXPath` (IL=160,
+`XmlPatchMethods.il.txt`) reads `GetXpathResults(...)` → `brtrue` continue →
+`ret 0` on false, then iterates the matched list (a zero-count list iterates
+zero times). So a well-formed XPath that selects **no nodes is a silent no-op**:
+the patch simply does not apply, the game runs, and nothing anywhere reports
+that a typo'd attribute name or a renamed parent silenced it. A **malformed**
+XPath is different and louder: `XPathEvaluate` throws `System.Xml.XPathException`,
+which `singlePatch` catches and turns into an `XML.Patch (...): XPath
+evaluation failed` log line — so an invalid selector fails loudly while a valid
+but zero-match one is invisible.
+
+**Consequence for a gate.** `shamway check-patches` must fail the **silent**
+case — a structural operation (`append`/`prepend`/`set`/`setattribute`/
+`remove`/`removeattribute`/`insertafter`/`insertbefore`) whose XPath selects no
+node in the stock file — because that is the bug the engine will not report.
+It is implemented with the standard library's XPath subset (ElementTree
+`findall`), which covers the descendant/attribute/predicate selectors mod
+patches actually use; an XPath the subset cannot evaluate is reported as
+"not checked" rather than guessed, so the gate never claims an invalid-guess
+verdict.
+
 

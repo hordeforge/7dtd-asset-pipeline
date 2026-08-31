@@ -440,6 +440,7 @@ Machine-readable output for agents and CI:
 | `shamway review-audio` | advisory semantic review of a clip by a configured audio model; uploads the asset, so it refuses without `--allow-network`, and never replaces the human listen |
 | `shamway check-icons --json` | atlas cells and every `CustomIcon` key |
 | `shamway check-localization --json` | every Config/ localization key against the mod's `Localization.csv` (+ vanilla, `--no-vanilla-keys` to fail those) |
+| `shamway check-patches --json` | replay Config/ patch XPaths against the game's stock configs and fail the zero-node ones (the engine silently no-ops those) |
 | `shamway render-icon STEM` | render a bundle prefab into its atlas cell, materials and all (needs an editor and a display) |
 | `shamway generate mesh-icon MESH PNG` | the same cell from a mesh file through headless Blender: no editor, no display, and a clay render rather than the in-game look |
 | `shamway generate rig OUT.glb` | a bone-structure template as a glTF armature to skin against in Blender, or as the rig for `generate entity`; `--rig` names one of the eight shipped rigs (humanoid, quadruped, quadruped-small/large, bird, dinosaur, arachnid, crocodile) or a spec file, `--scale` sizes it |

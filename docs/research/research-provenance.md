@@ -2327,7 +2327,7 @@ constants). A generated creature can now be modelled against those facts instead
 of guessing; the live-slice tuning and the detached-camera framing are the
 remaining work.
 
-## The generated creature is invisible because Shamway/Unlit does not skin (2026-08-31)
+## The generated creature is invisible because Shamway/Unlit does not skin (2026-08-31) — REFUTED, see the CORRECTION section at the end of this file
 
 The walk-entity look that "should" show the creature showed only terrain: the
 `Shamway/Unlit` material on the creature's `SkinnedMeshRenderer` renders
@@ -2425,8 +2425,12 @@ bundle data), locate the bundle, and read the `Shader` object's `m_Script`
 That yields the exact bind-channel sources + bone-matrix binding to replicate
 in `Shamway/Unlit`.
 
-**Convention found (2026-08-31): Unity 2022.3's non-DOTS GPU skinning is
-engine-injected via TEXCOORD + a bone cbuffer — no blend-weight bind channels.**
+**~~Convention found~~ REFUTED (2026-08-31, later the same day): Unity 2022.3's
+non-DOTS GPU skinning is engine-injected via TEXCOORD + a bone cbuffer — no
+blend-weight bind channels.** This conclusion is **wrong on every point**; it
+conflated the shader's *input signature* (ISGN) with its *bind channels*, and
+generalised from one degenerate test mesh. See the correction section at the end
+of this file.
 Resolving the Addressables catalog gave the physical bundle
 (`Data/Addressables/Standalone/shaders_assets_all.bundle`), and
 `shader_blob_dump.py --shader "Game/SDCS/Skin"` decoded it:
@@ -2469,3 +2473,74 @@ Also measured in the same session: the spawn-area "car" that occluded the shot
 is a **static world prop**, not an `EntityVehicle`, so despawning vehicles
 (`Helpers.Vehicles`, `EntityVehicle`) does not remove it; a clear spawn or a
 vehicle-agnostic camera vantage is needed for a clean look.
+
+## CORRECTION: `Shamway/Unlit` does skin-less draw the generated creatures; `Game/SDCS/Skin` does not GPU-skin (2026-08-31)
+
+The "Convention found" block above is wrong, and so is the `improvements.md`
+"Skinned meshes are not rendered by `Shamway/Unlit`" item and the
+`entities.md` "The synthesized entity shader does not skin" item. All three were
+written from the same two misreadings, corrected here.
+
+**Measurement.** Re-running `verify-bundle --draw` (the local editor
+`2022.3.62f2`, `xvfb-run -a shamway verify-bundle --draw
+Resources/shamwayselftest.unity3d`, from `examples/SelfTestMod`, on a freshly
+re-synthesized `shamwayselftest.unity3d` at `7b12af4`) gives this per-prefab
+verdict — read from `.shamway/build/verify/verify.log`:
+
+| Prefab | Renderer | `SetPass(0)` | prefab coverage |
+|---|---|---|---|
+| `shamwaySelfTestProp` | `MeshRenderer` | True | 81.4% |
+| `shamwaySelfTestCreature` | `SkinnedMeshRenderer` | True | 15.2% |
+| `shamwaySelfTestArachnid` | `SkinnedMeshRenderer` | True | 26.0% |
+| `shamwaySelfTestBird` | `SkinnedMeshRenderer` | True | 6.1% |
+| `shamwaySelfTestDino` | `SkinnedMeshRenderer` | True | 9.1% |
+| `gear` | `SkinnedMeshRenderer` | True | **0.0%** |
+
+**The only prefab that rasterizes nothing is `gear`** — and its *material* is
+healthy. For `gear`, the log shows `VERIFY-DRAWNOW: direct SetPass+DrawMeshNow
+covered=25.0%` (the material's shader can draw), and `VERIFY-DRAWN-MATERIAL:
+built-in cube wearing 'gear_mat' covered=8.4%` (a built-in cube wearing the
+bundle's `gear_mat` draws fine, and its `SetPass(0)=True`). So the four
+generated entities **draw with `Shamway/Unlit` as-is** — they are not
+"synthesized-shader-invisible". The prior "skinned prefabs rasterize nothing"
+generalisation came from reading `gear`'s failure and the control cube, and
+applying it to the entities. `gear` alone fails: it is the degenerate
+`skinned-gear.md` fixture — `gear_mesh` has `vertices=4 triangles=2 bounds=
+(0.20, 1.00, 0.00)`, a flat XY quad on a two-bone SkinnedMeshRenderer whose
+bone-space AABB puts the camera away from where the unskinned quad actually
+renders.
+
+**`Game/SDCS/Skin` does not GPU-skin.** Decoding `Game/SDCS/Skin` from
+`Data/Addressables/Standalone/shaders_assets_all.bundle` with
+`tools/shader_blob_dump.py` (engine-research) — 424 records, 198 d3d11 vertex
+sub-programs — shows the **actual bind channels** are only:
+
+```
+156x  (0,0) (1,1) (2,2) (4,5)          # POSITION NORMAL TANGENT TEXCOORD0
+ 42x  (0,0) (1,1) (2,2) (3,3) (4,5)   # ... + COLOR
+```
+
+None of the 198 vertex sub-programs binds a blend source (mesh channel 5/6/7,
+or BlendWeight/BlendIndices 12/13). So when the prior session "swapped the
+creature's material to the player's skinning shader `Game/SDCS/Skin`" and "the
+creature drew", what drew was the mesh **in bind pose** — `Game/SDCS/Skin`
+reads no blend weights and no bone matrices in its d3d11 sub-programs, it just
+draws the raw mesh. That is evidence the mesh is *renderable*, **not** evidence
+that a shader must skin. Its ISGN declares TEXCOORD1/2/3, but that is the
+*signature*, not the *bind table*: a vertex input that is never read is not
+bound, and `source_map=255` is a base mask, not a per-record channel list. The
+earlier "Convention found" block conflated `expected_channels` (derived from the
+signature) with the real bind channels.
+
+**Consequence.** Authoring GPU skinning into `Shamway/Unlit` (bone-matrix
+cbuffer, `unity_SkinnedMeshBoneMatrix`, blend-from-TEXCOORD) is **not the fix**
+for the reported creature invisibility: the creatures already draw with the
+current non-skinning shader in `verify-bundle --draw`, and `Game/SDCS/Skin` does
+not skin either, so there is no stock reference bind-channel table to copy. The
+live-client invisibility that started this thread is therefore a **separate
+problem** that a skinning shader does not address. The open diagnostic is: find
+why the same bundle that draws the creature in the editor (15.2%) draws nothing
+in a fresh Proton/d3d11 client (the shader's d3d11 cbuffer layout is ruled out —
+the `MeshRenderer` prop uses the same shader and draws 81.4%; a cbuffer-offset
+bug would break both).
+

@@ -268,16 +268,21 @@ than flattened if it cannot be encoded. One static mesh file is one
 material's worth of geometry, and a normal-mapped material would find no
 tangents. Both are consequences of the paragraph below rather than of effort.
 
-**Skinned meshes need a *skinning* shader (2026-08-31, TODO).** The
-`SkinnedMeshRenderer` lane writes the mesh, bind poses, weights and bone-name
-hashes, and its material uses the same `Shamway/Unlit` as the static lane — but
-that shader's vertex stage (`mul(unity_ObjectToWorld, input.vertex)`) applies
-no bone-matrix skinning, so in a live client a generated entity's skinned mesh
-draws **nothing**, while a `MeshRenderer` (the block prop) draws fine.
-Confirmed by swapping the entity material to the player's `Game/SDCS/Skin`: the
-creature drew. The entity lane needs either a skinning-capable `Shamway/Unlit`
-(per-vertex bone indices/weights + `unity_SkinnedMeshBoneMatrix`) or a stock
-skinning shader; see [improvements.md §4b](../status/improvements.md).
+**~~Skinned meshes need a *skinning* shader~~ REFUTED (2026-08-31, TODO).** This
+was wrong. `verify-bundle --draw` re-run on a freshly re-synthesized bundle
+(`7b12af4`, editor 2022.3.62f2) shows the generated entities **draw with the
+`Shamway/Unlit` that the static lane already uses**: creature 15.2%, arachnid
+26.0%, bird 6.1%, dino 9.1% coverage, all `SetPass(0)=True`. The only prefab
+rasterizing nothing is the `gear` test fixture (0.0%), whose own material draws
+fine on a built-in cube (`SetPass(0)=True`), so its blank is a flat two-bone
+mesh framing artifact, not a shader defect. And the shader the live swap called
+"the player's `Game/SDCS/Skin`" binds **no** blend channels in any of its 198
+d3d11 vertex sub-programs — it draws the mesh in bind pose and does not skin —
+so the swap proved the mesh is *renderable*, not that a shader must skin. The
+entity lane does **not** need a skinning-capable `Shamway/Unlit` or a stock
+skinning shader for the creature to draw. The open item is the live-client
+invisibility (the same bundle draws in the editor); see the CORRECTION section
+in [research-provenance.md](../research/research-provenance.md).
 
 A `Mesh` is a mesh, not a model. 7DTD's `Meshfile` and block `Model` resolve
 through `DataLoader.LoadAsset<GameObject>` — a **prefab**, which needs a

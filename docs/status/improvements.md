@@ -137,42 +137,38 @@ this writer does not declare; a mod that needs one wants `unity` or
 noise, lights, sub-emitters, mesh particles) are the same. "Shaders work"
 would be a wider claim than the evidence supports.
 
-**Skinned meshes are not rendered by `Shamway/Unlit` (2026-08-31, TODO).**
-`Shamway/Unlit`'s vertex stage is `mul(unity_ObjectToWorld, input.vertex)`
-with no bone-matrix skinning (`shader_blob.py` `UNLIT_VERTEX_HLSL`): it draws a
-`MeshRenderer` (the block prop) but renders **nothing** on a
-`SkinnedMeshRenderer`. So a generated **entity** (`shamwaySelfTestCreature`,
-bird, arachnid, dino) is invisible even though its mesh is healthy (verts
-1382, meshSize 0.33/1.04/0.83, renderer + mesh + root active). Confirmed in a
-live client by swapping the creature's material to the player's skinning
-shader `Game/SDCS/Skin`: the creature drew. The fix is one of:
-(1) add per-vertex bone-indices/weights input and sample the
-`SkinnedMeshRenderer` bone matrices (`unity_SkinnedMeshBoneMatrix`) in
-`UNLIT_VERTEX_HLSL` and recompile (the vkd3d/GLSL/Vulkan sources too), or
-(2) have the entity lane assign a stock skinning shader such as `Game/SDCS/Skin`
-to the generated entity material instead of `Shamway/Unlit`. Option 1 is the
-general fix; see the handover note in
-[research-provenance.md](../research/research-provenance.md) and
-`docs/authoring/entities.md`. Note the creature also "fell off the world"
-separately — the grounding item is `docs/authoring/entities.md`.
+**~~Skinned meshes are not rendered by `Shamway/Unlit`~~ REFUTED (2026-08-31).**
+This entry was written from the same two misreadings the provenance
+"Convention found" block had, and it is wrong. `verify-bundle --draw` re-run on
+a freshly re-synthesized `shamwayselftest.unity3d` (`7b12af4`, editor 2022.3.62f2)
+shows the four generated entities **draw with `Shamway/Unlit` as-is**: creature
+15.2%, arachnid 26.0%, bird 6.1%, dino 9.1% coverage, all `SetPass(0)=True`. The
+only prefab rasterizing nothing is the `gear` fixture (0.0%) — and its own
+material draws fine on a built-in cube (`VERIFY-DRAWN-MATERIAL ... covered=8.4%`,
+`SetPass(0)=True`), so `gear`'s blank is a geometry/bind-pose-framing artifact of
+that flat two-bone test mesh, not a shader defect. `Game/SDCS/Skin` (the shader
+the live swap called "the player's skinning shader") binds **no** blend channels
+in any of its 198 d3d11 vertex sub-programs — it draws the mesh in bind pose and
+does not skin — so the live swap proved the mesh is renderable, **not** that a
+shader must skin. Authoring GPU skinning into `Shamway/Unlit` is therefore **not
+the fix**. The live-client creature invisibility is a separate, un-diagnosed
+problem; see the near-verbatim correction in
+[research-provenance.md](../research/research-provenance.md) (the "CORRECTION"
+section) and `docs/authoring/entities.md`.
 
-**RE status (2026-08-31): the fix is shader-only, and it is Unity *standard*
-skinning.** The shader-material swap proved the generated creature's
-`SkinnedMeshRenderer` **does** carry per-vertex bone blend weights/indices
-(a skinning shader rendered it), so the mesh needs no change — only the
-shader's vertex stage. Reverse-engineering 7DTD's own skinning shader
-(`Game/SDCS/Skin`) to copy its exact bind channels is **not possible from the
-bundles**: decoding the shader sub-program blobs (`tools/shader_blob_dump.py` in
-`hordeforge/7dtd-engine-research`) found **zero** shaders with more than the four
-base vertex bind channels (POSITION/NORMAL/TANGENT/COLOR) across `data.unity3d`
-(199 shaders) and 33 Addressables `automatic_assets_*` bundles. So
-`Game/SDCS/Skin` is a **built-in engine shader**, and the convention to reproduce
-is Unity's standard GPU skinning: per-vertex `BLENDWEIGHT`/`BLENDINDICES` inputs
-+ the `SkinnedMeshRenderer`'s bone matrices (`unity_SkinnedMeshBoneMatrix`).
-The one genuinely open RE item is the **exact bind-channel source indices and
-bone-matrix binding Unity's built-in skinning uses in 2022.3** — not derivable
-from 7DTD's bundles, so it must come from Unity's documented skinning convention
-(or a reference material with a built-in skinning shader).
+**RE status (2026-08-31, superseded): the fix is shader-only, and it is Unity
+*standard* skinning.** This, too, is wrong — it was built on the refuted
+"Convention found" conclusion. The real bind-channel evidence (from
+`tools/shader_blob_dump.py` in `hordeforge/7dtd-engine-research` on
+`Game/SDCS/Skin`'s 424 records) is: no vertex sub-program binds a blend source
+(mesh channel 5/6/7 or BlendWeight/BlendIndices 12/13); the only bind tables are
+`(0,0)(1,1)(2,2)(4,5)` and `(...)(3,3)(4,5)`. The earlier "zero shaders with more
+than the four base channels" survey and the "it must be Unity standard GPU
+skinning" route both follow from reading the *input signature* as the *bind
+channels*. The open item is not "reproduce a skinning convention" — it is to
+diagnose why the same bundle that draws in the editor draws nothing in a fresh
+Proton/d3d11 client (the d3d11 `Shamway/Unlit` cbuffer layout is ruled out by
+the prop drawing 81.4% through the same shader).
 
 **Settled since this entry was written:**
 

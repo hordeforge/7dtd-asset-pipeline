@@ -393,9 +393,11 @@ that clients see nothing.
   node **must be active**: an inactive node defers the motor's Awake forever
   and `SetCapsuleDimensions` NREs on a null `Capsule` (the measured spawn-time
   NRE before this fix). The stock `GameObjectAnimalAnimation` controller is
-  **incompatible** with that active `Physics` node — its `Awake` finds its
-  figure as the model root's first *active* child, which then collides with the
-  active `Physics` sibling and NREs at `anim["Idle1"]`. So a generated entity
+  **incompatible** with that active `Physics` node — its `Awake` runs
+  `GetChild(reverse-first-active)` (it iterates the model root's children from
+  the last down and takes the first active one, so an active `Physics` sibling
+  that is the highest-index active child is picked as the figure), then NREs at
+  `anim["Idle1"]` because that child carries no `Animation`. So a generated entity
   must use a controller that finds the figure **by name** (the writer's
   `figure` node), not by first-active-child — that is the mod-owned
   `ShamwayAnimalController`, and the stock one cannot be used. This is the
@@ -413,7 +415,12 @@ that clients see nothing.
   client's version (`steamcmd +app_update 294420`); (2) a genuinely missing
   Steam client. The `Steamworks is not initialized` exception near boot is
   **caught and harmless** (the Analytics branch-name probe) — it must not be
-  read as "the run never reached the asset".
+  read as "the run never reached the asset". The stock construction path this
+  bullet describes — `Entity::AddCharacterController`, the
+  `CharacterControllerKinematic`/`KinematicCharacterMotor` wrapper, and the
+  `MoveEntityHeaded` motion-lerp constants the walk case measures — is
+  documented in `hordeforge/7dtd-engine-research`,
+  [entity-movement.md](https://github.com/hordeforge/7dtd-engine-research/blob/main/docs/entity-movement.md).
 - **SDCS extras** (`GearBoneMap`, `Morphable`) — the editor bakes those; see
   [skinned-gear.md](skinned-gear.md).
 

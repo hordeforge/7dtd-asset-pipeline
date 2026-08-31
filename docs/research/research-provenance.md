@@ -2317,4 +2317,12 @@ hypotheses are now ruled out by measurement: not a moveSpeed override, not the
 spawn drop (spawn-at-surface made it worse), not an oversized capsule radius.
 The instability is a deeper engine-physics interaction (KinematicCharacterMotor
 + `MoveEntityHeaded` motion-lerp constants + the generated rig) that needs a
-systematic RE and modelling pass, not one-off parameter guesses.
+systematic RE and modelling pass, not one-off parameter guesses. That RE
+groundwork is now written up where the stock facts belong:
+`hordeforge/7dtd-engine-research`
+[entity-movement.md](https://github.com/hordeforge/7dtd-engine-research/blob/main/docs/entity-movement.md)
+(`Entity::AddCharacterController`, `CharacterControllerKinematic`/
+`KinematicCharacterMotor`, and the `MoveEntityHeaded` 0.546 / 2.5 / 0.3 / 0.01
+constants). A generated creature can now be modelled against those facts instead
+of guessing; the live-slice tuning and the detached-camera framing are the
+remaining work.

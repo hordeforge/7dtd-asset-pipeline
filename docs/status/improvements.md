@@ -170,6 +170,46 @@ diagnose why the same bundle that draws in the editor draws nothing in a fresh
 Proton/d3d11 client (the d3d11 `Shamway/Unlit` cbuffer layout is ruled out by
 the prop drawing 81.4% through the same shader).
 
+**TODO (2026-08-31): the synthesized `SkinnedMeshRenderer` + `Shamway/Unlit`
+does not rasterize in the live client. Diagnose it as a d3d11-specific draw
+failure.** This is the live step the entity lane's invisibility reduces to, and
+everything else has been measured and ruled out. Do NOT re-hunt the shader,
+skin, bone, or grounding paths — each is closed:
+
+- **Repro:** `SEVEN_DAYS_TO_DIE_DIR=/home/yannick/Games/Steam/steamapps/common/7 Days To Die SEVEN_DAYS_TO_DIE_SERVER_DIR=/home/yannick/steam-server-build-3.2 SHAMWAY=.../shamway examples/SelfTestMod/scripts/playtest-synthesized.sh --look shamwaySelfTestCreature` (run from the fixture, env from `.local.env`). Then
+  `grep frame-div "…/logs/output_log_client_7dtd_connect.txt"`.
+- **What the `frame-div` line says (measured 2026-08-31):** the creature is
+  grounded and healthy but absent from every captured frame —
+  `getpos=(510.56, 60.05, 942.90)` `tf=(-1.35, 12.05, 14.62)`
+  `meshCenter=(-1.35, 12.55, 14.79)` `meshSize=(0.33, 1.04, 0.83)`
+  `smrEnabled=True` `verts=1382` `meshActive=True` `rootActive=True`.
+  `getpos` vs `tf` is just `World.Origin` (save-frame vs render-frame), NOT a
+  drop — the creature is on the terrain at world y≈60 (player at 61). So the
+  old "fell off the world / world-vs-render mismatch puts it under the floor"
+  theory is wrong.
+- **Already ruled out:** skinning (unityz `skin` reports all 59 game shaders
+  `skins:false`, so the engine CPU-skins and `Shamway/Unlit` needs no
+  bone-matrix stage); authored bones (SMR `m_Bones` all resolve, the mesh's 19
+  `m_BoneNameHashes` exactly equal `CRC32(path)`, root = `CRC32("Root")`, the
+  `m_BindPose` are the correct inverse-bind matrices, skeleton geometry +
+  `Physics` capsule coherent); shader/mesh (the same prefab draws ~15% in the
+  editor's `verify-bundle --draw`).
+- **The hypothesis to test: d3d11-specific draw failure of a
+  `SkinnedMeshRenderer`+`Shamway/Unlit`.** It draws on the editor's OpenGLCore
+  path and rasterizes nothing in the live Proton path. To name the API, re-run
+  the same `--look shamwaySelfTestCreature` with the client forced onto the
+  other graphics backends — **OpenGL (`-force-glcore`) and Vulkan
+  (`-force-vulkan`)** via the client launch (7dtd-fastconnect
+  `launch_client.sh` / the 7DTD client arg), and compare coverage + the frames.
+  If it rasterizes under GL or Vulkan, the defect is isolated to the d3d11
+  sub-program; if absent on all three, it is the engine's `SkinnedMeshRenderer`
+  path, not the shader.
+- **Extend the live probe** (in `7dtd-playtest` `CaseDef.WalkEntity`'s assert,
+  or the generated provider) to also log the creature SMR's `sharedMaterial.shader`,
+  `shader.isSupported`, `shader.passCount`, and `material.SetPass(0)` — the
+  frame-div block already reports bounds/active/verts, so add the shader/draw
+  values and re-run to see whether the pass can be set up at all.
+
 **Settled since this entry was written:**
 
 1. **whether 7DTD's own rendering path accepts this pass.** It does. The

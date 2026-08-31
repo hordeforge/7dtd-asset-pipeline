@@ -2569,4 +2569,25 @@ probe: a live client with a debug line that logs the creature's `SkinnedMeshRend
 `isSupported` hold there — or a game-side deobfuscation of the engine's
 `SkinnedMeshRenderer`/`Material` handling under d3d11.
 
+**Resolved independently by unityz (2026-08-31): the 7DTD engine CPU-skins — no
+game shader does GPU skinning, so `Shamway/Unlit`'s non-skinning vertex stage is
+correct and needs no change.** The Zig rewrite `hordeforge/unityz` now decodes the
+same Shader `m_Script` blob, and its `skin <bundle>` command reports, per Shader,
+whether it binds blend/bone data. Run on the game bundle it reports **all 59
+shaders as `skins:false`** — `Game/SDCS/Skin`, `Game/Character`,
+`Game/CharacterCloth`, `Game/CharacterPlayerOutfit`, `Game/Entity Tint Mask`, ...
+none binds a blend channel or a bone binding. Since the game's own character
+shaders don't read blend/bone data, the engine must deform the mesh **on the CPU**
+before the shader (Unity's default for a non-DOTS `SkinnedMeshRenderer`), so a
+plain vertex shader is exactly right for a `SkinnedMeshRenderer` here. This
+confirms with a second, fully independent reader (no pipeline or engine-research
+code) both halves of the refutation: `Game/SDCS/Skin` does not skin, and the
+pipeline's non-skinning `Shamway/Unlit` is consistent with 7DTD's own approach —
+it does **not** need a skinning vertex stage. `unityz skin` on the self-test
+bundle likewise reports `Shamway/Unlit` `skins:false` (and flags the five
+generated `SkinnedMeshRenderer`s using it as `failures`, a false positive given
+that every stock 7DTD character shader is also `skins:false`). The live-game
+creature invisibility therefore remains a separate d3d11/platform issue, still to
+be diagnosed live.
+
 

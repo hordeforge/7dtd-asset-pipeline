@@ -22,6 +22,7 @@ lists what each assertion catches.
 
 | Path | Why |
 |---|---|
+| `tools/shamway/environment/WeatherCapture.cs` | the worked reference for the environment lane's capture/clamp/restore discipline ([environment-effects.md](../../docs/authoring/environment-effects.md)) — a copy-paste example, not vendored tooling (ADR 0007); adapt it in your own mod's Harmony assembly |
 | `reference/creatures/` | clay geometry reference renders of the four generated rigs (6 views each) — the shape a live frame *should* contain, to compare against the in-game `--look` frames. See its `README.md`; `render_creatures.py` regenerates them (Blender) |
 | `assets-src/bundle/shamwaySelfTestProp.glb` | the mesh, a full 1 × 1 × 1 m block so it fills the voxel it is placed into, carrying UV0 so a texture can map; orientation is carried by the albedo's arrows and markers |
 | `assets-src/bundle/timedNuke.glb` | named hierarchy with an `armedLamp` child |

@@ -64,6 +64,7 @@ from .icon_render import (
     RenderResult,
     render_icon,
 )
+from .localization_check import LocalizationReport, check_localization
 from .mesh_check import DEFAULT_MAX_EXTENT, MeshReport, check_mesh
 from .operations import Operation
 from .operations import get as get_operation
@@ -334,6 +335,15 @@ class Pipeline:
         """Check the mod's atlas PNGs and its CustomIcon keys. Icons are not bundle members."""
         return check_icons(self.config.mod_root, self.config.config_dir, atlas_root, cell)
 
+    def check_localization(self, allow_vanilla_keys: bool = True) -> LocalizationReport:
+        """Reconcile Config/ localization keys with the mod's and the game's tables."""
+        return check_localization(
+            self.config.mod_root,
+            self.config.config_dir,
+            self.config.game_dir,
+            allow_vanilla_keys,
+        )
+
     def client_where(self, game_dir: Path | str | None = None) -> dict[str, Any]:
         """The Proton client's per-user paths, derived from the game directory."""
         return client.where_info(Path(game_dir) if game_dir else self.config.game_dir)
@@ -569,6 +579,7 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "review_video": lambda self, p: self.review_video(**_review_video_params(p)),
     "check_texture": lambda self, p: self.check_texture(**_texture_params(p)),
     "check_icons": lambda self, p: self.check_icons(p["atlas_root"], p["cell"]),
+    "check_localization": lambda self, p: self.check_localization(p["allow_vanilla_keys"]),
     "render_icon": lambda self, p: self.render_icon(
         p["prefab"],
         p.get("output"),

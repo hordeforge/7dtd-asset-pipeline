@@ -14,6 +14,14 @@ tag has no changelog section.
 
 ### Added
 
+- **`shamway check-localization`** reconciles every localization key Config/
+  references (item/block/entity_class names plus bare-token
+  `display_name`/`Description`/`desc_key`/`tooltip` values) with the mod's
+  `Config/Localization.csv` and the game's vanilla table, failing a referenced
+  key provided by neither when the mod ships a CSV (a dropped row is a bug —
+  `Localization.Get` returns the key itself on a miss, so it shows as a raw
+  name). A mod with no CSV is reported as untranslated rather than failed;
+  `--no-vanilla-keys` fails vanilla keys too.
 - Generated entity bones **carry colliders**: the writer adds a small
   `BoxCollider` to every skinned bone GameObject, so the game's physics body
   builds real colliders instead of `NullCollider`s

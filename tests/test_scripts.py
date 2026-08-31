@@ -83,6 +83,19 @@ class ScriptRegistryTests(unittest.TestCase):
         synth = Path(__file__).resolve().parents[1] / "scripts" / "playtest-synthesized.sh"
         self.assertIn("shamwayselftest_editorless", synth.read_text(encoding="utf-8"))
 
+    def test_spawned_entity_look_requires_collision_and_ground_evidence(self) -> None:
+        """A renderer-only success must not hide broken entity physics."""
+        synth = Path(__file__).resolve().parents[1] / "scripts" / "playtest-synthesized.sh"
+        text = synth.read_text(encoding="utf-8")
+        assertion = (
+            'grep -qE "motion_${LOOK_STEM}: render-probe .*collisionReady=True.*groundReady=True"'
+        )
+        self.assertIn(assertion, text)
+        self.assertLess(text.index(assertion), text.index("if ((FAILED)); then"))
+        self.assertIn("WALK_ENTITY_LOOK=1", text)
+        self.assertIn("surfaceHit", text)
+        self.assertIn("the $LOOK_STEM prefab staged", text)
+
     def test_the_listing_names_every_registered_script(self) -> None:
         out = io.StringIO()
         with contextlib.redirect_stdout(out):

@@ -31,6 +31,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
             yield return "shamwayselftest_shamwayselftestarachnid_look";
             yield return "shamwayselftest_shamwayselftestbird_look";
             yield return "shamwayselftest_shamwayselftestcreature_look";
+            yield return "shamwayselftest_shamwayselftestcreature_prefab_look";
             yield return "shamwayselftest_shamwayselftestdino_look";
             yield return "shamwayselftest_shamwayselftestprop_look";
             yield return "shamwayselftest_timednuke_look";
@@ -105,12 +106,12 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                 var renderers = burstStaged.GetComponentsInChildren<Renderer>(true);
                 float lowest = 0f;
                 float ground = 0f;
-                if (renderers.Length > 0)
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    burstStaged, out posedBounds);
+                if (hasPosedBounds)
                 {
-                    var bounds = renderers[0].bounds;
-                    for (int i = 1; i < renderers.Length; i++)
-                        bounds.Encapsulate(renderers[i].bounds);
-                    lowest = bounds.min.y;
+                    lowest = posedBounds.min.y;
                     var world = GameManager.Instance != null ? GameManager.Instance.World : null;
                     if (world != null)
                     {
@@ -133,7 +134,8 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                         ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
                         if (ground > 1f)
                             placed.y = ground - Origin.position.y - lowest;
-                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
                             placed.y = groundHit.point.y - lowest;
                     }
                 }
@@ -141,6 +143,7 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                 Report.Info("burst: staged at " + burstStaged.transform.position
                     + ", camera at " + camera.position
                     + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
                     + ", with " + renderers.Length + " renderer(s)");
                 // Live renderer probe (SMR-PROBE): under the live graphics
                 // device, log every renderer so a d3d11-only invisibility is
@@ -158,7 +161,10 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                     if (mat != null)
                     {
                         try { setPass = mat.SetPass(0); }
-                        catch (System.Exception e) { Report.Info("SMR-PROBE: " + renderer.name + " SetPass threw " + e.GetType().Name); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
                     }
                     Mesh mesh = null;
                     if (smr != null) mesh = smr.sharedMesh;
@@ -170,17 +176,25 @@ public sealed class ShamwaySelfTestAcceptanceProvider : IScenarioProvider
                         + " type=" + renderer.GetType().Name
                         + " active=" + renderer.gameObject.activeInHierarchy
                         + " enabled=" + renderer.enabled
-                        + " mesh=" + (mesh != null ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
                         + " shader=" + (shader != null ? shader.name : "<null>")
                         + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
                         + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
                         + " SetPass0=" + setPass
                         + " bounds=" + renderer.bounds.ToString("F2")
                         + " pos=" + renderer.transform.position.ToString("F2")
-                        + (smr != null ? " bones=" + smr.bones.Length + " root=" + (smr.rootBone != null ? smr.rootBone.name : "<null>") : ""));
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
                 }
                 // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, burstStaged);
             },
             holdSeconds: 12f,
             fail: "could not stage burst in front of the camera"));
@@ -250,12 +264,12 @@ if (suite == "shamwayselftest_gear_look")
                 var renderers = gearStaged.GetComponentsInChildren<Renderer>(true);
                 float lowest = 0f;
                 float ground = 0f;
-                if (renderers.Length > 0)
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    gearStaged, out posedBounds);
+                if (hasPosedBounds)
                 {
-                    var bounds = renderers[0].bounds;
-                    for (int i = 1; i < renderers.Length; i++)
-                        bounds.Encapsulate(renderers[i].bounds);
-                    lowest = bounds.min.y;
+                    lowest = posedBounds.min.y;
                     var world = GameManager.Instance != null ? GameManager.Instance.World : null;
                     if (world != null)
                     {
@@ -278,7 +292,8 @@ if (suite == "shamwayselftest_gear_look")
                         ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
                         if (ground > 1f)
                             placed.y = ground - Origin.position.y - lowest;
-                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
                             placed.y = groundHit.point.y - lowest;
                     }
                 }
@@ -286,6 +301,7 @@ if (suite == "shamwayselftest_gear_look")
                 Report.Info("gear: staged at " + gearStaged.transform.position
                     + ", camera at " + camera.position
                     + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
                     + ", with " + renderers.Length + " renderer(s)");
                 // Live renderer probe (SMR-PROBE): under the live graphics
                 // device, log every renderer so a d3d11-only invisibility is
@@ -303,7 +319,10 @@ if (suite == "shamwayselftest_gear_look")
                     if (mat != null)
                     {
                         try { setPass = mat.SetPass(0); }
-                        catch (System.Exception e) { Report.Info("SMR-PROBE: " + renderer.name + " SetPass threw " + e.GetType().Name); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
                     }
                     Mesh mesh = null;
                     if (smr != null) mesh = smr.sharedMesh;
@@ -315,17 +334,25 @@ if (suite == "shamwayselftest_gear_look")
                         + " type=" + renderer.GetType().Name
                         + " active=" + renderer.gameObject.activeInHierarchy
                         + " enabled=" + renderer.enabled
-                        + " mesh=" + (mesh != null ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
                         + " shader=" + (shader != null ? shader.name : "<null>")
                         + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
                         + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
                         + " SetPass0=" + setPass
                         + " bounds=" + renderer.bounds.ToString("F2")
                         + " pos=" + renderer.transform.position.ToString("F2")
-                        + (smr != null ? " bones=" + smr.bones.Length + " root=" + (smr.rootBone != null ? smr.rootBone.name : "<null>") : ""));
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
                 }
                 // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, gearStaged);
             },
             holdSeconds: 12f,
             fail: "could not stage gear in front of the camera"));
@@ -395,12 +422,12 @@ if (suite == "shamwayselftest_shamwayselftestarachnid_look")
                 var renderers = shamwaySelfTestArachnidStaged.GetComponentsInChildren<Renderer>(true);
                 float lowest = 0f;
                 float ground = 0f;
-                if (renderers.Length > 0)
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    shamwaySelfTestArachnidStaged, out posedBounds);
+                if (hasPosedBounds)
                 {
-                    var bounds = renderers[0].bounds;
-                    for (int i = 1; i < renderers.Length; i++)
-                        bounds.Encapsulate(renderers[i].bounds);
-                    lowest = bounds.min.y;
+                    lowest = posedBounds.min.y;
                     var world = GameManager.Instance != null ? GameManager.Instance.World : null;
                     if (world != null)
                     {
@@ -423,7 +450,8 @@ if (suite == "shamwayselftest_shamwayselftestarachnid_look")
                         ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
                         if (ground > 1f)
                             placed.y = ground - Origin.position.y - lowest;
-                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
                             placed.y = groundHit.point.y - lowest;
                     }
                 }
@@ -431,6 +459,7 @@ if (suite == "shamwayselftest_shamwayselftestarachnid_look")
                 Report.Info("shamwaySelfTestArachnid: staged at " + shamwaySelfTestArachnidStaged.transform.position
                     + ", camera at " + camera.position
                     + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
                     + ", with " + renderers.Length + " renderer(s)");
                 // Live renderer probe (SMR-PROBE): under the live graphics
                 // device, log every renderer so a d3d11-only invisibility is
@@ -448,7 +477,10 @@ if (suite == "shamwayselftest_shamwayselftestarachnid_look")
                     if (mat != null)
                     {
                         try { setPass = mat.SetPass(0); }
-                        catch (System.Exception e) { Report.Info("SMR-PROBE: " + renderer.name + " SetPass threw " + e.GetType().Name); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
                     }
                     Mesh mesh = null;
                     if (smr != null) mesh = smr.sharedMesh;
@@ -460,17 +492,25 @@ if (suite == "shamwayselftest_shamwayselftestarachnid_look")
                         + " type=" + renderer.GetType().Name
                         + " active=" + renderer.gameObject.activeInHierarchy
                         + " enabled=" + renderer.enabled
-                        + " mesh=" + (mesh != null ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
                         + " shader=" + (shader != null ? shader.name : "<null>")
                         + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
                         + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
                         + " SetPass0=" + setPass
                         + " bounds=" + renderer.bounds.ToString("F2")
                         + " pos=" + renderer.transform.position.ToString("F2")
-                        + (smr != null ? " bones=" + smr.bones.Length + " root=" + (smr.rootBone != null ? smr.rootBone.name : "<null>") : ""));
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
                 }
                 // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, shamwaySelfTestArachnidStaged);
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestArachnid in front of the camera"));
@@ -540,12 +580,12 @@ if (suite == "shamwayselftest_shamwayselftestbird_look")
                 var renderers = shamwaySelfTestBirdStaged.GetComponentsInChildren<Renderer>(true);
                 float lowest = 0f;
                 float ground = 0f;
-                if (renderers.Length > 0)
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    shamwaySelfTestBirdStaged, out posedBounds);
+                if (hasPosedBounds)
                 {
-                    var bounds = renderers[0].bounds;
-                    for (int i = 1; i < renderers.Length; i++)
-                        bounds.Encapsulate(renderers[i].bounds);
-                    lowest = bounds.min.y;
+                    lowest = posedBounds.min.y;
                     var world = GameManager.Instance != null ? GameManager.Instance.World : null;
                     if (world != null)
                     {
@@ -568,7 +608,8 @@ if (suite == "shamwayselftest_shamwayselftestbird_look")
                         ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
                         if (ground > 1f)
                             placed.y = ground - Origin.position.y - lowest;
-                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
                             placed.y = groundHit.point.y - lowest;
                     }
                 }
@@ -576,6 +617,7 @@ if (suite == "shamwayselftest_shamwayselftestbird_look")
                 Report.Info("shamwaySelfTestBird: staged at " + shamwaySelfTestBirdStaged.transform.position
                     + ", camera at " + camera.position
                     + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
                     + ", with " + renderers.Length + " renderer(s)");
                 // Live renderer probe (SMR-PROBE): under the live graphics
                 // device, log every renderer so a d3d11-only invisibility is
@@ -593,7 +635,10 @@ if (suite == "shamwayselftest_shamwayselftestbird_look")
                     if (mat != null)
                     {
                         try { setPass = mat.SetPass(0); }
-                        catch (System.Exception e) { Report.Info("SMR-PROBE: " + renderer.name + " SetPass threw " + e.GetType().Name); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
                     }
                     Mesh mesh = null;
                     if (smr != null) mesh = smr.sharedMesh;
@@ -605,17 +650,25 @@ if (suite == "shamwayselftest_shamwayselftestbird_look")
                         + " type=" + renderer.GetType().Name
                         + " active=" + renderer.gameObject.activeInHierarchy
                         + " enabled=" + renderer.enabled
-                        + " mesh=" + (mesh != null ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
                         + " shader=" + (shader != null ? shader.name : "<null>")
                         + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
                         + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
                         + " SetPass0=" + setPass
                         + " bounds=" + renderer.bounds.ToString("F2")
                         + " pos=" + renderer.transform.position.ToString("F2")
-                        + (smr != null ? " bones=" + smr.bones.Length + " root=" + (smr.rootBone != null ? smr.rootBone.name : "<null>") : ""));
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
                 }
                 // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, shamwaySelfTestBirdStaged);
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestBird in front of the camera"));
@@ -628,6 +681,164 @@ if (suite == "shamwayselftest_shamwayselftestcreature_look")
             label, "motion_shamwaySelfTestCreature", "shamwaySelfTestCreature", new Vector3(1.5f, 3f, 1.5f),
             holdSeconds: 12f, clipFps: 4f, speed: 0.8f,
             fail: "could not spawn and walk the {name} entity class"));
+            return;
+        }
+if (suite == "shamwayselftest_shamwayselftestcreature_prefab_look")
+        {
+
+        GameObject shamwaySelfTestCreatureStaged = null;
+        queue.Add(CaseDef.Staged(label, "look_shamwaySelfTestCreature", new[] { "capture", "bundle" },
+            stage: ctx =>
+            {
+                var prefab = DataLoader.LoadAsset<GameObject>(Bundle + "?shamwaySelfTestCreature");
+                if (prefab == null)
+                {
+                    Report.Info("shamwaySelfTestCreature: LoadAsset<GameObject> returned null; nothing to stage");
+                    return false;
+                }
+                var player = ctx == null ? null : ctx.Player;
+                if (player == null)
+                {
+                    Report.Info(
+                        "shamwaySelfTestCreature: no local player, so there is no camera to stage in front of");
+                    return false;
+                }
+                // In front of the *camera*, not the player's feet. An
+                // EntityPlayerLocal's `position` is its ground position and its
+                // own transform faces its body, so a prop placed from those
+                // lands under the camera and out of frame - which is exactly
+                // what the first staged capture photographed: an empty scene
+                // that still passed, because the case only asks whether a
+                // renderer exists.
+                var camera = player.playerCamera != null
+                    ? player.playerCamera.transform
+                    : player.transform;
+                var ahead = camera.forward;
+                shamwaySelfTestCreatureStaged = UnityEngine.Object.Instantiate(prefab);
+                CaseDef.RegisterStaged(shamwaySelfTestCreatureStaged);
+                // Face the camera with yaw only, keeping the prop's own up
+                // axis upright. `LookRotation(-ahead, up)` looks right but
+                // pitches the prop by the camera's own pitch, and a staged
+                // quadruped's camera looks down at it — a 25° lean put the
+                // front feet ~0.17 m below the rear feet, and grounding by
+                // the unrotated lowest point then sank the front legs into
+                // the floor ("clipped as fuck", twice). Yaw-only keeps every
+                // foot at one height, so the lowest bound point is the
+                // standing surface.
+                var yaw = Mathf.Atan2(-ahead.x, -ahead.z) * Mathf.Rad2Deg;
+                shamwaySelfTestCreatureStaged.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                var placed = camera.position + ahead * 3.5f;
+                // Sit the prefab on the ground instead of hovering at the
+                // camera offset: an animated entity's motion reads against
+                // the terrain, not against empty sky, and a floating prop
+                // looks like a staging bug. Drop it onto the actual surface
+                // with a physics raycast straight down from the staging
+                // point, using the game's own ground mask (the fall-point
+                // check in the game raycasts with 268500992 = layers
+                // 13+15+28, the traversable voxel surface; verified from
+                // Assembly-CSharp). The staged prefab has no colliders of
+                // its own, so the hit is the world surface at that column —
+                // slopes and carved pits included, in the same transform
+                // space as the camera. The terrain-height APIs failed this
+                // live twice before the raycast: `GetHeightAt` is the
+                // uncarved generator heightmap, and `GetTerrainHeight`
+                // needs an `Origin.position` rebase plus a loaded chunk —
+                // both grounded the staged entity wrong.
+                var renderers = shamwaySelfTestCreatureStaged.GetComponentsInChildren<Renderer>(true);
+                float lowest = 0f;
+                float ground = 0f;
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    shamwaySelfTestCreatureStaged, out posedBounds);
+                if (hasPosedBounds)
+                {
+                    lowest = posedBounds.min.y;
+                    var world = GameManager.Instance != null ? GameManager.Instance.World : null;
+                    if (world != null)
+                    {
+                        // The game's own ground placement, from the IL: ground
+                        // entities spawn at `chunk.GetHeight(blockX, blockZ)
+                        // + 1` (World.FindRandomSpawnPointNearPosition), and
+                        // `World.GetHeight(worldX, worldZ)` resolves to that
+                        // same chunk height map — the actual top block.
+                        // `World.GetTerrainHeight` (m_TerrainHeight) is the
+                        // terrain generator's cached height and sits ~2
+                        // blocks under the visible surface in carved terrain,
+                        // which is how this entity ended up knee-deep in the
+                        // floor. Terrain APIs take ABSOLUTE world coordinates
+                        // while transforms are rebased by Origin.position
+                        // (Entity.transform.position = position -
+                        // Origin.position), so the staging point is converted
+                        // before the query; a raycast on the ground mask is
+                        // the fallback when the chunk is not loaded yet.
+                        var abs = placed + Origin.position;
+                        ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
+                        if (ground > 1f)
+                            placed.y = ground - Origin.position.y - lowest;
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
+                            placed.y = groundHit.point.y - lowest;
+                    }
+                }
+                shamwaySelfTestCreatureStaged.transform.position = placed;
+                Report.Info("shamwaySelfTestCreature: staged at " + shamwaySelfTestCreatureStaged.transform.position
+                    + ", camera at " + camera.position
+                    + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
+                    + ", with " + renderers.Length + " renderer(s)");
+                // Live renderer probe (SMR-PROBE): under the live graphics
+                // device, log every renderer so a d3d11-only invisibility is
+                // diagnosed rather than guessed. SetPass(0)+isSupported answer
+                // "can the pass be set up", bounds+pos answer "is it where the
+                // camera looks", vertexCount answers "did the (skinned) upload
+                // survive". Only fires when this provider regenerated after the
+                // SMR-PROBE block was added; always goes to the client log.
+                foreach (var renderer in shamwaySelfTestCreatureStaged.GetComponentsInChildren<Renderer>(true))
+                {
+                    var smr = renderer as SkinnedMeshRenderer;
+                    var mat = renderer.sharedMaterial;
+                    var shader = mat != null ? mat.shader : null;
+                    var setPass = false;
+                    if (mat != null)
+                    {
+                        try { setPass = mat.SetPass(0); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
+                    }
+                    Mesh mesh = null;
+                    if (smr != null) mesh = smr.sharedMesh;
+                    else if (renderer is MeshRenderer) {
+                        var mf = renderer.GetComponent<MeshFilter>();
+                        if (mf != null) mesh = mf.sharedMesh;
+                    }
+                    Report.Info("SMR-PROBE: " + renderer.name
+                        + " type=" + renderer.GetType().Name
+                        + " active=" + renderer.gameObject.activeInHierarchy
+                        + " enabled=" + renderer.enabled
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " shader=" + (shader != null ? shader.name : "<null>")
+                        + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
+                        + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
+                        + " SetPass0=" + setPass
+                        + " bounds=" + renderer.bounds.ToString("F2")
+                        + " pos=" + renderer.transform.position.ToString("F2")
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
+                }
+                // A prefab with no renderer cannot be photographed into evidence.
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, shamwaySelfTestCreatureStaged);
+            },
+            holdSeconds: 12f,
+            fail: "could not stage shamwaySelfTestCreature in front of the camera"));
             return;
         }
 if (suite == "shamwayselftest_shamwayselftestdino_look")
@@ -694,12 +905,12 @@ if (suite == "shamwayselftest_shamwayselftestdino_look")
                 var renderers = shamwaySelfTestDinoStaged.GetComponentsInChildren<Renderer>(true);
                 float lowest = 0f;
                 float ground = 0f;
-                if (renderers.Length > 0)
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    shamwaySelfTestDinoStaged, out posedBounds);
+                if (hasPosedBounds)
                 {
-                    var bounds = renderers[0].bounds;
-                    for (int i = 1; i < renderers.Length; i++)
-                        bounds.Encapsulate(renderers[i].bounds);
-                    lowest = bounds.min.y;
+                    lowest = posedBounds.min.y;
                     var world = GameManager.Instance != null ? GameManager.Instance.World : null;
                     if (world != null)
                     {
@@ -722,7 +933,8 @@ if (suite == "shamwayselftest_shamwayselftestdino_look")
                         ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
                         if (ground > 1f)
                             placed.y = ground - Origin.position.y - lowest;
-                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
                             placed.y = groundHit.point.y - lowest;
                     }
                 }
@@ -730,6 +942,7 @@ if (suite == "shamwayselftest_shamwayselftestdino_look")
                 Report.Info("shamwaySelfTestDino: staged at " + shamwaySelfTestDinoStaged.transform.position
                     + ", camera at " + camera.position
                     + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
                     + ", with " + renderers.Length + " renderer(s)");
                 // Live renderer probe (SMR-PROBE): under the live graphics
                 // device, log every renderer so a d3d11-only invisibility is
@@ -747,7 +960,10 @@ if (suite == "shamwayselftest_shamwayselftestdino_look")
                     if (mat != null)
                     {
                         try { setPass = mat.SetPass(0); }
-                        catch (System.Exception e) { Report.Info("SMR-PROBE: " + renderer.name + " SetPass threw " + e.GetType().Name); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
                     }
                     Mesh mesh = null;
                     if (smr != null) mesh = smr.sharedMesh;
@@ -759,17 +975,25 @@ if (suite == "shamwayselftest_shamwayselftestdino_look")
                         + " type=" + renderer.GetType().Name
                         + " active=" + renderer.gameObject.activeInHierarchy
                         + " enabled=" + renderer.enabled
-                        + " mesh=" + (mesh != null ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
                         + " shader=" + (shader != null ? shader.name : "<null>")
                         + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
                         + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
                         + " SetPass0=" + setPass
                         + " bounds=" + renderer.bounds.ToString("F2")
                         + " pos=" + renderer.transform.position.ToString("F2")
-                        + (smr != null ? " bones=" + smr.bones.Length + " root=" + (smr.rootBone != null ? smr.rootBone.name : "<null>") : ""));
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
                 }
                 // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, shamwaySelfTestDinoStaged);
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestDino in front of the camera"));
@@ -839,12 +1063,12 @@ if (suite == "shamwayselftest_shamwayselftestprop_look")
                 var renderers = shamwaySelfTestPropStaged.GetComponentsInChildren<Renderer>(true);
                 float lowest = 0f;
                 float ground = 0f;
-                if (renderers.Length > 0)
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    shamwaySelfTestPropStaged, out posedBounds);
+                if (hasPosedBounds)
                 {
-                    var bounds = renderers[0].bounds;
-                    for (int i = 1; i < renderers.Length; i++)
-                        bounds.Encapsulate(renderers[i].bounds);
-                    lowest = bounds.min.y;
+                    lowest = posedBounds.min.y;
                     var world = GameManager.Instance != null ? GameManager.Instance.World : null;
                     if (world != null)
                     {
@@ -867,7 +1091,8 @@ if (suite == "shamwayselftest_shamwayselftestprop_look")
                         ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
                         if (ground > 1f)
                             placed.y = ground - Origin.position.y - lowest;
-                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
                             placed.y = groundHit.point.y - lowest;
                     }
                 }
@@ -875,6 +1100,7 @@ if (suite == "shamwayselftest_shamwayselftestprop_look")
                 Report.Info("shamwaySelfTestProp: staged at " + shamwaySelfTestPropStaged.transform.position
                     + ", camera at " + camera.position
                     + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
                     + ", with " + renderers.Length + " renderer(s)");
                 // Live renderer probe (SMR-PROBE): under the live graphics
                 // device, log every renderer so a d3d11-only invisibility is
@@ -892,7 +1118,10 @@ if (suite == "shamwayselftest_shamwayselftestprop_look")
                     if (mat != null)
                     {
                         try { setPass = mat.SetPass(0); }
-                        catch (System.Exception e) { Report.Info("SMR-PROBE: " + renderer.name + " SetPass threw " + e.GetType().Name); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
                     }
                     Mesh mesh = null;
                     if (smr != null) mesh = smr.sharedMesh;
@@ -904,17 +1133,25 @@ if (suite == "shamwayselftest_shamwayselftestprop_look")
                         + " type=" + renderer.GetType().Name
                         + " active=" + renderer.gameObject.activeInHierarchy
                         + " enabled=" + renderer.enabled
-                        + " mesh=" + (mesh != null ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
                         + " shader=" + (shader != null ? shader.name : "<null>")
                         + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
                         + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
                         + " SetPass0=" + setPass
                         + " bounds=" + renderer.bounds.ToString("F2")
                         + " pos=" + renderer.transform.position.ToString("F2")
-                        + (smr != null ? " bones=" + smr.bones.Length + " root=" + (smr.rootBone != null ? smr.rootBone.name : "<null>") : ""));
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
                 }
                 // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, shamwaySelfTestPropStaged);
             },
             holdSeconds: 12f,
             fail: "could not stage shamwaySelfTestProp in front of the camera"));
@@ -984,12 +1221,12 @@ if (suite == "shamwayselftest_timednuke_look")
                 var renderers = timedNukeStaged.GetComponentsInChildren<Renderer>(true);
                 float lowest = 0f;
                 float ground = 0f;
-                if (renderers.Length > 0)
+                Bounds posedBounds;
+                bool hasPosedBounds = Helpers.TryGetRenderedBounds(
+                    timedNukeStaged, out posedBounds);
+                if (hasPosedBounds)
                 {
-                    var bounds = renderers[0].bounds;
-                    for (int i = 1; i < renderers.Length; i++)
-                        bounds.Encapsulate(renderers[i].bounds);
-                    lowest = bounds.min.y;
+                    lowest = posedBounds.min.y;
                     var world = GameManager.Instance != null ? GameManager.Instance.World : null;
                     if (world != null)
                     {
@@ -1012,7 +1249,8 @@ if (suite == "shamwayselftest_timednuke_look")
                         ground = world.GetHeight((int)abs.x, (int)abs.z) + 1f;
                         if (ground > 1f)
                             placed.y = ground - Origin.position.y - lowest;
-                        else if (Physics.Raycast(placed, Vector3.down, out var groundHit, 200f, 268500992))
+                        else if (Physics.Raycast(
+                            placed, Vector3.down, out var groundHit, 200f, 268500992))
                             placed.y = groundHit.point.y - lowest;
                     }
                 }
@@ -1020,6 +1258,7 @@ if (suite == "shamwayselftest_timednuke_look")
                 Report.Info("timedNuke: staged at " + timedNukeStaged.transform.position
                     + ", camera at " + camera.position
                     + ", ground=" + ground + " lowest=" + lowest
+                    + " posedBounds=" + (hasPosedBounds ? posedBounds.ToString("F2") : "<none>")
                     + ", with " + renderers.Length + " renderer(s)");
                 // Live renderer probe (SMR-PROBE): under the live graphics
                 // device, log every renderer so a d3d11-only invisibility is
@@ -1037,7 +1276,10 @@ if (suite == "shamwayselftest_timednuke_look")
                     if (mat != null)
                     {
                         try { setPass = mat.SetPass(0); }
-                        catch (System.Exception e) { Report.Info("SMR-PROBE: " + renderer.name + " SetPass threw " + e.GetType().Name); }
+                        catch (System.Exception e) {
+                            Report.Info("SMR-PROBE: " + renderer.name
+                                + " SetPass threw " + e.GetType().Name);
+                        }
                     }
                     Mesh mesh = null;
                     if (smr != null) mesh = smr.sharedMesh;
@@ -1049,17 +1291,25 @@ if (suite == "shamwayselftest_timednuke_look")
                         + " type=" + renderer.GetType().Name
                         + " active=" + renderer.gameObject.activeInHierarchy
                         + " enabled=" + renderer.enabled
-                        + " mesh=" + (mesh != null ? mesh.name + " v=" + mesh.vertexCount : "<null>")
+                        + " mesh=" + (mesh != null
+                            ? mesh.name + " v=" + mesh.vertexCount : "<null>")
                         + " shader=" + (shader != null ? shader.name : "<null>")
                         + " supported=" + (shader != null ? shader.isSupported.ToString() : "n/a")
                         + " passes=" + (shader != null ? shader.passCount.ToString() : "n/a")
                         + " SetPass0=" + setPass
                         + " bounds=" + renderer.bounds.ToString("F2")
                         + " pos=" + renderer.transform.position.ToString("F2")
-                        + (smr != null ? " bones=" + smr.bones.Length + " root=" + (smr.rootBone != null ? smr.rootBone.name : "<null>") : ""));
+                        + (smr != null ? " bones=" + smr.bones.Length
+                            + " root=" + (smr.rootBone != null
+                                ? smr.rootBone.name : "<null>") : ""));
                 }
                 // A prefab with no renderer cannot be photographed into evidence.
-                return renderers.Length > 0;
+                // Detach from the first-person hands and point a clear camera
+                // lane at the combined renderer bounds. A staged marker with
+                // the subject hidden behind the player body or a world prop is
+                // not a look, even though every renderer exists.
+                return renderers.Length > 0
+                    && Helpers.FrameStagedObject(player, timedNukeStaged);
             },
             holdSeconds: 12f,
             fail: "could not stage timedNuke in front of the camera"));

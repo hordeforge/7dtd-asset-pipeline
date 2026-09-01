@@ -66,7 +66,7 @@ all = [
 # single home and land in uv.lock with hashes, which `uv sync --locked`
 # verifies on every install.
 [dependency-groups]
-dev = ["ruff==0.16.4", "mypy==2.3.1", "setuptools", "hypothesis"]
+dev = ["ruff==0.16.5", "mypy==2.3.1", "setuptools", "hypothesis"]
 
 [project.scripts]
 shamway = "sevendtd_asset_pipeline.cli:main"

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Install the host tooling this pipeline builds and inspects assets with.
 #
-# Python 3.11+ is the only pipeline requirement, and vkd3d-compiler is what the
-# default editorless build path needs to write a prefab's shader. A Unity editor
-# is opt-in and is installed by scripts/install-unity-editor.sh, not here.
-# Everything else supports the authoring lanes in docs/authoring/authoring-tools.md
-# and is opt-in too, so a build host never installs desktop art packages it has
-# no use for.
+# Python 3.11+ runs the pipeline and unityz reads, verifies, and extracts the
+# Unity artifacts it handles. vkd3d-compiler is what the default editorless
+# build path needs to write a prefab's shader. A Unity editor is opt-in and is
+# installed by scripts/install-unity-editor.sh, not here. Everything else
+# supports the authoring lanes in docs/authoring/authoring-tools.md and is
+# opt-in too, so a build host never installs desktop art packages it has no use
+# for.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -76,6 +77,9 @@ BASE TOOLS
   git, make          Version control and the consumer Makefile targets
   shellcheck         Lints this repository's scripts in 'make check'
   pactl              Mutes and unmutes a test client (shamway client mute)
+  unityz (>=0.1.1)   Reads, verifies, and extracts Unity bundles and assets.
+                     Built from a pinned, checksum-verified source archive
+                     into ~/.local/bin because no release artifact exists yet
   vkd3d-compiler     HLSL to DXBC: the shader a synthesized prefab's material
                      needs. Requires vkd3d >= 1.3, which is when vkd3d-shader
                      learned to read HLSL. Debian and Ubuntu package 1.2, so
@@ -215,6 +219,10 @@ has_vkd3d_hlsl() {
 		vkd3d-compiler --print-source-types 2>/dev/null | grep -q hlsl
 }
 
+has_unityz_contract() {
+	"$ROOT/scripts/install-unityz.sh" --check
+}
+
 has_libxml2_so2() {
 	if command -v ldconfig >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q 'libxml2\.so\.2 '; then
 		return 0
@@ -264,6 +272,8 @@ run_check() {
 	report make "consumer Makefile targets" have make
 	report shellcheck "script linting in make check" have shellcheck
 	report pactl "client mute/unmute (shamway client)" have pactl
+	report unityz "Unity asset inspection and verification; needs unityz >= 0.1.1" \
+		has_unityz_contract
 	report vkd3d-compiler "HLSL to DXBC (synthesized shaders and materials); needs vkd3d >= 1.3" \
 		has_vkd3d_hlsl
 	if ((WITH_AUTHORING)); then
@@ -327,6 +337,8 @@ collect_pacman() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(shellcheck)
 	have pactl || PACKAGES+=(libpulse)
+	have curl || PACKAGES+=(curl)
+	have tar || PACKAGES+=(tar)
 	# Arch ships /usr/bin/vkd3d-compiler in `vkd3d` (verified with pacman -Qo),
 	# currently 1.19, which reads HLSL.
 	has_vkd3d_hlsl || PACKAGES+=(vkd3d)
@@ -367,6 +379,8 @@ collect_apt() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(shellcheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
+	have curl || PACKAGES+=(curl)
+	have tar || PACKAGES+=(tar)
 	# Debian and Ubuntu ship glslangValidator in `glslang-tools`.
 	have glslangValidator || PACKAGES+=(glslang-tools)
 	# Zig builds the SMOL-V codec (zmol-v) the Vulkan shader lane loads.
@@ -410,6 +424,8 @@ collect_dnf() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(ShellCheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
+	have curl || PACKAGES+=(curl)
+	have tar || PACKAGES+=(tar)
 	# Fedora names the binary's package after the binary, and ships 1.17 in
 	# Rawhide, which is new enough to read HLSL.
 	has_vkd3d_hlsl || PACKAGES+=(vkd3d-compiler)
@@ -449,6 +465,8 @@ collect_zypper() {
 	have make || PACKAGES+=(make)
 	have shellcheck || PACKAGES+=(ShellCheck)
 	have pactl || PACKAGES+=(pulseaudio-utils)
+	have curl || PACKAGES+=(curl)
+	have tar || PACKAGES+=(tar)
 	# openSUSE Factory carries `vkd3d`. If this host ends up without a binary
 	# that reads HLSL anyway, --check says MISS with the reason and the build
 	# degrades with a printed note rather than failing.
@@ -974,6 +992,8 @@ install_zmolv() {
 	rm -rf "$clone"
 }
 
+"$ROOT/scripts/install-unityz.sh"
+export PATH="${UNITYZ_INSTALL_PREFIX:-$HOME/.local}/bin:$PATH"
 install_zmolv
 
 if ((WITH_AUTHORING)); then
@@ -1000,6 +1020,7 @@ run_check
 missing=()
 has_python_311 || missing+=("python3 >= 3.11")
 have uv || [[ -x "$HOME/.local/bin/uv" ]] || missing+=("uv")
+has_unityz_contract || missing+=("unityz >= 0.1.1")
 if ((${#missing[@]})); then
 	echo "ERROR: still missing after install: ${missing[*]}" >&2
 	exit 1

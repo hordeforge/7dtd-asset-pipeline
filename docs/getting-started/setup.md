@@ -10,13 +10,30 @@ scripts/install-tools.sh --check --with-authoring
 ```
 
 `--check` reports `OK`/`MISS` per tool and installs nothing. Drop `--check` to
-install through `pacman`, `apt-get`, `dnf`, or `zypper`. Only Python is
-required for the CLI itself. The base set also carries `vkd3d-compiler`, which
-compiles the shader a synthesized prefab's material needs — the writer's one
-host dependency, and it degrades to a bare `Mesh` with a printed note rather
-than failing. It has a **minimum version, 1.3**, and Debian and Ubuntu package
-1.2; `--with-vkd3d-source` builds a usable one on any distribution and does
-nothing where the packaged one already works. `--with-unity-prereqs` covers the **optional** editor
+install through `pacman`, `apt-get`, `dnf`, or `zypper`. Python runs the CLI;
+`unityz` reads, verifies and extracts its Unity artifacts. Because unityz has
+no published release artifact yet, the installer downloads an immutable source
+archive at commit `8e3925cf08b6f8c7f08e11a1d2fd32dae8a237ce`, verifies its
+recorded SHA-256, and builds it into `~/.local/bin`. It requires unityz 0.1.1:
+that is the first version whose JSON output includes the embedded
+SerializedFile revision and class IDs rather than only the outer UnityFS
+header's commonly generic `5.x.x` string. If the installer prints an
+`export PATH=...` line, run it in the calling shell; a child installer process
+cannot change its parent's environment.
+
+CI or a host that already has Zig 0.16.0 and only needs the reader can run the
+same pinned installation step directly:
+
+```bash
+shamway script install-unityz
+```
+
+The base set also carries `vkd3d-compiler`, which compiles the shader a
+synthesized prefab's material needs — the writer's one host dependency, and it
+degrades to a bare `Mesh` with a printed note rather than failing. It has a
+**minimum version, 1.3**, and Debian and Ubuntu package 1.2;
+`--with-vkd3d-source` builds a usable one on any distribution and does nothing
+where the packaged one already works. `--with-unity-prereqs` covers the **optional** editor
 installer's needs, `--with-authoring` the optional art tooling in
 [Authoring tools](../authoring/authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
 and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy) —
@@ -29,8 +46,9 @@ which goes on `PATH`), and Mono for `monodis` and `mcs`. Never set a global
 `DOTNET_ROOT` for ilspycmd; a distribution .NET upgrade can strand the tool,
 and Unity Hub ships a fallback SDK under `Editor/Data/DotNetSdk` per editor.
 The base set also installs `shellcheck` (for `make check`) and `pactl` (for
-`shamway client mute`). The script exits non-zero if Python or uv is still
-missing afterwards, rather than leaving a `MISS` line to scroll past.
+`shamway client mute`). The script exits non-zero if Python, uv, or a unityz
+with the required metadata contract is still missing afterwards, rather than
+leaving a `MISS` line to scroll past.
 
 Xvfb is there for one specific reason: `shamway render-icon` needs a real
 graphics device, and Unity run with `-nographics` renders a blank image instead

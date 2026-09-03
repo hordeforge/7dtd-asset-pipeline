@@ -1,6 +1,7 @@
 # Open-source authoring and inspection tools
 
-Python is the only pipeline requirement. Unity is **opt-in** and, for a bundle
+Python and the `unityz` asset CLI are the pipeline's base requirements. Unity
+is **opt-in** and, for a bundle
 of textures, clips, text files, meshes, materials, shaders and prefabs — which
 is every asset class a modlet references — not involved at all. The tools below
 are optional
@@ -438,6 +439,12 @@ texture, sprite, mesh, shader, FSB5, hierarchy and managed-field diagnostics
 this repository previously reached through Python, and its JSON commands are
 the migration boundary for pipeline code.
 
+`scripts/install-tools.sh` builds unityz 0.1.1 from the checksum-verified
+source archive for pinned commit `8e3925cf08b6f8c7f08e11a1d2fd32dae8a237ce`.
+It does not use a sibling checkout. The minimum is a format contract, not a
+general freshness preference: 0.1.1 is the first version whose `info --json`
+reports each embedded SerializedFile's revision and class IDs.
+
 It does not yet replace the writer's UnityPy dependency: it consumes type
 trees already in a file or supplied through `--trees`, has no bundled
 release-indexed built-in class-tree database, and rebuilds existing files
@@ -493,7 +500,7 @@ integration. This table says which is which, so nobody has to guess — and so
 
 | Tool | State |
 |---|---|
-| **unityz** | **migration in progress** — full reader/verify/extract coverage; embedded revision reporting landed upstream; writer creation gaps remain |
+| **unityz** | **base tool, migration in progress** — pinned source install and a >=0.1.1 contract probe; full reader/verify/extract coverage; writer creation gaps remain |
 | **UnityPy** | **wired, shrinking** — versioned type trees and fresh-object serialization remain; reader and test usages move to unityz |
 | **trimesh** | **wired** — `check-mesh`, and reads glTF/OBJ/STL/PLY into a bundle `Mesh` |
 | **Blender** | **wired** — `generate mesh` (GLB), `generate mesh-icon` (headless Cycles render), `generate bind` (skin an authored mesh onto a shipped rig) |

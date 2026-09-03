@@ -1,6 +1,7 @@
 """The host scripts, reachable from an installed `shamway` without a checkout.
 
-`install-tools.sh`, `install-unity-editor.sh`, `compile-editor-scripts.sh`,
+`install-tools.sh`, `install-unityz.sh`, `install-unity-editor.sh`,
+`compile-editor-scripts.sh`,
 `playtest-acceptance.sh`, `playtest-synthesized.sh` and `playtest-capture.sh`
 are host-setup and acceptance steps a mod needs once per machine. A mod is
 told never to keep a path into a checkout of this repository, so the scripts
@@ -30,6 +31,10 @@ SCRIPTS: dict[str, tuple[str, str]] = {
         "install-tools.sh",
         "host packages: base, --with-authoring, --with-unity-prereqs,"
         " --with-desktop-capture, --with-research",
+    ),
+    "install-unityz": (
+        "install-unityz.sh",
+        "the pinned, checksum-verified unityz reader used by bundle inspection",
     ),
     "install-unity-editor": (
         "install-unity-editor.sh",

@@ -421,12 +421,31 @@ revision and class-142 gates used during staging.
 
 ### UnityPy
 
-UnityPy is a Python parser/extractor useful for independent object-table,
-container, Texture2D, Mesh, and typetree inspection. Pin its minor version
-because its own documentation warns that minor releases may break APIs. Keep
-it diagnostic; do not use it to generate the authoritative bundle.
+UnityPy currently supplies the versioned built-in class type trees used by the
+synthesized writer. Its reader and extractor roles are being replaced by
+unityz; it remains until unityz can both select those trees by Unity revision
+and create a fresh SerializedFile and bundle rather than only rebuild one.
+Pin its minor version because its own documentation warns that minor releases
+may break APIs.
 
 - Official repository/documentation: <https://github.com/K0lb3/UnityPy>
+
+### unityz
+
+unityz is the HordeForge Zig reader, extractor, verifier, differ and in-place
+editor for UnityFS/WebFile/SerializedFile assets. It covers the object,
+texture, sprite, mesh, shader, FSB5, hierarchy and managed-field diagnostics
+this repository previously reached through Python, and its JSON commands are
+the migration boundary for pipeline code.
+
+It does not yet replace the writer's UnityPy dependency: it consumes type
+trees already in a file or supplied through `--trees`, has no bundled
+release-indexed built-in class-tree database, and rebuilds existing files
+rather than creating the first object table from empty input. The measured
+surface and exact decisions are in the
+[unityz capability audit](../research/unityz-capability-audit.md).
+
+- Official repository: <https://github.com/hordeforge/unityz>
 
 ### AssetsTools.NET
 
@@ -474,7 +493,8 @@ integration. This table says which is which, so nobody has to guess — and so
 
 | Tool | State |
 |---|---|
-| **UnityPy** | **wired** — type trees for every class the editorless writer emits, `inspect --deep` |
+| **unityz** | **migration in progress** — full reader/verify/extract coverage; embedded revision reporting landed upstream; writer creation gaps remain |
+| **UnityPy** | **wired, shrinking** — versioned type trees and fresh-object serialization remain; reader and test usages move to unityz |
 | **trimesh** | **wired** — `check-mesh`, and reads glTF/OBJ/STL/PLY into a bundle `Mesh` |
 | **Blender** | **wired** — `generate mesh` (GLB), `generate mesh-icon` (headless Cycles render), `generate bind` (skin an authored mesh onto a shipped rig) |
 | **Pillow** | **wired** — cutouts, atlas cells, contact sheets, the texture lane |

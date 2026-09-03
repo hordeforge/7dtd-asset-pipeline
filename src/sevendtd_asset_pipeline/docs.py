@@ -112,6 +112,10 @@ TOPICS: dict[str, tuple[str, str]] = {
         "research/research-provenance.md",
         "where each 7DTD-specific rule came from",
     ),
+    "unityz-audit": (
+        "research/unityz-capability-audit.md",
+        "unityz capabilities, migration decisions, and the remaining UnityPy gaps",
+    ),
     "release-checklist": ("runbooks/release-checklist.md", "artifact and live acceptance"),
 }
 

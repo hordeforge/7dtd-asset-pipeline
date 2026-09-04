@@ -21,12 +21,12 @@ import argparse
 import array
 import math
 import random
-import struct
 import sys
 import wave
 from pathlib import Path
 
 from .. import atomic
+from ..unityz import Unityz
 
 # The largest magnitude a 16-bit sample can hold, so clamped writes never
 # overflow 'h'. Not the dBFS full-scale reference `check-sound` divides by
@@ -121,7 +121,7 @@ def normalize(samples: array.array[int], peak: float) -> array.array[int]:
 
 
 def decode_bank(bank: Path, out_dir: Path) -> int:
-    """Decode every sample in an FSB5 bank to a WAV beside it.
+    """Decode every sample in an FSB5 bank through the pinned unityz reader.
 
     Two uses, and the second is why it is here rather than in a mod's own
     script. The obvious one is reference listening: the game stores every clip
@@ -130,42 +130,12 @@ def decode_bank(bank: Path, out_dir: Path) -> int:
 
     The other is that this pipeline *hand-writes* those banks. An encoder read
     back only by the code that wrote it has not been read back, and this is a
-    decoder written by someone else — the same reason the block compressor is
-    graded with `texture2ddecoder`.
+    decoder maintained in a different repository and language — the same
+    reason the block compressor is graded with `texture2ddecoder`.
     """
-    try:
-        import fsb5
-    except ImportError:
-        print(
-            "ERROR: reading an FSB5 bank needs the 'fsb5' capability.\n"
-            "       Install it, then retry:  shamway capabilities --json",
-            file=sys.stderr,
-        )
-        return 1
-
-    try:
-        parsed = fsb5.FSB5(bank.read_bytes())
-    except (OSError, ValueError, IndexError, struct.error) as exc:
-        print(f"ERROR: cannot read {bank}: {exc}", file=sys.stderr)
-        return 1
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"bank:    {bank}")
-    print(f"mode:    {parsed.header.mode}  samples: {parsed.header.numSamples}")
-    for index, sample in enumerate(parsed.samples):
-        stem = sample.name or f"sample{index:03d}"
-        target = out_dir / f"{stem}.wav"
-        try:
-            target.write_bytes(parsed.rebuild_sample(sample))
-        except Exception as exc:  # noqa: BLE001 - the library raises many types
-            # A bank this tool did not write may be Vorbis, which needs the
-            # optional decoder. Name the sample rather than aborting the rest.
-            print(f"  {stem}: cannot decode ({exc})", file=sys.stderr)
-            continue
-        print(
-            f"  {target.name}: {sample.frequency} Hz, {sample.channels} ch, "
-            f"{sample.samples} samples"
-        )
+    output = Unityz(bank).text("fsb", "--outdir", str(out_dir.resolve()))
+    if output:
+        print(output, end="" if output.endswith("\n") else "\n")
     return 0
 
 
@@ -187,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     bank = commands.add_parser(
-        "from-bank", help="decode an FSB5 bank to WAV, for reference listening"
+        "from-bank", help="decode an FSB5 bank to WAV/OGG, for reference listening"
     )
     bank.add_argument("bank", type=Path, help="an .fsb / .resource stream, or one this tool wrote")
     bank.add_argument("out_dir", type=Path, help="directory to write one WAV per sample into")

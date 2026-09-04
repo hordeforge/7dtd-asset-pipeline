@@ -167,14 +167,14 @@ class PresenceIsNotCapabilityTests(unittest.TestCase):
         ):
             return next(item for item in capabilities() if item.name == "unityz")
 
-    def test_unityz_before_the_nested_metadata_contract_is_not_available(self) -> None:
-        lane = self._unityz_lane("unityz 0.1.0\n")
+    def test_unityz_before_the_complete_pipeline_contract_is_not_available(self) -> None:
+        lane = self._unityz_lane("unityz 0.1.1\n")
         self.assertFalse(lane.available)
         self.assertEqual("/usr/bin/unityz", lane.path)
-        self.assertIn("older than unityz 0.1.1", lane.unusable_reason or "")
+        self.assertIn("older than unityz 0.1.2", lane.unusable_reason or "")
 
-    def test_unityz_with_the_nested_metadata_contract_is_available(self) -> None:
-        lane = self._unityz_lane("unityz 0.1.1\n")
+    def test_unityz_with_the_complete_pipeline_contract_is_available(self) -> None:
+        lane = self._unityz_lane("unityz 0.1.2\n")
         self.assertTrue(lane.available)
         self.assertIsNone(lane.unusable_reason)
 

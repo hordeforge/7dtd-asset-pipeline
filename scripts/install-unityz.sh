@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the exact unityz reader contract shamway consumes.
+# Install the exact unityz CLI contract shamway consumes.
 set -euo pipefail
 
 # One pinned unityz release. The binaries are the assets unityz's own release
@@ -22,13 +22,13 @@ UNITYZ_INSTALL_PREFIX="${UNITYZ_INSTALL_PREFIX:-$HOME/.local}"
 
 usage() {
 	cat <<'HELP'
-Install the pinned unityz reader used by shamway.
+Install the pinned unityz reader and FSB5 decoder used by shamway.
 
 USAGE
   scripts/install-unityz.sh [--check]
 
 OPTIONS
-  --check   Report whether unityz >= 0.1.1 is on PATH; install nothing
+  --check   Report whether unityz >= 0.1.2 is on PATH; install nothing
   -h        Show this help
 
 On Linux x86_64 and macOS arm64 the installer downloads the pinned unityz
@@ -47,7 +47,7 @@ unityz_contract_at() {
 	version="$("$executable" --version 2>/dev/null | awk '$1 == "unityz" {print $2; exit}')"
 	IFS=. read -r major minor patch <<<"$version"
 	[[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]] || return 1
-	((major > 0 || (major == 0 && (minor > 1 || (minor == 1 && patch >= 1)))))
+	((major > 0 || (major == 0 && (minor > 1 || (minor == 1 && patch >= 2)))))
 }
 
 sha256_file() {
@@ -100,9 +100,9 @@ release_target() {
 case "${1:-}" in
 	--check)
 		if installed_unityz; then
-			echo "OK: unityz >= 0.1.1 ($(command -v unityz))"
+			echo "OK: unityz >= 0.1.2 ($(command -v unityz))"
 		else
-			echo "MISS: unityz >= 0.1.1"
+			echo "MISS: unityz >= 0.1.2"
 			exit 1
 		fi
 		exit 0
@@ -113,7 +113,7 @@ case "${1:-}" in
 esac
 
 if installed_unityz; then
-	echo "OK: unityz already satisfies the >=0.1.1 metadata contract ($(command -v unityz))"
+	echo "OK: unityz already satisfies the >=0.1.2 pipeline contract ($(command -v unityz))"
 	exit 0
 fi
 
@@ -172,7 +172,7 @@ fi
 mkdir -p "$UNITYZ_INSTALL_PREFIX/bin"
 install -m 755 "$built" "$destination"
 if ! unityz_contract_at "$destination"; then
-	echo "ERROR: $destination does not provide the unityz >=0.1.1 contract" >&2
+	echo "ERROR: $destination does not provide the unityz >=0.1.2 contract" >&2
 	exit 1
 fi
 echo "OK: installed $("$destination" --version) at $destination"

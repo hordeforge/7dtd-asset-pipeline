@@ -261,10 +261,11 @@ errors raised by the commands that need one all read from it.
 
 ```json
 [
-  {"name": "unityz", "kind": "command", "available": true, "version": "0.1.1",
+  {"name": "unityz", "kind": "command", "available": true, "version": "0.1.2",
    "path": "/home/user/.local/bin/unityz",
    "purpose": "read Unity containers and serialized objects…",
    "unlocks": ["shamway inspect and inspect --deep",
+               "shamway generate audio from-bank",
                "Unity asset verification, extraction, and test read-back"],
    "install": "shamway script install-tools"}
 ]

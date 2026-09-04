@@ -88,6 +88,21 @@ variant-free**, so lit, shadowed, transparent, normal-mapped and multi-pass
 shading is unbuilt with a known route, and a mod that needs it opts into
 `bundle_source = "unity"` or `"external"` today.
 
+The active UnityPy-removal work has its own ordered pair in
+[improvements.md](docs/status/improvements.md#unitypy-removal-blockers):
+
+1. add a release-indexed built-in engine-class type-tree source to unityz,
+   closing the UnityPy-covered fallback for stripped SerializedFiles and the
+   writer's tree lookup;
+2. add fresh SerializedFile/object-table and UnityFS construction to unityz,
+   then move the pipeline's creation side and remove UnityPy.
+
+The first is a direct UnityPy parity gap. The second is the creation contract
+the pipeline needs after that data source exists; it is tracked separately so
+an in-place reserializer is never mistaken for a from-empty writer. The
+[unityz capability audit](docs/research/unityz-capability-audit.md) owns the
+evidence and the test-reader migration that can proceed before either item.
+
 The self-test burst `--look` shows flash and sparks; **grey haze is not
 visible**. That is [improvements.md §8](docs/status/improvements.md): packed
 and loaded, not a picture. Offset `shape.position` already; the card still

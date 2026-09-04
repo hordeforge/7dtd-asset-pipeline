@@ -44,9 +44,9 @@ inspect = ["UnityPy==1.25.3", "lz4>=1", "texture2ddecoder>=1"]
 authoring = ["pillow>=10", "numpy>=1.24"]
 # Pre-Unity mesh checks for the Blender/OpenSCAD lane.
 mesh = ["trimesh>=4"]
-# Reads an FSB5 bank back. The writer hand-builds those banks, so this is
-# the independent decoder that keeps the audio lane from being graded only
-# by the code that wrote it.
+# Reads an FSB5 bank back in the writer tests. The user-facing reference decoder
+# is unityz; this separate implementation keeps hand-written audio banks from
+# being graded only by HordeForge code and supplies the Vorbis setup catalogue.
 audio = ["fsb5>=1"]
 # Full XPath 1.0 for the Config/ patch gate; ElementTree's subset cannot run
 # every selector the engine's XPathEvaluate accepts (functions, unions), and a

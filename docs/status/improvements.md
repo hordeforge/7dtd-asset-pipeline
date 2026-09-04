@@ -46,6 +46,56 @@ memory still need measurement before setting a performance budget. The full
 commands and artifact context are recorded in the
 [unityz capability audit](../research/unityz-capability-audit.md).
 
+## UnityPy removal blockers
+
+These are the two upstream unityz capabilities that must close before this
+pipeline can remove its final UnityPy dependency. They are tracked here rather
+than only in the migration audit because this page is the authoritative
+capability backlog.
+
+### Release-indexed built-in engine-class type trees
+
+**Open; direct UnityPy parity gap.** UnityPy ships a TPK-backed database and can
+select the built-in class tree for a requested Unity revision and class ID.
+Unityz can consume trees embedded in a SerializedFile or supplied with
+`--trees`, but it does not ship and select that release-indexed built-in source.
+
+This affects two concrete paths: `inspect --deep` must refuse an external
+SerializedFile whose trees were stripped, and the synthesized writer still
+uses UnityPy to obtain exact 2022.3.62f2 layouts and version-specific defaults
+for `bundle_writer.py`, `anim.py`, and `particles.py`. Pipeline-authored bundles
+and the measured game `Entities` and `trees` bundles embed their trees, so this
+gap does not weaken their unityz-backed reads.
+
+**Close it with:** a pinned unityz library/CLI contract that accepts a Unity
+revision plus built-in class ID and returns the exact tree, backed by fixtures
+for a tree-present file, a stripped file that succeeds through the built-in
+fallback, an unknown revision, and an unavailable class. Migrate both the
+stripped-file reader fallback and the writer/default lookup before marking it
+closed.
+
+### Fresh SerializedFile and UnityFS construction
+
+**Open; dependency-removal contract.** Unityz rewrites existing serialized
+files and containers, preserving their type and object tables. It does not yet
+create the first type entry, object/path ID, AssetBundle container mapping, or
+UnityFS node from authored objects and an empty input. The pipeline therefore
+keeps its own fresh-file writer and cannot hand the whole creation path to
+unityz after the type-tree source above lands.
+
+This item is deliberately separate from the direct parity gap: UnityPy
+supplies the release-indexed trees and typetree serialization used by the
+current creation path, but UnityPy itself is primarily an edit/save library.
+Calling unityz's existing in-place writer "creation" would hide the missing
+from-empty contract.
+
+**Close it with:** a unityz API/CLI that creates a format-22 SerializedFile and
+UnityFS bundle from declared type trees, objects, path IDs, sidecars, and a
+class-142 container; acceptance and rejection fixtures; a cross-read by an
+independent implementation; and migration of `bundle_writer.py` before the
+UnityPy dependency is removed. The exact boundary and current evidence are in
+the [unityz capability audit](../research/unityz-capability-audit.md).
+
 ## 1. XML patches are never applied, only scanned  — **done (2026-08-31)**
 
 **Closed.** `shamway check-patches` replays every structural operation XPath in
@@ -370,7 +420,7 @@ lanes; these are the additions the current gaps argue for:
 |---|---|---|
 | [gltfpack](https://github.com/zeux/meshoptimizer) | mesh | quantization and vertex-cache optimization before import; smaller bundles without Unity's optimizer |
 | [AssetRipper](https://github.com/AssetRipper/AssetRipper) | research | full vanilla prefab/material/graph export for reference reading — read-only against the install, never copied into a mod |
-| [python-fsb5](https://github.com/HearthSim/python-fsb5) | audio | decode any FSB5 (including vanilla `.resource` streams) to WAV for reference listening |
+| [python-fsb5](https://github.com/HearthSim/python-fsb5) | audio | independently decode writer output in tests and gate Vorbis setup headers; pinned unityz now owns reference extraction |
 | [Compressonator](https://github.com/GPUOpen-Tools/compressonator) / bc7enc | texture | measure what block compression would save before deciding a clip-or-texture set stays on the synth path |
 
 Each is optional, installable per mod, and belongs behind

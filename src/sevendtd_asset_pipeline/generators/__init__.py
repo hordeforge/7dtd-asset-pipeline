@@ -45,7 +45,7 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     ),
     "audio": (
         "audio",
-        "measure and convert clips: report, downmix, resample, normalize",
+        "measure and convert clips, or decode FSB5 references through unityz",
         (),
     ),
     "cutout": (

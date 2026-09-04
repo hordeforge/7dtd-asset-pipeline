@@ -53,6 +53,33 @@ class UnityzProcessTests(unittest.TestCase):
         with capability, executable, run, self.assertRaisesRegex(PipelineError, "UnknownFormat"):
             run_json("info", self.path, "--json")
 
+    def test_multiline_failure_is_one_actionable_error_line(self) -> None:
+        result = subprocess.CompletedProcess(
+            [], 1, "bank: FSB5\n  sample 0: decode failed: Corrupt\n", ""
+        )
+        capability, executable, run = self.patches(result)
+        output_dir = str(Path(self.temporary.name) / "audio")
+        with capability, executable, run, self.assertRaises(PipelineError) as caught:
+            Unityz(self.path).text("fsb", "--outdir", output_dir)
+        message = str(caught.exception)
+        self.assertNotIn("\n", message)
+        self.assertIn("bank: FSB5 | sample 0: decode failed: Corrupt", message)
+
+    def test_text_runs_a_writing_command_through_the_same_bounded_adapter(self) -> None:
+        result = subprocess.CompletedProcess([], 0, "extracted 1 wav sample(s)\n", "")
+        capability, executable, run = self.patches(result)
+        output_dir = str(Path(self.temporary.name) / "audio")
+        with capability, executable, run as invoked:
+            output = Unityz(self.path).text("fsb", "--outdir", output_dir)
+        self.assertEqual("extracted 1 wav sample(s)\n", output)
+        invoked.assert_called_once_with(
+            ["/bin/unityz", "fsb", str(self.path.resolve()), "--outdir", output_dir],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+
     def test_invalid_json_is_a_pipeline_error(self) -> None:
         result = subprocess.CompletedProcess([], 0, "not json\n", "")
         capability, executable, run = self.patches(result)

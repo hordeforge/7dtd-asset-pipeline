@@ -105,9 +105,9 @@ from authored PNG/WAV/glTF/VFX inputs.
 | `anim.py` and `particles.py` type-tree defaults | UnityPy TPK nodes | not full; same missing built-in tree source | keep with the writer, not as a separate exception |
 | Writer read-back tests | UnityPy `load` / `read_typetree` | full through `show`, `info`, `hierarchy`, `shader`, and `verify` | migrate; unityz then becomes the independent reader of Python-authored bytes |
 | Shader-object and compiled-blob tests | UnityPy object views and LZ4 helper | full through `show` / `shader`; decoded record tables are native | migrate the object assertions; keep direct byte-level tests where they test the Python assembler itself |
-| `generate audio from-bank` | python-fsb5 | full through `unityz fsb` | migrate the user-facing decoder |
-| FSB5 writer catalogue gate | python-fsb5 CRC lookup and reconstructed setup header | partial: unityz owns the same catalogue and can decode a completed bank, but has no non-writing JSON validation/query command | keep for now; add the missing unityz contract before removing `fsb5` |
-| FSB5 writer independent tests | python-fsb5 rebuilds PCM/Ogg | full extraction, but replacing the only independent reader would reduce implementation independence | add unityz coverage, but do not delete the independent decoder solely for deduplication |
+| `generate audio from-bank` | pinned `unityz fsb` | full in 0.1.2: PCM/ADPCM WAV and Vorbis OGG extraction; incomplete decodes return non-zero | migrated; the generator delegates through the bounded unityz process adapter |
+| FSB5 writer catalogue gate | python-fsb5 CRC lookup and reconstructed setup header | full read-only validation in `unityz fsb --json`, including `setupKnown`, `decodable`, and `valid` | retain python-fsb5 for now because it is also the writer's independent implementation; add unityz validation beside it in the writer-test slice |
+| FSB5 writer independent tests | python-fsb5 rebuilds PCM/Ogg | full extraction, but replacing the only independent reader would reduce implementation independence | retain the independent decoder; unityz becomes an additional cross-repository check, not its replacement |
 | BC1/BC3 independent decode tests | `texture2ddecoder` | unityz decodes these formats | retain `texture2ddecoder`: it intentionally checks the Python encoder with unrelated code |
 | Authored glTF/OBJ/STL/PLY ingestion and geometry gates | trimesh plus Khronos validator | not covered: unityz extracts Unity `Mesh` objects; it is not an authored interchange-file validator | retain trimesh and the Khronos validator |
 | glTF scene/skin import | pipeline `gltf_scene.py` | not covered in this direction | retain; unityz exports Unity meshes to glTF, which is the inverse operation |
@@ -143,28 +143,44 @@ The first gap also owns the default-value helpers in `anim.py` and
 correct version-specific empty shape. Treating them as unrelated Python
 helpers would hide the actual dependency.
 
-### Other open unityz contracts
+### FSB5 contract closure
 
-The FSB5 migration needs a read-only, machine-readable validation mode. The
-existing `unityz fsb` proves more than python-fsb5 for supported codecs, but it
-writes decoded media and a sidecar. A writer gate needs to submit a bank and
-receive sample mode, rate, channel count, sample count, Vorbis setup CRC
-resolution, and success/failure without creating output files.
+Unityz PR 138 added the read-only, machine-readable validation mode the audit
+found missing. `unityz fsb --json` submits no extraction target, decodes or
+rebuilds every sample in memory, and reports mode, rate, channel count, sample
+count, Vorbis setup CRC availability, per-sample decodability, and a top-level
+validity verdict. It writes nothing and returns non-zero for malformed banks or
+any sample it cannot reconstruct. The same change corrected ordinary `fsb`
+extraction to return non-zero instead of printing a partial decode as success.
 
-`unityz` has no published release artifacts as of 2026-09-04 (`gh release
-list --repo hordeforge/unityz` returned no releases). The reproducible route
-now implemented by `scripts/install-unityz.sh` and called by
-`scripts/install-tools.sh` is the source archive for merged commit
-`d775a107b9bd4c83d643eaf3795a3828317b2fb1`, pinned independently by SHA-256
-and built with the already-required Zig 0.16 toolchain. It installs unityz
-0.1.1 into `~/.local/bin` and never reads a sibling checkout. The standalone
-script is the identical CI route, rather than a second copy of the recipe.
+At the initial 2026-09-04 measurement, `gh release list --repo
+hordeforge/unityz` returned no releases, so the first reproducible integration
+built merged commit `b3fc09b38f7d0b1d3870981b50164740c5cbeeb7` from a
+checksum-pinned source archive. Unityz subsequently published 0.1.3. The
+current `scripts/install-unityz.sh` installs that checksum-verified release
+binary on Linux x86_64 and macOS arm64, and builds pinned commit
+`b7ee8db3da36166c45903eea6a2d215a3ff9ef8f` elsewhere or when
+`UNITYZ_FROM_SOURCE=1`. Neither route reads a sibling checkout.
 
-Version 0.1.1 is the explicit downstream contract for the nested metadata
-added in unityz PR 121; unityz PR 123 introduced that version signal. Both the
-shell installer's `--check` and the Python capability probe reject an
-older binary as present but unusable instead of discovering the missing JSON
-fields half-way through an inspection.
+Version 0.1.2 is the explicit downstream contract. It includes the nested
+metadata added in unityz PR 121, the version signal from PR 123, the corrected
+`show` failure status from PR 137, and the FSB5 JSON/status contract from PR
+138. Both the shell installer's `--check` and the Python capability probe reject
+an older binary as present but unusable instead of discovering a missing
+contract half-way through an operation.
+
+The original pinned source archive was installed through the downstream script
+into an empty prefix and reported `unityz 0.1.2`. The pipeline-authored PCM16
+FSB5 fixture then decoded through `generate audio from-bank` to
+`audio_sample.wav` plus `bank.json` with exit 0. Truncating its sample payload
+returned exit 1 and one physical `ERROR:` line; it was not accepted as a
+partial extraction. After rebasing onto the release-installer change, that
+installer fetched and checksum-verified the Linux x86_64 0.1.3 binary into an
+empty prefix; the same valid fixture exited 0 and the payload-cut fixture
+exited 1 through that exact binary. After the generator, installer, capability,
+tests, and documentation moved together, `make check test` passed 852 tests
+with three opt-in skips and compiled all five editor scripts against Unity
+2022.3.62f2.
 
 The same pin includes unityz PR 135's subtree-local `skipped_children`
 contract. Deep inspection uses that field to mark only the affected prefab
@@ -208,8 +224,8 @@ The migration slices are:
    the built-in-tree gap above, not hidden as a complete replacement;
 5. replace UnityPy test readers by domain (`bundle_writer`, prefabs/entities,
    animation, shaders);
-6. replace the user-facing FSB decoder after adding a read-only JSON bank
-   contract;
+6. **done:** replace the user-facing FSB decoder after adding the read-only JSON
+   bank contract in unityz PR 138;
 7. design and implement the two creation-side contracts before removing the
    final UnityPy dependency.
 

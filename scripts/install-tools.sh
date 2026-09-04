@@ -77,9 +77,9 @@ BASE TOOLS
   git, make          Version control and the consumer Makefile targets
   shellcheck         Lints this repository's scripts in 'make check'
   pactl              Mutes and unmutes a test client (shamway client mute)
-  unityz (>=0.1.1)   Reads, verifies, and extracts Unity bundles and assets.
-                     Built from a pinned, checksum-verified source archive
-                     into ~/.local/bin because no release artifact exists yet
+  unityz (>=0.1.2)   Reads, verifies, and extracts Unity bundles, assets,
+                     and FSB5 banks. Installs a pinned, checksum-verified
+                     release binary, with a source build as fallback
   vkd3d-compiler     HLSL to DXBC: the shader a synthesized prefab's material
                      needs. Requires vkd3d >= 1.3, which is when vkd3d-shader
                      learned to read HLSL. Debian and Ubuntu package 1.2, so
@@ -127,8 +127,8 @@ WITH --with-extras
                      what block compression would save a texture/clip set
   AssetRipper        export a vanilla prefab/material/graph set for reference
                      reading (read-only against the install)
-  Reported (not auto-installed): fsb5 (the Python 'audio' extra already provides
-  it) and bc7enc_rdo (a source build; see authoring-tools.md).
+  Reported (not auto-installed): fsb5 (the Python 'audio' extra provides the
+  independent writer check) and bc7enc_rdo (a source build; see authoring-tools.md).
 
 NOTES
   vkd3d differs by distribution, and only the version matters
@@ -272,7 +272,7 @@ run_check() {
 	report make "consumer Makefile targets" have make
 	report shellcheck "script linting in make check" have shellcheck
 	report pactl "client mute/unmute (shamway client)" have pactl
-	report unityz "Unity asset inspection and verification; needs unityz >= 0.1.1" \
+	report unityz "Unity asset and FSB5 inspection; needs unityz >= 0.1.2" \
 		has_unityz_contract
 	report vkd3d-compiler "HLSL to DXBC (synthesized shaders and materials); needs vkd3d >= 1.3" \
 		has_vkd3d_hlsl
@@ -307,7 +307,7 @@ run_check() {
 		report gltfpack "meshop optimizer (mesh lane)" have gltfpack
 		report compressonatorcli "BC1-7 compressor (texture lane)" have compressonatorcli
 		report AssetRipper "vanilla export for reference" have assetripper
-		report fsb5 "decode an FSB5 bank (Python audio extra)" has_module fsb5
+		report fsb5 "independent FSB5 writer check (Python audio extra)" has_module fsb5
 		report bc7enc_rdo "BC7 encoder (source build)" have bc7enc_rdo
 	fi
 }
@@ -881,7 +881,7 @@ install_extras() {
 	install_binary_release compressonatorcli "GPUOpen-Tools/compressonator" "-Linux.tar.gz" "compressonatorcli"
 	install_assetripper
 	echo "note: bc7enc_rdo is a source build (see docs/authoring/authoring-tools.md);"
-	echo "      fsb5 comes from the Python 'audio' extra (shamway capabilities --missing)."
+	echo "      fsb5 writer checks come from the Python 'audio' extra (shamway capabilities --missing)."
 }
 
 install_python_extras() {
@@ -1022,7 +1022,7 @@ run_check
 missing=()
 has_python_311 || missing+=("python3 >= 3.11")
 have uv || [[ -x "$HOME/.local/bin/uv" ]] || missing+=("uv")
-has_unityz_contract || missing+=("unityz >= 0.1.1")
+has_unityz_contract || missing+=("unityz >= 0.1.2")
 if ((${#missing[@]})); then
 	echo "ERROR: still missing after install: ${missing[*]}" >&2
 	exit 1

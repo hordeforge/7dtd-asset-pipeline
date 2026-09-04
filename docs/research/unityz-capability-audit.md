@@ -43,6 +43,17 @@ inspections took 3.605 seconds; five sets of `unityz info --objects`, `stats`,
 and `hierarchy` took 0.169 seconds. These figures include process startup and
 describe this artifact on this host, not a universal speed claim.
 
+Before replacing the hot revision gate, the same single-run timing was taken
+against the installed game's preferred `Entities` bundle and its 621 MB
+`trees` fallback. `Entities` is 1.6 KB: the Python CLI plus prefix reader took
+0.101 seconds and `unityz info --json` took 0.002 seconds. On `trees`, the
+prefix reader took 0.116 seconds while unityz's current whole-container read
+took 1.365 seconds. The normal discovery path therefore improves, while the
+large fallback is a measured 1.249-second regression. Peak memory remains not
+checked because `/usr/bin/time` is absent on this host. The migration keeps
+the one-reader architecture, but this fallback measurement belongs in the
+optimization backlog rather than being hidden by the small-bundle benchmark.
+
 The baseline before any migration was `make check test`: 860 Python tests
 passed, five opt-in tests skipped, and all five editor scripts compiled against
 Unity 2022.3.62f2. The independent `unityz` suite passed 400 tests.
@@ -127,23 +138,47 @@ receive sample mode, rate, channel count, sample count, Vorbis setup CRC
 resolution, and success/failure without creating output files.
 
 `unityz` has no published release artifacts as of 2026-09-04 (`gh release
-list --repo hordeforge/unityz` returned no releases). Until releases exist,
-the reproducible installation route is a checksum-verified source archive at
-a pinned commit, built with the already-required Zig 0.16 toolchain. The
-pipeline must not depend on the sibling checkout path.
+list --repo hordeforge/unityz` returned no releases). The reproducible route
+now implemented by `scripts/install-unityz.sh` and called by
+`scripts/install-tools.sh` is the source archive for merged commit
+`8e3925cf08b6f8c7f08e11a1d2fd32dae8a237ce`, pinned independently by SHA-256
+and built with the already-required Zig 0.16 toolchain. It installs unityz
+0.1.1 into `~/.local/bin` and never reads a sibling checkout. The standalone
+script is the identical CI route, rather than a second copy of the recipe.
 
-The command-level benchmark above is enough to motivate migration, but not to
-set a performance budget. A durable budget needs representative small,
-large, LZ4, LZMA, and sidecar-backed game artifacts, plus peak-memory
-measurement. This remains not checked because only the tracked self-test
-bundle was benchmarked.
+Version 0.1.1 is the explicit downstream contract for the nested metadata
+added in unityz PR 121; unityz PR 123 introduced that version signal. Both the
+shell installer's `--check` and the Python capability probe reject an
+older binary as present but unusable instead of discovering the missing JSON
+fields half-way through an inspection.
+
+The pinned commit also includes unityz PR 134: `hierarchy --json` emits a
+stable `{node, hierarchy, skipped_children}` object for every SerializedFile,
+keeps arrays valid when an unreadable child is omitted, and returns non-zero
+for malformed input or an invalid option. That contract is required by the
+next deep-inspection slice; without the count, migrating from UnityPy would
+silently discard the existing partial-result signal.
+
+The first reader integration then found that `unityz info` printed a rejection
+for an unrecognized file but exited zero. Unityz PR 126 made single inputs and
+directory batches return non-zero when any member cannot be read; the pinned
+commit includes that fix, so the pipeline can trust exit status before parsing
+stdout.
+
+The command-level benchmark now covers a small shipped bundle and one large
+LZ4 shipped bundle as well as the synthesized self-test. It is still not a
+durable performance budget: LZMA and sidecar-backed game artifacts and peak
+memory remain not checked. A unityz metadata-only streaming path would remove
+the measured large-fallback regression without restoring a second parser.
 
 ## Where it landed
 
-The immediate slices are:
+The migration slices are:
 
-1. publish the embedded SerializedFile metadata in unityz (`info --json`);
-2. install and probe a pinned unityz command without a sibling checkout;
+1. **done:** publish the embedded SerializedFile metadata in unityz
+   (`info --json`, unityz PR 121);
+2. **done:** version that contract and install/probe a pinned unityz command
+   without a sibling checkout (unityz PR 123 and the installer slice);
 3. replace `unityfs.py` and UnityPy-backed deep inspection;
 4. replace UnityPy test readers by domain (`bundle_writer`, prefabs/entities,
    animation, shaders);

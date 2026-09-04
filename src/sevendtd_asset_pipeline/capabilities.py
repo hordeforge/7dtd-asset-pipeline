@@ -116,6 +116,36 @@ VKD3D_HLSL_HINT = (
     "shamway script install-tools --with-vkd3d-source"
 )
 
+UNITYZ_METADATA_HINT = (
+    "it is older than unityz 0.1.1, the first version whose info --json output "
+    "includes each embedded SerializedFile's revision and class IDs. Install the "
+    "pinned build with: shamway script install-tools"
+)
+
+
+def _unityz_has_metadata_contract(path: str) -> str | None:
+    """Whether unityz exposes the nested metadata the bundle gates consume."""
+    try:
+        reported = subprocess.run(
+            [path, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "it could not be run to read its version contract"
+    fields = reported.stdout.strip().split()
+    if reported.returncode != 0 or len(fields) != 2 or fields[0] != "unityz":
+        return "its --version output does not identify a unityz semantic version"
+    try:
+        version = tuple(int(part) for part in fields[1].split("."))
+    except ValueError:
+        return "its --version output does not identify a unityz semantic version"
+    if len(version) != 3 or version < (0, 1, 1):
+        return UNITYZ_METADATA_HINT
+    return None
+
 
 def _vkd3d_reads_hlsl(path: str) -> str | None:
     """Whether this `vkd3d-compiler` can take HLSL in, not merely whether it exists."""
@@ -146,6 +176,16 @@ def _zmolv_present(_probe: str) -> str | None:
 
 
 REGISTRY: tuple[_Spec, ...] = (
+    _Spec(
+        name="unityz",
+        kind="command",
+        probe="unityz",
+        usable=_unityz_has_metadata_contract,
+        unlocks=("Unity asset inspection, verification, extraction, and test read-back",),
+        purpose="read Unity containers and serialized objects through one fast, "
+        "machine-readable CLI instead of maintaining pipeline-local readers",
+        install="shamway script install-tools",
+    ),
     _Spec(
         name="UnityPy",
         kind="module",

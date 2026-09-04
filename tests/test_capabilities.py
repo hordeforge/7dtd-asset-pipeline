@@ -150,6 +150,37 @@ class PresenceIsNotCapabilityTests(unittest.TestCase):
     def _fake_vkd3d(self, source_types: str, returncode: int = 0) -> mock.MagicMock:
         return mock.MagicMock(returncode=returncode, stdout=source_types, stderr="")
 
+    def _unityz_lane(self, version: str, returncode: int = 0) -> Capability:
+        from sevendtd_asset_pipeline.capabilities import capabilities
+
+        with (
+            mock.patch(
+                "sevendtd_asset_pipeline.capabilities.shutil.which",
+                lambda name: "/usr/bin/unityz" if name == "unityz" else None,
+            ),
+            mock.patch(
+                "sevendtd_asset_pipeline.capabilities.subprocess.run",
+                return_value=mock.MagicMock(returncode=returncode, stdout=version, stderr=""),
+            ),
+        ):
+            return next(item for item in capabilities() if item.name == "unityz")
+
+    def test_unityz_before_the_nested_metadata_contract_is_not_available(self) -> None:
+        lane = self._unityz_lane("unityz 0.1.0\n")
+        self.assertFalse(lane.available)
+        self.assertEqual("/usr/bin/unityz", lane.path)
+        self.assertIn("older than unityz 0.1.1", lane.unusable_reason or "")
+
+    def test_unityz_with_the_nested_metadata_contract_is_available(self) -> None:
+        lane = self._unityz_lane("unityz 0.1.1\n")
+        self.assertTrue(lane.available)
+        self.assertIsNone(lane.unusable_reason)
+
+    def test_unityz_with_unparseable_version_output_is_not_available(self) -> None:
+        lane = self._unityz_lane("unityz development\n")
+        self.assertFalse(lane.available)
+        self.assertIn("semantic version", lane.unusable_reason or "")
+
     def _lane(self, run_result: object) -> Capability:
         from sevendtd_asset_pipeline.capabilities import capabilities
 

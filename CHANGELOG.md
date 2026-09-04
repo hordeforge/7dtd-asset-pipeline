@@ -220,6 +220,10 @@ tag has no changelog section.
 
 ### Changed
 
+- `scripts/install-unityz.sh` installs the pinned unityz 0.1.3 release
+  binary (Linux x86_64, macOS arm64, checksum-verified) instead of building
+  from source; other platforms and `UNITYZ_FROM_SOURCE=1` still build the
+  pinned commit with Zig. CI no longer installs Zig for it.
 - Usage docs for this session's surfaces: `docs/authoring/vfx.md` field
   reference and `--look` recipe; `no-unity.md` `.vfx` membership;
   `validation.md` `PLAYTEST_CONCERN_SUITES`; `consumer-api.md` /

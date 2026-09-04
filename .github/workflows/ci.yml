@@ -37,9 +37,6 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
-        with:
-          version: 0.16.0
       - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
       - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       - run: uv python install ${{ matrix.python-version }}
@@ -79,9 +76,6 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
-        with:
-          version: 0.16.0
       - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
       - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       - run: uv python install 3.13
@@ -102,9 +96,6 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
-        with:
-          version: 0.16.0
       - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
       - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       - run: ./scripts/bootstrap
@@ -138,9 +129,6 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
-        with:
-          version: 0.16.0
       - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
       - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       # The optional extras carry trimesh (reads the mesh) and Pillow (writes
@@ -258,9 +246,6 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
-        with:
-          version: 0.16.0
       - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
       - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       # Core only, no dev tools: coverage runs the unit suite directly.

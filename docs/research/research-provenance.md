@@ -715,6 +715,18 @@ class IDs (`2022.3.62f2`, 23 classes). The growth ladder is pinned by tests:
 a fixture whose table runs ~1.4 MiB parses on the second rung, and a table
 truncated past the first window still fails with the bounded error.
 
+**Reader replacement, measured 2026-09-04.** The pipeline now delegates this
+format work to pinned `unityz info --json` and retains only the bounded
+process/JSON adapter and `BundleInfo` mapping. On the installed V3.1.0 b14
+game, `/usr/bin/time` was absent, so Bash `time` measured elapsed command time:
+the preferred 1.6 KB `Data/Bundles/Standalone/Entities/Entities` took 0.002 s
+through unityz versus 0.101 s through the Python CLI and old prefix parser;
+the 621 MB `trees` fallback took 1.365 s versus 0.116 s. Peak memory, LZMA, and
+sidecar-backed artifacts remain not checked. The large fallback is therefore
+a measured optimization target for metadata-only streaming in unityz, not a
+reason to restore a second parser. The exact commands and broader self-test
+benchmark are in the [unityz capability audit](unityz-capability-audit.md).
+
 ## Official and community references
 
 - Unity `BuildPipeline.BuildAssetBundles`:

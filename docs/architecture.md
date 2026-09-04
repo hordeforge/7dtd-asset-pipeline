@@ -7,7 +7,8 @@
 - Keep editable source — and, where a mod opted into an editor, its Unity
   project state — owned by that mod.
 - Make the dangerous silent failures deterministic build-time failures.
-- Require no Python dependency merely to inspect or validate a bundle.
+- Require no optional Python dependency merely to inspect or validate a
+  bundle; the base host toolset includes the pinned `unityz` reader.
 - Require no Unity editor at all, ever, by default: the writer here produces
   every asset class a modlet references, and a Unity editor is a source a mod
   opts into (`bundle_source = "unity"`) rather than a dependency of the tool.
@@ -42,7 +43,7 @@
 | `scripts/install-unity-editor.sh` | *(opt-in)* the checksum-verified game-matched editor |
 | `generators/` (in the package) | reproducible sound, audio, cutout, particle-card, icon, texture-maps, mesh, mesh-optimize, mesh-icon and bind generation, as `shamway generate` |
 | consumer `AGENTS.md` | the agent contract, written into the mod by `init` |
-| UnityFS reader | signature, revision, block decompression, serialized type table |
+| `unityz.py` + pinned `unityz` | bounded process/JSON boundary, UnityFS decompression, revision and serialized class table |
 | tracked `.manifest` | complete build membership for offline exact-stem validation |
 | installed game | authoritative expected bundle revision, read-only |
 | fresh client | final runtime/render/audio acceptance |
@@ -86,10 +87,12 @@ exported is respected.
 Not `/tmp`: it is tmpfs on most Linux hosts, so that default charges every one
 of those payloads against RAM. Each scratch directory is removed on exit.
 
-The UnityFS reader is intentionally not a general Unity deserializer. A small
-auditable parser has a narrower attack and maintenance surface for the two
-facts the gate needs. UnityPy and AssetsTools.NET remain optional independent
-diagnostics.
+Unity parsing has one owner: the pinned `unityz` binary handles container
+bounds, decompression, and SerializedFile metadata, while `unityz.py` maps its
+versioned JSON contract into the pipeline's small report types. The pipeline
+does not keep a second UnityFS/LZ4 parser. UnityPy remains on the creation side
+for its release-indexed type-tree database; AssetsTools.NET remains an
+optional independent diagnostic.
 
 The icon and clip gates follow the same rule: the PNG check reads the IHDR
 chunk with the standard library and the clip check uses `wave`, so both run on

@@ -28,6 +28,24 @@ Closed recently, kept here so the pattern is visible:
   comparing every `TOPICS` page byte-for-byte (`tests/test_assets.py`,
   `DocumentationTests`); it caught seven drifted pages on its first run.
 
+## Unityz metadata-only streaming
+
+The unified reader is faster on the normal installed-game discovery artifact:
+`Data/Bundles/Standalone/Entities/Entities` is 1.6 KB here, where
+`unityz info --json` took 0.002 seconds versus 0.101 seconds for the Python CLI
+and its old prefix parser. The fallback `trees` bundle exposes the opposite
+cost: it is 621 MB, the prefix parser took 0.116 seconds, and unityz's current
+whole-container read took 1.365 seconds.
+
+What closes this is a metadata-only unityz path that reads the UnityFS block
+table and only decompresses the blocks covering the serialized type/object
+tables. The pipeline should keep one reader and take that optimization
+upstream; restoring a pipeline-local parser would recreate the two-contract
+problem this migration removes. LZMA and sidecar-backed bundles and peak
+memory still need measurement before setting a performance budget. The full
+commands and artifact context are recorded in the
+[unityz capability audit](../research/unityz-capability-audit.md).
+
 ## 1. XML patches are never applied, only scanned  — **done (2026-08-31)**
 
 **Closed.** `shamway check-patches` replays every structural operation XPath in

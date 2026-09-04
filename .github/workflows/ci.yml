@@ -37,9 +37,15 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.16.0
+      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
+      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       - run: uv python install ${{ matrix.python-version }}
-      # Install the core alone: the suite must pass without the optional
-      # capabilities, because that is how most consumers first run it.
+      # Install the Python core alone: unityz is a base host tool above, while
+      # the suite must pass without optional Python capabilities because that
+      # is how most consumers first run it.
       # `uv sync --locked` resolves from the committed uv.lock and verifies
       # its hashes — never a fresh resolution against PyPI — and brings the
       # dev group (ruff, mypy, setuptools) that `make check` needs.
@@ -73,6 +79,11 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.16.0
+      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
+      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       - run: uv python install 3.13
       - run: uv sync --locked --python 3.13
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
@@ -91,6 +102,11 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.16.0
+      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
+      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       - run: ./scripts/bootstrap
       - run: .venv/bin/shamway capabilities --json
       - run: .venv/bin/shamway capabilities --missing
@@ -122,6 +138,11 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.16.0
+      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
+      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       # The optional extras carry trimesh (reads the mesh) and Pillow (writes
       # the texture). Still no editor, no game install, and no network at run
       # time.
@@ -237,6 +258,11 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.16.0
+      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
+      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
       # Core only, no dev tools: coverage runs the unit suite directly.
       - run: uv sync --locked --no-dev
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"

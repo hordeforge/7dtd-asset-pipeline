@@ -1,241 +1,111 @@
+"""The pipeline's BundleInfo contract over unityz metadata.
+
+The tracked self-test bundle is the generated acceptance fixture. Its truncated
+copy is the rejection fixture: both pass through the real pinned unityz parser,
+while schema-focused tests isolate the small Python mapping layer.
+"""
+
 from __future__ import annotations
 
-import struct
 import tempfile
 import unittest
 from pathlib import Path
-
-from fixtures import build_bundle, lz4_bundle, serialized_file, unityfs_bundle
+from unittest import mock
 
 from sevendtd_asset_pipeline.errors import PipelineError
-from sevendtd_asset_pipeline.unityfs import _lz4_decompress, inspect_bundle
+from sevendtd_asset_pipeline.unityfs import BundleInfo, inspect_bundle
 from sevendtd_asset_pipeline.validation import validate_bundle
 
-
-class BundleCase(unittest.TestCase):
-    """A temp home for hand-built bundles, so each test owns its file."""
-
-    def write(self, data: bytes) -> Path:
-        directory = Path(tempfile.mkdtemp())
-        path = directory / "test.unity3d"
-        path.write_bytes(data)
-        self.addCleanup(lambda: __import__("shutil").rmtree(directory))
-        return path
+ROOT = Path(__file__).resolve().parents[1]
+SELF_TEST_BUNDLE = ROOT / "examples" / "SelfTestMod" / "Resources" / "shamwayselftest.unity3d"
 
 
-class UnityFsTests(BundleCase):
-    def test_reads_revision_and_class_ids(self) -> None:
-        info = inspect_bundle(self.write(unityfs_bundle([1, 21, 142])))
+def metadata(*nodes: tuple[str, list[int]]) -> dict[str, object]:
+    return {
+        "type": "UnityFS",
+        "version": 8,
+        "nodes_list": [
+            {
+                "path": f"CAB-{index}",
+                "serialized": {"unity": revision, "class_ids": class_ids},
+            }
+            for index, (revision, class_ids) in enumerate(nodes)
+        ],
+    }
+
+
+class GeneratedFixtureTests(unittest.TestCase):
+    def test_generated_bundle_reports_revision_format_and_classes(self) -> None:
+        info = inspect_bundle(SELF_TEST_BUNDLE)
         self.assertEqual("2022.3.62f2", info.unity_version)
-        self.assertEqual((1, 21, 142), info.class_ids)
+        self.assertEqual(8, info.archive_format)
+        self.assertIn(142, info.class_ids)
         self.assertTrue(info.has_assetbundle_object)
 
-    def test_reads_a_mono_behaviour_script_id(self) -> None:
-        """Class 114 carries a 16-byte script ID that shifts every later entry."""
-        info = inspect_bundle(self.write(unityfs_bundle([114, 142])))
-        self.assertEqual((114, 142), info.class_ids)
+    def test_truncated_generated_bundle_is_a_bounded_rejection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "truncated.unity3d"
+            path.write_bytes(SELF_TEST_BUNDLE.read_bytes()[:128])
+            with self.assertRaisesRegex(PipelineError, "not a UnityFS.*readable by unityz"):
+                inspect_bundle(path)
+
+
+class MetadataContractTests(unittest.TestCase):
+    def inspect(self, report: dict[str, object]) -> BundleInfo:
+        with mock.patch("sevendtd_asset_pipeline.unityfs.run_json", return_value=report):
+            return inspect_bundle(SELF_TEST_BUNDLE)
+
+    def test_combines_class_ids_across_serialized_nodes_without_duplicates(self) -> None:
+        info = self.inspect(metadata(("2022.3.62f2", [1, 142]), ("2022.3.62f2", [142, 28])))
+        self.assertEqual((1, 142, 28), info.class_ids)
+
+    def test_rejects_a_non_bundle_report(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "not a UnityFS"):
+            self.inspect({"type": "SerializedFile", "version": 22})
+
+    def test_rejects_a_bundle_without_serialized_nodes(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "no SerializedFile nodes"):
+            self.inspect({"type": "UnityFS", "version": 8, "nodes_list": []})
+
+    def test_rejects_mixed_serialized_file_revisions(self) -> None:
+        report = metadata(("2022.3.62f2", [142]), ("2021.3.1f1", [28]))
+        with self.assertRaisesRegex(PipelineError, "mixes SerializedFile revisions"):
+            self.inspect(report)
+
+    def test_rejects_malformed_class_ids(self) -> None:
+        report = metadata(("2022.3.62f2", [142]))
+        nodes = report["nodes_list"]
+        assert isinstance(nodes, list)
+        node = nodes[0]
+        assert isinstance(node, dict)
+        serialized = node["serialized"]
+        assert isinstance(serialized, dict)
+        serialized["class_ids"] = [142, "28"]
+        with self.assertRaisesRegex(PipelineError, "integer class ID"):
+            self.inspect(report)
 
     def test_rejects_bundle_without_class_142(self) -> None:
-        with self.assertRaisesRegex(PipelineError, "class-142"):
-            validate_bundle(self.write(unityfs_bundle([1, 21, 28])))
+        with (
+            mock.patch(
+                "sevendtd_asset_pipeline.unityfs.run_json",
+                return_value=metadata(("2022.3.62f2", [1, 21, 28])),
+            ),
+            self.assertRaisesRegex(PipelineError, "class-142"),
+        ):
+            validate_bundle(SELF_TEST_BUNDLE)
 
     def test_rejects_wrong_unity_revision(self) -> None:
-        path = self.write(unityfs_bundle([142], "2021.3.1f1"))
-        with self.assertRaisesRegex(PipelineError, "installed game uses"):
-            validate_bundle(path, "2022.3.62f2")
+        with (
+            mock.patch(
+                "sevendtd_asset_pipeline.unityfs.run_json",
+                return_value=metadata(("2021.3.1f1", [142])),
+            ),
+            self.assertRaisesRegex(PipelineError, "installed game uses"),
+        ):
+            validate_bundle(SELF_TEST_BUNDLE, "2022.3.62f2")
 
-    def test_rejects_non_bundle(self) -> None:
-        with self.assertRaisesRegex(PipelineError, "not a UnityFS"):
-            inspect_bundle(self.write(b"not a bundle"))
-
-
-class TypeTreeTests(BundleCase):
-    """The branch every real bundle takes: type trees present.
-
-    The shipped game's own bundles carry `has_type_tree = 1`
-    (docs/research/research-provenance.md, dissected from `Data/Bundles/…/Entities`),
-    so the per-type tree skip is the production path of the class-ID gate —
-    and until these fixtures it was the one path no test ever read.
-    """
-
-    def test_reads_class_ids_through_type_trees(self) -> None:
-        info = inspect_bundle(self.write(unityfs_bundle([21, 114, 142], has_type_tree=True)))
-        self.assertEqual((21, 114, 142), info.class_ids)
-        self.assertTrue(info.has_assetbundle_object)
-
-    def test_reads_type_trees_through_an_lz4_block(self) -> None:
-        # The skip arithmetic must also survive decompression, not only the
-        # plain-block path.
-        info = inspect_bundle(self.write(lz4_bundle([142] * 6, has_type_tree=True)))
-        self.assertEqual((142,) * 6, info.class_ids)
-
-    def test_a_type_table_past_the_first_window_still_parses(self) -> None:
-        """The reader grows its window when the table outgrows it, not never.
-
-        The initial window covers one megabyte; this fixture's table runs
-        about 1.4, so the first attempt must fail into the growth ladder and
-        the second must answer exactly what a single full read would.
-        """
-        info = inspect_bundle(self.write(unityfs_bundle([142] * 20_000, has_type_tree=True)))
-        self.assertEqual(20_000, len(info.class_ids))
-        self.assertTrue(info.has_assetbundle_object)
-
-    def test_a_truncated_table_beyond_the_first_window_is_bounded(self) -> None:
-        """Growth stops at the whole node, and the honest error survives it."""
-        payload = serialized_file([142] * 20_000, has_type_tree=True)
-        short = payload[:-8]
-        bundle = build_bundle([(short, len(short), 0)], node_size=len(short))
-        with self.assertRaisesRegex(PipelineError, "truncated Unity bundle|first directory node"):
-            inspect_bundle(self.write(bundle))
-
-    def test_a_truncated_type_tree_is_a_bounded_error(self) -> None:
-        payload = serialized_file([142], has_type_tree=True)
-        short = payload[:-8]
-        bundle = build_bundle([(short, len(short), 0)], node_size=len(short))
-        with self.assertRaisesRegex(PipelineError, "truncated Unity bundle"):
-            inspect_bundle(self.write(bundle))
-
-    def test_a_first_node_past_the_payload_is_refused(self) -> None:
-        """A directory that promises data the blocks do not hold cannot parse."""
-        payload = serialized_file([142])
-        bundle = build_bundle(
-            [(payload, len(payload), 0)],
-            node_size=len(payload),
-            node_offset=len(payload) + 16,
-        )
-        with self.assertRaisesRegex(PipelineError, "does not contain the first directory node"):
-            inspect_bundle(self.write(bundle))
-
-    def test_the_padding_bit_aligns_the_payload_before_reading_it(self) -> None:
-        payload = serialized_file([1, 142])
-        bundle = build_bundle(
-            [(payload, len(payload), 0)],
-            node_size=len(payload),
-            header_flags=0x40 | 0x200,
-        )
-        info = inspect_bundle(self.write(bundle))
-        self.assertEqual((1, 142), info.class_ids)
-
-
-class Lz4Tests(BundleCase):
-    """The LZ4 reader is hand-rolled, so its failure modes get their own pins."""
-
-    def test_decodes_a_compressed_block_end_to_end(self) -> None:
-        # Enough class IDs to force literal runs past the nibble cap and match
-        # lengths past theirs, including overlapping back-references.
-        info = inspect_bundle(self.write(lz4_bundle([142] * 40)))
-        self.assertEqual((142,) * 40, info.class_ids)
-        self.assertTrue(info.has_assetbundle_object)
-
-    def test_overlapping_matches_replicate_their_source_bytes(self) -> None:
-        """An offset shorter than the match re-copies its own output, byte-exact."""
-        # Run-length: four literals, then five copies of the last one.
-        self.assertEqual(
-            b"ABCDDDDDD",
-            _lz4_decompress(bytes([0x41]) + b"ABCD" + struct.pack("<H", 1), 9),
-        )
-        # Period three, exact multiple: "GHI" then nine more from those three.
-        self.assertEqual(
-            b"GHI" * 4,
-            _lz4_decompress(bytes([0x35]) + b"GHI" + struct.pack("<H", 3), 12),
-        )
-        # Period three, ragged: eight copied bytes truncate the last repetition.
-        self.assertEqual(
-            b"GHI" + b"GHIGHIGH",
-            _lz4_decompress(bytes([0x34]) + b"GHI" + struct.pack("<H", 3), 11),
-        )
-
-    def test_an_overlap_only_block_decodes_through_a_real_bundle(self) -> None:
-        """A shipped-style payload whose tail expands through an offset-1 match."""
-        payload = serialized_file([142])
-        head, tail = payload[:-8], payload[-8:]
-        self.assertEqual(b"\x00" * 8, tail)  # the padding the match will replicate
-        literal_parts = bytearray([(15 << 4) | 4])  # extended literal count + match of 8
-        remaining = len(head) - 15
-        while remaining >= 255:
-            literal_parts.append(255)
-            remaining -= 255
-        literal_parts.append(remaining)
-        block = bytes(literal_parts) + head + struct.pack("<H", 1)
-        info = inspect_bundle(
-            self.write(build_bundle([(block, len(payload), 2)], node_size=len(payload)))
-        )
-        self.assertEqual((142,), info.class_ids)
-
-    def test_rejects_an_invalid_match_offset(self) -> None:
-        # One literal, then an offset of zero: nothing can be referenced.
-        block = bytes([0x10, ord("A"), 0x00, 0x00])
-        with self.assertRaisesRegex(PipelineError, "invalid LZ4 match offset"):
-            inspect_bundle(self.write(build_bundle([(block, 64, 2)], node_size=64)))
-
-    def test_rejects_expansion_past_the_declared_size(self) -> None:
-        # Four literals, then eight copies of the last one: twelve from four.
-        block = bytes([0x44]) + b"AAAA" + struct.pack("<H", 1)
-        with self.assertRaisesRegex(PipelineError, "expands beyond its declared size"):
-            inspect_bundle(self.write(build_bundle([(block, 4, 2)], node_size=4)))
-
-    def test_rejects_a_size_mismatch(self) -> None:
-        block = bytes([0x50]) + b"hello"  # five literals, none missing
-        with self.assertRaisesRegex(PipelineError, "LZ4 block size mismatch"):
-            inspect_bundle(self.write(build_bundle([(block, 4, 2)], node_size=4)))
-
-    def test_rejects_truncated_literals(self) -> None:
-        block = bytes([0xA0, 65, 66])  # token promises ten literals, two follow
-        with self.assertRaisesRegex(PipelineError, "truncated.*LZ4 literals"):
-            inspect_bundle(self.write(build_bundle([(block, 10, 2)], node_size=10)))
-
-
-class HeaderTests(BundleCase):
-    """Header and table paths: compression selection, layout, truncation."""
-
-    def test_lzma_metadata_is_named_not_swallowed(self) -> None:
-        payload = serialized_file([142])
-        with self.assertRaisesRegex(PipelineError, "build with LZ4"):
-            inspect_bundle(
-                self.write(build_bundle([(payload[:5], len(payload), 1)], node_size=len(payload)))
-            )
-
-    def test_unknown_compression_mode_is_named(self) -> None:
-        payload = serialized_file([142])
-        with self.assertRaisesRegex(PipelineError, "compression mode 60"):
-            inspect_bundle(
-                self.write(
-                    build_bundle([(payload[:5], len(payload), 0x3C)], node_size=len(payload))
-                )
-            )
-
-    def test_uncompressed_block_with_the_wrong_declared_size_fails(self) -> None:
-        payload = serialized_file([142])
-        with self.assertRaisesRegex(PipelineError, "wrong size"):
-            inspect_bundle(
-                self.write(build_bundle([(payload, len(payload) + 1, 0)], node_size=len(payload)))
-            )
-
-    def test_a_block_table_at_the_end_of_the_file_still_parses(self) -> None:
-        payload = serialized_file([1, 142])
-        bundle = build_bundle(
-            [(payload, len(payload), 0)], node_size=len(payload), table_at_end=True
-        )
-        info = inspect_bundle(self.write(bundle))
-        self.assertEqual((1, 142), info.class_ids)
-
-    def test_an_archive_with_no_directory_nodes_is_refused(self) -> None:
-        payload = serialized_file([142])
-        with self.assertRaisesRegex(PipelineError, "no UnityFS directory nodes"):
-            inspect_bundle(
-                self.write(
-                    build_bundle([(payload, len(payload), 0)], node_size=len(payload), node_count=0)
-                )
-            )
-
-    def test_a_truncated_table_is_a_bounded_error(self) -> None:
-        payload = serialized_file([142])
-        bundle = build_bundle([(payload, len(payload), 0)], node_size=len(payload))
-        with self.assertRaisesRegex(PipelineError, "truncated Unity bundle"):
-            inspect_bundle(self.write(bundle[:-8]))
-
-    def test_a_missing_file_is_a_pipeline_error(self) -> None:
-        with self.assertRaisesRegex(PipelineError, "cannot read bundle"):
+    def test_a_missing_file_remains_an_actionable_pipeline_error(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "no such file"):
             inspect_bundle(Path("/nonexistent/dir/bundle.unity3d"))
 
 

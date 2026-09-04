@@ -208,9 +208,11 @@ shipped to a client, and was found by reading the log.
   `validate` proves a URI is *correct*, not that it is *applied*; only a
   client (or the engine's `ConfigsDump`) proves that.
 
-The UnityFS parser is dependency-free and bounded: it reads archive metadata,
-decompresses uncompressed/LZ4 blocks, and reads serialized class IDs. It does
-not execute Unity, deserialize every object, or modify files.
+The UnityFS gate runs the pinned `unityz info --json` reader behind a bounded
+subprocess/JSON adapter. `unityz` reads archive metadata, decompresses the
+container, and reports every embedded SerializedFile's revision and class IDs;
+the adapter rejects command failure, invalid JSON, missing fields, and mixed
+revisions as `PipelineError`. It does not execute Unity or modify files.
 
 ## Why class 142 is mandatory
 

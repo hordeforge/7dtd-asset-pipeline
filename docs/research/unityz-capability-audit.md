@@ -89,7 +89,7 @@ from authored PNG/WAV/glTF/VFX inputs.
 
 | Pipeline surface | Current mechanism | unityz coverage | Decision |
 |---|---|---|---|
-| `shamway inspect` revision and class-142 gate | local `unityfs.py` parser | full after unityz PR 121: embedded revision and class IDs are in `info --json` | migrate, then remove the duplicate parser and its pure-Python LZ4 path |
+| `shamway inspect` revision and class-142 gate | pinned `unityz info --json` behind `unityz.py` | full after unityz PR 121: embedded revision and class IDs are in `info --json` | migrated; the duplicate parser and its pure-Python LZ4 path are removed |
 | `shamway inspect --deep` object census | UnityPy environment, object tree and PPtrs | full from `info --objects`, `stats`, `show` on class 142, and `hierarchy --json` | migrate; retain the existing `DeepReport` public shape |
 | Synthesized writer type-tree lookup | UnityPy TPK database selected by Unity version and class ID | not full | keep until the creation gaps below land in unityz |
 | `anim.py` and `particles.py` type-tree defaults | UnityPy TPK nodes | not full; same missing built-in tree source | keep with the writer, not as a separate exception |
@@ -179,12 +179,16 @@ The migration slices are:
    (`info --json`, unityz PR 121);
 2. **done:** version that contract and install/probe a pinned unityz command
    without a sibling checkout (unityz PR 123 and the installer slice);
-3. replace `unityfs.py` and UnityPy-backed deep inspection;
-4. replace UnityPy test readers by domain (`bundle_writer`, prefabs/entities,
+3. **done:** replace the local `unityfs.py` parser with the bounded `unityz`
+   process/JSON adapter; generated acceptance and truncated-rejection fixtures
+   now exercise the external parser, whose own fuzz suite owns hostile format
+   inputs;
+4. replace UnityPy-backed deep inspection while retaining its public report;
+5. replace UnityPy test readers by domain (`bundle_writer`, prefabs/entities,
    animation, shaders);
-5. replace the user-facing FSB decoder after adding a read-only JSON bank
+6. replace the user-facing FSB decoder after adding a read-only JSON bank
    contract;
-6. design and implement the two creation-side contracts before removing the
+7. design and implement the two creation-side contracts before removing the
    final UnityPy dependency.
 
 Each behavior slice updates its owning command documentation and tests in the

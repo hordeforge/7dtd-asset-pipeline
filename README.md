@@ -343,8 +343,8 @@ the rules there rather than here.
 
 **Gates**
 
-- dependency-free UnityFS metadata inspection and the required class-142
-  `AssetBundle` gate;
+- UnityFS metadata inspection through the pinned `unityz` reader and the
+  required class-142 `AssetBundle` gate;
 - build-log rejection when Unity silently strips disabled engine modules;
 - installed-game Unity-version discovery instead of a hardcoded version, and
   checksum-verified editor resolution from Unity's release service instead of
@@ -370,9 +370,9 @@ the rules there rather than here.
 - an art-direction contract with prompt patterns, and `shamway prompt`, which
   renders them as a ready prompt with the key colour, the negative list and
   the commands that consume the model's output;
-- optional OSS capabilities that degrade cleanly: UnityPy object-level
-  inspection, trimesh and the Khronos glTF validator for meshes, Blender for
-  geometry and icon renders.
+- optional OSS capabilities that degrade cleanly: UnityPy's versioned type
+  trees for the synthesized writer, trimesh and the Khronos glTF validator
+  for meshes, Blender for geometry and icon renders.
 
 **Interfaces**
 

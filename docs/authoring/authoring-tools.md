@@ -417,8 +417,9 @@ against a real editor's assemblies without starting it.
 
 ### This pipeline's inspector
 
-`shamway inspect` is the required zero-dependency preflight. It owns the
-revision and class-142 gates used during staging.
+`shamway inspect` is the required base-tool preflight. Its bounded adapter to
+the pinned `unityz info --json` contract owns the revision and class-142 gates
+used during staging; it needs no optional Python package.
 
 ### UnityPy
 

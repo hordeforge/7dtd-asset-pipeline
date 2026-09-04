@@ -75,32 +75,43 @@ def serialized_file(
     unity_version: str = "2022.3.62f2",
     has_type_tree: bool = False,
 ) -> bytes:
-    """A SerializedFile the way `unityfs._class_ids` reads one.
+    """A complete, object-free SerializedFile v22 for reader fixtures.
 
     `has_type_tree` emits, after every type entry, one 32-byte tree node plus a
     four-byte string buffer and an empty dependency table — the shape the
     shipped game's bundles carry (`docs/research/research-provenance.md`: nodes are 32
-    bytes, type trees present). Every real bundle takes that branch; the
-    default keeps the older, shorter fixtures byte-stable.
+    bytes, type trees present). The trailing zero-count tables and v22 header
+    make this an independently parseable file rather than the metadata prefix
+    the removed pipeline-local parser used to tolerate.
     """
-    data = bytearray(20)
-    struct.pack_into(">I", data, 8, 22)
-    data.extend(bytes(28))
-    data.extend(unity_version.encode() + b"\x00")
-    data.extend(struct.pack("<I", 19))
-    data.append(1 if has_type_tree else 0)
-    data.extend(struct.pack("<I", len(class_ids)))
+    metadata = bytearray(unity_version.encode() + b"\x00")
+    metadata.extend(struct.pack("<I", 19))
+    metadata.append(1 if has_type_tree else 0)
+    metadata.extend(struct.pack("<I", len(class_ids)))
     for class_id in class_ids:
-        data.extend(struct.pack("<iBh", class_id, 0, 0))
+        metadata.extend(struct.pack("<iBh", class_id, 0, 0))
         if class_id == 114:
-            data.extend(bytes(16))
-        data.extend(bytes(16))
+            metadata.extend(bytes(16))
+        metadata.extend(bytes(16))
         if has_type_tree:
-            data.extend(struct.pack("<II", 1, 4))  # one node, four string bytes
-            data.extend(bytes(32))  # the node itself
-            data.extend(b"tree")  # the string buffer
-            data.extend(struct.pack("<I", 0))  # no ref dependencies
-    return bytes(data)
+            metadata.extend(struct.pack("<II", 1, 4))  # one node, four string bytes
+            metadata.extend(bytes(32))  # the node itself
+            metadata.extend(b"tree")  # the string buffer
+            metadata.extend(struct.pack("<I", 0))  # no type dependencies
+    metadata.extend(struct.pack("<I", len(class_ids)))
+    for index in range(len(class_ids)):
+        metadata.extend(bytes((-len(metadata)) % 4))
+        metadata.extend(struct.pack("<qqII", index + 1, 0, 0, index))
+    metadata.extend(struct.pack("<III", 0, 0, 0))
+    metadata.append(0)  # empty user_information C string
+
+    metadata_size = len(metadata)
+    data_offset = 48 + metadata_size
+    header = bytearray(48)
+    struct.pack_into(">IIII", header, 0, 0, 0, 22, 0)
+    header[16] = 0  # little-endian metadata
+    struct.pack_into(">Iqqq", header, 20, metadata_size, data_offset, data_offset, 0)
+    return bytes(header + metadata)
 
 
 def _count_parts(value: int) -> tuple[int, bytes]:

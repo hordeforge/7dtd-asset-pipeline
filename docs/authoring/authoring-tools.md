@@ -441,7 +441,7 @@ this repository previously reached through Python, and its JSON commands are
 the migration boundary for pipeline code.
 
 `scripts/install-tools.sh` builds unityz 0.1.1 from the checksum-verified
-source archive for pinned commit `8e3925cf08b6f8c7f08e11a1d2fd32dae8a237ce`.
+source archive for pinned commit `d775a107b9bd4c83d643eaf3795a3828317b2fb1`.
 It does not use a sibling checkout. The minimum is a format contract, not a
 general freshness preference: 0.1.1 is the first version whose `info --json`
 reports each embedded SerializedFile's revision and class IDs.

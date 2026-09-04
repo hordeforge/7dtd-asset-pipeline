@@ -141,7 +141,7 @@ resolution, and success/failure without creating output files.
 list --repo hordeforge/unityz` returned no releases). The reproducible route
 now implemented by `scripts/install-unityz.sh` and called by
 `scripts/install-tools.sh` is the source archive for merged commit
-`8e3925cf08b6f8c7f08e11a1d2fd32dae8a237ce`, pinned independently by SHA-256
+`d775a107b9bd4c83d643eaf3795a3828317b2fb1`, pinned independently by SHA-256
 and built with the already-required Zig 0.16 toolchain. It installs unityz
 0.1.1 into `~/.local/bin` and never reads a sibling checkout. The standalone
 script is the identical CI route, rather than a second copy of the recipe.
@@ -151,6 +151,11 @@ added in unityz PR 121; unityz PR 123 introduced that version signal. Both the
 shell installer's `--check` and the Python capability probe reject an
 older binary as present but unusable instead of discovering the missing JSON
 fields half-way through an inspection.
+
+The same pin includes unityz PR 135's subtree-local `skipped_children`
+contract. Deep inspection uses that field to mark only the affected prefab
+entry partial when a hierarchy child cannot be decoded; the top-level count
+alone cannot identify which bundle entry lost evidence.
 
 The pinned commit also includes unityz PR 134: `hierarchy --json` emits a
 stable `{node, hierarchy, skipped_children}` object for every SerializedFile,

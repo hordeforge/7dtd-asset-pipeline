@@ -13,7 +13,7 @@ scripts/install-tools.sh --check --with-authoring
 install through `pacman`, `apt-get`, `dnf`, or `zypper`. Python runs the CLI;
 `unityz` reads, verifies and extracts its Unity artifacts. Because unityz has
 no published release artifact yet, the installer downloads an immutable source
-archive at commit `8e3925cf08b6f8c7f08e11a1d2fd32dae8a237ce`, verifies its
+archive at commit `d775a107b9bd4c83d643eaf3795a3828317b2fb1`, verifies its
 recorded SHA-256, and builds it into `~/.local/bin`. It requires unityz 0.1.1:
 that is the first version whose JSON output includes the embedded
 SerializedFile revision and class IDs rather than only the outer UnityFS

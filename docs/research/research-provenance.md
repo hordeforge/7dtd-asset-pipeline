@@ -2486,6 +2486,25 @@ is a **static world prop**, not an `EntityVehicle`, so despawning vehicles
 (`Helpers.Vehicles`, `EntityVehicle`) does not remove it; a clear spawn or a
 vehicle-agnostic camera vantage is needed for a clean look.
 
+## Generated entity GameObject components belong to their own node (2026-09-04)
+
+Measured with pinned `unityz info --json --objects`, `show`, and `hierarchy
+--json` on the tracked `examples/SelfTestMod/Resources/shamwayselftest.unity3d`.
+The `shamwaySelfTestArachnid` root GameObject, path ID 36, listed component
+PPtrs 37 and 137; both objects were class 4 `Transform`, and path 137's
+`m_GameObject` was path 136, the **child** named `figure`. The same malformed
+cross-owner pointer was present on all six animated generated entities.
+
+This also explained a disagreement between readers. The old UnityPy census
+selected the last Transform in `m_Component`, followed only that transform's
+children, and omitted the `figure` GameObject plus the root-level `Physics`
+GameObject. Unityz followed the serialized transform graph and reported both,
+including the Animation and CapsuleCollider they own. Source inspection then
+located the writer statement that appended `figure_tr` to `root_go` after
+already parenting that Transform below the root Transform. Removing that
+component PPtr restores Unity's ownership invariant: each GameObject lists its
+own components; parentage lives only in `Transform.m_Father/m_Children`.
+
 ## CORRECTION: `Shamway/Unlit` does skin-less draw the generated creatures; `Game/SDCS/Skin` does not GPU-skin (2026-08-31)
 
 The "Convention found" block above is wrong, and so is the `improvements.md`

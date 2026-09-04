@@ -260,6 +260,15 @@ class AnimOnPrefabTests(unittest.TestCase):
 
         self.assertEqual(run("entity", [str(out), "--rig", "quadruped", "--anim"]), 0)
         objects = mesh_source_objects(out, set())
+        by_key = {obj.key: obj for obj in objects}
+        root_components = [
+            item["component"].key for item in by_key["creature:go"].fields["m_Component"]
+        ]
+        figure_components = [
+            item["component"].key for item in by_key["creature:figure:go"].fields["m_Component"]
+        ]
+        self.assertEqual(["creature:transform"], root_components)
+        self.assertEqual(["creature:figure:transform", "creature:animation"], figure_components)
         objects.append(shader("Shamway/Unlit"))
         bundle = self.root / "figure.unity3d"
         bundle.write_bytes(build_bundle(objects, REVISION, "figure.unity3d"))

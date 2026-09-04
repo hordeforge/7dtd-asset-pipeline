@@ -2123,7 +2123,6 @@ def attach_anim_objects(
     ]
     clip_keys = [obj.key for obj in clip_objects]
     animation_key = f"{path.stem}:animation"
-    root_go = f"{path.stem}:go"
     root_tr = f"{path.stem}:transform"
     # A generated entity carries its legacy Animation on a `figure` child, and
     # its grounding capsule on a sibling `Physics` child. Which node supplies
@@ -2209,10 +2208,6 @@ def attach_anim_objects(
         if obj.key == figure_go:
             components = [item["component"].key for item in obj.fields["m_Component"]]
             components.append(animation_key)
-            obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
-        elif obj.key == root_go:
-            components = [item["component"].key for item in obj.fields["m_Component"]]
-            components.append(figure_tr)
             obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
     return objects + clip_objects + [animation]
 

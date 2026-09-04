@@ -528,7 +528,16 @@ that clients see nothing.
   `ShamwayAnimalController`, and the stock one cannot be used. This is the
   reason the generator wires a mod-owned `AvatarController` and a mod-owned
   `Class`; a borrowed stock `Class`/controller reintroduces a pre-authored
-  model, a stock AI wander, and a stock speed the walk case cannot contain
+  model, a stock AI wander, and a stock speed the walk case cannot contain.
+
+The component pointers follow the same ownership boundary as the transform
+tree: the model-root GameObject lists only its own root Transform; the
+`figure` GameObject lists its own Transform and Animation. The figure
+Transform is a child of the root Transform, never a second component of the
+root GameObject. `unityz hierarchy` exposed the invalid cross-owner pointer in
+the earlier synthesized fixture because it could follow both transform graphs;
+the UnityPy walker followed only the last Transform and omitted `figure` and
+`Physics` from its census.
   (measured: the stock `EntityAnimalSnake` class walked 292 m in a 12 s hold,
   `moveSpeed=0.8` notwithstanding, with a 13 m Y-spread). `physicsbodies.xml`
   remain closed for a procedural skinned mesh — they build bone-centred

@@ -1,17 +1,7 @@
-"""Per-object bundle inspection, backed by UnityPy when it is installed.
+"""Per-object and per-prefab bundle inspection through the pinned unityz CLI.
 
-The built-in UnityFS reader answers the class-142 gate and nothing more, on
-purpose: it must stay dependency-free and auditable. But "the bundle contains a
-class-142 object" does not answer the question that follows a stripped engine
-module — *did my prefab's ParticleSystem actually survive serialization?* The
-tracked manifest cannot answer it either; it lists source paths, not the
-objects Unity emitted.
-
-UnityPy can, so this uses it when present and says how to get it when absent.
-It is diagnostic only: nothing here gates a build, and the authoritative
-container/revision checks stay in `unityfs.py`.
-
-Source: <https://github.com/K0lb3/UnityPy>
+The public report stays Python data, but Unity container parsing, object
+decoding, hierarchy recovery, and self-verification have one owner: unityz.
 """
 
 from __future__ import annotations
@@ -19,11 +9,9 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from types import ModuleType
-from typing import Any, cast
 
-from .capabilities import require_capability
 from .errors import PipelineError
+from .unityz import Unityz
 
 
 @dataclass
@@ -57,120 +45,261 @@ class DeepReport:
         }
 
 
-def _load_unitypy() -> ModuleType:
-    require_capability("UnityPy")
-    import UnityPy
+@dataclass(frozen=True)
+class _Object:
+    node: str | None
+    path_id: int
+    class_id: int
+    name: str
 
-    # follow_imports=skip leaves the capability module Any; the boundary lies here.
-    return cast(ModuleType, UnityPy)
+
+def _integer(value: object, field_name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise PipelineError(f"unityz omitted integer {field_name} from deep inspection")
+    return value
 
 
-def _walk(game_object: Any, depth: int = 0) -> tuple[Counter[str], int, int]:
-    """Count components across a prefab's whole hierarchy.
+def _objects(report: dict[str, object]) -> list[_Object]:
+    raw_objects = report.get("object_list")
+    if not isinstance(raw_objects, list):
+        raise PipelineError("unityz info omitted object_list from deep inspection")
+    objects: list[_Object] = []
+    for raw in raw_objects:
+        if not isinstance(raw, dict):
+            raise PipelineError("unityz info returned a malformed object_list entry")
+        node = raw.get("node")
+        if node is not None and not isinstance(node, str):
+            raise PipelineError("unityz info returned a malformed object node")
+        name = raw.get("name", "")
+        if not isinstance(name, str):
+            raise PipelineError("unityz info returned a malformed object name")
+        objects.append(
+            _Object(
+                node=node,
+                path_id=_integer(raw.get("path_id"), "object path_id"),
+                class_id=_integer(raw.get("class"), "object class"),
+                name=name,
+            )
+        )
+    return objects
 
-    A prefab root usually carries only a Transform; the components that matter
-    hang off its children, so a root-only census answers nothing.
 
-    Returns ``(counts, total, skipped)`` where *skipped* is the number of
-    child objects that could not be read (corrupt pointer, missing object,
-    or depth limit).
-    """
+def _require_embedded_type_trees(report: dict[str, object], path: Path) -> None:
+    raw_nodes = report.get("nodes_list")
+    if not isinstance(raw_nodes, list):
+        raise PipelineError("unityz info omitted the node list from deep inspection")
+    found = False
+    for raw_node in raw_nodes:
+        if not isinstance(raw_node, dict):
+            raise PipelineError("unityz info returned a malformed deep-inspection node")
+        serialized = raw_node.get("serialized")
+        if serialized is None:
+            continue
+        found = True
+        if not isinstance(serialized, dict) or not isinstance(serialized.get("type_tree"), bool):
+            raise PipelineError("unityz info omitted the SerializedFile type-tree state")
+        if not serialized["type_tree"]:
+            raise PipelineError(
+                f"shamway inspect --deep refuses {path}: it has stripped type trees, "
+                "and pinned unityz has no built-in release-indexed tree source yet; "
+                "this UnityPy-covered case is recorded in the unityz capability audit"
+            )
+    if not found:
+        raise PipelineError(f"unityz found no SerializedFile to inspect deeply in {path}")
+
+
+def _type_census(report: dict[str, object]) -> tuple[int, dict[int, str], dict[str, int]]:
+    object_count = _integer(report.get("objects"), "stats object count")
+    raw_classes = report.get("classes")
+    if not isinstance(raw_classes, dict):
+        raise PipelineError("unityz stats omitted the class census")
+    names: dict[int, str] = {}
     counts: Counter[str] = Counter()
+    for raw_class_id, raw in raw_classes.items():
+        if not isinstance(raw_class_id, str) or not isinstance(raw, dict):
+            raise PipelineError("unityz stats returned a malformed class census")
+        try:
+            class_id = int(raw_class_id)
+        except ValueError as exc:
+            raise PipelineError("unityz stats returned a non-numeric class ID") from exc
+        name = raw.get("name")
+        if not isinstance(name, str) or not name:
+            raise PipelineError("unityz stats omitted a class name")
+        names[class_id] = name
+        counts[name] += _integer(raw.get("count"), f"{name} count")
+    return object_count, names, dict(sorted(counts.items()))
+
+
+def _container_entries(value: dict[str, object]) -> dict[str, tuple[int, int]]:
+    raw_entries = value.get("m_Container")
+    if not isinstance(raw_entries, list):
+        raise PipelineError("unityz show omitted AssetBundle.m_Container")
+    entries: dict[str, tuple[int, int]] = {}
+    for raw in raw_entries:
+        if not isinstance(raw, list) or len(raw) != 2 or not isinstance(raw[0], str):
+            raise PipelineError("unityz show returned a malformed AssetBundle container entry")
+        preload = raw[1]
+        if not isinstance(preload, dict):
+            raise PipelineError("unityz show returned a malformed AssetBundle preload entry")
+        asset = preload.get("asset")
+        if not isinstance(asset, dict):
+            raise PipelineError("unityz show omitted an AssetBundle entry pointer")
+        entries[raw[0]] = (
+            _integer(asset.get("m_FileID"), "AssetBundle m_FileID"),
+            _integer(asset.get("m_PathID"), "AssetBundle m_PathID"),
+        )
+    return entries
+
+
+def _hierarchy_index(
+    documents: list[dict[str, object]],
+) -> tuple[dict[tuple[str | None, int], dict[str, object]], dict[str | None, int]]:
+    index: dict[tuple[str | None, int], dict[str, object]] = {}
+    document_skips: dict[str | None, int] = {}
+
+    def add(node_name: str | None, raw: object) -> None:
+        if not isinstance(raw, dict):
+            raise PipelineError("unityz hierarchy returned a malformed node")
+        game_object = _integer(raw.get("gameObject"), "hierarchy gameObject")
+        index[(node_name, game_object)] = raw
+        children = raw.get("children")
+        if not isinstance(children, list):
+            raise PipelineError("unityz hierarchy omitted a child list")
+        for child in children:
+            add(node_name, child)
+
+    for document in documents:
+        node_name = document.get("node")
+        if node_name is not None and not isinstance(node_name, str):
+            raise PipelineError("unityz hierarchy returned a malformed container node")
+        roots = document.get("hierarchy")
+        if not isinstance(roots, list):
+            raise PipelineError("unityz hierarchy omitted its root list")
+        document_skips[node_name] = _integer(
+            document.get("skipped_children"), "hierarchy skipped_children"
+        )
+        for root in roots:
+            add(node_name, root)
+    return index, document_skips
+
+
+def _walk_hierarchy(
+    raw: dict[str, object], class_names: dict[int, str], depth: int = 0
+) -> tuple[Counter[str], int]:
+    """Count GameObjects and components with the old report's depth bound."""
+    if depth > 64:
+        return Counter(), 1
+    raw_components = raw.get("components")
+    raw_children = raw.get("children")
+    if not isinstance(raw_components, list) or not isinstance(raw_children, list):
+        raise PipelineError("unityz hierarchy returned a malformed prefab node")
+    counts: Counter[str] = Counter()
+    for raw_class_id in raw_components:
+        class_id = _integer(raw_class_id, "hierarchy component class")
+        counts[class_names.get(class_id, f"Class{class_id}")] += 1
     total = 1
-    skipped = 0
-    if depth > 64:  # A malformed hierarchy must not become infinite recursion.
-        return counts, total, skipped
-    transform = None
-    for reference in getattr(game_object, "m_Component", []) or []:
-        pointer = getattr(reference, "component", reference)
-        try:
-            type_name = pointer.type.name
-        except AttributeError:
-            continue
-        counts[type_name] += 1
-        if type_name == "Transform":
-            transform = pointer
-    if transform is None:
-        return counts, total, skipped
-    try:
-        children = getattr(transform.read(), "m_Children", []) or []
-    except Exception:  # noqa: BLE001 - a child we cannot read must not abort the report
-        return counts, total, skipped
-    for child in children:
-        try:
-            child_object = child.read().m_GameObject.read()
-        except Exception:  # noqa: BLE001 - an unreadable child must not abort the walk
-            skipped += 1
-            continue
-        child_counts, child_total, child_skipped = _walk(child_object, depth + 1)
+    for child in raw_children:
+        if not isinstance(child, dict):
+            raise PipelineError("unityz hierarchy returned a malformed prefab child")
+        child_counts, child_total = _walk_hierarchy(child, class_names, depth + 1)
         counts += child_counts
         total += child_total
-        skipped += child_skipped
-    return counts, total, skipped
+    return counts, total
+
+
+def _verification_failures(
+    report: dict[str, object], objects: list[_Object]
+) -> set[tuple[str | None, int]]:
+    raw_failures = report.get("failures")
+    if not isinstance(raw_failures, list):
+        raise PipelineError("unityz verify omitted its failure list")
+    failed: set[tuple[str | None, int]] = set()
+    for raw in raw_failures:
+        if not isinstance(raw, dict):
+            raise PipelineError("unityz verify returned a malformed failure")
+        node = raw.get("node")
+        if node is not None and not isinstance(node, str):
+            raise PipelineError("unityz verify returned a malformed failure node")
+        path_id = _integer(raw.get("path_id"), "verification path_id")
+        if path_id == -1:
+            failed.update((item.node, item.path_id) for item in objects if item.node == node)
+        else:
+            failed.add((node, path_id))
+    if _integer(report.get("skipped"), "verification skipped count"):
+        # A typeless object has no per-object record in the current unityz
+        # report. Conservatively mark all entries; the documented built-in
+        # type-tree gap must never read as a complete inspection.
+        failed.update((item.node, item.path_id) for item in objects)
+    return failed
 
 
 def deep_inspect(path: Path) -> DeepReport:
-    unity_py = _load_unitypy()
     path = path.resolve()
-    if not path.is_file():
-        raise PipelineError(f"cannot read bundle {path}: no such file")
-    # Read the bundle here and hand UnityPy bytes. Loading from a path makes
-    # UnityPy hold the file descriptor in a reference-cyclic reader graph with
-    # no close() on the environment, so release would be delegated to the
-    # cyclic collector — an fd per load until it runs, on every inspect_deep
-    # call inside a long-lived serve session.
-    try:
-        payload = path.read_bytes()
-        environment = unity_py.load(payload)
-        objects = list(environment.objects)
-        container = dict(environment.container)
-    except OSError as exc:
-        raise PipelineError(f"cannot read bundle {path}: {exc}") from exc
-    except Exception as exc:
-        raise PipelineError(f"UnityPy could not read {path}: {exc}") from exc
+    reader = Unityz(path)
+    info = reader.json("info", "--json", "--objects")
+    _require_embedded_type_trees(info, path)
+    objects = _objects(info)
+    stats = reader.json("stats", "--json")
+    object_count, class_names, type_counts = _type_census(stats)
+    hierarchy, document_skips = _hierarchy_index(reader.json_lines("hierarchy", "--json"))
+    failed = _verification_failures(reader.json_report("verify", "--json"), objects)
+    by_key = {(item.node, item.path_id): item for item in objects}
+
+    container: dict[str, tuple[str | None, int, int]] = {}
+    for asset_bundle in (item for item in objects if item.class_id == 142):
+        selector = (
+            f"{asset_bundle.node}:{asset_bundle.path_id}"
+            if asset_bundle.node is not None
+            else str(asset_bundle.path_id)
+        )
+        value = reader.json("show", selector)
+        for container_path, (file_id, path_id) in _container_entries(value).items():
+            container[container_path] = (asset_bundle.node, file_id, path_id)
 
     entries: list[BundleEntry] = []
     skipped_children = 0
-    for container_path, obj in sorted(container.items()):
-        type_name = getattr(obj.type, "name", "Unknown")
+    for container_path, (node, file_id, path_id) in sorted(container.items()):
+        target = by_key.get((node, path_id)) if file_id == 0 else None
+        partial = target is None
+        type_name = (
+            class_names.get(target.class_id, f"Class{target.class_id}") if target else "Unknown"
+        )
+        object_name = target.name if target else ""
+        object_count_for_entry = 1
         components: dict[str, int] = {}
-        object_count = 1
-        object_name = ""
-        entry_partial = False
-        try:
-            data = obj.read()
-            object_name = getattr(data, "m_Name", "") or ""
-            if type_name == "GameObject":
-                counts, object_count, entry_skipped = _walk(data)
-                components = dict(sorted(counts.items()))
-                skipped_children += entry_skipped
-                if entry_skipped:
-                    entry_partial = True
-        except Exception:  # noqa: BLE001 - report the entry even if it cannot be read
-            object_name = ""
-            entry_partial = True
+        if target is not None:
+            partial = partial or (target.node, target.path_id) in failed
+            if target.class_id == 1:
+                root = hierarchy.get((target.node, target.path_id))
+                if root is None:
+                    partial = True
+                else:
+                    counts, object_count_for_entry = _walk_hierarchy(root, class_names)
+                    components = dict(sorted(counts.items()))
+                    root_skips = _integer(root.get("skipped_children"), "prefab skipped_children")
+                    skipped_children += root_skips
+                    partial = partial or root_skips != 0
         entries.append(
             BundleEntry(
                 container_path=container_path,
                 type=type_name,
                 object_name=object_name,
-                # 7DTD addresses assets by file-name stem, so surface the key
-                # it will actually look up rather than the full container path.
                 asset_stem=Path(container_path).stem,
-                object_count=object_count,
+                object_count=object_count_for_entry,
                 components=components,
-                partial=entry_partial,
+                partial=partial,
             )
         )
 
+    # A document-level omission outside every addressable prefab cannot be
+    # assigned to an entry, but still belongs in the report's global signal.
+    assigned = skipped_children
+    total_document_skips = sum(document_skips.values())
+    skipped_children += max(0, total_document_skips - assigned)
     return DeepReport(
         path=str(path),
-        object_count=len(objects),
-        # The same tolerance the per-entry loop above applies: one object whose
-        # type cannot be read must not abort a report whose entries succeeded.
-        type_counts=dict(
-            sorted(Counter(getattr(o.type, "name", "Unknown") for o in objects).items())
-        ),
+        object_count=object_count,
+        type_counts=type_counts,
         entries=entries,
         skipped_children=skipped_children,
     )

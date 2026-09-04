@@ -169,7 +169,7 @@ class Pipeline:
         return inspect_bundle(Path(bundle) if bundle else self.config.bundle_output)
 
     def inspect_deep(self, bundle: Path | str | None = None) -> DeepReport:
-        """Every serialized object and per-prefab components. Needs UnityPy."""
+        """Every serialized object and per-prefab components, read by unityz."""
         return deep_inspect(Path(bundle) if bundle else self.config.bundle_output)
 
     def validate(self, bundle: Path | str | None = None) -> ValidationReport:

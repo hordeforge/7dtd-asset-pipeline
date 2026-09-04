@@ -18,64 +18,105 @@ UNITYZ_TIMEOUT_SECONDS = 120
 JsonObject = dict[str, object]
 
 
-def _run(command: str, path: Path, *arguments: str) -> str:
-    path = path.resolve()
-    if not path.is_file():
-        raise PipelineError(f"cannot read Unity asset {path}: no such file")
-    require_capability("unityz")
-    executable = shutil.which("unityz")
-    if executable is None:  # The capability probe and execution share one answer.
-        raise PipelineError("unityz disappeared from PATH after its capability check")
-    try:
-        result = subprocess.run(
-            [executable, command, str(path), *arguments],
-            capture_output=True,
-            text=True,
-            timeout=UNITYZ_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise PipelineError(
-            f"unityz {command} timed out after {UNITYZ_TIMEOUT_SECONDS}s for {path}"
-        ) from exc
-    except (OSError, UnicodeError) as exc:
-        raise PipelineError(f"cannot run unityz {command} for {path}: {exc}") from exc
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic"
-        raise PipelineError(
-            f"unityz {command} could not read {path} (exit {result.returncode}): {detail}"
-        )
-    return result.stdout
+class Unityz:
+    """One resolved unityz executable applied repeatedly to one asset."""
 
+    def __init__(self, path: Path) -> None:
+        self.path = path.resolve()
+        if not self.path.is_file():
+            raise PipelineError(f"cannot read Unity asset {self.path}: no such file")
+        require_capability("unityz")
+        executable = shutil.which("unityz")
+        if executable is None:  # The capability probe and execution share one answer.
+            raise PipelineError("unityz disappeared from PATH after its capability check")
+        self.executable = executable
 
-def run_json(command: str, path: Path, *arguments: str) -> JsonObject:
-    """Run one unityz command whose successful stdout is one JSON object."""
-    output = _run(command, path, *arguments)
-    try:
-        value = json.loads(output)
-    except json.JSONDecodeError as exc:
-        raise PipelineError(f"unityz {command} returned invalid JSON for {path}: {exc}") from exc
-    if not isinstance(value, dict):
-        raise PipelineError(f"unityz {command} returned JSON that is not an object for {path}")
-    return value
-
-
-def run_json_lines(command: str, path: Path, *arguments: str) -> list[JsonObject]:
-    """Run one unityz command that emits one JSON object per SerializedFile."""
-    output = _run(command, path, *arguments)
-    documents: list[JsonObject] = []
-    for line_number, line in enumerate(output.splitlines(), start=1):
-        if not line.strip():
-            continue
+    def _invoke(self, command: str, *arguments: str) -> subprocess.CompletedProcess[str]:
         try:
-            value = json.loads(line)
+            return subprocess.run(
+                [self.executable, command, str(self.path), *arguments],
+                capture_output=True,
+                text=True,
+                timeout=UNITYZ_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise PipelineError(
+                f"unityz {command} timed out after {UNITYZ_TIMEOUT_SECONDS}s for {self.path}"
+            ) from exc
+        except (OSError, UnicodeError) as exc:
+            raise PipelineError(f"cannot run unityz {command} for {self.path}: {exc}") from exc
+
+    def _failure(self, command: str, result: subprocess.CompletedProcess[str]) -> PipelineError:
+        detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic"
+        return PipelineError(
+            f"unityz {command} could not read {self.path} (exit {result.returncode}): {detail}"
+        )
+
+    def json(self, command: str, *arguments: str) -> JsonObject:
+        """Run a command whose successful stdout is one JSON object."""
+        result = self._invoke(command, *arguments)
+        if result.returncode != 0:
+            raise self._failure(command, result)
+        return self._decode_object(command, result.stdout)
+
+    def json_report(self, command: str, *arguments: str) -> JsonObject:
+        """Decode a JSON verdict even when findings make the command non-zero.
+
+        Verification commands use exit 1 to report failed objects while still
+        returning their complete machine-readable report. A process failure
+        with no valid report remains an error.
+        """
+        result = self._invoke(command, *arguments)
+        try:
+            return self._decode_object(command, result.stdout)
+        except PipelineError:
+            if result.returncode != 0:
+                raise self._failure(command, result) from None
+            raise
+
+    def json_lines(self, command: str, *arguments: str) -> list[JsonObject]:
+        """Run a command that emits one JSON object per SerializedFile."""
+        result = self._invoke(command, *arguments)
+        if result.returncode != 0:
+            raise self._failure(command, result)
+        documents: list[JsonObject] = []
+        for line_number, line in enumerate(result.stdout.splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise PipelineError(
+                    f"unityz {command} returned invalid JSON on line {line_number} "
+                    f"for {self.path}: {exc}"
+                ) from exc
+            if not isinstance(value, dict):
+                raise PipelineError(
+                    f"unityz {command} returned a non-object on line {line_number} for {self.path}"
+                )
+            documents.append(value)
+        return documents
+
+    def _decode_object(self, command: str, output: str) -> JsonObject:
+        try:
+            value = json.loads(output)
         except json.JSONDecodeError as exc:
             raise PipelineError(
-                f"unityz {command} returned invalid JSON on line {line_number} for {path}: {exc}"
+                f"unityz {command} returned invalid JSON for {self.path}: {exc}"
             ) from exc
         if not isinstance(value, dict):
             raise PipelineError(
-                f"unityz {command} returned a non-object on line {line_number} for {path}"
+                f"unityz {command} returned JSON that is not an object for {self.path}"
             )
-        documents.append(value)
-    return documents
+        return value
+
+
+def run_json(command: str, path: Path, *arguments: str) -> JsonObject:
+    """Run one unityz JSON command through a newly resolved reader."""
+    return Unityz(path).json(command, *arguments)
+
+
+def run_json_lines(command: str, path: Path, *arguments: str) -> list[JsonObject]:
+    """Run one unityz JSON-lines command through a newly resolved reader."""
+    return Unityz(path).json_lines(command, *arguments)

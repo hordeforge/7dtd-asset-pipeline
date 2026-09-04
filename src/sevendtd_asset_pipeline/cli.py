@@ -173,7 +173,7 @@ def _parser() -> argparse.ArgumentParser:
     inspect.add_argument(
         "--deep",
         action="store_true",
-        help="list every serialized object and per-prefab components (needs UnityPy)",
+        help="list every serialized object and per-prefab components (uses unityz)",
     )
     release = commands.add_parser(
         "unity-release", help="resolve the official Unity editor download for a revision"

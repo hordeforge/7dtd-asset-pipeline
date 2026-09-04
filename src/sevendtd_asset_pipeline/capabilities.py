@@ -181,7 +181,10 @@ REGISTRY: tuple[_Spec, ...] = (
         kind="command",
         probe="unityz",
         usable=_unityz_has_metadata_contract,
-        unlocks=("Unity asset inspection, verification, extraction, and test read-back",),
+        unlocks=(
+            "shamway inspect and inspect --deep",
+            "Unity asset verification, extraction, and test read-back",
+        ),
         purpose="read Unity containers and serialized objects through one fast, "
         "machine-readable CLI instead of maintaining pipeline-local readers",
         install="shamway script install-tools",
@@ -191,13 +194,12 @@ REGISTRY: tuple[_Spec, ...] = (
         kind="module",
         probe="UnityPy",
         unlocks=(
-            "shamway inspect --deep",
             "shamway pack",
             'shamway build with bundle_source = "synthesized"',
         ),
-        purpose="read every serialized object in a bundle, and supply the engine's own "
-        "per-revision type trees to the editorless bundle writer",
-        install=extra_install("inspect"),
+        purpose="supply the engine's own per-revision type trees and object serializer "
+        "to the editorless bundle writer",
+        install=extra_install("writer"),
     ),
     _Spec(
         name="trimesh",

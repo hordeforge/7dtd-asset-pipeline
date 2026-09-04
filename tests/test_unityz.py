@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from sevendtd_asset_pipeline.errors import PipelineError
-from sevendtd_asset_pipeline.unityz import run_json, run_json_lines
+from sevendtd_asset_pipeline.unityz import Unityz, run_json, run_json_lines
 
 
 class UnityzProcessTests(unittest.TestCase):
@@ -58,6 +58,13 @@ class UnityzProcessTests(unittest.TestCase):
         capability, executable, run = self.patches(result)
         with capability, executable, run, self.assertRaisesRegex(PipelineError, "invalid JSON"):
             run_json("info", self.path, "--json")
+
+    def test_json_report_decodes_a_machine_verdict_from_exit_one(self) -> None:
+        result = subprocess.CompletedProcess([], 1, '{"checked":2,"failed":1}\n', "")
+        capability, executable, run = self.patches(result)
+        with capability, executable, run:
+            report = Unityz(self.path).json_report("verify", "--json")
+        self.assertEqual(1, report["failed"])
 
     def test_json_lines_preserve_each_serialized_file_document(self) -> None:
         result = subprocess.CompletedProcess([], 0, '{"node":"a"}\n{"node":"b"}\n', "")

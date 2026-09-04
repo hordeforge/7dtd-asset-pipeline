@@ -36,7 +36,8 @@ degrades to a bare `Mesh` with a printed note rather than failing. It has a
 where the packaged one already works. `--with-unity-prereqs` covers the **optional** editor
 installer's needs, `--with-authoring` the optional art tooling in
 [Authoring tools](../authoring/authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
-and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, UnityPy) —
+and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, and UnityPy's
+writer type trees) —
 `--with-desktop-capture` a screenshot tool (`grim` on Wayland, `maim` on X11)
 so `shamway client capture` can record what a person looked at during
 acceptance — skip it on a headless build host — and `--with-research` the
@@ -63,9 +64,10 @@ environments, installs, and test runs. `scripts/install-tools.sh` installs it,
 from the distribution package where one exists and otherwise from the official
 checksum-verified release.
 
-The runtime itself has no third-party Python dependencies. Python 3.11 is
-required because configuration uses the standard-library TOML parser; uv
-provisions a suitable interpreter itself if the host has none.
+The runtime itself has no third-party Python dependencies. The Unity reader is
+the base host-tool `unityz`, not a Python package. Python 3.11 is required
+because configuration uses the standard-library TOML parser; uv provisions a
+suitable interpreter itself if the host has none.
 
 From a checkout:
 
@@ -101,8 +103,9 @@ shamway init /path/to/MyMod \
 
 The command opens the first readable shipped bundle, preferring
 `Data/Bundles/Standalone/Entities/Entities`, and reads the revision from its
-UnityFS header. Do not choose an editor from a wiki page when the installed
-game can answer directly.
+embedded SerializedFile metadata through unityz. The outer UnityFS header is
+commonly only `5.x.x`, so it is not the revision authority. Do not choose an
+editor from a wiki page when the installed game can answer directly.
 
 If the game is not installed on the authoring host, pass an explicitly
 verified revision:

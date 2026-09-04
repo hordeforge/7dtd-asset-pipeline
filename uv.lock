@@ -42,6 +42,11 @@ mesh = [
 patch = [
     { name = "lxml" },
 ]
+writer = [
+    { name = "lz4" },
+    { name = "texture2ddecoder" },
+    { name = "unitypy" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -59,18 +64,21 @@ requires-dist = [
     { name = "lxml", marker = "extra == 'patch'", specifier = ">=5" },
     { name = "lz4", marker = "extra == 'all'", specifier = ">=1" },
     { name = "lz4", marker = "extra == 'inspect'", specifier = ">=1" },
+    { name = "lz4", marker = "extra == 'writer'", specifier = ">=1" },
     { name = "numpy", marker = "extra == 'all'", specifier = ">=1.24" },
     { name = "numpy", marker = "extra == 'authoring'", specifier = ">=1.24" },
     { name = "pillow", marker = "extra == 'all'", specifier = ">=10" },
     { name = "pillow", marker = "extra == 'authoring'", specifier = ">=10" },
     { name = "texture2ddecoder", marker = "extra == 'all'", specifier = ">=1" },
     { name = "texture2ddecoder", marker = "extra == 'inspect'", specifier = ">=1" },
+    { name = "texture2ddecoder", marker = "extra == 'writer'", specifier = ">=1" },
     { name = "trimesh", marker = "extra == 'all'", specifier = ">=4" },
     { name = "trimesh", marker = "extra == 'mesh'", specifier = ">=4" },
     { name = "unitypy", marker = "extra == 'all'", specifier = "==1.25.3" },
     { name = "unitypy", marker = "extra == 'inspect'", specifier = "==1.25.3" },
+    { name = "unitypy", marker = "extra == 'writer'", specifier = "==1.25.3" },
 ]
-provides-extras = ["inspect", "authoring", "mesh", "audio", "patch", "all"]
+provides-extras = ["writer", "inspect", "authoring", "mesh", "audio", "patch", "all"]
 
 [package.metadata.requires-dev]
 dev = [

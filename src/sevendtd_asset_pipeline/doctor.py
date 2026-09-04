@@ -227,7 +227,7 @@ def _synthesized_checks(config: PipelineConfig) -> list[Check]:
                 "FAIL",
                 "writer",
                 "the editorless writer needs UnityPy for the engine's own type trees: "
-                + extra_install("inspect"),
+                + extra_install("writer"),
             )
         )
     return checks

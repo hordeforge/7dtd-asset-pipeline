@@ -800,6 +800,33 @@ class GeneratorTests(unittest.TestCase):
                 load("audio").read_wav(clip)
             self.assertIn("damaged", str(raised.exception))
 
+    def test_audio_from_bank_delegates_extraction_to_unityz(self) -> None:
+        """The generator owns routing; unityz owns FSB parsing and decoding."""
+        import contextlib
+        import io
+        from unittest import mock
+
+        from sevendtd_asset_pipeline.generators import load
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            bank = root / "clip.fsb"
+            output = root / "decoded"
+            bank.write_bytes(b"FSB5 fixture")
+            reader = mock.MagicMock()
+            reader.text.return_value = "extracted 1 wav sample(s)\n"
+            with (
+                mock.patch(
+                    "sevendtd_asset_pipeline.generators.audio.Unityz", return_value=reader
+                ) as unityz,
+                contextlib.redirect_stdout(io.StringIO()) as stdout,
+            ):
+                result = load("audio").decode_bank(bank, output)
+            self.assertEqual(0, result)
+            self.assertEqual("extracted 1 wav sample(s)\n", stdout.getvalue())
+            unityz.assert_called_once_with(bank)
+            reader.text.assert_called_once_with("fsb", "--outdir", str(output.resolve()))
+
     def test_audio_writes_stay_little_endian_on_a_big_endian_host(self) -> None:
         """WAV is little-endian on disk whatever the host's byte order is.
 

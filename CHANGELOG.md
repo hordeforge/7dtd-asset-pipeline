@@ -224,6 +224,12 @@ tag has no changelog section.
   binary (Linux x86_64, macOS arm64, checksum-verified) instead of building
   from source; other platforms and `UNITYZ_FROM_SOURCE=1` still build the
   pinned commit with Zig. CI no longer installs Zig for it.
+- `shamway generate audio from-bank` delegates FSB5 parsing and WAV/OGG
+  extraction to the pinned unityz CLI. An incomplete decode is now a non-zero
+  command failure instead of a partial reference set; python-fsb5 remains the
+  independent writer check and Vorbis setup-header catalogue. The remaining
+  UnityPy type-tree parity gap and separate fresh-writer contract are tracked
+  in `TODO.md` and `docs/status/improvements.md`.
 - Usage docs for this session's surfaces: `docs/authoring/vfx.md` field
   reference and `--look` recipe; `no-unity.md` `.vfx` membership;
   `validation.md` `PLAYTEST_CONCERN_SUITES`; `consumer-api.md` /

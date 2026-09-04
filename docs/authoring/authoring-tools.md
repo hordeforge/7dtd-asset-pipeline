@@ -246,22 +246,29 @@ Judge the result with a **composited** PSNR, never a raw one: a transparent
 pixel's colour is renderer noise, and grading it makes a good encoder look
 broken (`shamway docs improvements`, gap 4).
 
-### python-fsb5 — FSB5 decoding, for reference and for proof
+### FSB5 decoding — unityz for reference, python-fsb5 for proof
 
-**Wired**, and for two jobs. The game stores every clip as an FSB5 bank inside
-a `.resource` stream, so decoding one lets a sound designer hear exactly what
-a vanilla clip contains at its true rate and channel count:
+The game stores every clip as an FSB5 bank inside a `.resource` stream. The
+base `unityz` tool decodes one to WAV or OGG plus `bank.json`, so a sound
+designer can hear exactly what a vanilla clip contains at its true rate and
+channel count:
 
 ```bash
 shamway generate audio from-bank vanilla.resource reference/
 ```
 
-The second job is why it is a dependency rather than a suggestion. This
-pipeline **hand-writes** those banks — `_fsb5_pcm16` packs the header bit by
-bit — and a bank read back only by the code that wrote it has not been read
-back at all. The suite decodes our own output with python-fsb5 and asserts the
-PCM returns byte-identical, the same independent-reader rule the block
-compressor follows with `texture2ddecoder`.
+The command delegates parsing and extraction to the pinned unityz 0.1.3
+release; 0.1.2 is the minimum compatible CLI contract. It accepts PCM/ADPCM
+and Vorbis banks; output names use `audio_*.wav` or `audio_*.ogg`, and any
+sample that cannot be reconstructed makes the command fail rather than
+silently leaving a partial reference set.
+
+python-fsb5 remains a test dependency for a different job. This pipeline
+**hand-writes** those banks — `_fsb5_pcm16` packs the header bit by bit — and a
+bank read back only by the code that wrote it has not been read back at all.
+The suite decodes our output with python-fsb5 and asserts that PCM returns
+byte-identical, preserving an implementation-independent check even though
+the user-facing extraction path moved to unityz.
 
 There is a third job, and it is not a test: python-fsb5 carries the catalogue of
 Vorbis setup headers FMOD's decoder can rebuild, so `compress_audio` asks it
@@ -440,11 +447,12 @@ texture, sprite, mesh, shader, FSB5, hierarchy and managed-field diagnostics
 this repository previously reached through Python, and its JSON commands are
 the migration boundary for pipeline code.
 
-`scripts/install-tools.sh` builds unityz 0.1.1 from the checksum-verified
-source archive for pinned commit `d775a107b9bd4c83d643eaf3795a3828317b2fb1`.
-It does not use a sibling checkout. The minimum is a format contract, not a
-general freshness preference: 0.1.1 is the first version whose `info --json`
-reports each embedded SerializedFile's revision and class IDs.
+`scripts/install-tools.sh` installs the checksum-verified unityz 0.1.3 release
+binary on its supported hosts, or builds pinned commit
+`b7ee8db3da36166c45903eea6a2d215a3ff9ef8f` as the fallback. It does not use a
+sibling checkout. The accepted minimum is a format contract, not a general
+freshness preference: 0.1.2 introduced the nested `info --json` metadata and
+the `fsb --json` validation/status contract this pipeline consumes.
 
 It does not yet replace the writer's UnityPy dependency: it consumes type
 trees already in a file or supplied through `--trees`, has no bundled
@@ -503,7 +511,7 @@ integration. This table says which is which, so nobody has to guess — and so
 
 | Tool | State |
 |---|---|
-| **unityz** | **base tool, migration in progress** — pinned source install and a >=0.1.1 contract probe; full reader/verify/extract coverage; writer creation gaps remain |
+| **unityz** | **base tool, migration in progress** — pinned 0.1.3 release install (source fallback) and a >=0.1.2 contract probe; full reader/verify/extract and FSB reference-decode coverage; writer creation gaps remain |
 | **UnityPy** | **wired, shrinking** — versioned type trees and fresh-object serialization remain; reader and test usages move to unityz |
 | **trimesh** | **wired** — `check-mesh`, and reads glTF/OBJ/STL/PLY into a bundle `Mesh` |
 | **Blender** | **wired** — `generate mesh` (GLB), `generate mesh-icon` (headless Cycles render), `generate bind` (skin an authored mesh onto a shipped rig) |
@@ -519,7 +527,7 @@ integration. This table says which is which, so nobody has to guess — and so
 | **gltfpack** | **wired** — `generate mesh-optimize`, for simplification. Its quantization is a *false win here* and is turned off by default |
 | **Material Maker** | **not wired** — GUI-first; its CLI export is a mod-side authoring choice |
 | **AssetRipper / AssetStudio / UABE** | **reference only, by design** — read the game to learn from it, never to copy out of it |
-| **python-fsb5** | **wired** — `generate audio from-bank`, and the independent reader that grades the hand-written FSB5 banks |
+| **python-fsb5** | **wired** — independent reader that grades hand-written FSB5 banks, plus the Vorbis setup-header catalogue used before writing |
 | **vkd3d-compiler** | **wired** — compiles the editorless shader's pass to SM4 `DXBC`; the prefab lane degrades to a bare `Mesh` without it |
 | **glslang** | **wired** — `glslangValidator` compiles the same HLSL to the SPIR-V a Vulkan sub-program carries, the route Unity itself uses; with the SMOL-V encoder the bundle then carries platform 18 |
 

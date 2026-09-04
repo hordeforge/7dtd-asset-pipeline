@@ -19,12 +19,12 @@ JsonObject = dict[str, object]
 
 
 class Unityz:
-    """One resolved unityz executable applied repeatedly to one asset."""
+    """One resolved unityz executable applied repeatedly to one input file."""
 
     def __init__(self, path: Path) -> None:
         self.path = path.resolve()
         if not self.path.is_file():
-            raise PipelineError(f"cannot read Unity asset {self.path}: no such file")
+            raise PipelineError(f"cannot read unityz input {self.path}: no such file")
         require_capability("unityz")
         executable = shutil.which("unityz")
         if executable is None:  # The capability probe and execution share one answer.
@@ -48,9 +48,10 @@ class Unityz:
             raise PipelineError(f"cannot run unityz {command} for {self.path}: {exc}") from exc
 
     def _failure(self, command: str, result: subprocess.CompletedProcess[str]) -> PipelineError:
-        detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic"
+        raw_detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic"
+        detail = " | ".join(line.strip() for line in raw_detail.splitlines() if line.strip())
         return PipelineError(
-            f"unityz {command} could not read {self.path} (exit {result.returncode}): {detail}"
+            f"unityz {command} failed for {self.path} (exit {result.returncode}): {detail}"
         )
 
     def json(self, command: str, *arguments: str) -> JsonObject:
@@ -59,6 +60,13 @@ class Unityz:
         if result.returncode != 0:
             raise self._failure(command, result)
         return self._decode_object(command, result.stdout)
+
+    def text(self, command: str, *arguments: str) -> str:
+        """Run a command whose successful stdout is human-readable text."""
+        result = self._invoke(command, *arguments)
+        if result.returncode != 0:
+            raise self._failure(command, result)
+        return result.stdout
 
     def json_report(self, command: str, *arguments: str) -> JsonObject:
         """Decode a JSON verdict even when findings make the command non-zero.

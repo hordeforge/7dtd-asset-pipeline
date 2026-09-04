@@ -116,15 +116,15 @@ VKD3D_HLSL_HINT = (
     "shamway script install-tools --with-vkd3d-source"
 )
 
-UNITYZ_METADATA_HINT = (
-    "it is older than unityz 0.1.1, the first version whose info --json output "
-    "includes each embedded SerializedFile's revision and class IDs. Install the "
-    "pinned build with: shamway script install-tools"
+UNITYZ_CONTRACT_HINT = (
+    "it is older than unityz 0.1.2, which includes both nested SerializedFile "
+    "metadata and read-only FSB5 validation. Install the pinned build with: "
+    "shamway script install-tools"
 )
 
 
 def _unityz_has_metadata_contract(path: str) -> str | None:
-    """Whether unityz exposes the nested metadata the bundle gates consume."""
+    """Whether unityz exposes every machine contract this pipeline consumes."""
     try:
         reported = subprocess.run(
             [path, "--version"],
@@ -142,8 +142,8 @@ def _unityz_has_metadata_contract(path: str) -> str | None:
         version = tuple(int(part) for part in fields[1].split("."))
     except ValueError:
         return "its --version output does not identify a unityz semantic version"
-    if len(version) != 3 or version < (0, 1, 1):
-        return UNITYZ_METADATA_HINT
+    if len(version) != 3 or version < (0, 1, 2):
+        return UNITYZ_CONTRACT_HINT
     return None
 
 
@@ -183,10 +183,11 @@ REGISTRY: tuple[_Spec, ...] = (
         usable=_unityz_has_metadata_contract,
         unlocks=(
             "shamway inspect and inspect --deep",
+            "shamway generate audio from-bank",
             "Unity asset verification, extraction, and test read-back",
         ),
-        purpose="read Unity containers and serialized objects through one fast, "
-        "machine-readable CLI instead of maintaining pipeline-local readers",
+        purpose="read Unity containers, serialized objects, and FSB5 banks through one "
+        "fast, machine-readable CLI instead of maintaining pipeline-local readers",
         install="shamway script install-tools",
     ),
     _Spec(
@@ -257,14 +258,12 @@ REGISTRY: tuple[_Spec, ...] = (
         kind="module",
         probe="fsb5",
         unlocks=(
-            "shamway generate audio from-bank",
             "the writer's own FSB5 round-trip check",
             "compress_audio (the Vorbis setup-header gate)",
         ),
-        purpose="decode an FSB5 bank back to PCM — the independent reader for the "
-        "banks this project hand-writes, and for hearing a vanilla clip. Its Vorbis "
-        "header catalogue is also what says whether a bank FMOD is handed is one its "
-        "decoder can rebuild the setup header for",
+        purpose="independently decode the FSB5 banks this project hand-writes during "
+        "tests. Its Vorbis header catalogue also says whether a bank FMOD is handed "
+        "is one its decoder can rebuild the setup header for",
         install=extra_install("audio"),
     ),
     _Spec(

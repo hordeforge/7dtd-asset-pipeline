@@ -283,7 +283,7 @@ run_check() {
 		report ffmpeg "audio" have ffmpeg
 		report xvfb-run "icon rendering on a headless host" have xvfb-run
 		report gltf_validator "glTF conformance" have gltf_validator
-		report UnityPy "deep bundle inspection" has_module UnityPy
+		report UnityPy "synthesized-writer type trees and serialization" has_module UnityPy
 		report Pillow "icon and texture lanes" has_module PIL
 		report NumPy "texture lane" has_module numpy
 		report trimesh "mesh checks" has_module trimesh
@@ -894,7 +894,8 @@ install_python_extras() {
 		# registry knows the right command for that environment.
 		echo "note: Python capabilities are installed per environment. Run:"
 		echo "      shamway capabilities --missing"
-		echo "      and use the install command it prints for pillow/numpy/UnityPy/trimesh."
+		echo "      Use its install command for each missing Python capability:"
+		echo "      UnityPy writer support, Pillow, NumPy, and trimesh."
 		return
 	fi
 	if ! have uv; then
@@ -902,7 +903,8 @@ install_python_extras() {
 		echo "      uv sync --project '${target}' --extra all"
 		return
 	fi
-	echo "Installing optional Python capabilities (UnityPy, Pillow, NumPy, trimesh)"
+	echo "Installing optional Python capabilities:"
+	echo "  UnityPy writer support, Pillow, NumPy, trimesh"
 	if [[ -d "$ROOT/.venv" ]]; then
 		# The checkout's own venv: resolve from the committed uv.lock so the
 		# extras land at the same hash-pinned versions bootstrap installs.

@@ -59,7 +59,7 @@ class CapabilityTests(unittest.TestCase):
             require_capability("UnityPy")
         message = str(caught.exception)
         self.assertIn("UnityPy", message)
-        self.assertIn("inspect --deep", message)
+        self.assertIn("shamway pack", message)
         self.assertIn("uv pip install", message)
 
     def test_no_install_hint_resolves_the_bare_name_from_an_index(self) -> None:
@@ -112,16 +112,18 @@ class CapabilityTests(unittest.TestCase):
 class OptionalFeatureTests(unittest.TestCase):
     """The optional features must degrade with an actionable message, never a traceback."""
 
-    def test_deep_inspect_without_unitypy_explains_itself(self) -> None:
+    def test_deep_inspect_without_unityz_explains_itself(self) -> None:
+        import tempfile
         from pathlib import Path
 
         from sevendtd_asset_pipeline.deep_inspect import deep_inspect
 
         with (
+            tempfile.NamedTemporaryFile(suffix=".unity3d") as asset,
             mock.patch("sevendtd_asset_pipeline.capabilities.has_capability", return_value=False),
-            self.assertRaisesRegex(PipelineError, "uv pip install"),
+            self.assertRaisesRegex(PipelineError, "install-tools"),
         ):
-            deep_inspect(Path("/nonexistent.unity3d"))
+            deep_inspect(Path(asset.name))
 
     def test_check_mesh_without_any_tooling_explains_itself(self) -> None:
         import tempfile

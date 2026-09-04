@@ -153,10 +153,11 @@ Two rules about doing this:
   not pixels.
 - **Never write to the game install.** It is evidence.
 
-`shamway inspect --deep` reads a bundle's objects when UnityPy is
-installed; for extracting the images themselves, UnityPy is the scriptable
-option and AssetStudio or UABE are the interactive ones. Pin whichever you use
-— all three track Unity's serialization format and break across versions.
+`shamway inspect --deep` reads a bundle's objects through the pinned unityz
+CLI. For extracting the images themselves, use unityz's texture and sprite
+export; AssetStudio or UABE remain interactive alternatives. Pin whichever
+tool you use — all three track Unity's serialization format and break across
+versions.
 
 ## Producing the source image
 

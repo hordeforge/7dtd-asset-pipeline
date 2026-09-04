@@ -44,7 +44,7 @@ Exit code 0 means valid. Start here rather than reading files.
 | `shamway doctor --json` | seconds | host readiness; exit 1 if any check is `FAIL` |
 | `shamway refs` | instant | every bundle URI in `Config/**/*.xml` |
 | `shamway inspect --json PATH` | fast | one bundle's revision and class IDs |
-| `shamway inspect --deep PATH` | fast | every object and per-prefab components (UnityPy) |
+| `shamway inspect --deep PATH` | fast | every object and per-prefab components (unityz; embedded type trees required) |
 | `shamway check-mesh FILE` | fast | authored-mesh extents and glTF conformance |
 | `shamway check-sound FILE` | fast | clip format, level, clipping, DC offset |
 | `shamway check-icons` | instant | atlas cells and every icon key: `CustomIcon`, `display_entry icon=`, and item/block names |

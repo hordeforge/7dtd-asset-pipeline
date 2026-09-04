@@ -48,7 +48,7 @@ needs_vkd3d = unittest.skipUnless(
 )
 needs_lz4 = unittest.skipUnless(
     importlib.util.find_spec("lz4") is not None,
-    "shader blob compression needs the lz4 extra (declared with UnityPy)",
+    "shader blob compression needs the lz4 writer extra (declared with UnityPy)",
 )
 
 

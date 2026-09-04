@@ -434,7 +434,7 @@ Machine-readable output for agents and CI:
 | `shamway verify-bundle` | load a bundle in a real Unity runtime; needs an editor, proves construction only |
 | `shamway acceptance-provider` | generate the 7dtd-playtest scenario provider that loads every bundle member through the game's own `DataLoader`, in a live client |
 | `shamway capabilities --json` | optional capabilities, what they unlock, install commands |
-| `shamway inspect --deep --json` | every serialized object and per-prefab components |
+| `shamway inspect --deep --json` | every serialized object and per-prefab components through unityz; embedded type trees required |
 | `shamway check-mesh --json` | authored-mesh extents and glTF conformance |
 | `shamway check-sound --json` | clip format, level, clipping, DC offset |
 | `shamway review-audio` | advisory semantic review of a clip by a configured audio model; uploads the asset, so it refuses without `--allow-network`, and never replaces the human listen |

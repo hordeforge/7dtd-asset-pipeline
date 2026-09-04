@@ -120,7 +120,7 @@ the network, nor a game install:
 | `shamway capabilities --json` | which optional tools work, what each unlocks, how to install it |
 | `shamway refs` | one `source: uri` line per XML reference found |
 | `shamway inspect BUNDLE --json` | revision, archive format, class IDs, class-142 flag |
-| `shamway inspect --deep --json` | every serialized object and per-prefab components |
+| `shamway inspect --deep --json` | every serialized object and per-prefab components; embedded type trees required |
 | `shamway validate` | the staged bundle and every recursive `Config/**/*.xml` reference |
 
 These produce or move the bundle:

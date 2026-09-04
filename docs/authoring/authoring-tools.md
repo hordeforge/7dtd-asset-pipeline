@@ -449,8 +449,10 @@ reports each embedded SerializedFile's revision and class IDs.
 It does not yet replace the writer's UnityPy dependency: it consumes type
 trees already in a file or supplied through `--trees`, has no bundled
 release-indexed built-in class-tree database, and rebuilds existing files
-rather than creating the first object table from empty input. The measured
-surface and exact decisions are in the
+rather than creating the first object table from empty input. That database
+is also the remaining UnityPy-covered reader feature: `inspect --deep`
+refuses an external SerializedFile whose type trees were stripped. The
+measured surface and exact decisions are in the
 [unityz capability audit](../research/unityz-capability-audit.md).
 
 - Official repository: <https://github.com/hordeforge/unityz>

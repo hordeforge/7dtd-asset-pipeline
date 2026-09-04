@@ -43,6 +43,16 @@ inspections took 3.605 seconds; five sets of `unityz info --objects`, `stats`,
 and `hierarchy` took 0.169 seconds. These figures include process startup and
 describe this artifact on this host, not a universal speed claim.
 
+The replacement report was also compared directly after correcting the
+generated entity component ownership found during the migration. UnityPy
+1.25.3 and the unityz-backed candidate produced byte-identical public JSON for
+the corrected self-test bundle: 604 objects, 50 container entries, 10 prefab
+roots, and zero skipped children. Before that correction they disagreed on the
+Arachnid hierarchy because UnityPy's old walker selected the last Transform
+pointer on a malformed root; unityz exposed that the pointer belonged to the
+child `figure` GameObject. That discrepancy became the writer fix rather than
+being normalized away in the replacement reader.
+
 Before replacing the hot revision gate, the same single-run timing was taken
 against the installed game's preferred `Entities` bundle and its 621 MB
 `trees` fallback. `Entities` is 1.6 KB: the Python CLI plus prefix reader took
@@ -90,7 +100,7 @@ from authored PNG/WAV/glTF/VFX inputs.
 | Pipeline surface | Current mechanism | unityz coverage | Decision |
 |---|---|---|---|
 | `shamway inspect` revision and class-142 gate | pinned `unityz info --json` behind `unityz.py` | full after unityz PR 121: embedded revision and class IDs are in `info --json` | migrated; the duplicate parser and its pure-Python LZ4 path are removed |
-| `shamway inspect --deep` object census | UnityPy environment, object tree and PPtrs | full from `info --objects`, `stats`, `show` on class 142, and `hierarchy --json` | migrate; retain the existing `DeepReport` public shape |
+| `shamway inspect --deep` object census | unityz `info`, `stats`, `show`, `verify`, and `hierarchy` | full for embedded-tree bundles; no built-in tree fallback for stripped files | migrated with the existing `DeepReport` shape; refuse and name the stripped-tree gap |
 | Synthesized writer type-tree lookup | UnityPy TPK database selected by Unity version and class ID | not full | keep until the creation gaps below land in unityz |
 | `anim.py` and `particles.py` type-tree defaults | UnityPy TPK nodes | not full; same missing built-in tree source | keep with the writer, not as a separate exception |
 | Writer read-back tests | UnityPy `load` / `read_typetree` | full through `show`, `info`, `hierarchy`, `shader`, and `verify` | migrate; unityz then becomes the independent reader of Python-authored bytes |
@@ -109,16 +119,20 @@ from authored PNG/WAV/glTF/VFX inputs.
 
 ### UnityPy replacement verdict
 
-UnityPy cannot yet be removed completely. The reader and diagnostic usage is
-replaceable now, and the test read-back usage is replaceable in logical
-slices. The synthesized writer still needs two creation-side contracts unityz
-does not currently provide:
+UnityPy remains required for the synthesized writer. The reader and diagnostic
+usage is replaceable now, and the test read-back usage is replaceable in
+logical slices. Two creation-side contracts are not implemented in the pinned
+unityz revision:
 
 1. A bundled, release-indexed source of built-in engine class type trees, or
    an equivalent offline command that returns the exact tree for a Unity
    revision and class ID. `unityz --trees` consumes externally generated
    AssetRipper/managed trees, but does not ship or select a versioned built-in
-   database the way UnityPy's TPK does.
+   database the way UnityPy's TPK does. This is also a reader gap for an
+   external SerializedFile built with type trees stripped: pipeline-authored
+   bundles and the installed game's measured `Entities` and `trees` bundles
+   embed their trees, but UnityPy can deep-read a typeless file from its TPK
+   while the current unityz-backed `inspect --deep` refuses that input.
 2. An API or CLI operation that creates a SerializedFile/object table and a
    UnityFS bundle from new objects. `unityz edit` and its writers rebuild an
    existing file; they do not create the first type, object, path ID, or
@@ -188,7 +202,10 @@ The migration slices are:
    process/JSON adapter; generated acceptance and truncated-rejection fixtures
    now exercise the external parser, whose own fuzz suite owns hostile format
    inputs;
-4. replace UnityPy-backed deep inspection while retaining its public report;
+4. **done for embedded-tree bundles:** replace UnityPy-backed deep inspection
+   while retaining its public report; unityz PR 135 adds subtree-local omission
+   counts so only the affected prefab is partial. The typeless-file limit is
+   the built-in-tree gap above, not hidden as a complete replacement;
 5. replace UnityPy test readers by domain (`bundle_writer`, prefabs/entities,
    animation, shaders);
 6. replace the user-facing FSB decoder after adding a read-only JSON bank

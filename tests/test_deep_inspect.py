@@ -1,176 +1,166 @@
-"""deep_inspect must not hold the bundle's descriptor after it returns.
-
-UnityPy keeps every loaded file open inside a reference-cyclic reader graph,
-and its Environment has no close(): loading from a path left one descriptor
-behind per call until the cyclic collector happened to run. Inside a long-lived
-`shamway serve` session that is an accumulation on every inspect_deep request.
-deep_inspect now hands UnityPy bytes instead, so no descriptor is ever held;
-this test pins that with the cycle collector switched off, so any return to
-path-based loading fails here rather than silently re-leaking.
-"""
+"""The stable DeepReport mapping over unityz object and hierarchy JSON."""
 
 from __future__ import annotations
 
-import gc
-import os
-import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from unittest import mock
 
-from sevendtd_asset_pipeline.bundle_writer import build_bundle, text_asset
 from sevendtd_asset_pipeline.capabilities import has_capability
-from sevendtd_asset_pipeline.deep_inspect import _walk, deep_inspect
+from sevendtd_asset_pipeline.deep_inspect import DeepReport, deep_inspect
 from sevendtd_asset_pipeline.errors import PipelineError
 
-REVISION = "2022.3.62f2"
+ROOT = Path(__file__).resolve().parents[1]
+SELF_TEST_BUNDLE = ROOT / "examples" / "SelfTestMod" / "Resources" / "shamwayselftest.unity3d"
 
 
-def open_descriptor_count() -> int | None:
-    """How many descriptors this process holds, or None off /proc hosts."""
-    directory = "/proc/self/fd"
-    if not os.path.isdir(directory):
-        return None
-    return len(os.listdir(directory))
+@unittest.skipUnless(has_capability("unityz"), "deep_inspect needs unityz")
+class DeepInspectFixtureTests(unittest.TestCase):
+    def test_generated_bundle_keeps_the_public_object_and_prefab_census(self) -> None:
+        report = deep_inspect(SELF_TEST_BUNDLE)
+        self.assertEqual(604, report.object_count)
+        self.assertEqual(50, len(report.entries))
+        self.assertEqual(0, report.skipped_children)
+        self.assertEqual(186, report.type_counts["GameObject"])
+        self.assertEqual(3, report.type_counts["ParticleSystem"])
 
-
-@unittest.skipUnless(has_capability("UnityPy"), "deep_inspect needs UnityPy")
-class DeepInspectResourceTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
-        self.bundle = self.root / "inspect.unity3d"
-        self.bundle.write_bytes(
-            build_bundle([text_asset("myModNote", "hello")], REVISION, "inspect.unity3d")
-        )
-
-    def tearDown(self) -> None:
-        self.temporary.cleanup()
-
-    def test_repeated_inspections_do_not_accumulate_descriptors(self) -> None:
-        before = open_descriptor_count()
-        if before is None:
-            self.skipTest("no /proc/self/fd on this host")
-        # Collector off: refcounting alone must reclaim everything the call
-        # acquired, because nothing outside the call can reach it.
-        gc.disable()
-        try:
-            report = None
-            for _ in range(50):
-                report = deep_inspect(self.bundle)
-            assert report is not None, "deep_inspect returned no report in 50 runs"
-            self.assertEqual(["mymodnote"], [entry.asset_stem for entry in report.entries])
-        finally:
-            gc.enable()
-        after = open_descriptor_count()
-        assert after is not None  # `before` already proved /proc/self/fd exists
-        # Not `assertEqual`: the count is process-wide, so a descriptor another
-        # test left reachable can be released *during* this one and the total
-        # drops. CI caught exactly that — 10 before, 7 after — and a decrease
-        # is not the failure this test is named for. Accumulation is, and 50
-        # iterations make even a one-per-call leak show as +50.
-        self.assertLessEqual(
-            after, before, f"deep_inspect accumulated {after - before} descriptors"
-        )
-
-    def test_a_missing_bundle_is_a_pipeline_error_not_a_raw_os_error(self) -> None:
-        # deep_inspect is diagnostic: every failure it reports must be
-        # actionable (PipelineError), never a bare OSError from UnityPy.
-        with self.assertRaisesRegex(PipelineError, "no such file"):
-            deep_inspect(self.root / "absent.unity3d")
-
-
-def _pointer(name: str) -> SimpleNamespace:
-    """A component reference the way UnityPy hands one over."""
-    return SimpleNamespace(type=SimpleNamespace(name=name))
-
-
-class _Transform(SimpleNamespace):
-    """A Transform pointer whose read() answers its children."""
-
-    def __init__(self, children: list[object] | None = None) -> None:
-        super().__init__(type=SimpleNamespace(name="Transform"))
-        self.children = list(children or [])
-
-    def read(self) -> SimpleNamespace:
-        return SimpleNamespace(m_Children=list(self.children))
-
-
-def _game_object(*component_names: str, transform: _Transform | None = None) -> SimpleNamespace:
-    components = [_pointer(name) for name in component_names]
-    if transform is not None:
-        components.append(transform)
-    return SimpleNamespace(m_Component=[SimpleNamespace(component=c) for c in components])
-
-
-def _child_link(child_object: SimpleNamespace) -> SimpleNamespace:
-    """A m_Children entry: read().m_GameObject.read() yields the child."""
-
-    def read() -> SimpleNamespace:
-        pointer = SimpleNamespace(read=lambda: child_object)
-        return SimpleNamespace(m_GameObject=pointer)
-
-    return SimpleNamespace(read=read)
-
-
-class WalkCensusTests(unittest.TestCase):
-    """The per-prefab component census, against duck-typed stand-ins.
-
-    `_walk` is the part of deep_inspect that answers "did my ParticleSystem
-    survive serialization": it must count across the whole hierarchy (a root
-    usually carries only its Transform), survive an unreadable component or
-    child, and stop a cyclic or absurdly deep chain instead of recursing
-    forever. deep_inspect() itself needs UnityPy and a real bundle; this logic
-    only needs objects shaped like the ones it reads, so it is pinned here.
-    """
-
-    def test_the_census_reaches_the_children_where_components_live(self) -> None:
-        leaf = _game_object("ParticleSystem", "Renderer", transform=_Transform())
-        middle = _game_object("AudioSource", transform=_Transform(children=[_child_link(leaf)]))
-        root = _game_object(transform=_Transform(children=[_child_link(middle)]))
-        counts, total, skipped = _walk(root)
-        self.assertEqual(3, total)
-        self.assertEqual(0, skipped)
+        entries = {entry.container_path: entry for entry in report.entries}
+        self.assertEqual("flashCard", entries["flashcard"].object_name)
+        self.assertEqual("alpha", entries["shamway/particles/alpha"].asset_stem)
+        self.assertEqual(4, entries["burst"].object_count)
         self.assertEqual(
-            {"Transform": 3, "ParticleSystem": 1, "Renderer": 1, "AudioSource": 1},
-            dict(counts),
+            {"ParticleSystem": 3, "ParticleSystemRenderer": 3, "Transform": 4},
+            entries["burst"].components,
         )
+        self.assertEqual(34, entries["shamwayselftestarachnid"].object_count)
+        self.assertEqual(
+            {
+                "Animation": 1,
+                "BoxCollider": 30,
+                "CapsuleCollider": 1,
+                "SkinnedMeshRenderer": 1,
+                "Transform": 34,
+            },
+            entries["shamwayselftestarachnid"].components,
+        )
+        self.assertFalse(any(entry.partial for entry in report.entries))
 
-    def test_a_root_without_a_transform_counts_itself_only(self) -> None:
-        counts, total, skipped = _walk(_game_object("MonoBehaviour"))
-        self.assertEqual(({"MonoBehaviour": 1}, 1, 0), (dict(counts), total, skipped))
+    def test_a_missing_bundle_is_an_actionable_pipeline_error(self) -> None:
+        with self.assertRaisesRegex(PipelineError, "no such file"):
+            deep_inspect(ROOT / "absent.unity3d")
 
-    def test_a_component_that_cannot_be_read_is_skipped_not_fatal(self) -> None:
-        game_object = SimpleNamespace(m_Component=[object()])  # no .component attribute
-        counts, total, skipped = _walk(game_object)
-        self.assertEqual(({}, 1, 0), (dict(counts), total, skipped))
 
-    def test_an_unreadable_child_is_skipped_and_its_siblings_still_count(self) -> None:
-        good = _game_object("Light", transform=_Transform())
+class _Reader:
+    def __init__(self, *, skipped: int = 0, verify_failures: list[object] | None = None) -> None:
+        self.info: dict[str, object] = {
+            "nodes_list": [{"path": "CAB", "serialized": {"type_tree": True}}],
+            "object_list": [
+                {"node": "CAB", "path_id": 1, "class": 142, "name": "bundle"},
+                {"node": "CAB", "path_id": 2, "class": 1, "name": "brokenPrefab"},
+                {"node": "CAB", "path_id": 3, "class": 1, "name": "goodPrefab"},
+                {"node": "CAB", "path_id": 4, "class": 21, "name": "material"},
+            ],
+        }
+        self.stats: dict[str, object] = {
+            "objects": 4,
+            "classes": {
+                "142": {"name": "AssetBundle", "count": 1},
+                "1": {"name": "GameObject", "count": 2},
+                "4": {"name": "Transform", "count": 2},
+                "21": {"name": "Material", "count": 1},
+            },
+        }
+        self.hierarchy: list[dict[str, object]] = [
+            {
+                "node": "CAB",
+                "skipped_children": skipped,
+                "hierarchy": [
+                    {
+                        "name": "brokenPrefab",
+                        "gameObject": 2,
+                        "components": [4],
+                        "children": [],
+                        "skipped_children": skipped,
+                    },
+                    {
+                        "name": "goodPrefab",
+                        "gameObject": 3,
+                        "components": [4],
+                        "children": [],
+                        "skipped_children": 0,
+                    },
+                ],
+            }
+        ]
+        self.verify: dict[str, object] = {
+            "checked": 4,
+            "failed": len(verify_failures or []),
+            "skipped": 0,
+            "failures": verify_failures or [],
+        }
 
-        class _TornChild:
-            def read(self) -> object:
-                raise RuntimeError("torn object")
+    def json(self, command: str, *arguments: str) -> dict[str, object]:
+        if command == "info":
+            return self.info
+        if command == "stats":
+            return self.stats
+        if command == "show":
+            return {
+                "m_Container": [
+                    ["broken", {"asset": {"m_FileID": 0, "m_PathID": 2}}],
+                    ["good", {"asset": {"m_FileID": 0, "m_PathID": 3}}],
+                    ["mat", {"asset": {"m_FileID": 0, "m_PathID": 4}}],
+                    ["external", {"asset": {"m_FileID": 1, "m_PathID": 99}}],
+                ]
+            }
+        raise AssertionError((command, arguments))
 
-        root = _game_object(transform=_Transform(children=[_TornChild(), _child_link(good)]))
-        counts, total, skipped = _walk(root)
-        self.assertEqual(2, total, "root plus only the readable child")
-        self.assertEqual(1, skipped, "the torn child must be counted as skipped")
-        self.assertEqual({"Transform": 2, "Light": 1}, dict(counts))
+    def json_lines(self, command: str, *arguments: str) -> list[dict[str, object]]:
+        if command != "hierarchy":
+            raise AssertionError((command, arguments))
+        return self.hierarchy
 
-    def test_a_deep_chain_terminates_instead_of_recurring_forever(self) -> None:
-        """A malformed hierarchy must not become infinite recursion."""
-        depth = 200
-        leaf = _game_object(transform=_Transform())
-        for _ in range(depth - 1):
-            leaf = _game_object(transform=_Transform(children=[_child_link(leaf)]))
-        root = leaf
-        counts, total, skipped = _walk(root)
-        # The guard counts components through depth 64, then stops at depth 65.
-        # The total still records that bounded final visit.
-        self.assertEqual(65, counts.get("Transform", 0))
-        self.assertEqual(66, total)
-        self.assertEqual(0, skipped)
+    def json_report(self, command: str, *arguments: str) -> dict[str, object]:
+        if command != "verify":
+            raise AssertionError((command, arguments))
+        return self.verify
+
+
+class DeepReportMappingTests(unittest.TestCase):
+    def inspect(self, reader: _Reader) -> DeepReport:
+        with mock.patch("sevendtd_asset_pipeline.deep_inspect.Unityz", return_value=reader):
+            return deep_inspect(SELF_TEST_BUNDLE)
+
+    def test_only_the_prefab_with_an_omitted_subtree_is_partial(self) -> None:
+        report = self.inspect(_Reader(skipped=1))
+        entries = {entry.container_path: entry for entry in report.entries}
+        self.assertTrue(entries["broken"].partial)
+        self.assertFalse(entries["good"].partial)
+        self.assertEqual(1, report.skipped_children)
+
+    def test_a_verified_object_failure_marks_its_container_entry(self) -> None:
+        report = self.inspect(
+            _Reader(verify_failures=[{"node": "CAB", "path_id": 4, "error": "read failed"}])
+        )
+        entries = {entry.container_path: entry for entry in report.entries}
+        self.assertTrue(entries["mat"].partial)
+        self.assertFalse(entries["good"].partial)
+
+    def test_an_external_pointer_is_reported_but_marked_partial(self) -> None:
+        report = self.inspect(_Reader())
+        external = next(entry for entry in report.entries if entry.container_path == "external")
+        self.assertEqual("Unknown", external.type)
+        self.assertEqual("", external.object_name)
+        self.assertTrue(external.partial)
+
+    def test_a_typeless_bundle_names_the_remaining_unitypy_covered_gap(self) -> None:
+        reader = _Reader()
+        reader.info["nodes_list"] = [{"path": "CAB", "serialized": {"type_tree": False}}]
+        with (
+            mock.patch("sevendtd_asset_pipeline.deep_inspect.Unityz", return_value=reader),
+            self.assertRaisesRegex(PipelineError, "stripped type trees.*UnityPy-covered"),
+        ):
+            deep_inspect(SELF_TEST_BUNDLE)
 
 
 if __name__ == "__main__":

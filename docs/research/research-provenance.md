@@ -727,6 +727,20 @@ a measured optimization target for metadata-only streaming in unityz, not a
 reason to restore a second parser. The exact commands and broader self-test
 benchmark are in the [unityz capability audit](unityz-capability-audit.md).
 
+**Deep-report replacement, measured 2026-09-04.** The pre-migration
+`DeepInspector` using UnityPy 1.25.3 and the unityz-backed replacement were run
+over the corrected synthesized self-test bundle. Their public report JSON was
+byte-identical: 604 serialized objects, 50 class-142 container entries, 10
+prefab roots, and zero skipped children. The first comparison was deliberately
+not accepted as parity: unityz showed that the Arachnid root listed a second
+Transform owned by its child `figure` GameObject, while the old UnityPy walker
+silently selected that last pointer and skipped both `figure` and the
+root-level `Physics` hierarchy. The writer was corrected and the bundle
+regenerated before parity was measured. Unityz PR 135 then added subtree-local
+`skipped_children` counts so the replacement preserves the old report's
+per-entry partial signal instead of treating valid hierarchy JSON as proof
+that no child was omitted.
+
 ## Official and community references
 
 - Unity `BuildPipeline.BuildAssetBundles`:

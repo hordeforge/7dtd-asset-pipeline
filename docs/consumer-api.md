@@ -169,7 +169,7 @@ machine**. Only three ever do, and `build` only when the mod set
 | `verify-bundle [BUNDLE]` | no | yes | no | load it in a real runtime and report every asset |
 | `init MOD_ROOT` | no | no | **yes** | scaffold into a modlet, or `--adopt` its existing Unity project |
 | `capabilities [--json]` | no | no | no | optional capabilities and how to install them |
-| `inspect --deep [--json]` | no | no | no | every serialized object (needs UnityPy) |
+| `inspect --deep [--json]` | no | no | no | every serialized object and per-prefab component census (unityz; embedded type trees required) |
 | `check-mesh [--json] FILE` | no | no | no | mesh extents and glTF conformance |
 | `check-sound [--json] FILE` | no | no | no | clip format, level, clipping, DC offset |
 | `review-audio CLIP [--intent F]` | **yes** | no | **yes** (evidence doc) | advisory model critique of a clip; refuses without `--allow-network` |
@@ -240,7 +240,8 @@ collected into the structure so one broken thing does not hide the rest.
   ],
   "valid": true,
   "problems": [],
-  "capabilities": {"UnityPy": true, "trimesh": false, "vkd3d-compiler": false,
+  "capabilities": {"unityz": true, "UnityPy": true, "trimesh": false,
+                   "vkd3d-compiler": false,
                    "libzmolv": false, "glslangValidator": false, "fsb5": false,
                    "gltf_validator": false, "blender": false, "gltfpack": false,
                    "openscad": false, "pillow": false, "numpy": false,
@@ -251,18 +252,21 @@ collected into the structure so one broken thing does not hide the rest.
 
 ### `capabilities --json`
 
-The pipeline core is dependency-free, so some features are optional. This is
-the programmatic interface for asking which are usable **right now**, what each
+The Python core has no third-party runtime dependency; the base host toolset
+includes unityz, while authoring features remain optional. This is the
+programmatic interface for asking which are usable **right now**, what each
 unlocks, and the exact command to install a missing one. It is the single
 source of truth: `doctor`'s capability rows, `status.capabilities`, and the
 errors raised by the commands that need one all read from it.
 
 ```json
 [
-  {"name": "UnityPy", "kind": "module", "available": true, "version": "1.25.3",
-   "path": null, "purpose": "list every serialized object and per-prefab component…",
-   "unlocks": ["shamway inspect --deep"],
-   "install": "uv pip install '7dtd-asset-pipeline[inspect] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'"}
+  {"name": "unityz", "kind": "command", "available": true, "version": "0.1.1",
+   "path": "/home/user/.local/bin/unityz",
+   "purpose": "read Unity containers and serialized objects…",
+   "unlocks": ["shamway inspect and inspect --deep",
+               "Unity asset verification, extraction, and test read-back"],
+   "install": "shamway script install-tools"}
 ]
 ```
 
@@ -271,17 +275,31 @@ versions. Every command needing a capability fails with a message naming the
 capability, what it unlocks, and its install command — never a traceback:
 
 ```text
-ERROR: shamway inspect --deep needs the optional capability 'UnityPy'
-(list every serialized object …). Install it with: uv pip install '…[inspect] @ git+…'
+ERROR: shamway inspect --deep needs the optional capability 'unityz'
+(read Unity containers and serialized objects …). Install it with:
+shamway script install-tools
 ```
 
 Every hint pins the canonical git source. The project is not registered on
 PyPI, so a bare-name hint would resolve against the public index — fail
 today, install whoever registers the name first tomorrow.
 
+`inspect --deep` currently refuses a SerializedFile whose type trees were
+stripped. Pipeline-authored bundles and the measured game `Entities`/`trees`
+bundles embed them. UnityPy's bundled TPK could supply trees for the stripped
+case; unityz has no release-indexed built-in tree source yet. This missing
+unityz feature is tracked in the
+[capability audit](research/unityz-capability-audit.md), alongside the same
+creation-side dependency in the synthesized writer.
+
+Python package consumers that synthesize bundles install the `writer` extra.
+The old `inspect` extra remains as a compatibility alias for the same UnityPy,
+LZ4, and independent texture-decoder dependencies, but it no longer unlocks
+deep inspection; the `unityz` command does.
+
 Install everything at once:
 
-- `uv pip install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'` — UnityPy, Pillow, NumPy, trimesh
+- `uv pip install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'` — UnityPy's writer type trees, Pillow, NumPy, trimesh
 - `scripts/install-tools.sh --with-authoring` — Blender, OpenSCAD, glTF validator, …
 - `scripts/install-tools.sh --with-desktop-capture` — a screenshot tool for `client capture`
 
@@ -309,6 +327,15 @@ atomicdoomsdaynukedetonationvfx (GameObject) name='atomicDoomsdayNukeDetonationV
 
 `object_name` is the name 7DTD compares against, so a silent fallback mesh
 shows up here as a mismatch.
+
+The implementation composes five bounded unityz views: `info --objects` owns
+the object list, `stats` owns the class census, `show` reads the class-142
+container, `hierarchy` owns prefab traversal, and `verify` identifies decoded
+objects whose structure failed validation. A prefab entry has `partial: true`
+when its own hierarchy lost a child, its target object failed verification, or
+its pointer is external. The report-level `skipped_children` retains the total
+number omitted across all serialized files; an omission in one prefab does not
+silently make another prefab complete or mark every unrelated entry partial.
 
 ### `check-mesh`
 
@@ -436,7 +463,7 @@ pipeline.call("inspect_deep")  # same dispatch as `call` and `serve`
 | `.capabilities(probe_versions=False)` | `list[Capability]` |
 | `.refs()` | `list[AssetReference]` |
 | `.inspect(bundle=None)` | `BundleInfo` |
-| `.inspect_deep(bundle=None)` | `DeepReport` (needs UnityPy) |
+| `.inspect_deep(bundle=None)` | `DeepReport` (read by unityz) |
 | `.validate(bundle=None)` | `ValidationReport` |
 | `.check_mesh(path, max_extent, strict)` | `MeshReport` (needs trimesh) |
 | `.check_texture(path, matches=None, tolerance=…, tileable=False, max_tile_ratio=…)` | `TextureReport` (needs numpy and Pillow) |
@@ -484,7 +511,7 @@ except PipelineError as exc:
     ...  # one user-actionable message
 
 # Branch on an optional capability instead of guessing or catching ImportError
-if has_capability("UnityPy"):
+if has_capability("unityz"):
     for entry in deep_inspect(config.bundle_output).entries:
         print(entry.asset_stem, entry.components)
 ```

@@ -12,6 +12,8 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-05
+
 ### Changed
 
 - `client deploy` and clip adoption refuse symlinks, so a copied tree cannot

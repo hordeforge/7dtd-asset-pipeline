@@ -413,7 +413,7 @@ the rules there rather than here.
 - `unityz` 0.1.2 or newer for Unity/FSB5 inspection, verification, and
   extraction; `scripts/install-tools.sh` calls the standalone
   `install-unityz` host script, which installs the pinned, checksum-verified
-  0.1.3 release binary into `~/.local/bin` (Linux x86_64, macOS arm64) or
+  0.1.4 release binary into `~/.local/bin` (Linux x86_64, macOS arm64) or
   builds the pinned source with Zig elsewhere;
 - an installed 7 Days to Die client as read-only version authority.
 

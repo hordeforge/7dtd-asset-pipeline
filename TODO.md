@@ -96,16 +96,16 @@ The active UnityPy-removal work has its own ordered pair in
    `unityz trees --builtin <release>` and used by `--builtin` on its
    reading commands. What remains here is the migration: point
    `bundle_writer.py`, `anim.py` and `particles.py` at that export instead
-   of UnityPy's TPK, let `inspect --deep` pass `--builtin` for a stripped
-   external file, and re-pin the unityz release that carries it;
+   of UnityPy's TPK and let `inspect --deep` pass `--builtin` for a stripped
+   external file; the installer already pins unityz 0.1.4, which carries it;
 2. **landed upstream (2026-09-05, unityz PR 157):** unityz creates a
    format-22 SerializedFile and UnityFS bundle from empty state
    (`unityz create <spec.json> --out <file>`), verifying before it writes;
    the self-test bundle rebuilds byte-identically through it. What remains
    here is the migration: hand `bundle_writer.py`'s serialization and
    container assembly to `create` through the process adapter, keep the
-   resource layout and `Ref` resolution in Python, re-pin, then remove
-   UnityPy.
+   resource layout and `Ref` resolution in Python, then remove UnityPy;
+   the pinned unityz 0.1.4 carries `create`.
 
 Both were upstream gaps and are now pipeline migrations. The second is
 tracked separately so an in-place reserializer is never mistaken for a

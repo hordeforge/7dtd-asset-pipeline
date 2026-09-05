@@ -89,7 +89,8 @@ that Unity (and the dump) flag `TypelessData` nodes as arrays while
 is accepted by the engine, but the built-in tree is the exact one, so the
 migration should take `m_TypeFlags` from the export rather than derive it.
 
-**Close it with:** re-pin unityz to the release carrying PR 156; replace the
+**Close it with:** (the installer pins unityz 0.1.4, which carries PR 156)
+replace the
 UnityPy TPK lookup in `bundle_writer.py`, `anim.py` and `particles.py` with a
 cached `unityz trees --builtin` export through the process adapter; pass
 `--builtin` from `inspect --deep` so a stripped external 2022.3.62f2 file is
@@ -144,8 +145,8 @@ zero changed objects. Fed the built-in trees from `trees --builtin
 flag on the `TypelessData` nodes of `Texture2D` (`image data`) and `Mesh`
 (`m_DataSize`), which the release dump carries and `bundle_writer.py` omits.
 
-**Close it with:** re-pin unityz to the release carrying PRs 156 and 157;
-replace `_serialize`, `_serialized_file` and `_container` in
+**Close it with:** (the installer pins unityz 0.1.4, which carries PRs 156
+and 157) replace `_serialize`, `_serialized_file` and `_container` in
 `bundle_writer.py` with a spec handed to `unityz create` through the process
 adapter (the resource layout, `StreamedResource` offsets and `Ref`
 resolution stay in Python, as does the class-142 container object, which

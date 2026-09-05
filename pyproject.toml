@@ -25,21 +25,15 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# Synthesized-writer support: UnityPy supplies the release-indexed built-in
-# class trees and typetree serializer unityz does not yet expose. Pin the
-# resolved release; UnityPy documents that minor releases may break its API.
-#
-# lz4 and texture2ddecoder are imported directly by this repository
-# (shader_blob.py compresses every shader blob with lz4.block; the suite's
-# independent block-compression cross-check decodes with texture2ddecoder) but
-# today arrive only as UnityPy's own dependencies. Declaring them here keeps
-# the extra self-contained if UnityPy ever swaps one out: without a
-# declaration that swap would silently break shader writing and silently stop
-# running the cross-check, both discovered at build time instead of install time.
-writer = ["UnityPy==1.25.3", "lz4>=1", "texture2ddecoder>=1"]
+# Synthesized-writer support. The type trees and the serializer are the
+# separately installed unityz command (scripts/install-unityz.sh); lz4 is
+# imported directly by shader_blob.py (every shader blob is LZ4-compressed)
+# and texture2ddecoder by the suite's independent block-compression
+# cross-check, so both are declared here rather than inherited.
+writer = ["lz4>=1", "texture2ddecoder>=1"]
 # Compatibility for callers that installed the old deep-reader extra. Deep
-# inspection itself now uses the separately installed unityz command.
-inspect = ["UnityPy==1.25.3", "lz4>=1", "texture2ddecoder>=1"]
+# inspection itself uses the separately installed unityz command.
+inspect = ["lz4>=1", "texture2ddecoder>=1"]
 # The Python authoring lanes in src/sevendtd_asset_pipeline/generators/.
 authoring = ["pillow>=10", "numpy>=1.24"]
 # Pre-Unity mesh checks for the Blender/OpenSCAD lane.
@@ -53,7 +47,6 @@ audio = ["fsb5>=1"]
 # selector the gate cannot run is reported as not checked. lxml closes that.
 patch = ["lxml>=5"]
 all = [
-  "UnityPy==1.25.3",
   "lz4>=1",
   "texture2ddecoder>=1",
   "pillow>=10",
@@ -212,7 +205,6 @@ enable_error_code = [
 # Optional capabilities: absent on most hosts, untyped or version-fragile when
 # present. Their attributes are Any; our code is checked.
 module = [
-  "UnityPy", "UnityPy.*",
   "PIL", "PIL.*",
   "numpy", "numpy.*",
   "trimesh", "trimesh.*",

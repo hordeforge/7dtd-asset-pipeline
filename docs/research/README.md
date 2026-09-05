@@ -8,7 +8,7 @@ behaviour either extends it or starts a page beside it from
 
 - [unityz capability and migration audit](unityz-capability-audit.md) — the
   repository-wide mapping from current Unity-format work to unityz, including
-  the exact creation-side gaps that still prevent removing UnityPy.
+  the record of the migration that removed UnityPy on 2026-09-05.
 
 A fact without a named source (`Data/Config/*.xml`, `ilspycmd`/`monodis` on
 `Assembly-CSharp.dll`, or hordeforge/7dtd-engine-research) does not belong in

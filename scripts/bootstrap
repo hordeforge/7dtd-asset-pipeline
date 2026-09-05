@@ -15,7 +15,7 @@ USAGE
 
 OPTIONS
   --no-extras   Install only the dependency-free core, without the optional
-                capabilities (UnityPy writer support, Pillow, NumPy, trimesh)
+                capabilities (lz4 writer support, Pillow, NumPy, trimesh)
   -h, --help    Show this help
 
 Uses uv for every Python step. Install it, and everything else, with

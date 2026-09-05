@@ -14,6 +14,28 @@ tag has no changelog section.
 
 ### Changed
 
+- The synthesized writer serializes through `unityz create`: `bundle_writer.py`
+  still decides path ids, the class-142 container and the resource layout, and
+  hands a spec (release trees from `unityz trees --builtin`, object values,
+  sidecar) to the pinned unityz, which embeds the trees, writes the
+  SerializedFile and UnityFS archive and verifies its own output before it
+  lands. The self-test bundle rebuilt this way differs from the previous
+  writer's bytes only in the array flag of the two `TypelessData` tree nodes,
+  which Unity's own trees carry; the committed fixture was regenerated.
+  Packing is about twice as fast (1.1 s vs 2.4 s for the self-test source).
+- `shamway inspect --deep` reads a stripped SerializedFile of a release unityz
+  packs (2022.3.62f2) through `--builtin` instead of refusing it; a stripped
+  file of any other release is refused by name.
+- `anim.py` and `particles.py` take their version-correct defaults from the
+  same `unityz trees --builtin` export.
+
+### Removed
+
+- UnityPy. It is no longer a dependency, an extra, or a capability; the
+  `writer`/`inspect`/`all` extras keep lz4 and texture2ddecoder only. The
+  `doctor` writer row and the `pack`/`inspect_deep` operations now declare
+  `unityz`. Historical measurements keep their UnityPy attribution.
+
 - `scripts/install-unityz.sh` pins unityz 0.1.4 (commit 9218681): the
   release that carries the built-in 2022.3.62f2 type-tree database
   (`trees --builtin`) and from-empty bundle creation (`create`). Binary and

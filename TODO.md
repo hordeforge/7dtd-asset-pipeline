@@ -88,31 +88,21 @@ variant-free**, so lit, shadowed, transparent, normal-mapped and multi-pass
 shading is unbuilt with a known route, and a mod that needs it opts into
 `bundle_source = "unity"` or `"external"` today.
 
-The active UnityPy-removal work has its own ordered pair in
-[improvements.md](docs/status/improvements.md#unitypy-removal-blockers):
-
-1. **landed upstream (2026-09-05, unityz PR 156):** unityz ships a
-   release-indexed built-in engine-class type-tree database, exported by
-   `unityz trees --builtin <release>` and used by `--builtin` on its
-   reading commands. What remains here is the migration: point
-   `bundle_writer.py`, `anim.py` and `particles.py` at that export instead
-   of UnityPy's TPK and let `inspect --deep` pass `--builtin` for a stripped
-   external file; the installer already pins unityz 0.1.4, which carries it;
-2. **landed upstream (2026-09-05, unityz PR 157):** unityz creates a
-   format-22 SerializedFile and UnityFS bundle from empty state
-   (`unityz create <spec.json> --out <file>`), verifying before it writes;
-   the self-test bundle rebuilds byte-identically through it. What remains
-   here is the migration: hand `bundle_writer.py`'s serialization and
-   container assembly to `create` through the process adapter, keep the
-   resource layout and `Ref` resolution in Python, then remove UnityPy;
-   the pinned unityz 0.1.4 carries `create`.
-
-Both were upstream gaps and are now pipeline migrations. The second is
-tracked separately so an in-place reserializer is never mistaken for a
-from-empty writer. The
-[unityz capability audit](docs/research/unityz-capability-audit.md) owns the
-evidence and records the completed test-reader migration. These two
-creation-side items are the remaining dependency-removal work.
+The UnityPy-removal pair in
+[improvements.md](docs/status/improvements.md#unitypy-removal-blockers) is
+**closed (2026-09-05)**: `bundle_writer.py`, `anim.py` and `particles.py`
+take their trees from `unityz trees --builtin`, the writer hands its objects
+to `unityz create`, `inspect --deep` passes `--builtin` for a stripped
+2022.3.62f2 file, and UnityPy is gone from the dependencies, extras,
+capability registry and tests. The evidence is the self-test bundle rebuilt
+through the new path: identical to the old writer's bytes except the array
+flag on two `TypelessData` tree nodes (Unity's own value), `unityz verify`
+604/604. The
+[unityz capability audit](docs/research/unityz-capability-audit.md) records
+the migration. What is still owed there is the cross-read of a created
+bundle by an implementation other than unityz, which now both writes and
+re-reads it; the fresh-client acceptance remains the real gate, as for
+every synthesized bundle.
 
 The self-test burst `--look` shows flash and sparks; **grey haze is not
 visible**. That is [improvements.md §8](docs/status/improvements.md): packed

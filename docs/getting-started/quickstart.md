@@ -51,8 +51,8 @@ prefab's material needs. Without it a mesh still reaches the bundle, as a bare
 
 `install-tools.sh` installs uv first, since every Python step runs through it.
 `--with-authoring` then installs Blender, OpenSCAD, ImageMagick, FFmpeg, the
-Khronos glTF validator, and the Python capabilities (UnityPy's writer type
-trees, Pillow, NumPy, trimesh). `--with-desktop-capture` installs `grim` or
+Khronos glTF validator, and the Python capabilities (Pillow, NumPy,
+trimesh). `--with-desktop-capture` installs `grim` or
 `maim`, which is what
 lets step 8's visual sign-off leave a citable frame; skip it on a headless
 build host. Blender and the glTF validator fall back to official

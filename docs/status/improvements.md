@@ -48,14 +48,19 @@ commands and artifact context are recorded in the
 
 ## UnityPy removal blockers
 
-These are the two upstream unityz capabilities that must close before this
-pipeline can remove its final UnityPy dependency. They are tracked here rather
+These were the two upstream unityz capabilities that had to close before this
+pipeline could remove its final UnityPy dependency; both closed on 2026-09-05
+and the entries below record what landed. They are tracked here rather
 than only in the migration audit because this page is the authoritative
 capability backlog.
 
-### Release-indexed built-in engine-class type trees
+### Release-indexed built-in engine-class type trees — **done (2026-09-05)**
 
-**Upstream half landed (2026-09-05); pipeline migration open.** UnityPy ships
+**Closed.** The upstream half landed and the pipeline migrated the same day:
+`typetrees.py` runs one cached `unityz trees --builtin <release>` per process
+and serves `bundle_writer.py`, `anim.py` and `particles.py`; `inspect --deep`
+passes `--builtin` for a stripped file and refuses an unshipped release by
+name; UnityPy is removed. The record of what landed follows. UnityPy shipped
 a TPK-backed database and can select the built-in class tree for a requested
 Unity revision and class ID. Unityz now ships the same kind of source:
 [unityz PR 156](https://github.com/hordeforge/unityz/pull/156) (merged as a5a2273d471218779bd36ba89922f50cd25812f2) adds
@@ -89,19 +94,22 @@ that Unity (and the dump) flag `TypelessData` nodes as arrays while
 is accepted by the engine, but the built-in tree is the exact one, so the
 migration should take `m_TypeFlags` from the export rather than derive it.
 
-**Close it with:** (the installer pins unityz 0.1.4, which carries PR 156)
-replace the
-UnityPy TPK lookup in `bundle_writer.py`, `anim.py` and `particles.py` with a
-cached `unityz trees --builtin` export through the process adapter; pass
-`--builtin` from `inspect --deep` so a stripped external 2022.3.62f2 file is
-read instead of refused, while any other release keeps the explicit refusal;
-keep the fixtures for a tree-present file, a stripped file, an unknown
-revision and an unavailable class on the pipeline side. Until that migration
-lands, `bundle_writer.py`, `anim.py` and `particles.py` still import UnityPy.
+**Closed with:** the migration above. The `TypelessData` array flag is now
+taken from the export, so the writer's trees are Unity's exact ones; the
+pipeline keeps tests for a tree-present file (never asks for `--builtin`), a
+stripped 2022.3.62f2 file (decoded through it), an unshipped release
+(refused by name) and a revision the database lacks (`build_bundle` refuses
+with the shipped releases named).
 
-### Fresh SerializedFile and UnityFS construction
+### Fresh SerializedFile and UnityFS construction — **done (2026-09-05)**
 
-**Upstream half landed (2026-09-05); pipeline migration open.** Unityz can now
+**Closed.** `bundle_writer.py` no longer serializes: it writes a `unityz
+create` spec (revision, platform, CAB name, the release trees for the classes
+in use, every object's value with byte payloads as base64, the resource
+sidecar) into a scratch directory, runs the pinned unityz through the bounded
+process adapter and returns the archive bytes. Path ids, the class-142
+container, `Ref` resolution, the resource layout and every refusal that is
+the pipeline's own stay in Python. The record of what landed follows. Unityz can
 create a bundle from empty state:
 [unityz PR 157](https://github.com/hordeforge/unityz/pull/157) (merged as
 0987f16) adds `unityz create <spec.json> --out <file>` on top of three library
@@ -145,18 +153,14 @@ zero changed objects. Fed the built-in trees from `trees --builtin
 flag on the `TypelessData` nodes of `Texture2D` (`image data`) and `Mesh`
 (`m_DataSize`), which the release dump carries and `bundle_writer.py` omits.
 
-**Close it with:** (the installer pins unityz 0.1.4, which carries PRs 156
-and 157) replace `_serialize`, `_serialized_file` and `_container` in
-`bundle_writer.py` with a spec handed to `unityz create` through the process
-adapter (the resource layout, `StreamedResource` offsets and `Ref`
-resolution stay in Python, as does the class-142 container object, which
-`create` only checks for); keep the tree-present, stripped, unknown-revision
-and unavailable-class fixtures on the pipeline side; then remove the UnityPy
-dependency. Two things `create` does not do and the migration must keep or
-add: it does not lay out the resource stream (the caller patches
-`m_Source`/`m_Offset`/`m_Size` and hands over the bytes), and the cross-read
-by an independent implementation named in the original contract is still
-owed, since unityz now both writes and re-reads the file.
+**Closed with:** the migration above; UnityPy is removed. Evidence: the
+self-test source packed through the new path is the same size as the old
+writer's output and differs in exactly two bytes, the `TypelessData` array
+flags Unity's own trees carry; `unityz verify` passes 604/604 and packing
+takes 1.1 s instead of 2.4 s. Still owed, tracked here: the cross-read of a
+created bundle by an implementation other than unityz (it now both writes
+and re-reads the file), until then the fresh-client acceptance is the only
+independent check, exactly as for every synthesized bundle.
 
 ## 1. XML patches are never applied, only scanned  — **done (2026-08-31)**
 

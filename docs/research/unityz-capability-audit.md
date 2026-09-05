@@ -100,9 +100,9 @@ from authored PNG/WAV/glTF/VFX inputs.
 | Pipeline surface | Current mechanism | unityz coverage | Decision |
 |---|---|---|---|
 | `shamway inspect` revision and class-142 gate | pinned `unityz info --json` behind `unityz.py` | full after unityz PR 121: embedded revision and class IDs are in `info --json` | migrated; the duplicate parser and its pure-Python LZ4 path are removed |
-| `shamway inspect --deep` object census | unityz `info`, `stats`, `show`, `verify`, and `hierarchy` | full for embedded-tree bundles; stripped 2022.3.62f2 files decode with `--builtin` since unityz PR 156, other releases still refuse | migrated with the existing `DeepReport` shape; pass `--builtin` now that 0.1.4 is pinned and keep the refusal for unshipped releases |
-| Synthesized writer type-tree lookup | UnityPy TPK database selected by Unity version and class ID | full for 2022.3.62f2 since unityz PR 156: `trees --builtin <release> --class <id>` returns the exact tree with sizes, versions and array flags | migrate to the export from the pinned 0.1.4; keep UnityPy until then |
-| `anim.py` and `particles.py` type-tree defaults | UnityPy TPK nodes | full for 2022.3.62f2 through the same export | migrate with the writer, not as a separate exception |
+| `shamway inspect --deep` object census | unityz `info`, `stats`, `show`, `verify`, and `hierarchy` | full for embedded-tree bundles; stripped 2022.3.62f2 files decode with `--builtin` since unityz PR 156, other releases still refuse | migrated with the existing `DeepReport` shape; a stripped file is read with `--builtin` and an unshipped release refused by name (2026-09-05) |
+| Synthesized writer type-tree lookup | `typetrees.py`, one cached `unityz trees --builtin <release>` per process | full for 2022.3.62f2 since unityz PR 156: the exact tree with sizes, versions and array flags | migrated (2026-09-05); an unshipped release is refused by name |
+| `anim.py` and `particles.py` type-tree defaults | the same `typetrees.py` export | full for 2022.3.62f2 through the same export | migrated with the writer |
 | Writer read-back tests | pinned unityz `extract --json` through the test adapter | full through `show`, `info`, `hierarchy`, `shader`, and `verify` | migrated; unityz is the independent reader of Python-authored bytes |
 | Shader-object and compiled-blob tests | unityz object trees and enriched `show` shader records | full through `show` / `shader`; decoded record tables are native | migrated; direct byte-level tests remain where they test the Python assembler itself |
 | `generate audio from-bank` | pinned `unityz fsb` | full in 0.1.2: PCM/ADPCM WAV and Vorbis OGG extraction; incomplete decodes return non-zero | migrated; the generator delegates through the bounded unityz process adapter |
@@ -113,58 +113,42 @@ from authored PNG/WAV/glTF/VFX inputs.
 | glTF scene/skin import | pipeline `gltf_scene.py` | not covered in this direction | retain; unityz exports Unity meshes to glTF, which is the inverse operation |
 | BC1/BC3 encoding | pipeline NumPy compressor | decode only | retain the encoder and its independent checks |
 | HLSL/DXBC/SPIR-V/SMOL-V authoring | vkd3d, glslang, zmol-v and `shader_blob.py` | shader blob decode and analysis only | retain compilers and assembler; migrate read-back inspection |
-| Fresh SerializedFile and UnityFS creation | `bundle_writer.py` | full since unityz PR 157: `create <spec.json> --out <file>` builds the format-22 file and UnityFS v8 archive from trees, JSON values and a sidecar, and rebuilds the self-test bundle byte-identically | migrate `_serialize`/`_serialized_file`/`_container` onto the pinned 0.1.4; resource layout and `Ref` resolution stay in Python |
+| Fresh SerializedFile and UnityFS creation | `bundle_writer.py` | full since unityz PR 157: `create <spec.json> --out <file>` builds the format-22 file and UnityFS v8 archive from trees, JSON values and a sidecar, and rebuilds the self-test bundle byte-identically | migrated (2026-09-05): `bundle_writer._create` hands a spec to `create`; resource layout and `Ref` resolution stay in Python |
 | Engine method decompilation | ILSpy / monodis | not covered: `unityz managed` reads serialized field layouts, not method bodies | retain the decompilers for engine-behaviour provenance |
 | Historical research facts | named UnityPy measurements | unityz could repeat many, but did not produce the recorded evidence | preserve attribution; remeasure only when a current conclusion depends on it |
 
 ### UnityPy replacement verdict
 
-UnityPy remains required for the synthesized writer until the pipeline
-migrates to the upstream contracts. The reader and diagnostic usage is
-replaceable now, and the test read-back usage is replaceable in logical
-slices. Both creation-side contracts have landed upstream and await the
-pipeline's re-pin and migration:
+UnityPy is removed (2026-09-05). Every reader, diagnostic and test read-back
+use had moved to unityz in earlier slices; the two creation-side contracts
+landed upstream in unityz PRs 156 and 157, the installer pinned 0.1.4, and
+the pipeline migrated onto them:
 
-1. **Landed (unityz PR 156, 2026-09-05, not yet in the pinned release):** a
-   bundled, release-indexed source of built-in engine class type trees.
-   `src/builtin_trees.zig` embeds the AssetRipper TypeTreeDumps release dump
-   packed by `scripts/structsdump-to-builtin.py` and serves the exact tree for
-   an exact `(release, class id)`; `unityz trees --builtin <release>
-   [--class <id>]` exports it in the `--trees` JSON shape with `m_ByteSize`,
-   `m_Version`, `m_TypeFlags` and `m_Index`, and `--builtin` lets the reading
-   commands decode a stripped file's built-in classes. Only 2022.3.62f2 ships;
-   matching is exact, with no nearest-version selection, so a stripped file
-   from any other release is still refused by `inspect --deep` until that
-   release is packed upstream. Checked against the self-test bundle's
-   embedded TPK trees: all 17 classes identical on type, name, level, meta
-   flag, version and byte size; the only difference is the array flag on
-   `TypelessData` nodes, which `bundle_writer.py` omits and the built-in tree
-   carries. MonoBehaviour script trees remain a `--trees`/`managed` concern.
-2. **Landed (unityz PR 157, 2026-09-05, merged as 0987f16, not yet in the
-   pinned release):** an API and CLI that create a SerializedFile and a
-   UnityFS bundle from new objects. `typetree.writeBlob`,
-   `serialized_writer.create` and `bundle.create` build the first type
-   entry, object table, path IDs and directory nodes from empty input, and
-   `unityz create <spec.json> --out <file>` drives them from a JSON spec
-   (revision, platform, CAB name, `none`/`lz4`, a `--trees` table or its
-   path, objects as path id + class + `show`-shaped value, an optional
-   resource file), re-parsing and round-trip checking the result before the
-   atomic write. Rejections (bad spec, class without a tree, zero or
-   duplicate path id, missing field, dangling same-file `PPtr`, not exactly
-   one class-142 object, streamed reference outside the sidecar) exit 1 and
-   write nothing. Checked against the self-test bundle: `trees` +
-   `extract --json` + `create` reproduces the 9,313,411-byte file byte for
-   byte, the LZ4 variant verifies 604/604 with zero changed fields, and the
-   same spec over the built-in trees differs only in the `TypelessData`
-   array flag noted under item 1. Still owed on the pipeline side: the
-   resource-stream layout stays with the caller, and the independent
-   cross-read from the original contract is not supplied by unityz itself.
+1. `typetrees.py` runs `unityz trees --builtin <release>` once per process and
+   serves the exact tree for a class to `bundle_writer.py`, `anim.py` and
+   `particles.py`. Matching is exact: a release unityz does not pack (only
+   2022.3.62f2 today) is refused with the shipped releases named, never
+   approximated by a neighbour.
+2. `bundle_writer._create` writes a `unityz create` spec (revision, platform,
+   CAB, the trees for the classes in use, object values with byte payloads as
+   base64, the resource sidecar) and runs the pinned unityz through the
+   bounded process adapter; unityz embeds the trees, serializes, lays out the
+   file and archive and verifies before writing. Path ids, the class-142
+   container, `Ref` resolution and the resource layout stay in Python.
+3. `deep_inspect.py` passes `--builtin` to `stats`, `hierarchy`, `verify` and
+   `show` when `info` reports a SerializedFile without trees, and refuses by
+   name when `verify` still reports skipped objects (an unshipped release).
 
-The first item also owns the default-value helpers in `anim.py` and
-`particles.py`: those functions walk the selected class tree to produce the
-correct version-specific empty shape, and they move to the `trees --builtin`
-export together with the writer. Treating them as unrelated Python helpers
-would hide the actual dependency.
+Evidence: the self-test source packed by the old writer and by the new path
+produce files of the same size (9,313,411 bytes) differing in exactly two
+bytes, the array flag on the `TypelessData` nodes of `Texture2D` and `Mesh`
+that Unity's own trees carry and the old writer omitted; `unityz verify`
+passes 604/604 on the new file and packing takes 1.1 s instead of 2.4 s.
+The committed self-test fixture was regenerated to the new bytes.
+
+Still owed: a cross-read of a created bundle by an implementation other than
+unityz, which now both writes and re-reads the file. The fresh-client
+acceptance remains the independent gate, as for every synthesized bundle.
 
 ### FSB5 contract closure
 
@@ -255,12 +239,11 @@ The migration slices are:
    remain byte-level checks of the Python authoring implementation;
 6. **done:** replace the user-facing FSB decoder after adding the read-only JSON
    bank contract in unityz PR 138;
-7. design and implement the two creation-side contracts before removing the
-   final UnityPy dependency: the built-in type-tree source landed upstream in
-   unityz PR 156 and from-empty SerializedFile and UnityFS creation in
-   unityz PR 157, and the installer pins unityz 0.1.4, which carries both.
-   What remains is the writer/default/deep-inspect migration here, after
-   which UnityPy is removed.
+7. **done (2026-09-05):** the two creation-side contracts landed upstream
+   (unityz PRs 156 and 157), the installer pinned 0.1.4, and the writer,
+   the animation and particle defaults and deep inspection migrated onto
+   `trees --builtin` and `create`; UnityPy is removed from the dependencies,
+   extras, capability registry and tests.
 
 Each behavior slice updates its owning command documentation and tests in the
 same commit. Unknown performance limits stay on this page until the broader

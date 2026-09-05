@@ -36,8 +36,7 @@ degrades to a bare `Mesh` with a printed note rather than failing. It has a
 where the packaged one already works. `--with-unity-prereqs` covers the **optional** editor
 installer's needs, `--with-authoring` the optional art tooling in
 [Authoring tools](../authoring/authoring-tools.md) — Blender, OpenSCAD, ImageMagick, FFmpeg,
-and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh, and UnityPy's
-writer type trees) —
+and Xvfb, plus the Python capabilities (Pillow, NumPy, trimesh) —
 `--with-desktop-capture` a screenshot tool (`grim` on Wayland, `maim` on X11)
 so `shamway client capture` can record what a person looked at during
 acceptance — skip it on a headless build host — and `--with-research` the

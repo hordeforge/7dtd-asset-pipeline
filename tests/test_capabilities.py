@@ -56,9 +56,9 @@ class CapabilityTests(unittest.TestCase):
             mock.patch("sevendtd_asset_pipeline.capabilities.has_capability", return_value=False),
             self.assertRaises(PipelineError) as caught,
         ):
-            require_capability("UnityPy")
+            require_capability("trimesh")
         message = str(caught.exception)
-        self.assertIn("UnityPy", message)
+        self.assertIn("trimesh", message)
         self.assertIn("shamway pack", message)
         self.assertIn("uv pip install", message)
 
@@ -77,7 +77,7 @@ class CapabilityTests(unittest.TestCase):
 
     def test_require_passes_when_available(self) -> None:
         with mock.patch("sevendtd_asset_pipeline.capabilities.has_capability", return_value=True):
-            require_capability("UnityPy")
+            require_capability("trimesh")
 
     def test_unknown_capability_is_rejected(self) -> None:
         with self.assertRaisesRegex(PipelineError, "unknown capability"):
@@ -97,16 +97,16 @@ class CapabilityTests(unittest.TestCase):
             "sevendtd_asset_pipeline.capabilities.importlib.util.find_spec",
             return_value=None,
         ):
-            self.assertFalse(has_capability("UnityPy"))
+            self.assertFalse(has_capability("trimesh"))
             with self.assertRaises(PipelineError):
-                require_capability("UnityPy")
+                require_capability("trimesh")
         # The install lands; nothing is cached, so the next ask sees it.
         with mock.patch(
             "sevendtd_asset_pipeline.capabilities.importlib.util.find_spec",
             return_value=object(),
         ):
-            self.assertTrue(has_capability("UnityPy"))
-            require_capability("UnityPy")
+            self.assertTrue(has_capability("trimesh"))
+            require_capability("trimesh")
 
 
 class OptionalFeatureTests(unittest.TestCase):

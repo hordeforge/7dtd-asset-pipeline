@@ -2,8 +2,8 @@
 
 An encoder checked only by the decoder that ships beside it has not been
 checked — the pair can agree on a format nothing else reads. Where
-`texture2ddecoder` is installed (declared beside UnityPy in the writer extra,
-and it is what UnityPy uses on real game textures) the acceptance test decodes
+`texture2ddecoder` is installed (declared in the writer extra,
+and it is what UnityPy used on real game textures) the acceptance test decodes
 our blocks with *that* and demands byte equality. A real Unity 2022.3.62f2
 runtime also loaded one of these as `160x160 DXT5`; that half needs an editor
 and is recorded in docs/research/research-provenance.md.
@@ -11,6 +11,7 @@ and is recorded in docs/research/research-provenance.md.
 
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from typing import Any
 
@@ -97,8 +98,8 @@ class QualityTests(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    has_capability("numpy") and has_capability("UnityPy"),
-    "the cross-check needs texture2ddecoder, declared with UnityPy in the writer extra",
+    has_capability("numpy") and importlib.util.find_spec("texture2ddecoder") is not None,
+    "the cross-check needs texture2ddecoder, declared in the writer extra",
 )
 class IndependentDecoderTests(unittest.TestCase):
     """The acceptance half: a decoder this project did not write."""

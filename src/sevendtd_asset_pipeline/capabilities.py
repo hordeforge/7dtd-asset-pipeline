@@ -191,18 +191,6 @@ REGISTRY: tuple[_Spec, ...] = (
         install="shamway script install-tools",
     ),
     _Spec(
-        name="UnityPy",
-        kind="module",
-        probe="UnityPy",
-        unlocks=(
-            "shamway pack",
-            'shamway build with bundle_source = "synthesized"',
-        ),
-        purpose="supply the engine's own per-revision type trees and object serializer "
-        "to the editorless bundle writer",
-        install=extra_install("writer"),
-    ),
-    _Spec(
         name="trimesh",
         kind="module",
         probe="trimesh",

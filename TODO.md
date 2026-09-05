@@ -91,15 +91,20 @@ shading is unbuilt with a known route, and a mod that needs it opts into
 The active UnityPy-removal work has its own ordered pair in
 [improvements.md](docs/status/improvements.md#unitypy-removal-blockers):
 
-1. add a release-indexed built-in engine-class type-tree source to unityz,
-   closing the UnityPy-covered fallback for stripped SerializedFiles and the
-   writer's tree lookup;
+1. **landed upstream (2026-09-05, unityz PR 156):** unityz ships a
+   release-indexed built-in engine-class type-tree database, exported by
+   `unityz trees --builtin <release>` and used by `--builtin` on its
+   reading commands. What remains here is the migration: point
+   `bundle_writer.py`, `anim.py` and `particles.py` at that export instead
+   of UnityPy's TPK, let `inspect --deep` pass `--builtin` for a stripped
+   external file, and re-pin the unityz release that carries it;
 2. add fresh SerializedFile/object-table and UnityFS construction to unityz,
    then move the pipeline's creation side and remove UnityPy.
 
-The first is a direct UnityPy parity gap. The second is the creation contract
-the pipeline needs after that data source exists; it is tracked separately so
-an in-place reserializer is never mistaken for a from-empty writer. The
+The first was a direct UnityPy parity gap and is now a pipeline migration.
+The second is the creation contract the pipeline needs after that data
+source exists; it is tracked separately so an in-place reserializer is never
+mistaken for a from-empty writer. The
 [unityz capability audit](docs/research/unityz-capability-audit.md) owns the
 evidence and the test-reader migration that can proceed before either item.
 

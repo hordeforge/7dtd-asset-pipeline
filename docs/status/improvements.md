@@ -100,25 +100,62 @@ lands, `bundle_writer.py`, `anim.py` and `particles.py` still import UnityPy.
 
 ### Fresh SerializedFile and UnityFS construction
 
-**Open; dependency-removal contract.** Unityz rewrites existing serialized
-files and containers, preserving their type and object tables. It does not yet
-create the first type entry, object/path ID, AssetBundle container mapping, or
-UnityFS node from authored objects and an empty input. The pipeline therefore
-keeps its own fresh-file writer and cannot hand the whole creation path to
-unityz after the type-tree source above lands.
+**Upstream half landed (2026-09-05); pipeline migration open.** Unityz can now
+create a bundle from empty state:
+[unityz PR 157](https://github.com/hordeforge/unityz/pull/157) (merged as
+0987f16) adds `unityz create <spec.json> --out <file>` on top of three library
+pieces, `typetree.writeBlob`, `serialized_writer.create` and `bundle.create`.
+It writes the exact layout `bundle_writer.py` emits today: a format-22
+little-endian SerializedFile with the declared trees embedded (old type hash
+zero, no dependencies), a 4-aligned object table, 8-aligned object data,
+no script or reference types, empty user information; inside a UnityFS
+format-8 archive with `5.x.x` plus the revision, the block and directory
+table at the head (`0x40`), one stored or LZ4 block, the data hash zero,
+the serialized node flagged 4 and an optional `<cab>.resource` node flagged
+0. The result is re-parsed and every object round-trip checked, and every
+streamed reference is checked against the sidecar, before the file is
+written atomically; `--no-verify` skips that.
 
-This item is deliberately separate from the direct parity gap: UnityPy
-supplies the release-indexed trees and typetree serialization used by the
-current creation path, but UnityPy itself is primarily an edit/save library.
-Calling unityz's existing in-place writer "creation" would hide the missing
-from-empty contract.
+The contract this pipeline will consume:
 
-**Close it with:** a unityz API/CLI that creates a format-22 SerializedFile and
-UnityFS bundle from declared type trees, objects, path IDs, sidecars, and a
-class-142 container; acceptance and rejection fixtures; a cross-read by an
-independent implementation; and migration of `bundle_writer.py` before the
-UnityPy dependency is removed. The exact boundary and current evidence are in
-the [unityz capability audit](../research/unityz-capability-audit.md).
+- The spec is one JSON object with `revision`, `platform` (default 19),
+  `cab`, `compression` (`none` or `lz4`), `trees` (the `--trees` table
+  inline or a path to one, which is exactly what `trees --builtin
+  2022.3.62f2 --out` writes), `objects` (`pathId`, `class` as an id or a
+  `__class_ids__` name, `value` in the JSON shape `show` and
+  `extract --json` print, byte arrays as base64, `PPtr` as
+  `{"m_FileID","m_PathID"}`, `-0` kept as a negative-zero float) and an
+  optional `resource` `{"file": ...}` appended as the sidecar. Success
+  prints one line, `{"file":...,"bytes":N,"objects":N,"verified":true}`.
+- Rejections exit 1 with a stderr diagnostic and write nothing: malformed
+  spec, unknown key or compression, a class without a tree, a zero or
+  duplicate path id, a value missing a field its tree names, a same-file
+  `PPtr` naming a path id the bundle does not contain (the exact
+  silent-load failure `Ref` guards against here), any count of class-142
+  objects other than one, and a streamed reference outside the sidecar.
+  The full text is in unityz `docs/features.md`, "Creating files".
+
+Evidence: the self-test bundle exported with `unityz trees` and
+`unityz extract --json`, fed back through `create` with `"compression":
+"none"`, is byte-identical to the committed 9,313,411-byte file; with `lz4`
+it is 3,262,352 bytes, `verify` passes 604/604 and `diff --fields` reports
+zero changed objects. Fed the built-in trees from `trees --builtin
+2022.3.62f2` instead, the output differs in exactly two bytes: the array
+flag on the `TypelessData` nodes of `Texture2D` (`image data`) and `Mesh`
+(`m_DataSize`), which the release dump carries and `bundle_writer.py` omits.
+
+**Close it with:** re-pin unityz to the release carrying PRs 156 and 157;
+replace `_serialize`, `_serialized_file` and `_container` in
+`bundle_writer.py` with a spec handed to `unityz create` through the process
+adapter (the resource layout, `StreamedResource` offsets and `Ref`
+resolution stay in Python, as does the class-142 container object, which
+`create` only checks for); keep the tree-present, stripped, unknown-revision
+and unavailable-class fixtures on the pipeline side; then remove the UnityPy
+dependency. Two things `create` does not do and the migration must keep or
+add: it does not lay out the resource stream (the caller patches
+`m_Source`/`m_Offset`/`m_Size` and hands over the bytes), and the cross-read
+by an independent implementation named in the original contract is still
+owed, since unityz now both writes and re-reads the file.
 
 ## 1. XML patches are never applied, only scanned  — **done (2026-08-31)**
 

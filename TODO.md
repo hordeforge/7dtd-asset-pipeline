@@ -98,13 +98,18 @@ The active UnityPy-removal work has its own ordered pair in
    `bundle_writer.py`, `anim.py` and `particles.py` at that export instead
    of UnityPy's TPK, let `inspect --deep` pass `--builtin` for a stripped
    external file, and re-pin the unityz release that carries it;
-2. add fresh SerializedFile/object-table and UnityFS construction to unityz,
-   then move the pipeline's creation side and remove UnityPy.
+2. **landed upstream (2026-09-05, unityz PR 157):** unityz creates a
+   format-22 SerializedFile and UnityFS bundle from empty state
+   (`unityz create <spec.json> --out <file>`), verifying before it writes;
+   the self-test bundle rebuilds byte-identically through it. What remains
+   here is the migration: hand `bundle_writer.py`'s serialization and
+   container assembly to `create` through the process adapter, keep the
+   resource layout and `Ref` resolution in Python, re-pin, then remove
+   UnityPy.
 
-The first was a direct UnityPy parity gap and is now a pipeline migration.
-The second is the creation contract the pipeline needs after that data
-source exists; it is tracked separately so an in-place reserializer is never
-mistaken for a from-empty writer. The
+Both were upstream gaps and are now pipeline migrations. The second is
+tracked separately so an in-place reserializer is never mistaken for a
+from-empty writer. The
 [unityz capability audit](docs/research/unityz-capability-audit.md) owns the
 evidence and the test-reader migration that can proceed before either item.
 

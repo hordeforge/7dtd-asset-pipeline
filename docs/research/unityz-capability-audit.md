@@ -225,8 +225,9 @@ The migration slices are:
 5. **in progress:** replace UnityPy test readers by domain. The
    `bundle_writer`, prefab/hierarchy, skinned-mesh, particle, and generated
    entity round trips now use the pinned unityz `extract --json` manifest,
-   object trees, and path IDs; animation and shaders remain separate migration
-   slices;
+   object trees, and path IDs. Animation clips, curves, components, and figure
+   hierarchy now use the same contract; shaders remain the final test-reader
+   slice;
 6. **done:** replace the user-facing FSB decoder after adding the read-only JSON
    bank contract in unityz PR 138;
 7. design and implement the two creation-side contracts before removing the

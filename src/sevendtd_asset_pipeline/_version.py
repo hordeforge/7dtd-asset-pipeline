@@ -5,4 +5,4 @@ directly, because the registry sits below the package root and must not
 import upward into it.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

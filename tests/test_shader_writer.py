@@ -235,6 +235,7 @@ class CompileTimeoutTests(unittest.TestCase):
 
 @needs_unityz
 @needs_vkd3d
+@needs_lz4
 class ShaderObjectTests(unittest.TestCase):
     def read_back(
         self, objects: list[Any], name: str = "shaders.unity3d"
@@ -310,6 +311,7 @@ class RejectionTests(unittest.TestCase):
             build_bundle([material("m", "Shamway/Absent", None)], REVISION, "x.unity3d")
         self.assertIn("Shamway/Absent", str(caught.exception))
 
+    @needs_lz4
     def test_a_material_pointing_at_a_missing_texture_is_refused(self) -> None:
         with self.assertRaises(PipelineError) as caught:
             build_bundle(

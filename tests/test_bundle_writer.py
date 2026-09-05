@@ -42,6 +42,9 @@ REVISION = "2022.3.62f2"
 needs_unityz = unittest.skipUnless(
     has_capability("unityz"), "the writer needs unityz for the engine's type trees"
 )
+needs_pillow = unittest.skipUnless(
+    has_capability("pillow"), "the texture lane reads PNGs through Pillow"
+)
 needs_trimesh = unittest.skipUnless(
     has_capability("trimesh"), "the mesh lane reads interchange files through trimesh"
 )
@@ -115,6 +118,7 @@ class WriterTests(unittest.TestCase):
         self.assertTrue(info.has_assetbundle_object)
         self.assertIn(49, info.class_ids)
 
+    @needs_pillow
     def test_unityz_reads_back_every_field_this_writer_wrote(self) -> None:
         # An independent reader of Unity's format, with none of our code in it.
         bundle = self.root / "readback.unity3d"
@@ -238,6 +242,7 @@ class WriterTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "cannot read clip"):
             audio_clip("myModZero", clip)
 
+    @needs_pillow
     def test_a_texture_over_pillows_decompression_limit_is_refused_not_crashed(self) -> None:
         # DecompressionBombError subclasses Exception directly, so an OSError-
         # only catch let it escape cli.main's handler as a raw traceback.
@@ -252,6 +257,7 @@ class WriterTests(unittest.TestCase):
         finally:
             Image.MAX_IMAGE_PIXELS = original
 
+    @needs_pillow
     def test_a_block_compressed_texture_reports_the_quality_it_achieved(self) -> None:
         # Compression is lossy and opt-in, and a lossy conversion that reports
         # nothing is indistinguishable from a lossless one. The note names the
@@ -287,6 +293,7 @@ class SourceDirectoryTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    @needs_pillow
     def test_a_directory_becomes_a_bundle_and_its_membership_manifest(self) -> None:
         (self.sources / "myModNote.txt").write_text("hello", encoding="utf-8")
         write_png(self.sources / "myModPanel.png")

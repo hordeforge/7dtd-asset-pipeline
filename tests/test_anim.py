@@ -35,6 +35,9 @@ REVISION = "2022.3.62f2"
 needs_unityz = unittest.skipUnless(
     has_capability("unityz"), "the writer needs unityz for the engine's type trees"
 )
+needs_numpy = unittest.skipUnless(
+    has_capability("numpy"), "generated entities are NumPy arithmetic"
+)
 needs_vkd3d = unittest.skipUnless(
     has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
 )
@@ -180,6 +183,7 @@ class AnimDeclarationTests(unittest.TestCase):
 
 
 @needs_unityz
+@needs_numpy
 class AnimOnPrefabTests(unittest.TestCase):
     """A `.anim.json` beside a skinned source: the prefab carries an Animation
     component with the declared legacy clip."""
@@ -571,6 +575,7 @@ class CombatAnimTests(unittest.TestCase):
 
 
 @needs_unityz
+@needs_numpy
 class LimbAnimBundleTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -640,6 +645,7 @@ class LimbAnimBundleTests(unittest.TestCase):
             run("entity", [str(out), "--rig", "humanoid", "--anim", "gallop"])
 
 
+@needs_numpy
 class BoneColliderTests(unittest.TestCase):
     """A generated entity's bones carry colliders, so the game's physics body
     builds real colliders (PhysicsBodyInstance.bindCollider finds a Box/Capsule/

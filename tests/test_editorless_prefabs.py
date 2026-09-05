@@ -48,6 +48,7 @@ REVISION = "2022.3.62f2"
 needs_unityz = unittest.skipUnless(
     has_capability("unityz"), "the writer needs unityz for the engine's type trees"
 )
+needs_numpy = unittest.skipUnless(has_capability("numpy"), "the skinned lane is NumPy arithmetic")
 needs_trimesh = unittest.skipUnless(
     has_capability("trimesh"), "the mesh lane reads interchange files through trimesh"
 )
@@ -330,6 +331,7 @@ class HierarchyTests(unittest.TestCase):
         return payload, read_objects(written)
 
     @needs_vkd3d
+    @needs_numpy
     def test_named_children_survive_with_authored_names_and_parenting(self) -> None:
         source = write_hierarchy_glb(self.root / "timedNuke.glb")
         _payload, objects = self.pack(source)
@@ -370,6 +372,7 @@ class HierarchyTests(unittest.TestCase):
         self.assertNotIn("armedlamp", container)
 
     @needs_vkd3d
+    @needs_numpy
     def test_mesh_stays_on_the_authored_node_not_the_root_when_the_mesh_is_a_child(self) -> None:
         blob, views, accessors = triangle_blob()
         document = {
@@ -471,6 +474,7 @@ class HierarchyTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "non-finite"):
             parse_gltf(source)
 
+    @needs_trimesh
     def test_a_single_mesh_gltf_still_collapses_to_the_static_prefab_shape(self) -> None:
         blob, views, accessors = triangle_blob()
         document = {
@@ -495,6 +499,7 @@ class HierarchyTests(unittest.TestCase):
 
 
 @needs_unityz
+@needs_numpy
 class SkinnedTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()

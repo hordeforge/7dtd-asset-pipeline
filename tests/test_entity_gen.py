@@ -1,10 +1,11 @@
 """The generated-entity lane: rig + parts -> skinned GLB -> bundle -> read-back.
 
 The bundle leg drives the writer's own skinned path (`mesh_source_objects` /
-`build_bundle`) and reads the result back with UnityPy, which parses Unity's
-format with none of this repository's code — so an acceptance here is the
-same evidence the writer's own suite demands: a `SkinnedMeshRenderer` with
-the rig's bones bound by name hash, and no MeshRenderer fallback.
+`build_bundle`) and reads the result back with the pinned unityz CLI, which
+parses Unity's format with none of this repository's writer code — so an
+acceptance here is the same evidence the writer's own suite demands: a
+`SkinnedMeshRenderer` with the rig's bones bound by name hash, and no
+MeshRenderer fallback.
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+
+from unityz_readback import read_bundle
 
 from sevendtd_asset_pipeline.bundle_writer import (
     CAPSULE_COLLIDER,
@@ -50,12 +53,7 @@ needs_trimesh = unittest.skipUnless(
 
 
 def read_objects(bundle: Path) -> dict[int, list[dict[str, Any]]]:
-    import UnityPy
-
-    found: dict[int, list[dict[str, Any]]] = {}
-    for obj in UnityPy.load(str(bundle)).objects:
-        found.setdefault(int(obj.type.value), []).append(obj.read_typetree())
-    return found
+    return read_bundle(bundle).trees_by_class()
 
 
 class EntityGeneratorTests(unittest.TestCase):
@@ -358,7 +356,7 @@ class EntityGeneratorTests(unittest.TestCase):
 @needs_trimesh
 class EntityBundleTests(unittest.TestCase):
     """The generated entity through the writer's own skinned lane, read back
-    with UnityPy — construction evidence the pipeline's own gates demand."""
+    with unityz — construction evidence the pipeline's own gates demand."""
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -446,24 +444,21 @@ class EntityBundleTests(unittest.TestCase):
         _payload, trees = self.pack(out)
 
         def hierarchy(bundle: Path) -> dict[str, dict[str, Any]]:
-            """Map each GO name to its world transform, by UnityPy path_id.
+            """Map each GO name to its world transform, by unityz path ID.
 
             Inside one bundle, a Transform's `m_GameObject.m_PathID` equals its
             owning GameObject's own path_id, and a GameObject's
             `m_Component[*].component.m_PathID` equals that component's path_id
-            — the two agree only via UnityPy's path_id, not the re-indexed
+            — the two agree only via unityz's object path ID, not the re-indexed
             typetree, so the correlation has to be done on the parsed objects.
             """
-            import UnityPy
-
             names: dict[int, str] = {}
             transforms: dict[int, dict[str, Any]] = {}
-            for obj in UnityPy.load(str(bundle)).objects:
-                tree = obj.read_typetree()
-                if int(obj.type.value) == GAME_OBJECT:
-                    names[obj.path_id] = tree["m_Name"]
-                elif int(obj.type.value) == TRANSFORM:
-                    transforms[obj.path_id] = tree
+            for obj in read_bundle(bundle).objects:
+                if obj.class_id == GAME_OBJECT:
+                    names[obj.path_id] = obj.tree["m_Name"]
+                elif obj.class_id == TRANSFORM:
+                    transforms[obj.path_id] = obj.tree
             out: dict[str, dict[str, Any]] = {}
             for go_id, name in names.items():
                 matched = next(

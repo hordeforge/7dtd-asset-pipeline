@@ -1,7 +1,8 @@
 """Named hierarchies, skinned meshes and ParticleSystem graphs.
 
 Every acceptance here drives `pack_directory` / `build_bundle` and is read back
-with UnityPy, which parses Unity's format with none of this repository's code.
+with the pinned unityz CLI, which parses Unity's format with none of this
+repository's writer code.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+
+from unityz_readback import read_bundle
 
 from sevendtd_asset_pipeline.bundle_writer import (
     GAME_OBJECT,
@@ -306,12 +309,7 @@ def vfx_document(**overrides: Any) -> dict[str, Any]:
 
 
 def read_objects(bundle: Path) -> dict[int, list[dict[str, Any]]]:
-    import UnityPy
-
-    found: dict[int, list[dict[str, Any]]] = {}
-    for obj in UnityPy.load(str(bundle)).objects:
-        found.setdefault(int(obj.type.value), []).append(obj.read_typetree())
-    return found
+    return read_bundle(bundle).trees_by_class()
 
 
 @needs_unitypy
@@ -342,22 +340,19 @@ class HierarchyTests(unittest.TestCase):
         self.assertIn("nestedChild", gos)
         transforms = objects[TRANSFORM]
         by_go = {item["m_GameObject"]["m_PathID"]: item for item in transforms}
-        path_ids = {}
-        import UnityPy
-
-        env = UnityPy.load(str(self.root / "hier.unity3d"))
-        for obj in env.objects:
-            if int(obj.type.value) == GAME_OBJECT:
-                tree = obj.read_typetree()
-                path_ids[tree["m_Name"]] = obj.path_id
+        readback = read_bundle(self.root / "hier.unity3d")
+        path_ids = {
+            obj.tree["m_Name"]: obj.path_id
+            for obj in readback.objects
+            if obj.class_id == GAME_OBJECT
+        }
 
         def transform_id(name: str) -> int:
-            for obj in env.objects:
-                if int(obj.type.value) != TRANSFORM:
+            for obj in readback.objects:
+                if obj.class_id != TRANSFORM:
                     continue
-                tree = obj.read_typetree()
-                if tree["m_GameObject"]["m_PathID"] == path_ids[name]:
-                    return int(obj.path_id)
+                if obj.tree["m_GameObject"]["m_PathID"] == path_ids[name]:
+                    return obj.path_id
             raise AssertionError(f"no transform for {name}")
 
         lamp_tr = by_go[path_ids["armedLamp"]]
@@ -393,13 +388,12 @@ class HierarchyTests(unittest.TestCase):
         source = write_glb(self.root / "lamp.glb", document, blob)
         _payload, objects = self.pack(source)
         self.assertEqual(1, len(objects[MESH_FILTER]))
-        import UnityPy
-
-        env = UnityPy.load(str(self.root / "hier.unity3d"))
-        gos = {}
-        for obj in env.objects:
-            if int(obj.type.value) == GAME_OBJECT:
-                gos[obj.read_typetree()["m_Name"]] = obj.path_id
+        readback = read_bundle(self.root / "hier.unity3d")
+        gos = {
+            obj.tree["m_Name"]: obj.path_id
+            for obj in readback.objects
+            if obj.class_id == GAME_OBJECT
+        }
         filt = objects[MESH_FILTER][0]
         self.assertEqual(filt["m_GameObject"]["m_PathID"], gos["armedLamp"])
 
@@ -626,12 +620,10 @@ class SkinnedTests(unittest.TestCase):
         bundle = _nomad_gear_bundle()
         if bundle is None:
             self.skipTest("installed game nomad.bundle is not present")
-        import UnityPy
-
-        for obj in UnityPy.load(str(bundle)).objects:
-            if int(obj.type.value) != MESH:
+        for obj in read_bundle(bundle).objects:
+            if obj.class_id != MESH:
                 continue
-            tree = obj.read_typetree()
+            tree = obj.tree
             if tree.get("m_Name") != "bodyCloth":
                 continue
             self.assertEqual(1722913273, tree["m_RootBoneNameHash"])

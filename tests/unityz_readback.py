@@ -98,3 +98,25 @@ def read_bundle(bundle: Path) -> BundleReadback:
             if path.is_file() and path.name != "manifest.json"
         }
         return BundleReadback(tuple(objects), raw_files)
+
+
+def show_object(bundle: Path, class_id: int) -> dict[str, Any]:
+    """Return unityz's enriched view of the only object of one class."""
+    reader = Unityz(bundle)
+    report = reader.json("info", "--json", "--objects")
+    entries = report.get("object_list")
+    if not isinstance(entries, list):
+        raise AssertionError("unityz info report has no object_list array")
+    matches = [
+        entry for entry in entries if isinstance(entry, dict) and entry.get("class") == class_id
+    ]
+    if len(matches) != 1:
+        raise AssertionError(
+            f"unityz info found {len(matches)} class-{class_id} objects; expected exactly one"
+        )
+    entry = matches[0]
+    node = entry.get("node")
+    path_id = entry.get("path_id")
+    if not isinstance(node, str) or not isinstance(path_id, int):
+        raise AssertionError(f"unityz class-{class_id} object has no node/path ID")
+    return dict(reader.json("show", f"{node}:{path_id}", "--json"))

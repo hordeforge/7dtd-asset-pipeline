@@ -2,8 +2,9 @@
 
 The container these tests exercise is specified in `hordeforge/7dtd-engine-research`,
 `docs/shader-subprogram-blob.md`, and that repository's `tools/shader_blob_dump.py`
-re-checks a bundle against it. Acceptance here is read back with UnityPy, which
-parses Unity's format with none of this repository's code.
+re-checks a bundle against it. Acceptance here is read back with the pinned
+unityz CLI, which parses Unity's format with none of this repository's writer
+code.
 
 The runtime half of the evidence — a real editor reporting `Shader.isSupported`
 — is `shamway verify-bundle` and needs Unity, so it cannot live in this suite.
@@ -24,8 +25,14 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+from unityz_readback import ReadbackObject, read_bundle, show_object
+
 from sevendtd_asset_pipeline import bundle_writer, shader_blob
 from sevendtd_asset_pipeline.bundle_writer import (
+    GAME_OBJECT,
+    MATERIAL,
+    MESH,
+    SHADER,
     UNLIT_SHADER_NAME,
     build_bundle,
     material,
@@ -229,58 +236,46 @@ class CompileTimeoutTests(unittest.TestCase):
 @needs_unitypy
 @needs_vkd3d
 class ShaderObjectTests(unittest.TestCase):
-    def read_back(self, objects: list[Any], name: str = "shaders.unity3d") -> dict[str, Any]:
-        import UnityPy
-
+    def read_back(
+        self, objects: list[Any], name: str = "shaders.unity3d"
+    ) -> dict[int, list[dict[str, Any]]]:
         with tempfile.TemporaryDirectory() as work:
             path = Path(work) / name
             path.write_bytes(build_bundle(objects, REVISION, name))
-            env = UnityPy.load(str(path))
-            return {obj.type.name: obj.read() for obj in env.objects}
+            return read_bundle(path).trees_by_class()
+
+    def read_shader(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory() as work:
+            path = Path(work) / "shaders.unity3d"
+            path.write_bytes(build_bundle([shader(UNLIT_SHADER_NAME)], REVISION, path.name))
+            return show_object(path, SHADER)
 
     def test_a_shader_reads_back_as_class_48_with_its_name(self) -> None:
         read = self.read_back([shader(UNLIT_SHADER_NAME)])
-        self.assertIn("Shader", read)
-        self.assertEqual(read["Shader"].m_ParsedForm.m_Name, UNLIT_SHADER_NAME)
+        self.assertIn(SHADER, read)
+        self.assertEqual(read[SHADER][0]["m_ParsedForm"]["m_Name"], UNLIT_SHADER_NAME)
 
     def test_the_shader_declares_one_pass_and_the_platforms_it_compiled(self) -> None:
-        parsed = self.read_back([shader(UNLIT_SHADER_NAME)])["Shader"]
-        sub_shaders = parsed.m_ParsedForm.m_SubShaders
+        parsed = self.read_shader()
+        sub_shaders = parsed["m_ParsedForm"]["m_SubShaders"]
         self.assertEqual(len(sub_shaders), 1)
-        self.assertEqual(len(sub_shaders[0].m_Passes), 1)
-        self.assertIn(shader_blob.SHADER_COMPILER_PLATFORM_D3D11, list(parsed.platforms))
+        self.assertEqual(len(sub_shaders[0]["m_Passes"]), 1)
+        self.assertIn(shader_blob.SHADER_COMPILER_PLATFORM_D3D11, parsed["platforms"])
         # d3d11 keeps vertex and fragment as separate programs; OpenGLCore
         # carries both stages in one source.
-        self.assertEqual(next(iter(parsed.stageCounts)), 2)
+        self.assertEqual(parsed["stageCounts"][0], 2)
 
-    def test_every_code_blob_puts_dxbc_at_offset_38(self) -> None:
-        from UnityPy.helpers import CompressionHelper
-
-        parsed = self.read_back([shader(UNLIT_SHADER_NAME)])["Shader"]
-        index = list(parsed.platforms).index(shader_blob.SHADER_COMPILER_PLATFORM_D3D11)
-        blob = bytes(parsed.compressedBlob)
-        start = parsed.offsets[index][0]
-        data = CompressionHelper.decompress_lz4(
-            blob[start : start + parsed.compressedLengths[index][0]],
-            parsed.decompressedLengths[index][0],
+    def test_unityz_decodes_both_dxbc_program_records(self) -> None:
+        decoded = self.read_shader()["shaderBlob"]
+        records = [record for record in decoded["records"] if record["kind"] == "code"]
+        self.assertEqual({record["stage"] for record in records}, {"vertex", "fragment"})
+        self.assertEqual(
+            {record["programType"] for record in records},
+            {shader_blob.DX11_VERTEX_SM40, shader_blob.DX11_PIXEL_SM40},
         )
-        count = struct.unpack_from("<I", data, 0)[0]
-        found = 0
-        for i in range(count):
-            offset, _length, segment = struct.unpack_from("<III", data, 4 + i * 12)
-            self.assertEqual(segment, 0, "stock records carry a zero segment word")
-            if struct.unpack_from("<I", data, offset + 4)[0] in (
-                shader_blob.DX11_VERTEX_SM40,
-                shader_blob.DX11_PIXEL_SM40,
-            ):
-                position = offset + 24
-                keywords = struct.unpack_from("<I", data, position)[0]
-                self.assertEqual(keywords, 0, "this writer emits no keyword variants")
-                size = struct.unpack_from("<I", data, position + 4)[0]
-                payload = bytes(data[position + 8 : position + 8 + size])
-                self.assertEqual(payload[38:42], b"DXBC")
-                found += 1
-        self.assertEqual(found, 2, "one vertex and one fragment sub-program")
+        for record in records:
+            self.assertEqual(record["segment"], 0, "stock records carry a zero segment word")
+            self.assertIn("SHDR", record["dxbc"]["chunks"])
 
     def test_a_material_binds_its_shader_and_texture_by_path_id(self) -> None:
         with tempfile.TemporaryDirectory() as work:
@@ -292,17 +287,19 @@ class ShaderObjectTests(unittest.TestCase):
                     material("propmat", UNLIT_SHADER_NAME, "albedo"),
                 ]
             )
-        found = read["Material"]
-        self.assertEqual(found.m_Name, "propmat")
-        self.assertNotEqual(found.m_Shader.m_PathID, 0, "a null shader is the magenta failure")
-        texture_envs = dict(found.m_SavedProperties.m_TexEnvs)
+        found = read[MATERIAL][0]
+        self.assertEqual(found["m_Name"], "propmat")
+        self.assertNotEqual(
+            found["m_Shader"]["m_PathID"], 0, "a null shader is the magenta failure"
+        )
+        texture_envs = dict(found["m_SavedProperties"]["m_TexEnvs"])
         self.assertIn("_MainTex", texture_envs)
-        self.assertNotEqual(texture_envs["_MainTex"].m_Texture.m_PathID, 0)
+        self.assertNotEqual(texture_envs["_MainTex"]["m_Texture"]["m_PathID"], 0)
 
     def test_a_material_may_leave_its_texture_unbound(self) -> None:
         read = self.read_back([shader(UNLIT_SHADER_NAME), material("m", UNLIT_SHADER_NAME, None)])
-        envs = dict(read["Material"].m_SavedProperties.m_TexEnvs)
-        self.assertEqual(envs["_MainTex"].m_Texture.m_PathID, 0)
+        envs = dict(read[MATERIAL][0]["m_SavedProperties"]["m_TexEnvs"])
+        self.assertEqual(envs["_MainTex"]["m_Texture"]["m_PathID"], 0)
 
 
 @needs_unitypy
@@ -353,18 +350,16 @@ def textured_box(path: Path) -> Path:
 class SourceLaneTests(unittest.TestCase):
     """A mesh source file becomes a prefab only where a shader compiler exists."""
 
-    def pack(self, work: Path) -> collections.Counter[str]:
-        return collections.Counter(obj.type.name for obj in self.packed_objects(work))
+    def pack(self, work: Path) -> collections.Counter[int]:
+        return collections.Counter(obj.class_id for obj in self.packed_objects(work))
 
-    def packed_objects(self, work: Path) -> list[Any]:
-        import UnityPy
-
+    def packed_objects(self, work: Path) -> tuple[ReadbackObject, ...]:
         from sevendtd_asset_pipeline.bundle_writer import pack_directory
 
         bundle, _manifest = pack_directory(work, "lane.unity3d", REVISION)
         path = work / "out.unity3d"
         path.write_bytes(bundle)
-        return list(UnityPy.load(str(path)).objects)
+        return read_bundle(path).objects
 
     def source_tree(self, work: Path) -> None:
         textured_box(work / "prop.glb")
@@ -377,10 +372,10 @@ class SourceLaneTests(unittest.TestCase):
             work = Path(raw)
             self.source_tree(work)
             kinds = self.pack(work)
-        self.assertEqual(kinds["GameObject"], 1, "the prefab the game resolves")
-        self.assertEqual(kinds["Mesh"], 1)
-        self.assertEqual(kinds["Material"], 1)
-        self.assertEqual(kinds["Shader"], 1, "one shader shared across the bundle")
+        self.assertEqual(kinds[GAME_OBJECT], 1, "the prefab the game resolves")
+        self.assertEqual(kinds[MESH], 1)
+        self.assertEqual(kinds[MATERIAL], 1)
+        self.assertEqual(kinds[SHADER], 1, "one shader shared across the bundle")
 
     @unittest.skipUnless(has_capability("trimesh"), "the mesh lane needs trimesh")
     def test_without_a_shader_compiler_the_lane_writes_the_bare_mesh(self) -> None:
@@ -397,9 +392,9 @@ class SourceLaneTests(unittest.TestCase):
                 lambda name, *a, **k: None if name == "vkd3d-compiler" else real(name, *a, **k),
             ):
                 kinds = self.pack(work)
-        self.assertEqual(kinds["Mesh"], 1)
-        self.assertEqual(kinds["Shader"], 0)
-        self.assertEqual(kinds["GameObject"], 0)
+        self.assertEqual(kinds[MESH], 1)
+        self.assertEqual(kinds[SHADER], 0)
+        self.assertEqual(kinds[GAME_OBJECT], 0)
 
     @unittest.skipUnless(has_capability("trimesh"), "the mesh lane needs trimesh")
     @needs_vkd3d
@@ -417,11 +412,13 @@ class SourceLaneTests(unittest.TestCase):
             textured_box(work / "prop.glb")
             Image.new("RGBA", (1, 1), (9, 9, 9, 255)).save(work / "prop_albedo.tga")
             objects = self.packed_objects(work)
-        materials = [obj.read() for obj in objects if obj.type.name == "Material"]
+        materials = [obj.tree for obj in objects if obj.class_id == MATERIAL]
         self.assertEqual(len(materials), 1)
-        envs = dict(materials[0].m_SavedProperties.m_TexEnvs)
+        envs = dict(materials[0]["m_SavedProperties"]["m_TexEnvs"])
         self.assertNotEqual(
-            envs["_MainTex"].m_Texture.m_PathID, 0, "an unbound _MainTex draws the default white"
+            envs["_MainTex"]["m_Texture"]["m_PathID"],
+            0,
+            "an unbound _MainTex draws the default white",
         )
 
 

@@ -72,7 +72,7 @@ installed build's IL (recorded in
 `shamway generate entity`; the writer half is the skinned lane of
 [skinned-gear.md](skinned-gear.md).** A generated entity produces a bundle
 with a `SkinnedMeshRenderer` whose bones are named, bound, and weighted —
-proven by read-back through UnityPy in `tests/test_entity_gen.py` — and
+proven by read-back through unityz in `tests/test_entity_gen.py` — and
 every shipped rig has been staged in a live client (see "End-to-end
 confirmation"). Movement ships too: `--anim` wires a legacy `Animation`
 component with synthesized clips and `AvatarController =

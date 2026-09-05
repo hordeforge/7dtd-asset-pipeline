@@ -32,8 +32,11 @@ from sevendtd_asset_pipeline.bundle_writer import (
 from sevendtd_asset_pipeline.capabilities import has_capability
 
 REVISION = "2022.3.62f2"
-needs_unitypy = unittest.skipUnless(
-    has_capability("UnityPy"), "the writer needs UnityPy for the engine's type trees"
+needs_unityz = unittest.skipUnless(
+    has_capability("unityz"), "the writer needs unityz for the engine's type trees"
+)
+needs_numpy = unittest.skipUnless(
+    has_capability("numpy"), "generated entities are NumPy arithmetic"
 )
 needs_vkd3d = unittest.skipUnless(
     has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
@@ -44,7 +47,7 @@ def read_objects(bundle: Path) -> dict[int, list[dict[str, Any]]]:
     return read_bundle(bundle).trees_by_class()
 
 
-@needs_unitypy
+@needs_unityz
 class LegacyClipTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -179,7 +182,8 @@ class AnimDeclarationTests(unittest.TestCase):
                     parse_anim(path)
 
 
-@needs_unitypy
+@needs_unityz
+@needs_numpy
 class AnimOnPrefabTests(unittest.TestCase):
     """A `.anim.json` beside a skinned source: the prefab carries an Animation
     component with the declared legacy clip."""
@@ -448,7 +452,7 @@ class LimbAnimTests(unittest.TestCase):
         self.assertAlmostEqual(left_keys[0]["time"], 0.0)
         self.assertAlmostEqual(left_keys[-1]["time"], 8.0)
 
-    @needs_unitypy
+    @needs_unityz
     def test_position_curves_preserve_the_bones_rest_translation(self) -> None:
         from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
 
@@ -477,7 +481,7 @@ class LimbAnimTests(unittest.TestCase):
         self.assertEqual(jump_values[0]["value"], {"x": -0.2, "y": 0.6, "z": 0.4})
         self.assertAlmostEqual(jump_values[4]["value"]["y"], 0.8)
 
-    @needs_unitypy
+    @needs_unityz
     def test_same_name_entries_merge_into_one_clip(self) -> None:
         from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
 
@@ -570,7 +574,8 @@ class CombatAnimTests(unittest.TestCase):
         self.assertAlmostEqual(ys[-1], 0.0, places=6)
 
 
-@needs_unitypy
+@needs_unityz
+@needs_numpy
 class LimbAnimBundleTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -640,13 +645,14 @@ class LimbAnimBundleTests(unittest.TestCase):
             run("entity", [str(out), "--rig", "humanoid", "--anim", "gallop"])
 
 
+@needs_numpy
 class BoneColliderTests(unittest.TestCase):
     """A generated entity's bones carry colliders, so the game's physics body
     builds real colliders (PhysicsBodyInstance.bindCollider finds a Box/Capsule/
     Sphere collider on the referenced bone; absent one it creates a
     PhysicsBodyNullCollider and the creature floats)."""
 
-    @needs_unitypy
+    @needs_unityz
     @needs_vkd3d
     def test_every_bone_has_a_collider_component(self) -> None:
         from sevendtd_asset_pipeline.bundle_writer import build_bundle, mesh_source_objects, shader

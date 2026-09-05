@@ -443,7 +443,7 @@ wings), `lower_bones` (each upper's first child, so the knee bends), and
 directly** (`m_MuscleClipSize = 0`, measured from the game's
 `animals.bundle` `_Take 001`) — no compiled `m_Clip` stream, unlike Mecanim
 clips. `anim.py` builds the type-tree dicts and `tests/test_anim.py`
-round-trips them through `build_bundle` and back through UnityPy. Walk
+round-trips them through `build_bundle` and back through unityz. Walk
 selection is pinned without packing a bundle: `tests/test_anim.py`
 `BodyPlanWalkTests` drives `generate entity --anim` and reads the sibling
 `.anim.json`.
@@ -575,8 +575,8 @@ in-game picture.
 The unit suite proves the construction half end to end with no editor and no
 game: `shamway generate entity` writes a GLB; the writer's own skinned lane
 (`mesh_source_objects` → `build_bundle`) turns it into a bundle; and the
-result is read back with UnityPy, which parses Unity's format with none of
-this repository's code — asserting a `SkinnedMeshRenderer` (never a
+result is read back with unityz `extract --json`, an independent
+implementation of Unity's format — asserting a `SkinnedMeshRenderer` (never a
 `MeshRenderer` fallback), 20 named bone transforms, and a mesh whose
 `m_BoneNameHashes` match the authored joint names. The generated
 `entityclasses.xml` is asserted for the mandatory `Prefab`, the `Mesh`, the

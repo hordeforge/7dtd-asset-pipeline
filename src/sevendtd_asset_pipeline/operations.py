@@ -147,7 +147,7 @@ _DEFINITIONS: tuple[Operation, ...] = (
         cost=FAST,
         writes=False,
         needs_config=True,
-        capabilities=("UnityPy",),
+        capabilities=("unityz",),
     ),
     Operation(
         name="check_mesh",
@@ -480,7 +480,7 @@ _DEFINITIONS: tuple[Operation, ...] = (
         cost=FAST,
         writes=True,
         needs_config=False,
-        capabilities=("UnityPy",),
+        capabilities=("unityz",),
     ),
     Operation(
         name="verify_bundle",

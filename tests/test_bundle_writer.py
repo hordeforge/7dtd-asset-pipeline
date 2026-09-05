@@ -39,8 +39,11 @@ from sevendtd_asset_pipeline.references import manifest_assets
 from sevendtd_asset_pipeline.unityfs import inspect_bundle
 
 REVISION = "2022.3.62f2"
-needs_unitypy = unittest.skipUnless(
-    has_capability("UnityPy"), "the writer needs UnityPy for the engine's type trees"
+needs_unityz = unittest.skipUnless(
+    has_capability("unityz"), "the writer needs unityz for the engine's type trees"
+)
+needs_pillow = unittest.skipUnless(
+    has_capability("pillow"), "the texture lane reads PNGs through Pillow"
 )
 needs_trimesh = unittest.skipUnless(
     has_capability("trimesh"), "the mesh lane reads interchange files through trimesh"
@@ -50,7 +53,7 @@ needs_vkd3d = unittest.skipUnless(
 )
 needs_lz4 = unittest.skipUnless(
     importlib.util.find_spec("lz4") is not None,
-    "shader blob compression needs the lz4 writer extra (declared with UnityPy)",
+    "shader blob compression needs the lz4 writer extra (declared in the writer extra)",
 )
 
 
@@ -94,7 +97,7 @@ def write_png(path: Path, size: tuple[int, int] = (4, 2)) -> Path:
     return path
 
 
-@needs_unitypy
+@needs_unityz
 class WriterTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -115,6 +118,7 @@ class WriterTests(unittest.TestCase):
         self.assertTrue(info.has_assetbundle_object)
         self.assertIn(49, info.class_ids)
 
+    @needs_pillow
     def test_unityz_reads_back_every_field_this_writer_wrote(self) -> None:
         # An independent reader of Unity's format, with none of our code in it.
         bundle = self.root / "readback.unity3d"
@@ -198,15 +202,14 @@ class WriterTests(unittest.TestCase):
             build_bundle([], REVISION, "empty.unity3d")
 
     def test_a_revision_from_another_era_fails_loudly_rather_than_silently(self) -> None:
-        # Type trees are versioned in ranges, so a wrong revision does not come
-        # back empty: it comes back as some *other* version's field layout. The
-        # writer must refuse to fill a shape it was not given, which is what
-        # keeps a mistyped revision from producing a plausible wrong bundle.
-        with self.assertRaisesRegex(PipelineError, "cannot serialize"):
+        # unityz packs type trees per exact release and never picks a
+        # neighbouring one, so a wrong revision is a refusal that names the
+        # shipped releases, never some *other* version's field layout.
+        with self.assertRaisesRegex(PipelineError, "no built-in type trees.*3.4.0f1"):
             build_bundle([text_asset("x", "y")], "3.4.0f1", "old.unity3d")
 
     def test_an_unparsable_revision_is_refused(self) -> None:
-        with self.assertRaisesRegex(PipelineError, "no type tree"):
+        with self.assertRaisesRegex(PipelineError, "no built-in type trees"):
             build_bundle([text_asset("x", "y")], "not-a-revision", "bad.unity3d")
 
     def test_a_clip_at_an_unlisted_sample_rate_is_refused_with_the_fix(self) -> None:
@@ -239,6 +242,7 @@ class WriterTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "cannot read clip"):
             audio_clip("myModZero", clip)
 
+    @needs_pillow
     def test_a_texture_over_pillows_decompression_limit_is_refused_not_crashed(self) -> None:
         # DecompressionBombError subclasses Exception directly, so an OSError-
         # only catch let it escape cli.main's handler as a raw traceback.
@@ -253,6 +257,7 @@ class WriterTests(unittest.TestCase):
         finally:
             Image.MAX_IMAGE_PIXELS = original
 
+    @needs_pillow
     def test_a_block_compressed_texture_reports_the_quality_it_achieved(self) -> None:
         # Compression is lossy and opt-in, and a lossy conversion that reports
         # nothing is indistinguishable from a lossless one. The note names the
@@ -277,7 +282,7 @@ class WriterTests(unittest.TestCase):
         self.assertEqual("", quiet.getvalue())
 
 
-@needs_unitypy
+@needs_unityz
 class SourceDirectoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -288,6 +293,7 @@ class SourceDirectoryTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    @needs_pillow
     def test_a_directory_becomes_a_bundle_and_its_membership_manifest(self) -> None:
         (self.sources / "myModNote.txt").write_text("hello", encoding="utf-8")
         write_png(self.sources / "myModPanel.png")
@@ -324,7 +330,7 @@ class SourceDirectoryTests(unittest.TestCase):
             collect_sources(self.root / "absent")
 
 
-@needs_unitypy
+@needs_unityz
 @needs_trimesh
 class MeshTests(unittest.TestCase):
     """The mesh lane: what a real runtime later confirmed, asserted offline.
@@ -435,7 +441,7 @@ class MeshTests(unittest.TestCase):
         self.assertIn("bundle/myModThing.obj", manifest_text)
 
 
-@needs_unitypy
+@needs_unityz
 @needs_trimesh
 class PrefabTests(unittest.TestCase):
     """Cross-object references, and the prefab they exist for.
@@ -587,7 +593,7 @@ class FsbRoundTripTests(unittest.TestCase):
 
 
 class ManifestTests(unittest.TestCase):
-    """The manifest text needs no writer, so it is checked without UnityPy."""
+    """The manifest text needs no writer, so it is checked without the writer."""
 
     def test_the_manifest_round_trips_through_unitys_own_parser(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

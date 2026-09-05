@@ -9,7 +9,7 @@ is what the lanes themselves do: a package whose metadata is present but whose
 native extension will not load is not a usable capability.
 
 Usage:
-    have_module.py UnityPy
+    have_module.py trimesh
     have_module.py PIL numpy trimesh
 """
 

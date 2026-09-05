@@ -39,7 +39,7 @@ environment. The system `python3`, a `PYTHONPATH=src python3 -m …` invocation,
 and another clone's `.venv` (the shared hordeforge checkout vs a worktree) are
 three different ones. They can all import a module named
 `sevendtd_asset_pipeline` and still run the wrong code or miss extras
-(trimesh, UnityPy, Pillow). A build that then asks you to `uv pip install`
+(trimesh, lz4, Pillow). A build that then asks you to `uv pip install`
 from GitHub is the symptom of having used the wrong one.
 
 ```bash

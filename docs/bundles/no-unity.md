@@ -442,9 +442,11 @@ was read out of a real artifact rather than guessed:
 - a SerializedFile version 22 with **type trees written**, because the game's
   own bundles carry them;
 - each object serialized by walking that class's own type tree for the exact
-  revision, taken from UnityPy's per-version database. A type tree *is* the
-  engine's field layout; nothing here guesses one, and a class without one is
-  refused;
+  revision, taken from unityz's built-in release-indexed database
+  (`unityz trees --builtin`) and written by `unityz create`, which re-parses
+  and round-trips its own output before it lands. A type tree *is* the
+  engine's field layout; nothing here guesses one, and a class or release
+  without one is refused;
 - the class-142 `AssetBundle` object, with the `m_Container` table that makes
   each asset reachable by name and the `m_RuntimeCompatibility` and
   `m_PathFlags` values Unity's own container carries;

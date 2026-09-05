@@ -428,14 +428,13 @@ against a real editor's assemblies without starting it.
 the pinned `unityz info --json` contract owns the revision and class-142 gates
 used during staging; it needs no optional Python package.
 
-### UnityPy
+### UnityPy (removed 2026-09-05)
 
-UnityPy currently supplies the versioned built-in class type trees used by the
-synthesized writer. Its reader and extractor roles are being replaced by
-unityz; it remains until unityz can both select those trees by Unity revision
-and create a fresh SerializedFile and bundle rather than only rebuild one.
-Pin its minor version because its own documentation warns that minor releases
-may break APIs.
+UnityPy supplied the versioned built-in class type trees and the object
+serializer of the synthesized writer until unityz 0.1.4 shipped both
+(`trees --builtin` and `create`). It is no longer a dependency or a
+capability; the historical measurements it produced keep their attribution
+in [research-provenance.md](../research/research-provenance.md).
 
 - Official repository/documentation: <https://github.com/K0lb3/UnityPy>
 
@@ -447,20 +446,21 @@ texture, sprite, mesh, shader, FSB5, hierarchy and managed-field diagnostics
 this repository previously reached through Python, and its JSON commands are
 the migration boundary for pipeline code.
 
-`scripts/install-tools.sh` installs the checksum-verified unityz 0.1.3 release
+`scripts/install-tools.sh` installs the checksum-verified unityz 0.1.4 release
 binary on its supported hosts, or builds pinned commit
-`b7ee8db3da36166c45903eea6a2d215a3ff9ef8f` as the fallback. It does not use a
+`92186817dda98b75683f38aacedf417d47b763cc` as the fallback. It does not use a
 sibling checkout. The accepted minimum is a format contract, not a general
 freshness preference: 0.1.2 introduced the nested `info --json` metadata and
-the `fsb --json` validation/status contract this pipeline consumes.
+the `fsb --json` validation/status contract this pipeline consumes, and 0.1.4
+the built-in type-tree database and from-empty creation the writer needs.
 
-It does not yet replace the writer's UnityPy dependency: it consumes type
-trees already in a file or supplied through `--trees`, has no bundled
-release-indexed built-in class-tree database, and rebuilds existing files
-rather than creating the first object table from empty input. That database
-is also the remaining UnityPy-covered reader feature: `inspect --deep`
-refuses an external SerializedFile whose type trees were stripped. The
-measured surface and exact decisions are in the
+Since 0.1.4 it is also the writer's engine: `unityz trees --builtin
+<release>` supplies the exact per-release class trees (2022.3.62f2 today,
+matched by exact release string) and `unityz create` serializes the objects,
+lays out the SerializedFile and UnityFS archive, and verifies the result
+before writing. `inspect --deep` passes `--builtin` for a stripped
+SerializedFile of a shipped release and refuses one of any other release by
+name. The measured surface and exact decisions are in the
 [unityz capability audit](../research/unityz-capability-audit.md).
 
 - Official repository: <https://github.com/hordeforge/unityz>
@@ -511,8 +511,8 @@ integration. This table says which is which, so nobody has to guess — and so
 
 | Tool | State |
 |---|---|
-| **unityz** | **base tool, migration in progress** — pinned 0.1.3 release install (source fallback) and a >=0.1.2 contract probe; full reader/verify/extract and FSB reference-decode coverage; writer creation gaps remain |
-| **UnityPy** | **wired, shrinking** — versioned type trees and fresh-object serialization remain; reader and test usages move to unityz |
+| **unityz** | **base tool** — pinned 0.1.4 release install (source fallback) and a >=0.1.2 contract probe; reader/verify/extract, FSB reference decode, the built-in type trees and the from-empty writer behind `shamway pack` and `build` |
+| **UnityPy** | **removed 2026-09-05** — its type trees and serializer are unityz's `trees --builtin` and `create` |
 | **trimesh** | **wired** — `check-mesh`, and reads glTF/OBJ/STL/PLY into a bundle `Mesh` |
 | **Blender** | **wired** — `generate mesh` (GLB), `generate mesh-icon` (headless Cycles render), `generate bind` (skin an authored mesh onto a shipped rig) |
 | **Pillow** | **wired** — cutouts, atlas cells, contact sheets, the texture lane |

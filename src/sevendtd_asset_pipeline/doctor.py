@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from .bundle_writer import collect_sources
-from .capabilities import capabilities, extra_install, has_capability
+from .capabilities import capabilities, has_capability
 from .config import BUNDLE_SOURCES, PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
@@ -176,7 +176,7 @@ def run_doctor(config: PipelineConfig) -> list[Check]:
 
 
 def _synthesized_checks(config: PipelineConfig) -> list[Check]:
-    """Readiness for the editorless writer: a revision, a source folder, UnityPy.
+    """Readiness for the editorless writer: a revision, a source folder, unityz.
 
     None of the Unity rows apply — there is no project to read a revision from
     and no editor to run — so this answers the three questions that decide
@@ -215,10 +215,12 @@ def _synthesized_checks(config: PipelineConfig) -> list[Check]:
                 Check("OK", "bundle sources", f"{len(found)} asset(s) in {source} ({kinds})")
             )
 
-    if has_capability("UnityPy"):
+    if has_capability("unityz"):
         checks.append(
             Check(
-                "OK", "writer", "UnityPy is installed; type trees for this revision are available"
+                "OK",
+                "writer",
+                "unityz is installed; it supplies the engine's type trees and writes the bundle",
             )
         )
     else:
@@ -226,8 +228,8 @@ def _synthesized_checks(config: PipelineConfig) -> list[Check]:
             Check(
                 "FAIL",
                 "writer",
-                "the editorless writer needs UnityPy for the engine's own type trees: "
-                + extra_install("writer"),
+                "the editorless writer needs unityz for the engine's own type trees and "
+                "serialization: shamway script install-tools",
             )
         )
     return checks

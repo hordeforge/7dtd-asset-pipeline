@@ -114,7 +114,7 @@ TOPICS: dict[str, tuple[str, str]] = {
     ),
     "unityz-audit": (
         "research/unityz-capability-audit.md",
-        "unityz capabilities, migration decisions, and the remaining UnityPy gaps",
+        "unityz capabilities, migration decisions, and the record of removing UnityPy",
     ),
     "release-checklist": ("runbooks/release-checklist.md", "artifact and live acceptance"),
 }

@@ -45,7 +45,7 @@ returns, and three fields a caller needs before running anything:
 | `cost` | `instant`, `fast`, `seconds`, or `minutes` — the worst case, so `build` declares `minutes` for the editor it *may* start. With the default `bundle_source = "synthesized"` it starts none and finishes in milliseconds |
 | `writes` | whether it modifies files; `build`, `pack`, `stage`, `init`, `render_icon`, `review_audio`, `acceptance_provider`, `client_deploy`, and `client_launch` do |
 | `needs_config` | whether it must run inside a scaffolded modlet |
-| `capabilities` | optional tools it requires, e.g. `["UnityPy"]` |
+| `capabilities` | optional tools it requires, e.g. `["unityz"]` |
 
 Discover the surface without parsing help text or prose:
 
@@ -240,7 +240,7 @@ collected into the structure so one broken thing does not hide the rest.
   ],
   "valid": true,
   "problems": [],
-  "capabilities": {"unityz": true, "UnityPy": true, "trimesh": false,
+  "capabilities": {"unityz": true, "trimesh": false,
                    "vkd3d-compiler": false,
                    "libzmolv": false, "glslangValidator": false, "fsb5": false,
                    "gltf_validator": false, "blender": false, "gltfpack": false,
@@ -285,22 +285,20 @@ Every hint pins the canonical git source. The project is not registered on
 PyPI, so a bare-name hint would resolve against the public index — fail
 today, install whoever registers the name first tomorrow.
 
-`inspect --deep` currently refuses a SerializedFile whose type trees were
-stripped. Pipeline-authored bundles and the measured game `Entities`/`trees`
-bundles embed them. UnityPy's bundled TPK could supply trees for the stripped
-case; unityz has no release-indexed built-in tree source yet. This missing
-unityz feature is tracked in the
-[capability audit](research/unityz-capability-audit.md), alongside the same
-creation-side dependency in the synthesized writer.
+`inspect --deep` reads a SerializedFile whose type trees were stripped
+through unityz's built-in release-indexed database (`--builtin`), which
+ships 2022.3.62f2 today and matches the release exactly; a stripped file of
+any other release is refused by name. Pipeline-authored bundles and the
+measured game `Entities`/`trees` bundles embed their trees and never need it.
 
-Python package consumers that synthesize bundles install the `writer` extra.
-The old `inspect` extra remains as a compatibility alias for the same UnityPy,
-LZ4, and independent texture-decoder dependencies, but it no longer unlocks
-deep inspection; the `unityz` command does.
+Python package consumers that synthesize bundles install the `writer` extra
+(lz4 for shader blobs). The old `inspect` extra remains as a compatibility
+alias for the same LZ4 and independent texture-decoder dependencies, but it
+does not unlock deep inspection; the `unityz` command does.
 
 Install everything at once:
 
-- `uv pip install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'` — UnityPy's writer type trees, Pillow, NumPy, trimesh
+- `uv pip install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'` — lz4, Pillow, NumPy, trimesh
 - `scripts/install-tools.sh --with-authoring` — Blender, OpenSCAD, glTF validator, …
 - `scripts/install-tools.sh --with-desktop-capture` — a screenshot tool for `client capture`
 

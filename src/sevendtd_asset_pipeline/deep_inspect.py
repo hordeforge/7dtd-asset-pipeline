@@ -84,11 +84,19 @@ def _objects(report: dict[str, object]) -> list[_Object]:
     return objects
 
 
-def _require_embedded_type_trees(report: dict[str, object], path: Path) -> None:
+def _stripped_revisions(report: dict[str, object], path: Path) -> set[str]:
+    """The revisions of every SerializedFile whose type trees were stripped.
+
+    A file that embeds its trees decodes on its own. A stripped one decodes
+    only through unityz's built-in release-indexed database (`--builtin`),
+    which knows exactly the releases it ships; the caller passes the flag and
+    treats any object still skipped as the release not being shipped.
+    """
     raw_nodes = report.get("nodes_list")
     if not isinstance(raw_nodes, list):
         raise PipelineError("unityz info omitted the node list from deep inspection")
     found = False
+    stripped: set[str] = set()
     for raw_node in raw_nodes:
         if not isinstance(raw_node, dict):
             raise PipelineError("unityz info returned a malformed deep-inspection node")
@@ -99,13 +107,11 @@ def _require_embedded_type_trees(report: dict[str, object], path: Path) -> None:
         if not isinstance(serialized, dict) or not isinstance(serialized.get("type_tree"), bool):
             raise PipelineError("unityz info omitted the SerializedFile type-tree state")
         if not serialized["type_tree"]:
-            raise PipelineError(
-                f"shamway inspect --deep refuses {path}: it has stripped type trees, "
-                "and pinned unityz has no built-in release-indexed tree source yet; "
-                "this UnityPy-covered case is recorded in the unityz capability audit"
-            )
+            revision = serialized.get("unity")
+            stripped.add(revision if isinstance(revision, str) else "unknown revision")
     if not found:
         raise PipelineError(f"unityz found no SerializedFile to inspect deeply in {path}")
+    return stripped
 
 
 def _type_census(report: dict[str, object]) -> tuple[int, dict[int, str], dict[str, int]]:
@@ -227,8 +233,8 @@ def _verification_failures(
             failed.add((node, path_id))
     if _integer(report.get("skipped"), "verification skipped count"):
         # A typeless object has no per-object record in the current unityz
-        # report. Conservatively mark all entries; the documented built-in
-        # type-tree gap must never read as a complete inspection.
+        # report. Conservatively mark all entries; a partial decode must never
+        # read as a complete inspection.
         failed.update((item.node, item.path_id) for item in objects)
     return failed
 
@@ -237,12 +243,22 @@ def deep_inspect(path: Path) -> DeepReport:
     path = path.resolve()
     reader = Unityz(path)
     info = reader.json("info", "--json", "--objects")
-    _require_embedded_type_trees(info, path)
+    stripped = _stripped_revisions(info, path)
+    # A stripped file decodes through unityz's built-in release-indexed trees;
+    # a file that embeds its own trees is unaffected by the flag.
+    trees: tuple[str, ...] = ("--builtin",) if stripped else ()
     objects = _objects(info)
-    stats = reader.json("stats", "--json")
+    stats = reader.json("stats", "--json", *trees)
     object_count, class_names, type_counts = _type_census(stats)
-    hierarchy, document_skips = _hierarchy_index(reader.json_lines("hierarchy", "--json"))
-    failed = _verification_failures(reader.json_report("verify", "--json"), objects)
+    hierarchy, document_skips = _hierarchy_index(reader.json_lines("hierarchy", "--json", *trees))
+    verification = reader.json_report("verify", "--json", *trees)
+    if stripped and _integer(verification.get("skipped"), "verification skipped count"):
+        raise PipelineError(
+            f"shamway inspect --deep refuses {path}: its type trees were stripped and "
+            f"the pinned unityz ships no built-in trees for {', '.join(sorted(stripped))}; "
+            "a stripped file decodes only for a release unityz packs (2022.3.62f2 today)"
+        )
+    failed = _verification_failures(verification, objects)
     by_key = {(item.node, item.path_id): item for item in objects}
 
     container: dict[str, tuple[str | None, int, int]] = {}
@@ -252,7 +268,7 @@ def deep_inspect(path: Path) -> DeepReport:
             if asset_bundle.node is not None
             else str(asset_bundle.path_id)
         )
-        value = reader.json("show", selector)
+        value = reader.json("show", selector, *trees)
         for container_path, (file_id, path_id) in _container_entries(value).items():
             container[container_path] = (asset_bundle.node, file_id, path_id)
 

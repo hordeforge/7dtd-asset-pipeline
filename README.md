@@ -370,9 +370,9 @@ the rules there rather than here.
 - an art-direction contract with prompt patterns, and `shamway prompt`, which
   renders them as a ready prompt with the key colour, the negative list and
   the commands that consume the model's output;
-- optional OSS capabilities that degrade cleanly: UnityPy's versioned type
-  trees for the synthesized writer, trimesh and the Khronos glTF validator
-  for meshes, Blender for geometry and icon renders.
+- optional OSS capabilities that degrade cleanly: trimesh and the Khronos
+  glTF validator for meshes, Blender for geometry and icon renders. The
+  synthesized writer itself needs only the base unityz tool.
 
 **Interfaces**
 

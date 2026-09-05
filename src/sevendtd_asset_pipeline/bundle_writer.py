@@ -17,12 +17,14 @@ the bundles the installed game ships (`docs/research/research-provenance.md`):
       objects:  8-byte aligned, byte_start relative to data_offset
       data:     each object serialized by walking its own type tree
 
-The type trees come from UnityPy's per-version database, which is why this
-backend declares the `UnityPy` capability: a type tree is the engine's own
-field layout for a class at an exact revision, and guessing one is how a
-bundle becomes a silent load failure. The same library then serializes each
-object by walking that tree, so the field order, array shape and alignment
-rules are the ones a reader of Unity's format already agrees on.
+The type trees come from unityz's release-indexed built-in database
+(`unityz trees --builtin`), which is why this backend needs the pinned
+`unityz` command: a type tree is the engine's own field layout for a class at
+an exact revision, and guessing one is how a bundle becomes a silent load
+failure. `unityz create` then serializes each object by walking that tree and
+assembles the file and archive above, verifying its own output before it
+writes, so the field order, array shape and alignment rules are the ones a
+reader of Unity's format already agrees on.
 
 The proof boundary is narrow and stated in `docs/bundles/no-unity.md`: this
 writes containers and objects for a bounded set of classes — `Texture2D`,
@@ -40,17 +42,20 @@ construction, never acceptance.
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import json
 import math
 import struct
 import sys
+import tempfile
 import zlib
 from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
 
-from . import anim, block_compress, shader_blob, transcode
+from . import anim, block_compress, shader_blob, transcode, typetrees, unityz
 from . import particles as particle_fields
 from .capabilities import has_capability, require_capability
 from .errors import PipelineError
@@ -157,111 +162,21 @@ class BundleObject:
     """Path to the `StreamedResource` sub-object whose offset must be patched."""
 
 
-@dataclass
-class _Serialized:
-    metadata: bytes
-    data: bytes
-    resource: bytes = b""
+def _jsonable(value: Any) -> Any:
+    """The field tree in the JSON shape `unityz create` reads.
 
-
-def _node(class_id: int, unity_version: str) -> Any:
-    """The release type tree for one class at one exact Unity revision.
-
-    The node type belongs to UnityPy, an untyped boundary here; callers pass
-    it straight back into that library.
+    Byte payloads become base64 strings (unityz's own byte-array notation),
+    tuples become lists, and maps are already the `[key, value]` pair lists
+    Unity's `map` nodes expect. NaN and infinity are refused by the encoder
+    rather than smuggled in as non-JSON tokens.
     """
-    require_capability("UnityPy")
-    from UnityPy.helpers.Tpk import get_typetree_node
-    from UnityPy.helpers.UnityVersion import UnityVersion
-
-    try:
-        return get_typetree_node(class_id, UnityVersion.from_str(unity_version))
-    except Exception as exc:
-        raise PipelineError(
-            f"no type tree for class {class_id} at Unity {unity_version}: {exc}. "
-            "The type tree is the engine's own field layout; without it this "
-            "backend will not guess one."
-        ) from exc
-
-
-def _write_object(value: dict[str, Any], node: Any) -> bytes:
-    from UnityPy.helpers.TypeTreeHelper import write_typetree
-    from UnityPy.streams import EndianBinaryWriter
-
-    writer = EndianBinaryWriter(endian="<")
-    try:
-        write_typetree(value, node, writer)
-    except Exception as exc:
-        raise PipelineError(
-            f"cannot serialize a {node.m_Type} object: {exc}. Every field the "
-            "type tree names must be present and of the right shape."
-        ) from exc
-    return cast(bytes, writer.bytes)
-
-
-def _common_strings() -> dict[str, int]:
-    """Unity's built-in type-tree string table, reversed into name -> offset.
-
-    Unity writes a type tree's field and type names as offsets: into the local
-    string buffer, or — with the high bit set — into this table it already has
-    in memory. Real bundles use it for nearly every name, so this writer does
-    too; a local copy would work, and would also be the first structural
-    difference from Unity's own output that a diff would show.
-    """
-    from UnityPy.helpers.Tpk import get_common_strings
-
-    reverse: dict[str, int] = {}
-    for offset, text in get_common_strings().items():
-        reverse.setdefault(text, offset)
-    return reverse
-
-
-def _type_tree(node: Any, common: dict[str, int]) -> bytes:
-    """Serialize one class's type tree, as the metadata's per-type payload.
-
-    The node is UnityPy's own tree object; this repository treats that
-    library as an untyped boundary (see pyproject), so its shape is Any here.
-    """
-    nodes: list[tuple[Any, int]] = []
-
-    def walk(current: Any, level: int) -> None:
-        nodes.append((current, level))
-        for child in current.m_Children:
-            walk(child, level + 1)
-
-    walk(node, 0)
-
-    strings = bytearray()
-    offsets: dict[str, int] = {}
-
-    def string_offset(text: str) -> int:
-        if text in common:
-            return common[text] | 0x80000000
-        if text not in offsets:
-            offsets[text] = len(strings)
-            strings.extend(text.encode("utf-8") + b"\x00")
-        return offsets[text]
-
-    body = bytearray()
-    for index, (current, level) in enumerate(nodes):
-        # An array node is flagged, not inferred from its name, because the
-        # reader uses the flag to decide the size-prefixed layout.
-        type_flags = 1 if current.m_Type == "Array" else 0
-        body.extend(
-            struct.pack(
-                "<HBBIIiiIQ",
-                current.m_Version,
-                level,
-                type_flags,
-                string_offset(current.m_Type),
-                string_offset(current.m_Name),
-                current.m_ByteSize if current.m_ByteSize is not None else -1,
-                index,
-                current.m_MetaFlag or 0,
-                0,
-            )
-        )
-    return struct.pack("<II", len(nodes), len(strings)) + bytes(body) + bytes(strings)
+    if isinstance(value, bytes | bytearray):
+        return base64.b64encode(bytes(value)).decode("ascii")
+    if isinstance(value, dict):
+        return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_jsonable(item) for item in value]
+    return value
 
 
 def _resolve_refs(value: Any, path_ids: dict[str, int], owner: str) -> Any:
@@ -294,14 +209,16 @@ def _align(data: bytearray, boundary: int) -> None:
     data.extend(b"\x00" * ((-len(data)) % boundary))
 
 
-def _serialize(
-    objects: list[BundleObject], unity_version: str, target: int, cab: str
-) -> _Serialized:
-    """Build the SerializedFile metadata and data sections."""
-    class_ids = list(dict.fromkeys(obj.class_id for obj in objects))
+def _create(objects: list[BundleObject], unity_version: str, target: int, cab: str) -> bytes:
+    """Hand the object set to `unityz create` and return the archive bytes.
 
-    common = _common_strings()
-    trees = {class_id: _node(class_id, unity_version) for class_id in class_ids}
+    unityz owns the format: it embeds the release trees, serializes every
+    object by walking them, lays out the object table and the UnityFS
+    container, and re-parses and round-trips the result before it writes.
+    This side keeps what is the pipeline's to decide - path ids, the
+    container object, the resource layout - and the refusals it stands for.
+    """
+    trees = typetrees.class_trees({obj.class_id for obj in objects}, unity_version)
 
     resource = bytearray()
     for obj in objects:
@@ -319,60 +236,32 @@ def _serialize(
         resource.extend(obj.resource)
         _align(resource, 16)
 
-    data = bytearray()
-    entries: list[tuple[int, int, int, int]] = []
-    for index, obj in enumerate(objects, start=1):
-        _align(data, 8)
-        start = len(data)
-        data.extend(_write_object(obj.fields, trees[obj.class_id]))
-        entries.append((index, start, len(data) - start, class_ids.index(obj.class_id)))
-
-    metadata = bytearray()
-    metadata.extend(unity_version.encode("utf-8") + b"\x00")
-    metadata.extend(struct.pack("<i", target))
-    metadata.append(1)  # type trees are written; the game's own bundles do
-    metadata.extend(struct.pack("<I", len(class_ids)))
-    for class_id in class_ids:
-        metadata.extend(struct.pack("<ibh", class_id, 0, -1))
-        # The old type hash Unity stores is a compatibility record for the
-        # tree that follows it. The tree is written in full, so a reader has
-        # the layout regardless; this is left zero deliberately.
-        metadata.extend(bytes(16))
-        metadata.extend(_type_tree(trees[class_id], common))
-        metadata.extend(struct.pack("<I", 0))  # no type dependencies
-    metadata.extend(struct.pack("<I", len(entries)))
-    for path_id, start, size, type_index in entries:
-        _align(metadata, 4)
-        metadata.extend(struct.pack("<qQii", path_id, start, size, type_index))
-    metadata.extend(struct.pack("<I", 0))  # script types
-    metadata.extend(struct.pack("<I", 0))  # externals
-    metadata.extend(struct.pack("<I", 0))  # reference types
-    metadata.extend(b"\x00")  # userInformation
-
-    return _Serialized(bytes(metadata), bytes(data), bytes(resource))
-
-
-def _serialized_file(serialized: _Serialized) -> bytes:
-    """Wrap metadata and data in the SerializedFile header (version 22)."""
-    header_size = 48
-    metadata_size = len(serialized.metadata)
-    data_offset = header_size + metadata_size
-    data_offset += (-data_offset) % 8
-    file_size = data_offset + len(serialized.data)
-    header = bytearray()
-    # The four legacy fields are zero from version 22 on; the real values live
-    # in the extended header below, which is where a reader of a modern file
-    # looks. Both are big-endian: only the metadata that follows honours the
-    # endianness byte.
-    header.extend(struct.pack(">IIII", 0, 0, SERIALIZED_VERSION, 0))
-    header.append(0)  # little-endian metadata
-    header.extend(bytes(3))
-    header.extend(struct.pack(">IqqQ", metadata_size, file_size, data_offset, 0))
-    body = bytearray(header)
-    body.extend(serialized.metadata)
-    body.extend(b"\x00" * (data_offset - len(body)))
-    body.extend(serialized.data)
-    return bytes(body)
+    spec: dict[str, Any] = {
+        "revision": unity_version,
+        "platform": target,
+        "cab": cab,
+        "compression": "none",
+        "trees": trees,
+        "objects": [
+            {"pathId": path_id, "class": obj.class_id, "value": _jsonable(obj.fields)}
+            for path_id, obj in enumerate(objects, start=1)
+        ],
+    }
+    with tempfile.TemporaryDirectory(prefix="shamway-create-") as scratch:
+        workdir = Path(scratch)
+        if resource:
+            (workdir / "resource.bin").write_bytes(resource)
+            spec["resource"] = {"file": str(workdir / "resource.bin")}
+        spec_path = workdir / "spec.json"
+        output = workdir / "bundle.unity3d"
+        try:
+            spec_path.write_text(json.dumps(spec, allow_nan=False))
+        except ValueError as exc:
+            raise PipelineError(f"a field holds a value JSON cannot carry: {exc}") from exc
+        result = unityz.invoke("create", str(spec_path), "--out", str(output), subject=cab)
+        if result.returncode != 0:
+            raise unityz.failure("create", result, subject=cab)
+        return output.read_bytes()
 
 
 def _cab_name(bundle_name: str) -> str:
@@ -383,45 +272,6 @@ def _cab_name(bundle_name: str) -> str:
     reviewable in git.
     """
     return "CAB-" + hashlib.md5(bundle_name.encode("utf-8")).hexdigest()  # noqa: S324
-
-
-def _container(revision: str, nodes: list[tuple[str, bytes]]) -> bytes:
-    """Assemble the UnityFS archive around one or more directory nodes."""
-    payload = bytearray()
-    directory: list[tuple[int, int, int, str]] = []
-    for name, content in nodes:
-        # Flag 4 marks the serialized file; the resource stream beside it
-        # carries none, exactly as the directory of a Unity-built bundle does.
-        flags = 0 if name.endswith(".resource") else 4
-        directory.append((len(payload), len(content), flags, name))
-        payload.extend(content)
-
-    table = bytearray(bytes(16))  # the uncompressed-data hash Unity leaves zero
-    table.extend(struct.pack(">I", 1))
-    table.extend(struct.pack(">IIH", len(payload), len(payload), 0))  # one stored block
-    table.extend(struct.pack(">I", len(directory)))
-    for offset, size, flags, name in directory:
-        table.extend(struct.pack(">QQI", offset, size, flags))
-        table.extend(name.encode("utf-8") + b"\x00")
-
-    header = bytearray(b"UnityFS\x00")
-    header.extend(struct.pack(">I", 8))  # archive format 8, as the game ships
-    header.extend(b"5.x.x\x00")
-    header.extend(revision.encode("utf-8") + b"\x00")
-    size_offset = len(header)
-    header.extend(bytes(20))
-    header.extend(b"\x00" * ((-len(header)) % 16))
-    # Flags 0x40: the block table sits at the head of the archive, uncompressed.
-    struct.pack_into(
-        ">QIII",
-        header,
-        size_offset,
-        len(header) + len(table) + len(payload),
-        len(table),
-        len(table),
-        0x40,
-    )
-    return bytes(header) + bytes(table) + bytes(payload)
 
 
 def build_bundle(
@@ -492,11 +342,7 @@ def build_bundle(
             "m_SceneHashes": [],
         },
     )
-    serialized = _serialize([bundle_object, *objects], unity_version, target, cab)
-    nodes = [(cab, _serialized_file(serialized))]
-    if serialized.resource:
-        nodes.append((f"{cab}.resource", serialized.resource))
-    return _container(unity_version, nodes)
+    return _create([bundle_object, *objects], unity_version, target, cab)
 
 
 # -- assets -----------------------------------------------------------------
@@ -540,7 +386,7 @@ TEXTURE_RGBA32 = 4
 # VertexData always declares the engine's full channel table and leaves the
 # slots a mesh does not use zeroed. The count and the slot order were read out
 # of `Data/Bundles/Standalone/Entities/trees` in the installed game with
-# UnityPy (research-provenance.md, "Mesh finding"), not from a wiki.
+# UnityPy at the time (research-provenance.md, "Mesh finding"), not from a wiki.
 MESH_CHANNELS = 14
 CHANNEL_POSITION = 0
 CHANNEL_NORMAL = 1

@@ -119,7 +119,7 @@ game-matched editor (`~/Unity/Hub/Editor/<revision>/Editor/Unity`).
 
 The class-142 gate proves the container, not every component. Search the Unity
 log for all disabled-module warnings and inspect the object table with
-UnityPy/AssetsTools.NET. Ensure the relevant engine module—particles, physics,
+`shamway inspect --deep` (unityz) or AssetsTools.NET. Ensure the relevant engine module—particles, physics,
 audio, animation—is declared. Then verify the exact prefab live.
 
 ## A synthesized mesh loaded, but nothing is drawn where the prop should be

@@ -258,8 +258,9 @@ The migration slices are:
 7. design and implement the two creation-side contracts before removing the
    final UnityPy dependency: the built-in type-tree source landed upstream in
    unityz PR 156 and from-empty SerializedFile and UnityFS creation in
-   unityz PR 157; both await the re-pin plus the writer/default/deep-inspect
-   migration here, after which UnityPy is removed.
+   unityz PR 157, and the installer pins unityz 0.1.4, which carries both.
+   What remains is the writer/default/deep-inspect migration here, after
+   which UnityPy is removed.
 
 Each behavior slice updates its owning command documentation and tests in the
 same commit. Unknown performance limits stay on this page until the broader

@@ -12,6 +12,8 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-05
+
 ### Changed
 
 - The synthesized writer serializes through `unityz create`: `bundle_writer.py`

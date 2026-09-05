@@ -12,6 +12,13 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Changed
+
+- `scripts/install-unityz.sh` pins unityz 0.1.4 (commit 9218681): the
+  release that carries the built-in 2022.3.62f2 type-tree database
+  (`trees --builtin`) and from-empty bundle creation (`create`). Binary and
+  source checksums were verified against the GitHub release assets.
+
 ### Added
 
 - **`shamway generate bind`** — skin an authored glTF/OBJ onto a shipped

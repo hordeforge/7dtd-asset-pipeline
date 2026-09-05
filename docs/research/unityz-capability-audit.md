@@ -100,8 +100,8 @@ from authored PNG/WAV/glTF/VFX inputs.
 | Pipeline surface | Current mechanism | unityz coverage | Decision |
 |---|---|---|---|
 | `shamway inspect` revision and class-142 gate | pinned `unityz info --json` behind `unityz.py` | full after unityz PR 121: embedded revision and class IDs are in `info --json` | migrated; the duplicate parser and its pure-Python LZ4 path are removed |
-| `shamway inspect --deep` object census | unityz `info`, `stats`, `show`, `verify`, and `hierarchy` | full for embedded-tree bundles; stripped 2022.3.62f2 files decode with `--builtin` since unityz PR 156, other releases still refuse | migrated with the existing `DeepReport` shape; pass `--builtin` in the next re-pin and keep the refusal for unshipped releases |
-| Synthesized writer type-tree lookup | UnityPy TPK database selected by Unity version and class ID | full for 2022.3.62f2 since unityz PR 156: `trees --builtin <release> --class <id>` returns the exact tree with sizes, versions and array flags | migrate to the export after the re-pin; keep UnityPy until then |
+| `shamway inspect --deep` object census | unityz `info`, `stats`, `show`, `verify`, and `hierarchy` | full for embedded-tree bundles; stripped 2022.3.62f2 files decode with `--builtin` since unityz PR 156, other releases still refuse | migrated with the existing `DeepReport` shape; pass `--builtin` now that 0.1.4 is pinned and keep the refusal for unshipped releases |
+| Synthesized writer type-tree lookup | UnityPy TPK database selected by Unity version and class ID | full for 2022.3.62f2 since unityz PR 156: `trees --builtin <release> --class <id>` returns the exact tree with sizes, versions and array flags | migrate to the export from the pinned 0.1.4; keep UnityPy until then |
 | `anim.py` and `particles.py` type-tree defaults | UnityPy TPK nodes | full for 2022.3.62f2 through the same export | migrate with the writer, not as a separate exception |
 | Writer read-back tests | pinned unityz `extract --json` through the test adapter | full through `show`, `info`, `hierarchy`, `shader`, and `verify` | migrated; unityz is the independent reader of Python-authored bytes |
 | Shader-object and compiled-blob tests | unityz object trees and enriched `show` shader records | full through `show` / `shader`; decoded record tables are native | migrated; direct byte-level tests remain where they test the Python assembler itself |
@@ -113,7 +113,7 @@ from authored PNG/WAV/glTF/VFX inputs.
 | glTF scene/skin import | pipeline `gltf_scene.py` | not covered in this direction | retain; unityz exports Unity meshes to glTF, which is the inverse operation |
 | BC1/BC3 encoding | pipeline NumPy compressor | decode only | retain the encoder and its independent checks |
 | HLSL/DXBC/SPIR-V/SMOL-V authoring | vkd3d, glslang, zmol-v and `shader_blob.py` | shader blob decode and analysis only | retain compilers and assembler; migrate read-back inspection |
-| Fresh SerializedFile and UnityFS creation | `bundle_writer.py` | full since unityz PR 157: `create <spec.json> --out <file>` builds the format-22 file and UnityFS v8 archive from trees, JSON values and a sidecar, and rebuilds the self-test bundle byte-identically | migrate `_serialize`/`_serialized_file`/`_container` after the re-pin; resource layout and `Ref` resolution stay in Python |
+| Fresh SerializedFile and UnityFS creation | `bundle_writer.py` | full since unityz PR 157: `create <spec.json> --out <file>` builds the format-22 file and UnityFS v8 archive from trees, JSON values and a sidecar, and rebuilds the self-test bundle byte-identically | migrate `_serialize`/`_serialized_file`/`_container` onto the pinned 0.1.4; resource layout and `Ref` resolution stay in Python |
 | Engine method decompilation | ILSpy / monodis | not covered: `unityz managed` reads serialized field layouts, not method bodies | retain the decompilers for engine-behaviour provenance |
 | Historical research facts | named UnityPy measurements | unityz could repeat many, but did not produce the recorded evidence | preserve attribution; remeasure only when a current conclusion depends on it |
 
@@ -179,10 +179,11 @@ extraction to return non-zero instead of printing a partial decode as success.
 At the initial 2026-09-04 measurement, `gh release list --repo
 hordeforge/unityz` returned no releases, so the first reproducible integration
 built merged commit `b3fc09b38f7d0b1d3870981b50164740c5cbeeb7` from a
-checksum-pinned source archive. Unityz subsequently published 0.1.3. The
-current `scripts/install-unityz.sh` installs that checksum-verified release
+checksum-pinned source archive. Unityz subsequently published 0.1.3 and,
+on 2026-09-05, 0.1.4 (the release carrying PRs 156 and 157). The current
+`scripts/install-unityz.sh` installs the checksum-verified 0.1.4 release
 binary on Linux x86_64 and macOS arm64, and builds pinned commit
-`b7ee8db3da36166c45903eea6a2d215a3ff9ef8f` elsewhere or when
+`92186817dda98b75683f38aacedf417d47b763cc` elsewhere or when
 `UNITYZ_FROM_SOURCE=1`. Neither route reads a sibling checkout.
 
 Version 0.1.2 is the explicit downstream contract. It includes the nested

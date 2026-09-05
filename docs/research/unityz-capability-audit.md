@@ -113,7 +113,7 @@ from authored PNG/WAV/glTF/VFX inputs.
 | glTF scene/skin import | pipeline `gltf_scene.py` | not covered in this direction | retain; unityz exports Unity meshes to glTF, which is the inverse operation |
 | BC1/BC3 encoding | pipeline NumPy compressor | decode only | retain the encoder and its independent checks |
 | HLSL/DXBC/SPIR-V/SMOL-V authoring | vkd3d, glslang, zmol-v and `shader_blob.py` | shader blob decode and analysis only | retain compilers and assembler; migrate read-back inspection |
-| Fresh SerializedFile and UnityFS creation | `bundle_writer.py` | not covered from an empty input | retain until unityz exposes creation, not only rebuild |
+| Fresh SerializedFile and UnityFS creation | `bundle_writer.py` | full since unityz PR 157: `create <spec.json> --out <file>` builds the format-22 file and UnityFS v8 archive from trees, JSON values and a sidecar, and rebuilds the self-test bundle byte-identically | migrate `_serialize`/`_serialized_file`/`_container` after the re-pin; resource layout and `Ref` resolution stay in Python |
 | Engine method decompilation | ILSpy / monodis | not covered: `unityz managed` reads serialized field layouts, not method bodies | retain the decompilers for engine-behaviour provenance |
 | Historical research facts | named UnityPy measurements | unityz could repeat many, but did not produce the recorded evidence | preserve attribution; remeasure only when a current conclusion depends on it |
 
@@ -122,8 +122,8 @@ from authored PNG/WAV/glTF/VFX inputs.
 UnityPy remains required for the synthesized writer until the pipeline
 migrates to the upstream contracts. The reader and diagnostic usage is
 replaceable now, and the test read-back usage is replaceable in logical
-slices. Of the two creation-side contracts, one has landed upstream and one is
-still missing:
+slices. Both creation-side contracts have landed upstream and await the
+pipeline's re-pin and migration:
 
 1. **Landed (unityz PR 156, 2026-09-05, not yet in the pinned release):** a
    bundled, release-indexed source of built-in engine class type trees.
@@ -140,10 +140,25 @@ still missing:
    flag, version and byte size; the only difference is the array flag on
    `TypelessData` nodes, which `bundle_writer.py` omits and the built-in tree
    carries. MonoBehaviour script trees remain a `--trees`/`managed` concern.
-2. An API or CLI operation that creates a SerializedFile/object table and a
-   UnityFS bundle from new objects. `unityz edit` and its writers rebuild an
-   existing file; they do not create the first type, object, path ID, or
-   container mapping from empty input.
+2. **Landed (unityz PR 157, 2026-09-05, merged as 0987f16, not yet in the
+   pinned release):** an API and CLI that create a SerializedFile and a
+   UnityFS bundle from new objects. `typetree.writeBlob`,
+   `serialized_writer.create` and `bundle.create` build the first type
+   entry, object table, path IDs and directory nodes from empty input, and
+   `unityz create <spec.json> --out <file>` drives them from a JSON spec
+   (revision, platform, CAB name, `none`/`lz4`, a `--trees` table or its
+   path, objects as path id + class + `show`-shaped value, an optional
+   resource file), re-parsing and round-trip checking the result before the
+   atomic write. Rejections (bad spec, class without a tree, zero or
+   duplicate path id, missing field, dangling same-file `PPtr`, not exactly
+   one class-142 object, streamed reference outside the sidecar) exit 1 and
+   write nothing. Checked against the self-test bundle: `trees` +
+   `extract --json` + `create` reproduces the 9,313,411-byte file byte for
+   byte, the LZ4 variant verifies 604/604 with zero changed fields, and the
+   same spec over the built-in trees differs only in the `TypelessData`
+   array flag noted under item 1. Still owed on the pipeline side: the
+   resource-stream layout stays with the caller, and the independent
+   cross-read from the original contract is not supplied by unityz itself.
 
 The first item also owns the default-value helpers in `anim.py` and
 `particles.py`: those functions walk the selected class tree to produce the
@@ -241,9 +256,9 @@ The migration slices are:
    bank contract in unityz PR 138;
 7. design and implement the two creation-side contracts before removing the
    final UnityPy dependency: the built-in type-tree source landed upstream in
-   unityz PR 156 and awaits the re-pin plus the writer/default/deep-inspect
-   migration here; from-empty SerializedFile and UnityFS creation is still
-   open.
+   unityz PR 156 and from-empty SerializedFile and UnityFS creation in
+   unityz PR 157; both await the re-pin plus the writer/default/deep-inspect
+   migration here, after which UnityPy is removed.
 
 Each behavior slice updates its owning command documentation and tests in the
 same commit. Unknown performance limits stay on this page until the broader

@@ -2997,3 +2997,19 @@ deferred. Hide is peach
 (`--base 198,142,108 --fur 220,168,132 --limb 170,118,88 --paw 96,62,48
 --outline 56,36,28 --seed 11 --size 256`); tan vanished into dirt,
 charcoal was contrast only.
+
+## AssetsTools.NET reads a unityz-created bundle identically (2026-09-05)
+
+Measured with `scripts/cross-read.sh` (AssetsTools.NET 3.0.5 under .NET SDK
+10.0.302, reading through the bundle's own embedded type trees, no class
+database) against pinned `unityz 0.1.4` (`info --json --objects`, `show 1`)
+on the tracked `examples/SelfTestMod/Resources/shamwayselftest.unity3d`,
+which `unityz create` wrote. Both readers report Unity `2022.3.62f2`,
+platform 19, type trees present, node `CAB-8c9178dc4d97f09235b2f3b683f22ca0`,
+the same 604 `(path id, class id, m_Name)` triples in the same order, and
+the same 50 `m_Container` keys in the same order. unityz reports no `name`
+for objects whose tree has no `m_Name`; AssetsTools.NET reports an empty
+string for the same objects, and the comparison treats those as equal.
+This is the second, code-independent reader the UnityPy removal left owed;
+it proves the container and object table are readable by an unrelated
+implementation, not that the engine accepts them.

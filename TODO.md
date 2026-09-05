@@ -99,10 +99,12 @@ through the new path: identical to the old writer's bytes except the array
 flag on two `TypelessData` tree nodes (Unity's own value), `unityz verify`
 604/604. The
 [unityz capability audit](docs/research/unityz-capability-audit.md) records
-the migration. What is still owed there is the cross-read of a created
-bundle by an implementation other than unityz, which now both writes and
-re-reads it; the fresh-client acceptance remains the real gate, as for
-every synthesized bundle.
+the migration. The cross-read by an implementation other than unityz is
+`shamway script cross-read` (AssetsTools.NET, C#): on the self-test bundle
+it reports the same 604 objects and 50 container entries unityz does
+(`tests/test_cross_read.py`, run wherever the .NET SDK is present). The
+fresh-client acceptance remains the real gate, as for every synthesized
+bundle.
 
 The self-test burst `--look` shows flash and sparks; **grey haze is not
 visible**. That is [improvements.md §8](docs/status/improvements.md): packed

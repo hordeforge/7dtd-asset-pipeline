@@ -12,6 +12,8 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-05
+
 ### Added
 
 - `shamway script cross-read BUNDLE` reads a synthesized bundle with

@@ -410,7 +410,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(support.resolve(), Path(windows.detail).resolve())
 
     def test_doctor_reports_the_synthesized_build_readiness(self) -> None:
-        """The editorless writer answers three questions: revision, sources, UnityPy.
+        """The editorless writer answers three questions: revision, sources, unityz.
 
         This branch decided whether `shamway build` can write a bundle at all,
         and none of the Unity-project rows apply to it.
@@ -433,7 +433,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual("FAIL", checks["bundle sources"].status)
         self.assertIn("holds no assets", checks["bundle sources"].detail)
         writer = checks["writer"]
-        self.assertEqual("FAIL" if not has_capability("UnityPy") else "OK", writer.status)
+        self.assertEqual("FAIL" if not has_capability("unityz") else "OK", writer.status)
 
         (config.bundle_source_dir / "myModNote.txt").write_text("hello", encoding="utf-8")
         self.assertEqual("OK", by_name()["bundle sources"].status)
@@ -712,13 +712,13 @@ class ConfigRejectionTests(unittest.TestCase):
                 self.assertEqual(expected_base / config.source_root, config.bundle_source_dir)
 
 
-needs_unitypy = unittest.skipUnless(
-    has_capability("UnityPy"),
-    "the synthesized backend needs UnityPy for the engine's type trees",
+needs_unityz = unittest.skipUnless(
+    has_capability("unityz"),
+    "the synthesized backend needs unityz for the engine's type trees",
 )
 
 
-@needs_unitypy
+@needs_unityz
 class SynthesisStagingTests(unittest.TestCase):
     """`synthesize_bundle` is `run_build`'s editorless second half.
 

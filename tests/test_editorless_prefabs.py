@@ -45,8 +45,8 @@ from sevendtd_asset_pipeline.gltf_scene import parse_gltf
 from sevendtd_asset_pipeline.vfx import parse_vfx
 
 REVISION = "2022.3.62f2"
-needs_unitypy = unittest.skipUnless(
-    has_capability("UnityPy"), "the writer needs UnityPy for the engine's type trees"
+needs_unityz = unittest.skipUnless(
+    has_capability("unityz"), "the writer needs unityz for the engine's type trees"
 )
 needs_trimesh = unittest.skipUnless(
     has_capability("trimesh"), "the mesh lane reads interchange files through trimesh"
@@ -312,7 +312,7 @@ def read_objects(bundle: Path) -> dict[int, list[dict[str, Any]]]:
     return read_bundle(bundle).trees_by_class()
 
 
-@needs_unitypy
+@needs_unityz
 class HierarchyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -494,7 +494,7 @@ class HierarchyTests(unittest.TestCase):
         self.assertEqual("cube", gos[0].name)
 
 
-@needs_unitypy
+@needs_unityz
 class SkinnedTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -644,7 +644,7 @@ def _nomad_gear_bundle() -> Path | None:
 
 @needs_trimesh
 class BoneHashTests(unittest.TestCase):
-    """CRC of the Transform path, and pack-time refusal, independent of UnityPy.
+    """CRC of the Transform path, and pack-time refusal, independent of the writer.
 
     The pack-time refusals run `pack_directory`, which reads the interchange
     file through trimesh — gated, or a job without trimesh fails them with
@@ -707,7 +707,7 @@ def _glb_parts(path: Path) -> tuple[dict[str, Any], bytes]:
     return document, blob
 
 
-@needs_unitypy
+@needs_unityz
 @needs_vkd3d
 @needs_lz4
 class ParticleTests(unittest.TestCase):
@@ -862,7 +862,7 @@ def _write_json(path: Path, document: dict[str, Any]) -> Path:
     return path
 
 
-@needs_unitypy
+@needs_unityz
 @needs_trimesh
 class BackwardCompatTests(unittest.TestCase):
     def test_an_obj_still_emits_mesh_filter_and_mesh_renderer(self) -> None:
@@ -880,7 +880,7 @@ class BackwardCompatTests(unittest.TestCase):
             self.assertFalse(any(obj.class_id == PARTICLE_SYSTEM for obj in objects))
 
 
-@needs_unitypy
+@needs_unityz
 @needs_vkd3d
 @needs_lz4
 class PackDirectoryNewTypesTests(unittest.TestCase):

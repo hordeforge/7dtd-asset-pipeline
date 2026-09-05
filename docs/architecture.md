@@ -90,9 +90,11 @@ of those payloads against RAM. Each scratch directory is removed on exit.
 Unity parsing has one owner: the pinned `unityz` binary handles container
 bounds, decompression, and SerializedFile metadata, while `unityz.py` maps its
 versioned JSON contract into the pipeline's small report types. The pipeline
-does not keep a second UnityFS/LZ4 parser. UnityPy remains on the creation side
-for its release-indexed type-tree database; AssetsTools.NET remains an
-optional independent diagnostic.
+does not keep a second UnityFS/LZ4 parser, and since unityz 0.1.4 the
+creation side is the same owner: `bundle_writer.py` decides path ids, the
+container object and the resource layout, then hands a spec to `unityz
+create`, which embeds the release trees, serializes and verifies.
+AssetsTools.NET remains an optional independent diagnostic.
 
 The icon and clip gates follow the same rule: the PNG check reads the IHDR
 chunk with the standard library and the clip check uses `wave`, so both run on

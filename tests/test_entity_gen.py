@@ -41,8 +41,8 @@ from sevendtd_asset_pipeline.gltf_scene import parse_gltf
 from sevendtd_asset_pipeline.rigs import load_rig, scaled
 
 REVISION = "2022.3.62f2"
-needs_unitypy = unittest.skipUnless(
-    has_capability("UnityPy"), "the writer needs UnityPy for the engine's type trees"
+needs_unityz = unittest.skipUnless(
+    has_capability("unityz"), "the writer needs unityz for the engine's type trees"
 )
 needs_vkd3d = unittest.skipUnless(
     has_capability("vkd3d-compiler"), "the prefab lane needs a usable shader compiler"
@@ -351,7 +351,7 @@ class EntityGeneratorTests(unittest.TestCase):
         self.assertNotEqual(roles["LeftFrontPaw"], roles["Pelvis"])
 
 
-@needs_unitypy
+@needs_unityz
 @needs_vkd3d
 @needs_trimesh
 class EntityBundleTests(unittest.TestCase):

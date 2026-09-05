@@ -18,6 +18,41 @@ UNITYZ_TIMEOUT_SECONDS = 120
 JsonObject = dict[str, object]
 
 
+def executable() -> str:
+    """The pinned unityz on PATH, after the capability probe agreed it is usable."""
+    require_capability("unityz")
+    found = shutil.which("unityz")
+    if found is None:  # The capability probe and execution share one answer.
+        raise PipelineError("unityz disappeared from PATH after its capability check")
+    return found
+
+
+def invoke(command: str, *arguments: str, subject: str) -> subprocess.CompletedProcess[str]:
+    """Run one bounded unityz process; `subject` names the input in errors."""
+    try:
+        return subprocess.run(
+            [executable(), command, *arguments],
+            capture_output=True,
+            text=True,
+            timeout=UNITYZ_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise PipelineError(
+            f"unityz {command} timed out after {UNITYZ_TIMEOUT_SECONDS}s for {subject}"
+        ) from exc
+    except (OSError, UnicodeError) as exc:
+        raise PipelineError(f"cannot run unityz {command} for {subject}: {exc}") from exc
+
+
+def failure(command: str, result: subprocess.CompletedProcess[str], subject: str) -> PipelineError:
+    raw_detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic"
+    detail = " | ".join(line.strip() for line in raw_detail.splitlines() if line.strip())
+    return PipelineError(
+        f"unityz {command} failed for {subject} (exit {result.returncode}): {detail}"
+    )
+
+
 class Unityz:
     """One resolved unityz executable applied repeatedly to one input file."""
 
@@ -25,34 +60,13 @@ class Unityz:
         self.path = path.resolve()
         if not self.path.is_file():
             raise PipelineError(f"cannot read unityz input {self.path}: no such file")
-        require_capability("unityz")
-        executable = shutil.which("unityz")
-        if executable is None:  # The capability probe and execution share one answer.
-            raise PipelineError("unityz disappeared from PATH after its capability check")
-        self.executable = executable
+        self.executable = executable()
 
     def _invoke(self, command: str, *arguments: str) -> subprocess.CompletedProcess[str]:
-        try:
-            return subprocess.run(
-                [self.executable, command, str(self.path), *arguments],
-                capture_output=True,
-                text=True,
-                timeout=UNITYZ_TIMEOUT_SECONDS,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise PipelineError(
-                f"unityz {command} timed out after {UNITYZ_TIMEOUT_SECONDS}s for {self.path}"
-            ) from exc
-        except (OSError, UnicodeError) as exc:
-            raise PipelineError(f"cannot run unityz {command} for {self.path}: {exc}") from exc
+        return invoke(command, str(self.path), *arguments, subject=str(self.path))
 
     def _failure(self, command: str, result: subprocess.CompletedProcess[str]) -> PipelineError:
-        raw_detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic"
-        detail = " | ".join(line.strip() for line in raw_detail.splitlines() if line.strip())
-        return PipelineError(
-            f"unityz {command} failed for {self.path} (exit {result.returncode}): {detail}"
-        )
+        return failure(command, result, subject=str(self.path))
 
     def json(self, command: str, *arguments: str) -> JsonObject:
         """Run a command whose successful stdout is one JSON object."""

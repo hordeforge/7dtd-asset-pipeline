@@ -1,7 +1,7 @@
 """ParticleSystem / ParticleSystemRenderer field graphs for the editorless writer.
 
 Every default that is not an obvious zero comes from a real 2022.3.62f2
-artifact (see docs/research/research-provenance.md): type trees from UnityPy,
+artifact (see docs/research/research-provenance.md): type trees from unityz,
 ParticleSystem objects in the installed game's `zombies/lab.bundle`, and the
 editor-authored AtomicDoomsday `atomicDoomsdayNukeDetonationVfxLow.prefab`.
 """
@@ -11,8 +11,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from .capabilities import require_capability
-from .errors import PipelineError
+from . import typetrees
 from .vfx import (
     CURVE_CONSTANT,
     CURVE_CURVE,
@@ -365,22 +364,13 @@ def _class_default(class_id: int) -> dict[str, Any]:
     return deepcopy(cached)
 
 
-def _release_node(class_id: int) -> Any:
-    from UnityPy.helpers.Tpk import get_typetree_node
-    from UnityPy.helpers.UnityVersion import UnityVersion
-
-    require_capability("UnityPy")
-    try:
-        return get_typetree_node(class_id, UnityVersion.from_str("2022.3.62f2"))
-    except Exception as exc:
-        raise PipelineError(
-            f"no type tree for class {class_id} at Unity 2022.3.62f2: {exc}"
-        ) from exc
+def _release_node(class_id: int) -> typetrees.TreeNode:
+    return typetrees.release_tree(class_id, "2022.3.62f2")
 
 
-def _typetree_default(node: Any) -> Any:
-    kind = node.m_Type
-    children = list(node.m_Children or [])
+def _typetree_default(node: typetrees.TreeNode) -> Any:
+    kind = node.kind
+    children = node.children
     if kind in {
         "int",
         "SInt32",
@@ -413,9 +403,9 @@ def _typetree_default(node: Any) -> Any:
         return []
     fields: dict[str, Any] = {}
     for child in children:
-        if child.m_Type == "Array" and child.m_Name == "Array":
+        if child.kind == "Array" and child.name == "Array":
             return []
-        fields[child.m_Name] = _typetree_default(child)
+        fields[child.name] = _typetree_default(child)
     return fields
 
 

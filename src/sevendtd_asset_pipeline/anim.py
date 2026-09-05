@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import typetrees
 from .errors import PipelineError
 
 # The curve-write flags Unity uses on the animation component.
@@ -73,16 +74,16 @@ def _curve(keyframes: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _typetree_default(node: Any) -> Any:
+def _typetree_default(node: typetrees.TreeNode) -> Any:
     """A default value for every type-tree node, mirroring particles.py.
 
-    The writer's `write_typetree` requires every field the tree names, so a
+    The writer (`unityz create`) requires every field the tree names, so a
     clip dict is the tree's defaults deep-merged with the fields this module
     authors. The walker is small; duplicating it beats importing a sibling
     module's private.
     """
-    kind = node.m_Type
-    children = list(node.m_Children or [])
+    kind = node.kind
+    children = node.children
     if kind in {
         "int",
         "SInt32",
@@ -115,18 +116,14 @@ def _typetree_default(node: Any) -> Any:
         return []
     fields: dict[str, Any] = {}
     for child in children:
-        if child.m_Type == "Array" and child.m_Name == "Array":
+        if child.kind == "Array" and child.name == "Array":
             return []
-        fields[child.m_Name] = _typetree_default(child)
+        fields[child.name] = _typetree_default(child)
     return fields
 
 
 def _clip_defaults() -> dict[str, Any]:
-    from UnityPy.helpers.Tpk import get_typetree_node
-    from UnityPy.helpers.UnityVersion import UnityVersion
-
-    node = get_typetree_node(ANIMATION_CLIP, UnityVersion.from_str("2022.3.62f2"))
-    default = _typetree_default(node)
+    default = _typetree_default(typetrees.release_tree(ANIMATION_CLIP, "2022.3.62f2"))
     return dict(default)
 
 

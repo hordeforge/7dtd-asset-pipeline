@@ -57,7 +57,7 @@ A 7DTD modlet bundle is the friendliest possible case for an offline writer:
 | Tool | What it proves | License | Notes |
 |---|---|---|---|
 | [AssetsTools.NET v3](https://github.com/nesrak1/AssetsTools.NET) | read+write of SerializedFiles and UnityFS archives; adding whole new objects via typetree-driven fields (`AssetsReplacerFromMemory`); LZ4 repack (`Pack(writer, AssetBundleCompressionType.LZ4)`); new MonoScript creation is the one documented gap (irrelevant here, point 1 above) | MIT | C#/.NET; UABEA is its GUI |
-| [UnityPy](https://github.com/K0lb3/UnityPy) (already a capability here) | edit-and-save round trip in Python: parse → modify via typetree dict/class → `env.file.save()` re-serializes the archive; custom block compression hooks | MIT | primarily a patcher; creating files from scratch is not its design centre |
+| [UnityPy](https://github.com/K0lb3/UnityPy) (a capability here until unityz 0.1.4 replaced it on 2026-09-05) | edit-and-save round trip in Python: parse → modify via typetree dict/class → `env.file.save()` re-serializes the archive; custom block compression hooks | MIT | primarily a patcher; creating files from scratch is not its design centre |
 | [Fmod5Sharp](https://github.com/SamboyCoding/Fmod5Sharp) | FSB5 banks can be rebuilt from decoded samples (PCM; Vorbis with care) — the write-side counterpart of python-fsb5 | MIT | C# |
 | [FMOD FSBank API](https://www.fmod.com/docs/2.03/api/fsbank-api.html) | official builder of FSB5 from WAV/PCM | FMOD EULA | binary redistribution terms need review before depending on it |
 | [python-fsb5](https://github.com/HearthSim/python-fsb5) | documents the FSB5 container layout by parsing it; PCM8/16/32 rebuild path shows the exact header fields | MIT | read-only itself |
@@ -135,7 +135,7 @@ here without waiting on anyone.
 | Piece | Where | State |
 |---|---|---|
 | UnityFS container writer, SerializedFile v22 with type trees | `bundle_writer.py` | built; the mirror of `unityfs.py` |
-| typetree-driven object serialization | `bundle_writer.py`, via UnityPy's per-version database | built; a class without a tree is refused, never guessed |
+| typetree-driven object serialization | `unityz create`, fed the release trees from `unityz trees --builtin` (UnityPy's database until 2026-09-05) | built; a class or release without a tree is refused, never guessed |
 | class-142 `AssetBundle` object and its `m_Container` | `bundle_writer.py` | built; field values taken from the game's own bundles |
 | `Texture2D` (RGBA32, inline pixels, bottom-up rows) | `bundle_writer.texture_2d` | built; pixels read back correctly through a real runtime |
 | `AudioClip` (PCM16 in an FSB5 bank in a `.resource` node) | `bundle_writer.audio_clip` | built; decoded by FMOD in a real runtime |
@@ -267,8 +267,8 @@ asset: it says the game read the bytes, never that they are the right bytes.
   earns phase 4.
 - **Phase 4 — surface it.** `bundle_source = "synthesized"` in config,
   registered in `BUNDLE_SOURCES`, wired through doctor/status/build, an entry
-  in `capabilities.REGISTRY` for whatever optional library the writer leans on
-  (UnityPy is already one), docs updated, gates' by-construction caveats
+  in `capabilities.REGISTRY` for whatever optional tool the writer leans on
+  (UnityPy was one until unityz took over on 2026-09-05), docs updated, gates' by-construction caveats
   printed in reports.
 
 Phases 1–3 produce fixtures and evidence even if phase 4 is never reached;

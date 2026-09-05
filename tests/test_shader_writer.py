@@ -43,15 +43,15 @@ from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.errors import PipelineError
 
 REVISION = "2022.3.62f2"
-needs_unitypy = unittest.skipUnless(
-    has_capability("UnityPy"), "the writer needs UnityPy for the engine's type trees"
+needs_unityz = unittest.skipUnless(
+    has_capability("unityz"), "the writer needs unityz for the engine's type trees"
 )
 needs_vkd3d = unittest.skipUnless(
     has_capability("vkd3d-compiler"), "the shader lane compiles HLSL with vkd3d-compiler"
 )
 needs_lz4 = unittest.skipUnless(
     importlib.util.find_spec("lz4") is not None,
-    "shader blob compression needs the lz4 writer extra (declared with UnityPy)",
+    "shader blob compression needs the lz4 writer extra (declared in the writer extra)",
 )
 
 
@@ -233,7 +233,7 @@ class CompileTimeoutTests(unittest.TestCase):
             self.assertIn("killed", message)
 
 
-@needs_unitypy
+@needs_unityz
 @needs_vkd3d
 class ShaderObjectTests(unittest.TestCase):
     def read_back(
@@ -302,7 +302,7 @@ class ShaderObjectTests(unittest.TestCase):
         self.assertEqual(envs["_MainTex"]["m_Texture"]["m_PathID"], 0)
 
 
-@needs_unitypy
+@needs_unityz
 @needs_vkd3d
 class RejectionTests(unittest.TestCase):
     def test_a_material_pointing_at_no_shader_is_refused(self) -> None:
@@ -346,7 +346,7 @@ def textured_box(path: Path) -> Path:
     return path
 
 
-@needs_unitypy
+@needs_unityz
 class SourceLaneTests(unittest.TestCase):
     """A mesh source file becomes a prefab only where a shader compiler exists."""
 

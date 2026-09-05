@@ -2,7 +2,7 @@
 
 The production writer owns the bytes. Tests use this adapter to ask the pinned
 Zig implementation what those bytes contain, preserving the independent-reader
-boundary without depending on UnityPy's Python object wrappers.
+boundary with no Python Unity library in the loop.
 """
 
 from __future__ import annotations

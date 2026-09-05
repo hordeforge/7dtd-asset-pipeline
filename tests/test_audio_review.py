@@ -43,6 +43,7 @@ from sevendtd_asset_pipeline.providers import (
 )
 from sevendtd_asset_pipeline.providers.base import ReviewRequest, ReviewResponse
 from sevendtd_asset_pipeline.providers.fake import FakeProvider
+from sevendtd_asset_pipeline.providers.gemini import GeminiProvider
 
 VALID_INTENT: dict[str, Any] = {
     "schema_version": INTENT_SCHEMA_VERSION,
@@ -608,6 +609,36 @@ class OperationSurfaceTests(unittest.TestCase):
 
 class GeminiFaultTests(unittest.TestCase):
     """The hosted adapter's fault paths, without any network."""
+
+    def test_a_model_id_cannot_rewrite_the_request_url(self) -> None:
+        provider = GeminiProvider()
+        request = ReviewRequest(
+            prompt="x",
+            audios=(),
+            model="gemini-2.5-flash/../../evil",
+            timeout_seconds=1,
+        )
+        with (
+            mock.patch.dict("os.environ", {"GEMINI_API_KEY": "k"}, clear=True),
+            mock.patch("urllib.request.urlopen") as urlopen,
+            self.assertRaisesRegex(PipelineError, "not a model identifier"),
+        ):
+            provider.review(request)
+        urlopen.assert_not_called()
+
+    def test_a_model_id_cannot_inject_headers(self) -> None:
+        provider = GeminiProvider()
+        request = ReviewRequest(
+            prompt="x",
+            audios=(),
+            model="gemini-2.5-flash\r\nHost: evil.example",
+            timeout_seconds=1,
+        )
+        with (
+            mock.patch.dict("os.environ", {"GEMINI_API_KEY": "k"}, clear=True),
+            self.assertRaisesRegex(PipelineError, "not a model identifier"),
+        ):
+            provider.review(request)
 
     def test_an_unreadable_error_body_still_names_the_http_fault(self) -> None:
         """A body that dies mid-read degrades to the status line, never a NameError."""

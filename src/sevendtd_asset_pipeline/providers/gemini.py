@@ -18,7 +18,9 @@ import base64
 import contextlib
 import json
 import os
+import re
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from ..errors import PipelineError
@@ -26,6 +28,8 @@ from .base import MIME_BY_SUFFIX, ProviderLimits, ReviewRequest, ReviewResponse
 
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
 CREDENTIAL_ENV_VARS = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
+# Interpolated into the request URL, so it must be a single path segment.
+_MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 # Gemini's audio documentation lists these containers; the 20 MB figure is the
 # published per-request budget for inline data.
 SUPPORTED_SUFFIXES = (".wav", ".mp3", ".aiff", ".aac", ".ogg", ".flac")
@@ -74,6 +78,11 @@ class GeminiProvider:
         credential = self.credential()
         if credential is None:
             raise PipelineError(f"provider 'gemini' has no credential; {self.configuration_hint()}")
+        if not _MODEL_ID.fullmatch(request.model):
+            raise PipelineError(
+                f"provider 'gemini' model {request.model!r} is not a model identifier "
+                "(letters, digits, '.', '_' and '-' only)"
+            )
         parts: list[dict[str, object]] = [{"text": request.prompt}]
         for payload in request.audios:
             parts.append({"text": f"audio attachment: {payload.name}"})
@@ -93,7 +102,7 @@ class GeminiProvider:
         # this module's fixed https constant plus the requested model name;
         # scheme and host are never caller-controlled.
         http_request = urllib.request.Request(  # noqa: S310
-            f"{API_ROOT}/{request.model}:generateContent",
+            f"{API_ROOT}/{urllib.parse.quote(request.model, safe='-._')}:generateContent",
             data=json.dumps(body).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",

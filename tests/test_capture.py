@@ -424,6 +424,16 @@ class ClipAdoptionTests(unittest.TestCase):
         entry = record_existing_clip(adopted, "thing", "", self.capture_root)
         self.assertEqual(before, {item.name for item in entry.files})
 
+    def test_a_symlink_inside_the_clip_is_refused(self) -> None:
+        from sevendtd_asset_pipeline.capture import record_existing_clip
+
+        secret = self.root / "secret"
+        secret.write_text("ssh-key")
+        (self.source / "extra.png").symlink_to(secret)
+        with self.assertRaisesRegex(PipelineError, "symlink"):
+            record_existing_clip(self.source, "thing", "", self.capture_root)
+        self.assertFalse((self.capture_root / "thing").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

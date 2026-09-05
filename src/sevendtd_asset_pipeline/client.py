@@ -51,6 +51,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -429,21 +430,52 @@ def new_session_id(prefix: str = "shamway") -> str:
 # ------------------------------------------------------------------- deploy
 
 
+# Bidirectional overrides in a folder name reverse adjacent text in logs and
+# listings, so a name can display as a different mod than the one written.
+_BIDI_CLASSES = frozenset({"RLE", "LRE", "RLO", "LRO", "PDF", "FSI", "LRI", "RLI", "PDI"})
+
+
 def _deploy_name(mod_name: str) -> str:
     """Validate a deployment folder name as one plain path component.
 
     The name can come from a mod's own ModInfo.xml or an API parameter, so it
     is untrusted input at this boundary: without this check a name like
     `../../elsewhere` or `/tmp/x` would aim the `rmtree`/`mkdir` below outside
-    the Mods directory.
+    the Mods directory. Control characters and bidi overrides are refused too:
+    they do not traverse, but they spoof the name in logs and listings.
     """
     name = mod_name.strip()
-    if not name or name in (".", "..") or "/" in name or "\\" in name or "\0" in name:
+    if (
+        not name
+        or name in (".", "..")
+        or "/" in name
+        or "\\" in name
+        or "\0" in name
+        or any(ord(character) < 32 or ord(character) == 0x7F for character in name)
+        or any(unicodedata.bidirectional(character) in _BIDI_CLASSES for character in name)
+    ):
         raise PipelineError(
             f"mod name {mod_name!r} is not a single folder name; refusing to derive "
             "a deployment path from it"
         )
     return name
+
+
+def _reject_symlinks(path: Path, *, role: str) -> None:
+    """Refuse a tree `copytree`/`copy2` would follow out of the modlet.
+
+    Those copies follow links by default. A ModInfo.xml, Config file, or
+    nested asset that is a symlink to a host path would then be published
+    into the shared Mods folder as that file's contents.
+    """
+    if path.is_symlink():
+        raise PipelineError(
+            f"refusing to deploy {role} {path.name!r}: it is a symlink, and a "
+            "deploy copies only real files inside the modlet"
+        )
+    if path.is_dir():
+        for child in path.iterdir():
+            _reject_symlinks(child, role=role)
 
 
 def _managed_source_without_dll(mod_root: Path) -> bool:
@@ -493,6 +525,9 @@ def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = Tr
             raise PipelineError(f"{destination} is the mod root itself; refusing to delete it")
     candidates = [mod_root / entry for entry in DEPLOY_ALLOWLIST]
     candidates += sorted(path for path in mod_root.glob("*.dll") if path.is_file())
+    for source in candidates:
+        if source.exists():
+            _reject_symlinks(source, role=source.name)
     staged = destination.with_name(f".{name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
     copied: list[str] = []
     try:

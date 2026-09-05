@@ -208,8 +208,27 @@ class DeployTests(unittest.TestCase):
             for name in ("../hostage", "../../hostage", str(root / "elsewhere"), "..", ".", ""):
                 with self.assertRaises(PipelineError, msg=name):
                     client.deploy_mod(mod, mods_dir, name)
+            for name in ("MyMod\nfoo", "MyMod\x7f", "MyMod\u202e"):
+                with self.assertRaises(PipelineError, msg=repr(name)):
+                    client.deploy_mod(mod, mods_dir, name)
             self.assertTrue(hostage.is_dir())
             self.assertFalse(mods_dir.exists())
+
+    def test_refuses_a_symlink_inside_the_modlet(self) -> None:
+        """copytree/copy2 follow links; a Config file pointing at a host path
+        would otherwise be published into the shared Mods folder as that file."""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mod = root / "MyMod"
+            (mod / "Config").mkdir(parents=True)
+            secret = root / "secret"
+            secret.write_text("ssh-key")
+            (mod / "Config/items.xml").symlink_to(secret)
+            (mod / "ModInfo.xml").write_text("<xml/>")
+            mods_dir = root / "Mods"
+            with self.assertRaisesRegex(PipelineError, "symlink"):
+                client.deploy_mod(mod, mods_dir, "MyMod")
+            self.assertFalse((mods_dir / "MyMod").exists())
 
     def test_deploy_resolves_the_mod_name_from_modinfo(self) -> None:
         """`deploy` without --name reads ModInfo.xml through read_mod_name.

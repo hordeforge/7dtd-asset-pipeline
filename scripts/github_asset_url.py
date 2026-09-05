@@ -22,7 +22,30 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import urllib.parse
 from collections.abc import Iterator
+
+_GITHUB_DOWNLOAD_HOSTS = frozenset(
+    {
+        "github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+    }
+)
+
+
+def _is_github_https_url(url: str) -> bool:
+    """True for an https GitHub release-asset URL with no userinfo or CR/LF."""
+    if any(character in url for character in "\r\n\x00"):
+        return False
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    return (
+        parsed.scheme == "https"
+        and host in _GITHUB_DOWNLOAD_HOSTS
+        and parsed.username is None
+        and parsed.password is None
+    )
 
 
 def _assets(payload: object) -> Iterator[tuple[str, str]]:
@@ -36,7 +59,7 @@ def _assets(payload: object) -> Iterator[tuple[str, str]]:
                 continue
             name = asset.get("name")
             url = asset.get("browser_download_url")
-            if isinstance(name, str) and isinstance(url, str):
+            if isinstance(name, str) and isinstance(url, str) and _is_github_https_url(url):
                 yield name, url
 
 

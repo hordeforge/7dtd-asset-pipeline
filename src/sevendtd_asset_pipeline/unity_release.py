@@ -23,6 +23,9 @@ from .errors import PipelineError
 RELEASE_API = "https://services.api.unity.com/unity/editor/release/v1/releases"
 CHANGESET = re.compile(r"/download_unity/([0-9a-f]+)/")
 WINDOWS_MONO_MODULE = "windows-mono"
+# The installer curl-downloads whatever URL this module returns; keep it on
+# Unity's own CDN even if the release JSON names somewhere else.
+_DOWNLOAD_HOSTS = frozenset({"download.unity3d.com"})
 # The host platform the editor is downloaded for, shared with the published
 # schema (operations.py) and the CLI (--platform).
 DEFAULT_PLATFORM = "LINUX"
@@ -52,6 +55,23 @@ class Release:
             "windows_mono_url": self.windows_mono.url if self.windows_mono else None,
             "windows_mono_md5": self.windows_mono.md5 if self.windows_mono else None,
         }
+
+
+def _require_unity_download(url: str, what: str) -> str:
+    """Refuse a download URL that is not https://download.unity3d.com/…."""
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or host not in _DOWNLOAD_HOSTS
+        or parsed.username is not None
+        or parsed.password is not None
+        or any(character in url for character in "\r\n\x00")
+    ):
+        raise PipelineError(
+            f"Unity's release service returned a non-https download.unity3d.com URL for {what}"
+        )
+    return url
 
 
 def _md5(integrity: object) -> str | None:
@@ -98,7 +118,7 @@ def parse_release(
     if not downloads:
         raise PipelineError(f"Unity {version} has no {platform} X86_64 editor download")
     editor = downloads[0]
-    url = str(editor.get("url", ""))
+    url = _require_unity_download(str(editor.get("url", "")), f"Unity {version}")
     changeset_match = CHANGESET.search(url)
     if not changeset_match:
         raise PipelineError(f"cannot read a changeset from Unity's download URL: {url}")
@@ -116,7 +136,12 @@ def parse_release(
         changeset=changeset_match.group(1),
         editor=Download(url, _md5(editor.get("integrity"))),
         windows_mono=(
-            Download(str(module.get("url", "")), _md5(module.get("integrity"))) if module else None
+            Download(
+                _require_unity_download(str(module.get("url", "")), "windows-mono"),
+                _md5(module.get("integrity")),
+            )
+            if module
+            else None
         ),
     )
 

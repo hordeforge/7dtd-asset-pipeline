@@ -10,6 +10,12 @@
 # nothing here goes stale when the game updates its engine.
 set -euo pipefail
 
+# HTTPS only, including after a 3xx: --location would otherwise follow a
+# redirect onto file:// or http://.
+curl() {
+	command curl --proto '=https' --proto-redir '=https' "$@"
+}
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # The editor archive staged through mktemp below is several gigabytes, and

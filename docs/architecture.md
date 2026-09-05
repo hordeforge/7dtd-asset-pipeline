@@ -37,7 +37,7 @@
 | `icon_check.py` | the atlas gate: cell geometry, alpha, and every `CustomIcon` key |
 | `sound_check.py` | the clip gate: channels, rate, level, clipping, DC offset |
 | `assets_src.py` | the editable-source tree and the provenance contract written into the mod |
-| `client.py` | fresh-client acceptance: the client's per-user paths, allow-listed deployment, Steam launch, OS-layer mute, and log classification |
+| `client.py` | fresh-client acceptance: the client's per-user paths, allow-listed deployment (real files only; a symlink is refused), Steam launch, OS-layer mute, and log classification |
 | `scripts/compile-editor-scripts.sh` | compiles the vendored editor C# against a real editor's assemblies, without starting one |
 | `scripts/install-tools.sh` | host packages, including `vkd3d-compiler` for the writer's shader lane |
 | `scripts/install-unity-editor.sh` | *(opt-in)* the checksum-verified game-matched editor |

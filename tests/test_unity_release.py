@@ -116,6 +116,25 @@ class UnityReleaseTests(unittest.TestCase):
         release = parse_release(payload, "2022.3.62f2")
         self.assertIsNotNone(release.windows_mono)
 
+    def test_a_non_unity_cdn_url_is_refused(self) -> None:
+        payload: dict[str, object] = {
+            "results": [
+                {
+                    "version": "1.2.3f4",
+                    "downloads": [
+                        {
+                            "platform": "LINUX",
+                            "architecture": "X86_64",
+                            "url": "https://evil.example/download_unity/abc123/L/u.tar.xz",
+                            "modules": [],
+                        }
+                    ],
+                }
+            ]
+        }
+        with self.assertRaisesRegex(PipelineError, "download.unity3d.com"):
+            parse_release(payload, "1.2.3f4")
+
 
 class _Response:
     """The slice of urlopen's context manager fetch_release uses."""

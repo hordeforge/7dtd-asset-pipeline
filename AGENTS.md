@@ -335,12 +335,13 @@ gate reads exactly like a passed one — and **never call a synthesized bundle
 design, its shader lane, and what is still unbuilt inside it.
 
 - Changes to `bundle_writer.py` need the same evidence `unityfs.py` does —
-  fixtures for acceptance *and* rejection — plus a read-back through UnityPy,
-  which parses Unity's format with none of this repository's code. Adding an
-  asset class means adding it to `ASSET_KINDS`, giving it a constructor whose
-  field values came from a real artifact rather than from a wiki, and saying in
-  `docs/research/research-provenance.md` which artifact. Never invent a field layout: a
-  class without a type tree for the target revision is refused, deliberately.
+  fixtures for acceptance *and* rejection — plus a read-back through the pinned
+  unityz CLI, which parses Unity's format with none of this repository's writer
+  code. Adding an asset class means adding it to `ASSET_KINDS`, giving it a
+  constructor whose field values came from a real artifact rather than from a
+  wiki, and saying in `docs/research/research-provenance.md` which artifact.
+  Never invent a field layout: a class without a type tree for the target
+  revision is refused, deliberately.
 - `shamway verify-bundle` is the strongest offline evidence available for a
   synthesized bundle, because it is the engine's own loader. When an editor is
   present, run it and say so; when it is not, say that too. It still proves

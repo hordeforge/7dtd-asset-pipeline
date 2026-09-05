@@ -106,7 +106,8 @@ The second is the creation contract the pipeline needs after that data
 source exists; it is tracked separately so an in-place reserializer is never
 mistaken for a from-empty writer. The
 [unityz capability audit](docs/research/unityz-capability-audit.md) owns the
-evidence and the test-reader migration that can proceed before either item.
+evidence and records the completed test-reader migration. These two
+creation-side items are the remaining dependency-removal work.
 
 The self-test burst `--look` shows flash and sparks; **grey haze is not
 visible**. That is [improvements.md §8](docs/status/improvements.md): packed

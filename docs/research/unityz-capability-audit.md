@@ -103,8 +103,8 @@ from authored PNG/WAV/glTF/VFX inputs.
 | `shamway inspect --deep` object census | unityz `info`, `stats`, `show`, `verify`, and `hierarchy` | full for embedded-tree bundles; stripped 2022.3.62f2 files decode with `--builtin` since unityz PR 156, other releases still refuse | migrated with the existing `DeepReport` shape; pass `--builtin` in the next re-pin and keep the refusal for unshipped releases |
 | Synthesized writer type-tree lookup | UnityPy TPK database selected by Unity version and class ID | full for 2022.3.62f2 since unityz PR 156: `trees --builtin <release> --class <id>` returns the exact tree with sizes, versions and array flags | migrate to the export after the re-pin; keep UnityPy until then |
 | `anim.py` and `particles.py` type-tree defaults | UnityPy TPK nodes | full for 2022.3.62f2 through the same export | migrate with the writer, not as a separate exception |
-| Writer read-back tests | UnityPy `load` / `read_typetree` | full through `show`, `info`, `hierarchy`, `shader`, and `verify` | migrate; unityz then becomes the independent reader of Python-authored bytes |
-| Shader-object and compiled-blob tests | UnityPy object views and LZ4 helper | full through `show` / `shader`; decoded record tables are native | migrate the object assertions; keep direct byte-level tests where they test the Python assembler itself |
+| Writer read-back tests | pinned unityz `extract --json` through the test adapter | full through `show`, `info`, `hierarchy`, `shader`, and `verify` | migrated; unityz is the independent reader of Python-authored bytes |
+| Shader-object and compiled-blob tests | unityz object trees and enriched `show` shader records | full through `show` / `shader`; decoded record tables are native | migrated; direct byte-level tests remain where they test the Python assembler itself |
 | `generate audio from-bank` | pinned `unityz fsb` | full in 0.1.2: PCM/ADPCM WAV and Vorbis OGG extraction; incomplete decodes return non-zero | migrated; the generator delegates through the bounded unityz process adapter |
 | FSB5 writer catalogue gate | python-fsb5 CRC lookup and reconstructed setup header | full read-only validation in `unityz fsb --json`, including `setupKnown`, `decodable`, and `valid` | retain python-fsb5 for now because it is also the writer's independent implementation; add unityz validation beside it in the writer-test slice |
 | FSB5 writer independent tests | python-fsb5 rebuilds PCM/Ogg | full extraction, but replacing the only independent reader would reduce implementation independence | retain the independent decoder; unityz becomes an additional cross-repository check, not its replacement |
@@ -230,12 +230,13 @@ The migration slices are:
    while retaining its public report; unityz PR 135 adds subtree-local omission
    counts so only the affected prefab is partial. The typeless-file limit is
    the built-in-tree gap above, not hidden as a complete replacement;
-5. **in progress:** replace UnityPy test readers by domain. The
+5. **done:** replace UnityPy test readers by domain. The
    `bundle_writer`, prefab/hierarchy, skinned-mesh, particle, and generated
    entity round trips now use the pinned unityz `extract --json` manifest,
    object trees, and path IDs. Animation clips, curves, components, and figure
-   hierarchy now use the same contract; shaders remain the final test-reader
-   slice;
+   hierarchy use the same contract. Shader objects, materials, source-lane
+   membership, and decoded DXBC records use unityz `show`; raw assembler tests
+   remain byte-level checks of the Python authoring implementation;
 6. **done:** replace the user-facing FSB decoder after adding the read-only JSON
    bank contract in unityz PR 138;
 7. design and implement the two creation-side contracts before removing the

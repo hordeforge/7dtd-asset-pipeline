@@ -226,8 +226,11 @@ tag has no changelog section.
 - Prefab, hierarchy, skinned-mesh, particle, and generated-entity tests now use
   unityz object trees and path IDs for their independent bundle readback.
 - Animation serialization tests now use unityz for legacy clips, curves,
-  components, and figure hierarchy path IDs. The shader reader remains the
-  final test-only UnityPy migration slice in the capability audit.
+  components, and figure hierarchy path IDs.
+- Shader and material round trips now use unityz object trees and enriched
+  shader-record decoding instead of UnityPy object wrappers and its LZ4 helper.
+  All test-reader domains are migrated; the two creation-side capabilities in
+  `TODO.md` remain before the runtime UnityPy dependency can be removed.
 - `scripts/install-unityz.sh` installs the pinned unityz 0.1.3 release
   binary (Linux x86_64, macOS arm64, checksum-verified) instead of building
   from source; other platforms and `UNITYZ_FROM_SOURCE=1` still build the

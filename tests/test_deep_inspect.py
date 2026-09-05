@@ -99,7 +99,10 @@ class _Reader:
             "failures": verify_failures or [],
         }
 
+    calls: list[tuple[str, ...]]
+
     def json(self, command: str, *arguments: str) -> dict[str, object]:
+        self.__dict__.setdefault("calls", []).append((command, *arguments))
         if command == "info":
             return self.info
         if command == "stats":
@@ -116,11 +119,13 @@ class _Reader:
         raise AssertionError((command, arguments))
 
     def json_lines(self, command: str, *arguments: str) -> list[dict[str, object]]:
+        self.__dict__.setdefault("calls", []).append((command, *arguments))
         if command != "hierarchy":
             raise AssertionError((command, arguments))
         return self.hierarchy
 
     def json_report(self, command: str, *arguments: str) -> dict[str, object]:
+        self.__dict__.setdefault("calls", []).append((command, *arguments))
         if command != "verify":
             raise AssertionError((command, arguments))
         return self.verify
@@ -153,12 +158,38 @@ class DeepReportMappingTests(unittest.TestCase):
         self.assertEqual("", external.object_name)
         self.assertTrue(external.partial)
 
-    def test_a_typeless_bundle_names_the_remaining_unitypy_covered_gap(self) -> None:
+    def test_a_typeless_bundle_decodes_through_the_built_in_trees(self) -> None:
+        """A stripped 2022.3.62f2 file is read with `--builtin`, not refused."""
         reader = _Reader()
-        reader.info["nodes_list"] = [{"path": "CAB", "serialized": {"type_tree": False}}]
+        reader.info["nodes_list"] = [
+            {"path": "CAB", "serialized": {"type_tree": False, "unity": "2022.3.62f2"}}
+        ]
+        with mock.patch("sevendtd_asset_pipeline.deep_inspect.Unityz", return_value=reader):
+            report = deep_inspect(SELF_TEST_BUNDLE)
+        self.assertEqual(4, report.object_count)
+        decoding = [call for call in reader.calls if call[0] != "info"]
+        self.assertTrue(decoding)
+        for call in decoding:
+            self.assertIn("--builtin", call, call)
+        self.assertNotIn("--builtin", next(call for call in reader.calls if call[0] == "info"))
+
+    def test_an_embedded_tree_bundle_never_asks_for_built_in_trees(self) -> None:
+        reader = _Reader()
+        with mock.patch("sevendtd_asset_pipeline.deep_inspect.Unityz", return_value=reader):
+            deep_inspect(SELF_TEST_BUNDLE)
+        for call in reader.calls:
+            self.assertNotIn("--builtin", call, call)
+
+    def test_a_typeless_bundle_of_an_unshipped_release_is_refused_by_name(self) -> None:
+        """unityz packs trees per exact release; an unshipped one leaves objects skipped."""
+        reader = _Reader()
+        reader.info["nodes_list"] = [
+            {"path": "CAB", "serialized": {"type_tree": False, "unity": "2021.3.45f2"}}
+        ]
+        reader.verify["skipped"] = 4
         with (
             mock.patch("sevendtd_asset_pipeline.deep_inspect.Unityz", return_value=reader),
-            self.assertRaisesRegex(PipelineError, "stripped type trees.*UnityPy-covered"),
+            self.assertRaisesRegex(PipelineError, "no built-in trees for 2021.3.45f2"),
         ):
             deep_inspect(SELF_TEST_BUNDLE)
 

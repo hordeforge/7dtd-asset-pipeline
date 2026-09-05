@@ -222,8 +222,10 @@ tag has no changelog section.
 
 - Bundle-writer round-trip tests now inspect Python-authored fields, resource
   sidecars, meshes, and prefab references through the pinned unityz CLI instead
-  of UnityPy. The remaining prefab/entity, animation, and shader test-reader
-  slices stay tracked in the unityz capability audit.
+  of UnityPy.
+- Prefab, hierarchy, skinned-mesh, particle, and generated-entity tests now use
+  unityz object trees and path IDs for their independent bundle readback. Only
+  the animation and shader test-reader slices remain in the capability audit.
 - `scripts/install-unityz.sh` installs the pinned unityz 0.1.3 release
   binary (Linux x86_64, macOS arm64, checksum-verified) instead of building
   from source; other platforms and `UNITYZ_FROM_SOURCE=1` still build the

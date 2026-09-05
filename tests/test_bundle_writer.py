@@ -1,11 +1,11 @@
 """The editorless bundle writer: what it accepts, and what it refuses.
 
 A writer that can only produce files its own reader likes has not been tested,
-so every acceptance here is read back with `unityfs.py` *and* — where the
-optional reader is installed — with UnityPy, which parses Unity's format
-without any of this repository's code. The runtime half of the evidence (a real
-editor loading the result) is `shamway verify-bundle`; it needs Unity and so
-cannot live in this suite. What it proved is recorded in
+so every acceptance here is read back through the pinned unityz CLI, which
+parses Unity's format without any of this repository's writer code. The runtime
+half of the evidence (a real editor loading the result) is `shamway
+verify-bundle`; it needs Unity and so cannot live in this suite. What it proved
+is recorded in
 docs/research/research-provenance.md and docs/status/blockers.md.
 """
 
@@ -18,6 +18,8 @@ import unittest
 import wave
 from pathlib import Path
 from typing import Any, ClassVar
+
+from unityz_readback import decoded_bytes, read_bundle
 
 from sevendtd_asset_pipeline import bundle_writer
 from sevendtd_asset_pipeline.bundle_writer import (
@@ -113,10 +115,8 @@ class WriterTests(unittest.TestCase):
         self.assertTrue(info.has_assetbundle_object)
         self.assertIn(49, info.class_ids)
 
-    def test_unitypy_reads_back_every_field_this_writer_wrote(self) -> None:
+    def test_unityz_reads_back_every_field_this_writer_wrote(self) -> None:
         # An independent reader of Unity's format, with none of our code in it.
-        import UnityPy
-
         bundle = self.root / "readback.unity3d"
         bundle.write_bytes(
             build_bundle(
@@ -129,9 +129,8 @@ class WriterTests(unittest.TestCase):
                 "readback.unity3d",
             )
         )
-        objects = {
-            int(obj.type.value): obj.read_typetree() for obj in UnityPy.load(str(bundle)).objects
-        }
+        by_class = read_bundle(bundle).trees_by_class()
+        objects = {class_id: trees[0] for class_id, trees in by_class.items()}
         self.assertEqual("hello from shamway", objects[49]["m_Script"])
         self.assertEqual((4, 2), (objects[28]["m_Width"], objects[28]["m_Height"]))
         self.assertEqual(4, objects[28]["m_TextureFormat"])  # RGBA32
@@ -142,8 +141,6 @@ class WriterTests(unittest.TestCase):
         self.assertEqual({"mymodnote", "mymodpanel", "mymodblast"}, set(container))
 
     def test_the_clip_resource_is_an_fsb5_bank_the_object_points_into(self) -> None:
-        import UnityPy
-
         bundle = self.root / "clip.unity3d"
         bundle.write_bytes(
             build_bundle(
@@ -152,14 +149,9 @@ class WriterTests(unittest.TestCase):
                 "clip.unity3d",
             )
         )
-        environment = UnityPy.load(str(bundle))
-        clip = next(obj.read_typetree() for obj in environment.objects if obj.type.value == 83)
-        streams = {
-            name: bytes(reader.bytes)
-            for file in environment.files.values()
-            for name, reader in file.files.items()
-            if name.endswith(".resource")
-        }
+        readback = read_bundle(bundle)
+        clip = readback.trees_by_class()[83][0]
+        streams = readback.raw_files_ending(".resource")
         self.assertEqual(1, len(streams))
         name, data = next(iter(streams.items()))
         self.assertTrue(clip["m_Resource"]["m_Source"].endswith(name))
@@ -170,10 +162,8 @@ class WriterTests(unittest.TestCase):
     @unittest.skipUnless(has_capability("fsb5"), "the Vorbis lane gates the header through fsb5")
     def test_pack_carries_compress_audio_all_the_way_to_the_resource(self) -> None:
         # A flag that is threaded but ignored is the failure this checks: the
-        # bank in the packed stream has to be mode 15, read back by UnityPy
+        # bank in the packed stream has to be mode 15, read back by unityz
         # rather than by this repository's own parser.
-        import UnityPy
-
         sources = self.root / "bundle"
         sources.mkdir()
         write_wav(sources / "myModBlast.wav", frames=44100)
@@ -181,15 +171,10 @@ class WriterTests(unittest.TestCase):
         written = self.root / "mod.unity3d"
         written.write_bytes(bundle)
 
-        environment = UnityPy.load(str(written))
-        clip = next(obj.read_typetree() for obj in environment.objects if obj.type.value == 83)
+        readback = read_bundle(written)
+        clip = readback.trees_by_class()[83][0]
         self.assertEqual(1, clip["m_CompressionFormat"], "the packed clip should declare Vorbis")
-        data = next(
-            bytes(reader.bytes)
-            for file in environment.files.values()
-            for name, reader in file.files.items()
-            if name.endswith(".resource")
-        )
+        data = next(iter(readback.raw_files_ending(".resource").values()))
         self.assertEqual(b"FSB5", data[:4])
         self.assertEqual(15, struct.unpack_from("<I", data, 24)[0], "the bank should be Vorbis")
 
@@ -357,22 +342,18 @@ class MeshTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def read_back(self, source: Path) -> dict[str, Any]:
-        import UnityPy
-
         bundle = self.root / "mesh.unity3d"
         bundle.write_bytes(build_bundle([mesh("myModThing", source)], REVISION, "mesh.unity3d"))
-        objects = {
-            int(obj.type.value): obj.read_typetree() for obj in UnityPy.load(str(bundle)).objects
-        }
+        objects = read_bundle(bundle).trees_by_class()
         self.assertIn(43, objects, "no Mesh object survived the round trip")
-        tree: dict[str, Any] = objects[43]
+        tree: dict[str, Any] = objects[43][0]
         return tree
 
     def test_a_mesh_without_uvs_takes_the_short_vertex_stride(self) -> None:
         tree = self.read_back(write_obj(self.root / "myModThing.obj"))
         data = tree["m_VertexData"]
         self.assertEqual(4, data["m_VertexCount"])
-        self.assertEqual(24, len(bytes(data["m_DataSize"])) // 4)  # position + normal
+        self.assertEqual(24, len(decoded_bytes(data["m_DataSize"])) // 4)  # position + normal
         filled = [channel for channel in data["m_Channels"] if channel["dimension"]]
         self.assertEqual([3, 3], [channel["dimension"] for channel in filled])
         self.assertEqual(14, len(data["m_Channels"]), "the full channel table is always declared")
@@ -387,17 +368,17 @@ class MeshTests(unittest.TestCase):
         )
         self.assertEqual(
             32 * tree["m_VertexData"]["m_VertexCount"],
-            len(bytes(tree["m_VertexData"]["m_DataSize"])),
+            len(decoded_bytes(tree["m_VertexData"]["m_DataSize"])),
         )
 
     def test_the_right_handed_source_is_converted_rather_than_mirrored(self) -> None:
         # The single check that separates a correct mesh from one that loads
         # perfectly and is inside-out: X negated *and* winding reversed.
         tree = self.read_back(write_obj(self.root / "myModThing.obj"))
-        stream = bytes(tree["m_VertexData"]["m_DataSize"])
+        stream = decoded_bytes(tree["m_VertexData"]["m_DataSize"])
         first_x = struct.unpack_from("<f", stream, 0)[0]
         self.assertEqual(-1.0, first_x, "the OBJ's x=+1 vertex must arrive at x=-1")
-        indices = struct.unpack_from("<3H", bytes(tree["m_IndexBuffer"]), 0)
+        indices = struct.unpack_from("<3H", decoded_bytes(tree["m_IndexBuffer"]), 0)
         self.assertEqual((2, 1, 0), indices, "face 1/2/3 must be written back to front")
 
     def test_the_submesh_and_bounds_describe_the_whole_geometry(self) -> None:
@@ -471,8 +452,6 @@ class PrefabTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def build(self) -> dict[int, list[dict[str, Any]]]:
-        import UnityPy
-
         source = write_obj(self.root / "myModThing.obj")
         objects = [
             mesh("myModThing", source),
@@ -480,12 +459,9 @@ class PrefabTests(unittest.TestCase):
         ]
         bundle = self.root / "prefab.unity3d"
         bundle.write_bytes(build_bundle(objects, REVISION, "prefab.unity3d"))
-        found: dict[int, list[dict[str, Any]]] = {}
-        self.ids: dict[int, int] = {}
-        for obj in UnityPy.load(str(bundle)).objects:
-            found.setdefault(int(obj.type.value), []).append(obj.read_typetree())
-            self.ids.setdefault(int(obj.type.value), obj.path_id)
-        return found
+        readback = read_bundle(bundle)
+        self.ids = readback.first_path_ids_by_class()
+        return readback.trees_by_class()
 
     def test_every_component_points_back_at_its_game_object(self) -> None:
         objects = self.build()

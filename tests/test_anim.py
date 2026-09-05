@@ -2,9 +2,9 @@
 
 A legacy `AnimationClip` carries its curves directly (m_MuscleClipSize = 0,
 measured from the game's own animals.bundle), so a clip dict serializes
-through the writer's type-tree walk and must come back through UnityPy —
-which parses Unity's format with none of this repository's code — with the
-curves, the legacy flag and the empty compiled stream intact.
+through the writer's type-tree walk and must come back through the pinned
+unityz CLI — which parses Unity's format with none of this repository's writer
+code — with the curves, the legacy flag and the empty compiled stream intact.
 """
 
 from __future__ import annotations
@@ -15,13 +15,20 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+from unityz_readback import read_bundle
+
 from sevendtd_asset_pipeline.anim import (
     animation_component,
     idle_bob_curves,
     legacy_clip,
     rotation_curve,
 )
-from sevendtd_asset_pipeline.bundle_writer import BundleObject, build_bundle
+from sevendtd_asset_pipeline.bundle_writer import (
+    GAME_OBJECT,
+    TRANSFORM,
+    BundleObject,
+    build_bundle,
+)
 from sevendtd_asset_pipeline.capabilities import has_capability
 
 REVISION = "2022.3.62f2"
@@ -34,12 +41,7 @@ needs_vkd3d = unittest.skipUnless(
 
 
 def read_objects(bundle: Path) -> dict[int, list[dict[str, Any]]]:
-    import UnityPy
-
-    found: dict[int, list[dict[str, Any]]] = {}
-    for obj in UnityPy.load(str(bundle)).objects:
-        found.setdefault(int(obj.type.value), []).append(obj.read_typetree())
-    return found
+    return read_bundle(bundle).trees_by_class()
 
 
 @needs_unitypy
@@ -277,17 +279,14 @@ class AnimOnPrefabTests(unittest.TestCase):
         # The Animation lives on a GameObject that is a child of the prefab root
         # and is NOT the root itself (the controller grabs the first child).
         anim_go = animation["m_GameObject"]["m_PathID"]
-        # Recover GameObjects/Transforms from the object tree via UnityPy.
-        import UnityPy
-
-        env = UnityPy.load(str(bundle))
-        gameobjects, transforms = {}, {}
-        for obj in env.objects:
-            if obj.type.name == "GameObject":
-                gameobjects[obj.path_id] = obj.read_typetree()
-            elif obj.type.name == "Transform":
-                t = obj.read_typetree()
-                transforms[obj.path_id] = t
+        # Recover GameObjects/Transforms and their object IDs through unityz.
+        gameobjects: dict[int, dict[str, Any]] = {}
+        transforms: dict[int, dict[str, Any]] = {}
+        for obj in read_bundle(bundle).objects:
+            if obj.class_id == GAME_OBJECT:
+                gameobjects[obj.path_id] = obj.tree
+            elif obj.class_id == TRANSFORM:
+                transforms[obj.path_id] = obj.tree
         go_to_transform = {t["m_GameObject"]["m_PathID"]: ptr for ptr, t in transforms.items()}
         anim_go_name = gameobjects[anim_go]["m_Name"]
         # Prefab root is the file stem; the Animation must be on the 'figure'.

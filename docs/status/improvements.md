@@ -157,10 +157,13 @@ flag on the `TypelessData` nodes of `Texture2D` (`image data`) and `Mesh`
 self-test source packed through the new path is the same size as the old
 writer's output and differs in exactly two bytes, the `TypelessData` array
 flags Unity's own trees carry; `unityz verify` passes 604/604 and packing
-takes 1.1 s instead of 2.4 s. Still owed, tracked here: the cross-read of a
-created bundle by an implementation other than unityz (it now both writes
-and re-reads the file), until then the fresh-client acceptance is the only
-independent check, exactly as for every synthesized bundle.
+takes 1.1 s instead of 2.4 s. The cross-read by an implementation other
+than unityz landed the same day: `shamway script cross-read` reads the
+bundle with AssetsTools.NET and, on the self-test bundle, reports the same
+604 objects (path id, class, name) and 50 container entries unityz does;
+`tests/test_cross_read.py` compares the two wherever the .NET SDK is
+present. The fresh-client acceptance remains the gate for whether the
+engine accepts the container, exactly as for every synthesized bundle.
 
 ## 1. XML patches are never applied, only scanned  — **done (2026-08-31)**
 

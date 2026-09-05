@@ -56,6 +56,11 @@ SCRIPTS: dict[str, tuple[str, str]] = {
         "playtest-capture.sh",
         "photograph the frame a staged acceptance case holds, so a look needs no person watching",
     ),
+    "cross-read": (
+        "cross-read.sh",
+        "read a synthesized bundle with AssetsTools.NET, a reader that shares no code with"
+        " the writer (needs the .NET SDK)",
+    ),
 }
 
 

@@ -146,9 +146,13 @@ that Unity's own trees carry and the old writer omitted; `unityz verify`
 passes 604/604 on the new file and packing takes 1.1 s instead of 2.4 s.
 The committed self-test fixture was regenerated to the new bytes.
 
-Still owed: a cross-read of a created bundle by an implementation other than
-unityz, which now both writes and re-reads the file. The fresh-client
-acceptance remains the independent gate, as for every synthesized bundle.
+The cross-read by an implementation other than unityz is
+`scripts/cross-read.sh` (AssetsTools.NET 3.0.5, C#): it reads the created
+bundle through its embedded type trees and, on the self-test bundle, reports
+the same 604 objects and 50 container entries as `unityz info --json
+--objects`; `tests/test_cross_read.py` compares them wherever the .NET SDK
+is present. The fresh-client acceptance remains the independent gate for
+engine acceptance, as for every synthesized bundle.
 
 ### FSB5 contract closure
 

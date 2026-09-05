@@ -457,6 +457,16 @@ was read out of a real artifact rather than guessed:
   default; `compress_audio` writes Vorbis (mode 15) instead, which is a
   different bank in one respect worth knowing — see below.
 
+Because unityz both writes the file and re-reads it, a second reader that
+shares no code with either is available: `shamway script cross-read
+<bundle>` opens the bundle with [AssetsTools.NET](https://github.com/nesrak1/AssetsTools.NET)
+(C#, needs the .NET SDK) and prints the revision, platform, every object's
+path id, class and name, and the container table, for comparison against
+`unityz info --json --objects`. On the self-test bundle the two agree on all
+604 objects and 50 container entries. That proves construction from two
+directions; it still says nothing about whether the engine accepts the
+result, which only a fresh client shows.
+
 Provenance for each of those is in
 [research-provenance.md](../research/research-provenance.md); the design record, the prior
 art surveyed, and what is not attempted are in

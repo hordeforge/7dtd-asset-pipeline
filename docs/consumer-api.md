@@ -179,7 +179,7 @@ machine**. Only three ever do, and `build` only when the mod set
 | `generate NAME [ARGS]` | no | Blender for `mesh` | **yes** (writes what you ask for) | run a packaged asset generator |
 | `prompt KIND --subject …` | no | no | no | render a house-style image prompt and its lane |
 | `docs [TOPIC]` | no | no | no | print packaged documentation |
-| `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized, playtest-capture) |
+| `script NAME [ARGS]` | depends | no | host packages | run a packaged host script (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized, playtest-capture, cross-read) |
 
 `playtest-synthesized` default suite list is
 `<mod>_bundle,<mod>_block_model,<mod>_editorless` with

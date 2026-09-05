@@ -12,6 +12,16 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Added
+
+- `shamway script cross-read BUNDLE` reads a synthesized bundle with
+  AssetsTools.NET (C#, pinned 3.0.5, needs the .NET SDK), a reader that shares
+  no code with the writer or with unityz, and prints the revision, platform,
+  object table and container entries as JSON. `tests/test_cross_read.py`
+  compares it with `unityz info --json --objects` on the self-test bundle
+  wherever `dotnet` is present; the two agree on all 604 objects and 50
+  container entries. This closes the cross-read the UnityPy removal left owed.
+
 ## [0.3.1] - 2026-09-05
 
 ### Changed

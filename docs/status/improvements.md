@@ -55,24 +55,48 @@ capability backlog.
 
 ### Release-indexed built-in engine-class type trees
 
-**Open; direct UnityPy parity gap.** UnityPy ships a TPK-backed database and can
-select the built-in class tree for a requested Unity revision and class ID.
-Unityz can consume trees embedded in a SerializedFile or supplied with
-`--trees`, but it does not ship and select that release-indexed built-in source.
+**Upstream half landed (2026-09-05); pipeline migration open.** UnityPy ships
+a TPK-backed database and can select the built-in class tree for a requested
+Unity revision and class ID. Unityz now ships the same kind of source:
+[unityz PR 156](https://github.com/hordeforge/unityz/pull/156) (merged as a5a2273d471218779bd36ba89922f50cd25812f2) adds
+`src/builtin_trees.zig`, a database packed from the AssetRipper
+TypeTreeDumps release dump by `scripts/structsdump-to-builtin.py`, embedded in
+the binary and served by exact `(release, class id)` pair. It ships
+2022.3.62f2 (294 concrete classes, 21755 nodes); other releases are added by
+packing their dump and listing it in the table. Matching is exact: an unknown
+release or a class absent from it is an error, never a nearest-version guess.
 
-This affects two concrete paths: `inspect --deep` must refuse an external
-SerializedFile whose trees were stripped, and the synthesized writer still
-uses UnityPy to obtain exact 2022.3.62f2 layouts and version-specific defaults
-for `bundle_writer.py`, `anim.py`, and `particles.py`. Pipeline-authored bundles
-and the measured game `Entities` and `trees` bundles embed their trees, so this
-gap does not weaken their unityz-backed reads.
+The contract this pipeline will consume:
 
-**Close it with:** a pinned unityz library/CLI contract that accepts a Unity
-revision plus built-in class ID and returns the exact tree, backed by fixtures
-for a tree-present file, a stripped file that succeeds through the built-in
-fallback, an unknown revision, and an unavailable class. Migrate both the
-stripped-file reader fallback and the writer/default lookup before marking it
-closed.
+- `unityz trees --builtin 2022.3.62f2 [--class <id>] [--out <file.json>]`
+  prints the `--trees` JSON shape (`__class_ids__` plus one flat node list per
+  class name) where every node carries `m_Type`, `m_Name`, `m_Level`,
+  `m_MetaFlag`, `m_ByteSize`, `m_Version`, `m_TypeFlags` and `m_Index`, which
+  is everything `bundle_writer.py`'s type-tree serializer and the
+  `_typetree_default` walkers in `anim.py` and `particles.py` take from the
+  TPK node today. An unknown release or class exits 1 with one stderr
+  diagnostic and nothing on stdout.
+- `--builtin` on `extract`, `show`, `verify`, `find`, `skin`, `hierarchy`,
+  `stats`, `edit` and `diff --fields` decodes a stripped SerializedFile's
+  built-in classes through the shipped trees keyed by the file's own embedded
+  revision; MonoBehaviour script fields still need `--trees`.
+
+Parity evidence: the self-test bundle embeds UnityPy's TPK trees for its 17
+classes. Compared node by node with the built-in export, every type, name,
+level, meta flag, version and byte size is identical. The one difference is
+that Unity (and the dump) flag `TypelessData` nodes as arrays while
+`bundle_writer.py` sets that flag only on `Array` nodes; the writer's output
+is accepted by the engine, but the built-in tree is the exact one, so the
+migration should take `m_TypeFlags` from the export rather than derive it.
+
+**Close it with:** re-pin unityz to the release carrying PR 156; replace the
+UnityPy TPK lookup in `bundle_writer.py`, `anim.py` and `particles.py` with a
+cached `unityz trees --builtin` export through the process adapter; pass
+`--builtin` from `inspect --deep` so a stripped external 2022.3.62f2 file is
+read instead of refused, while any other release keeps the explicit refusal;
+keep the fixtures for a tree-present file, a stripped file, an unknown
+revision and an unavailable class on the pipeline side. Until that migration
+lands, `bundle_writer.py`, `anim.py` and `particles.py` still import UnityPy.
 
 ### Fresh SerializedFile and UnityFS construction
 

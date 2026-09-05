@@ -222,8 +222,10 @@ The migration slices are:
    while retaining its public report; unityz PR 135 adds subtree-local omission
    counts so only the affected prefab is partial. The typeless-file limit is
    the built-in-tree gap above, not hidden as a complete replacement;
-5. replace UnityPy test readers by domain (`bundle_writer`, prefabs/entities,
-   animation, shaders);
+5. **in progress:** replace UnityPy test readers by domain. The
+   `bundle_writer` field, sidecar, mesh, and prefab round trips now use the
+   pinned unityz `extract --json` manifest and object trees; prefabs/entities,
+   animation, and shaders remain separate migration slices;
 6. **done:** replace the user-facing FSB decoder after adding the read-only JSON
    bank contract in unityz PR 138;
 7. design and implement the two creation-side contracts before removing the

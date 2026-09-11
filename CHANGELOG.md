@@ -12,6 +12,14 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-11
+
+### Changed
+
+- `AGENTS.md` states what this repository owns and does not own, so the
+  pipeline / playtest / sandbox boundaries are readable from the repo itself.
+  No behaviour change.
+
 ## [0.4.0] - 2026-09-05
 
 ### Added

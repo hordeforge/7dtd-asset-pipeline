@@ -4,6 +4,15 @@ This repository is the reusable asset pipeline for 7 Days to Die modlets. It
 is designed to be driven by coding agents, so these rules are the contract.
 Read them before inspecting, planning, editing, or testing anything here.
 
+## Owns
+
+| Owns | Does not own |
+|---|---|
+| Editable Unity assets → validated `Resources/*.unity3d` pipeline (Shamway) | Runtime dedicated server or game host |
+| Offline gates, consumer modlet layout, acceptance helpers | Stock playtest suites (`7dtd-playtest/suites/*.json`) |
+| Example SelfTestMod acceptance wiring that consumes playtest surface | Lab isolation / `sb` CLI (`7dtd-sandbox`) |
+| Invoking `7dtd-vision-review` (deadeye) as advisory evidence only | Declaring stock-fidelity pass/fail for Vanguard suites |
+
 ## What this repository is
 
 `shamway` turns editable source assets into a validated

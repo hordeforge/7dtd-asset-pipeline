@@ -25,6 +25,9 @@ tag has no changelog section.
 
 ### Added
 
+- `shamway capabilities --json` probes `compressonatorcli` and
+  `assetripper` (install: `shamway script install-tools --with-extras`).
+  Neither is required by a pack or inspect command.
 - A skipped-without-game `unityz info --json` budget on the 621 MB
   `trees` fallback: 0.2 s wall / 64 MB RSS. Measured 0.006 s / 13.5 MB
   with the 1.15 GB `.resS` sidecar left compressed; stock 7DTD UnityFS

@@ -45,6 +45,16 @@ class CapabilityTests(unittest.TestCase):
             self.assertIn("GEMINI_API_KEY", message)
             self.assertIn("review-audio", message)
 
+    def test_extras_tools_are_probed_without_being_required(self) -> None:
+        names = {spec.name for spec in REGISTRY}
+        self.assertIn("compressonatorcli", names)
+        self.assertIn("assetripper", names)
+        self.assertIn("gltfpack", names)
+        compress = next(spec for spec in REGISTRY if spec.name == "compressonatorcli")
+        ripper = next(spec for spec in REGISTRY if spec.name == "assetripper")
+        self.assertEqual(compress.install, "shamway script install-tools --with-extras")
+        self.assertEqual(ripper.install, "shamway script install-tools --with-extras")
+
     def test_report_is_json_serializable(self) -> None:
         import json
 

@@ -18,6 +18,10 @@ tag has no changelog section.
   release whose default `info` reads the UnityFS block table and
   decompresses only the blocks covering serialized metadata. Binary and
   source checksums were verified against the GitHub release assets.
+- `scripts/install-unityz.sh` replaces an existing unityz older than the
+  pin. `--check` still reports the >= 0.1.2 contract floor; a host that
+  already had 0.1.2–0.1.5 now gets 0.1.6 on the next install instead of
+  being skipped.
 
 ## [0.5.0] - 2026-09-11
 

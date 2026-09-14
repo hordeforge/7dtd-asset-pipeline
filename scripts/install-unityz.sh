@@ -38,16 +38,39 @@ UNITYZ_FROM_SOURCE=1, downloads the pinned commit's source archive, verifies
 its SHA-256, and builds it with Zig 0.16.0 in ReleaseSafe mode instead.
 UNITYZ_INSTALL_PREFIX changes the destination. Overriding UNITYZ_SOURCE_COMMIT
 also requires the matching UNITYZ_SOURCE_SHA256; an unverified archive is never
-installed.
+installed. An existing unityz older than the pin is replaced; --check still
+only reports the >= 0.1.2 contract floor.
 HELP
+}
+
+unityz_version_of() {
+	local executable="$1" version
+	version="$("$executable" --version 2>/dev/null | awk '$1 == "unityz" {print $2; exit}')"
+	[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+	printf '%s\n' "$version"
 }
 
 unityz_contract_at() {
 	local executable="$1" version major minor patch
-	version="$("$executable" --version 2>/dev/null | awk '$1 == "unityz" {print $2; exit}')"
+	version="$(unityz_version_of "$executable")" || return 1
 	IFS=. read -r major minor patch <<<"$version"
-	[[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]] || return 1
 	((major > 0 || (major == 0 && (minor > 1 || (minor == 1 && patch >= 2)))))
+}
+
+# True when $1 (X.Y.Z) is greater than or equal to $2. Used only in `if`
+# so a false comparison cannot trip `set -e`.
+version_ge() {
+	local IFS=.
+	local -a a b
+	# shellcheck disable=SC2206
+	a=($1)
+	# shellcheck disable=SC2206
+	b=($2)
+	((10#${a[0]:-0} > 10#${b[0]:-0})) && return 0
+	((10#${a[0]:-0} < 10#${b[0]:-0})) && return 1
+	((10#${a[1]:-0} > 10#${b[1]:-0})) && return 0
+	((10#${a[1]:-0} < 10#${b[1]:-0})) && return 1
+	((10#${a[2]:-0} >= 10#${b[2]:-0}))
 }
 
 sha256_file() {
@@ -113,8 +136,12 @@ case "${1:-}" in
 esac
 
 if installed_unityz; then
-	echo "OK: unityz already satisfies the >=0.1.2 pipeline contract ($(command -v unityz))"
-	exit 0
+	current="$(unityz_version_of "$(command -v unityz)")" || current=""
+	if [[ -n "$current" ]] && version_ge "$current" "$UNITYZ_PINNED_VERSION"; then
+		echo "OK: unityz $current already meets the pinned $UNITYZ_PINNED_VERSION ($(command -v unityz))"
+		exit 0
+	fi
+	echo "note: upgrading unityz ${current:-unknown} to pinned $UNITYZ_PINNED_VERSION"
 fi
 
 require curl tar install

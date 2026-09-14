@@ -6,13 +6,13 @@ set -euo pipefail
 # workflow built from the tagged tree; the source archive is that tag's commit
 # (a commit archive, not a tag archive, so GitHub cannot regenerate it under
 # the same name). Bump the version, commit, and all three checksums together.
-UNITYZ_PINNED_VERSION="0.1.7"
-UNITYZ_PINNED_COMMIT="e8199552fc2559f7335c08bb31755114969640a2"
-UNITYZ_PINNED_SOURCE_SHA256="f327d3c9e5bc715f23654fb66b8217d9d0643c865cc0f28d575cfab3a1bc214f"
+UNITYZ_PINNED_VERSION="0.1.8"
+UNITYZ_PINNED_COMMIT="c99e631c8100bc9a06d994e26fd7c886b51de6ed"
+UNITYZ_PINNED_SOURCE_SHA256="3c903c584ba5ac071444796259bcc61e946b7233f0fcb350fc25b94acee7bcc3"
 binary_sha256() {
 	case "$1" in
-		x86_64-linux) echo 4443a1340e13f3a79d6fc63717c1ad969afd27e31dd8c46843c67e33eaafd401 ;;
-		aarch64-macos) echo faa148c9a49dc0c3313974ddf4d6a22f316dbe8f49218a83dff36951f3ad17ad ;;
+		x86_64-linux) echo d0ff1ffa71acc614224a3282e9255cf9e0aa6b6d1016558b902e1a713b67970a ;;
+		aarch64-macos) echo 9019f005dd8649fd202e994b5b91dc5501fbd6786ebdf2c7f845137b1f4f1219 ;;
 	esac
 }
 

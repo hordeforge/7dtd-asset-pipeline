@@ -23,6 +23,10 @@ tag has no changelog section.
 - `scripts/install-unityz.sh` pins unityz 0.1.7 (commit e819955): ships
   2021.3.45f2 built-in type trees alongside 2022.3.62f2. Binary and
   source checksums were verified against the GitHub release assets.
+- `scripts/install-unityz.sh` pins unityz 0.1.8 (commit c99e631): ships
+  the extra LTS dumps (2019.4.41f2, 2020.3.49f1, 2021.3.58f1,
+  2022.3.76f1, 2023.2.18f1). Binary and source checksums were verified
+  against the GitHub release assets.
 - `scripts/install-unityz.sh` replaces an existing unityz older than the
   pin. `--check` still reports the >= 0.1.2 contract floor; a host that
   already had 0.1.2–0.1.5 now gets 0.1.6 on the next install instead of

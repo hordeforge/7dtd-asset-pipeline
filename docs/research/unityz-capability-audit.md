@@ -170,10 +170,11 @@ built merged commit `b3fc09b38f7d0b1d3870981b50164740c5cbeeb7` from a
 checksum-pinned source archive. Unityz subsequently published 0.1.3 and,
 on 2026-09-05, 0.1.4 (the release carrying PRs 156 and 157), and on
 2026-09-14, 0.1.6 (metadata-only `info`, unityz PR 173), and on
-2026-09-14, 0.1.7 (2021.3.45f2 built-in trees, unityz PR 175). The current
-`scripts/install-unityz.sh` installs the checksum-verified 0.1.7 release
+2026-09-14, 0.1.7 (2021.3.45f2 built-in trees, unityz PR 175), and on
+2026-09-14, 0.1.8 (extra LTS dumps, unityz PR 177). The current
+`scripts/install-unityz.sh` installs the checksum-verified 0.1.8 release
 binary on Linux x86_64 and macOS arm64, and builds pinned commit
-`e8199552fc2559f7335c08bb31755114969640a2` elsewhere or when
+`c99e631c8100bc9a06d994e26fd7c886b51de6ed` elsewhere or when
 `UNITYZ_FROM_SOURCE=1`. Neither route reads a sibling checkout.
 
 Version 0.1.2 is the explicit downstream contract. It includes the nested

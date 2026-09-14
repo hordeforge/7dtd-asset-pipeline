@@ -172,11 +172,13 @@ on 2026-09-05, 0.1.4 (the release carrying PRs 156 and 157), and on
 2026-09-14, 0.1.6 (metadata-only `info`, unityz PR 173), and on
 2026-09-14, 0.1.7 (2021.3.45f2 built-in trees, unityz PR 175), and on
 2026-09-14, 0.1.8 (extra LTS dumps, unityz PR 177), and on 2026-09-14,
-0.1.9 (format 2-8 metadata-only `info`, unityz PR 180). The current
-`scripts/install-unityz.sh` installs the checksum-verified 0.1.9 release
-binary on Linux x86_64 and macOS arm64, and builds pinned commit
-`d97fd0ff073c28e89ec939d45d3c11ff22d56b38` elsewhere or when
-`UNITYZ_FROM_SOURCE=1`. Neither route reads a sibling checkout.
+0.1.9 (format 2-8 metadata-only `info`, unityz PR 180), and on
+2026-09-15, 0.1.10 (`trees --builtin` listing and `metadata_only`,
+unityz PR 182). The current `scripts/install-unityz.sh` installs the
+checksum-verified 0.1.10 release binary on Linux x86_64 and macOS arm64,
+and builds pinned commit `4f2126382b08370c9b2b016f73dc80bf48df30be`
+elsewhere or when `UNITYZ_FROM_SOURCE=1`. Neither route reads a sibling
+checkout.
 
 Version 0.1.2 is the explicit downstream contract. It includes the nested
 metadata added in unityz PR 121, the version signal from PR 123, the corrected

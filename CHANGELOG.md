@@ -31,6 +31,10 @@ tag has no changelog section.
   2-8 metadata-only `info` (header plus trailing metadata, not the
   object-data hole). Binary and source checksums were verified against
   the GitHub release assets.
+- `scripts/install-unityz.sh` pins unityz 0.1.10 (commit 4f21263):
+  `trees --builtin` lists shipped dumps; UnityFS `info --json` includes
+  `metadata_only`. Binary and source checksums were verified against
+  the GitHub release assets.
 - `scripts/install-unityz.sh` replaces an existing unityz older than the
   pin. `--check` still reports the >= 0.1.2 contract floor; a host that
   already had 0.1.2–0.1.5 now gets 0.1.6 on the next install instead of

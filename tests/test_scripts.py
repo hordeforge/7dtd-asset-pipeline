@@ -73,6 +73,15 @@ class ScriptRegistryTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "install-tools"):
             path("no-such-script")
 
+    def test_install_tools_extras_installs_gltfpack_compressonator_and_assetripper(self) -> None:
+        source = Path(__file__).resolve().parents[1] / "scripts" / "install-tools.sh"
+        text = source.read_text(encoding="utf-8")
+        extras = text[text.index("install_extras()") :]
+        extras = extras[: extras.index("\n}\n") + 2]
+        self.assertIn("install_binary_release gltfpack", extras)
+        self.assertIn("install_binary_release compressonatorcli", extras)
+        self.assertIn("install_assetripper", extras)
+
     def test_install_unityz_upgrades_an_older_than_pin_binary(self) -> None:
         """A host with 0.1.2+ already on PATH used to skip the pin forever."""
         source = Path(__file__).resolve().parents[1] / "scripts" / "install-unityz.sh"

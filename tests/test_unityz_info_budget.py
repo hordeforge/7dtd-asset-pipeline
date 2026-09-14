@@ -18,7 +18,6 @@ from pathlib import Path
 
 from sevendtd_asset_pipeline.unityz import invoke
 
-
 # Measured 0.006 s / 13768 kB on the installed trees bundle (unityz 0.1.6).
 INFO_BUDGET_SECONDS = 0.2
 INFO_BUDGET_RSS_KB = 64 * 1024
@@ -38,8 +37,7 @@ class UnityzInfoBudgetTests(unittest.TestCase):
         trees = _trees_bundle()
         if trees is None:
             self.skipTest(
-                "SEVEN_DAYS_TO_DIE_DIR is unset or has no "
-                "Data/Bundles/Standalone/Entities/trees"
+                "SEVEN_DAYS_TO_DIE_DIR is unset or has no Data/Bundles/Standalone/Entities/trees"
             )
 
         _ = resource.getrusage(resource.RUSAGE_CHILDREN)

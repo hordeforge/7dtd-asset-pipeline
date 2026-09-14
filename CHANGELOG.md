@@ -23,6 +23,13 @@ tag has no changelog section.
   already had 0.1.2–0.1.5 now gets 0.1.6 on the next install instead of
   being skipped.
 
+### Added
+
+- A skipped-without-game `unityz info --json` budget on the 621 MB
+  `trees` fallback: 0.2 s wall / 64 MB RSS. Measured 0.006 s / 13.5 MB
+  with the 1.15 GB `.resS` sidecar left compressed; stock 7DTD UnityFS
+  files in this install have no LZMA or LZHAM blocks.
+
 ## [0.5.0] - 2026-09-11
 
 ### Changed

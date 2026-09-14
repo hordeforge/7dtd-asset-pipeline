@@ -76,6 +76,68 @@ Closing a blocker is a commit, not a note in a chat:
 If a run **fails**, that is the blocker doing its job. Fix the cause, then
 close the entry — never edit the entry to match what happened.
 
+### The one sitting at the screen
+
+Everything below needs a person in front of a live client, and nothing else.
+Collected here so it can be done in one session instead of six. Items 1 and
+2 are blockers 6 and 4 above and keep their commands in
+[blockers.md](docs/status/blockers.md); the rest are the smaller owed looks
+and listens scattered through the docs, each with the page that owns it.
+Every look ends the same way: `shamway client capture LABEL --observable
+"..."` records the frame, and the reviewer writes the `verdict` into
+`.local/acceptance/manifest.json`, which nothing else ever fills in.
+
+Set up once: `shamway script playtest-synthesized` from `examples/SelfTestMod`
+deploys and loads the self-test bundle; `GFX_API` picks the backend. Then:
+
+1. **Blocker 6, the rest of it.** One prop is signed off; every other
+   self-test asset's look is still owed. `shamway script playtest-synthesized
+   --look STEM` for `shamwaySelfTestBird` and `shamwaySelfTestCrocodile`
+   (captured 2026-08-31, `verdict: null`), and for `gear` and `timednuke`,
+   which have no capture at all.
+2. **Blocker 4** in the same sitting: `render-icon` and the six
+   `GeneratedAsset` helpers executing in an editor with a display.
+3. **Verdicts owed on frames already taken.** `shamway client capture --list`
+   shows `shamwaySelfTestArachnid` and `shamwaySelfTestDino` (observable
+   says "signed 2026-08-31", field still `null`), `vulkan-staged` and
+   `vulkan2-staged` (the Vulkan lane is described as confirmed in
+   [improvements.md](docs/status/improvements.md#the-vulkan-sub-program);
+   the manifest does not say so). Write the verdicts or the sign-offs are
+   prose only.
+4. **Burst grey haze** ([improvements.md §8](docs/status/improvements.md)):
+   `--look` with no stem; a person names grey haze without being told where
+   to look, capture `burst --observable "grey haze left, gold flash centre,
+   orange streaks right"`. Likely needs a denser smoke card first.
+5. **Humanoid feet** ([improvements.md §9](docs/status/improvements.md)):
+   `--look shamwaySelfTestHumanoid`; feet read as feet, not blades or a web.
+   The 2026-08-31 capture has `verdict: null` and streaks on record.
+6. **A Vorbis clip heard in a client, unmuted.** `compress_audio` is off by
+   default partly because no client has played one
+   ([audio.md](docs/authoring/audio.md), [no-unity.md](docs/bundles/no-unity.md)).
+   `shamway pack --compress-audio` the self-test source, deploy, fire, listen
+   for three clean beeps; say in the capture that the run was unmuted.
+7. **A block-compressed texture seen in a client.** `compress_textures`
+   (DXT1/DXT5) has an offline PSNR gate and no capture; pack with
+   `--compress-textures`, look at the orientation card, record whether the
+   R, arrow and stripes still read.
+8. **Skinned gear on a live character.**
+   [skinned-gear.md](docs/authoring/skinned-gear.md) says plainly that where
+   it marks something inferred, nobody has run it. A synthesized gear piece
+   worn by the player, looked at while moving, is that run.
+9. **Model critique against a real experience.**
+   [PRD 0001](docs/prds/0001-contextual-model-audio-review.md) (a human
+   listen beside a model's audio critique) and
+   [PRD 0002](docs/prds/0002-video-based-asset-review.md) (a human look
+   beside a model's video critique) each keep acceptance boxes unchecked
+   until a person compares the two; both need `GEMINI_API_KEY` and consent.
+10. **Blockers 3, 5, 2 and 1** stay in their table order: an editor-built
+    bundle through a fresh client, the second machine, Hub sign-in, and a
+    host without the editor installed.
+
+Closing any of these follows "How to close one" above: the entry moves with
+its measured output, and the page that made the weaker claim is corrected in
+the same commit.
+
 ## Everything else
 
 Capability work is [improvements.md](docs/status/improvements.md), which

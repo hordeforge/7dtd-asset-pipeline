@@ -244,6 +244,7 @@ collected into the structure so one broken thing does not hide the rest.
                    "vkd3d-compiler": false,
                    "libzmolv": false, "glslangValidator": false, "fsb5": false,
                    "gltf_validator": false, "blender": false, "gltfpack": false,
+                   "compressonatorcli": false, "assetripper": false,
                    "openscad": false, "pillow": false, "numpy": false,
                    "magick": false, "xvfb": false, "desktop-capture": false,
                    "ffmpeg": false, "model-audio-review": false}

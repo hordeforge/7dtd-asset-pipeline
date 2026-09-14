@@ -292,6 +292,25 @@ REGISTRY: tuple[_Spec, ...] = (
         install="bun install -g gltfpack",
     ),
     _Spec(
+        name="compressonatorcli",
+        kind="command",
+        probe="compressonatorcli",
+        unlocks=("measure BC1-7 savings before a texture or clip set stays on the synth path",),
+        purpose="GPUOpen command-line block compressor; not a pack encoder, a "
+        "measurement tool for whether a clip or texture set should leave the "
+        "synthesized BC1/BC3 lane",
+        install="shamway script install-tools --with-extras",
+    ),
+    _Spec(
+        name="assetripper",
+        kind="command",
+        probe="assetripper",
+        unlocks=("read-only vanilla prefab/material/graph export for research",),
+        purpose="export a vanilla prefab, material or graph set from the installed "
+        "game for reference reading; never copied into a mod",
+        install="shamway script install-tools --with-extras",
+    ),
+    _Spec(
         name="openscad",
         kind="command",
         probe="openscad",

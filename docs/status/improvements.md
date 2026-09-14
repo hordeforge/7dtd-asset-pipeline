@@ -494,9 +494,13 @@ lanes; these are the additions the current gaps argue for:
 | [python-fsb5](https://github.com/HearthSim/python-fsb5) | audio | independently decode writer output in tests and gate Vorbis setup headers; pinned unityz now owns reference extraction |
 | [Compressonator](https://github.com/GPUOpen-Tools/compressonator) / bc7enc | texture | measure what block compression would save before deciding a clip-or-texture set stays on the synth path |
 
-Each is optional, installable per mod, and belongs behind
-`shamway capabilities --json` when one becomes load-bearing for a command —
-never guessed at.
+gltfpack, compressonatorcli, and assetripper are probed by
+`shamway capabilities --json` and install via `install-tools.sh --with-extras`
+(gltfpack also via `bun install -g gltfpack`). None is required by a pack
+or inspect command. python-fsb5 is the `audio` extra; bc7enc_rdo remains a
+source build. A command that starts depending on one of these still has to
+declare it in `capabilities=` — presence in the registry is not a guess
+that it is load-bearing.
 
 ## 8. Self-test burst haze is not visible at `--look`
 

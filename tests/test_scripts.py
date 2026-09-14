@@ -73,6 +73,18 @@ class ScriptRegistryTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "install-tools"):
             path("no-such-script")
 
+    def test_install_unityz_upgrades_an_older_than_pin_binary(self) -> None:
+        """A host with 0.1.2+ already on PATH used to skip the pin forever."""
+        source = Path(__file__).resolve().parents[1] / "scripts" / "install-unityz.sh"
+        text = source.read_text(encoding="utf-8")
+        self.assertNotIn(
+            "already satisfies the >=0.1.2 pipeline contract",
+            text,
+        )
+        self.assertIn("already meets the pinned", text)
+        self.assertIn("upgrading unityz", text)
+        self.assertIn("UNITYZ_PINNED_VERSION", text)
+
     def test_playtest_acceptance_refuses_mixed_visual_suites(self) -> None:
         """Load, prefab-look, and block-place must not share one PLAYTEST_SUITE."""
         source = Path(__file__).resolve().parents[1] / "scripts" / "playtest-acceptance.sh"

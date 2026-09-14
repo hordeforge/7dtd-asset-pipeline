@@ -214,11 +214,12 @@ commit includes that fix, so the pipeline can trust exit status before parsing
 stdout.
 
 The command-level benchmark now covers a small shipped bundle and one large
-LZ4 shipped bundle as well as the synthesized self-test. It is still not a
-durable performance budget: LZMA and sidecar-backed game artifacts and peak
-memory remain not checked. The metadata-only `info` path in unityz 0.1.6
-removed the measured large-fallback regression without restoring a second
-parser (1.22 s whole-container to 0.006 s on the installed `trees` bundle).
+LZ4 shipped bundle as well as the synthesized self-test. The sidecar-backed
+`trees` fallback is budgeted at 0.2 s / 64 MB RSS for default `info --json`
+(measured 0.006 s / 13.5 MB on unityz 0.1.6). A scan of 288 stock 7DTD
+UnityFS files found no LZMA or LZHAM data blocks. The metadata-only `info`
+path in unityz 0.1.6 removed the measured large-fallback regression without
+restoring a second parser.
 
 ## Where it landed
 

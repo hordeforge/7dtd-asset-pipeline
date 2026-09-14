@@ -38,11 +38,14 @@ payloads. The installer pins that release. Restoring a pipeline-local prefix
 parser is still rejected.
 
 On the installed 621 MB `trees` fallback, ReleaseSafe `unityz info --json`
-dropped from 1.22 s (whole-container) to 0.006 s; nested revision
-`2022.3.62f2`, 23 types, 3145 objects and 20 class IDs match the full
-read. LZMA and sidecar-backed bundles and peak memory still need
-measurement before setting a performance budget. The full commands and
-artifact context are recorded in the
+dropped from 1.22 s (whole-container) to 0.006 s / 13.5 MB RSS; nested
+revision `2022.3.62f2`, 23 types, 3145 objects and 20 class IDs match the
+full read. That bundle is the sidecar-backed case (1.15 GB `.resS` node).
+A scan of 288 stock 7DTD UnityFS files found LZ4/uncompressed blocks only
+— no LZMA or LZHAM. The inspect budget for that artifact is 0.2 s wall /
+64 MB RSS (`tests/test_unityz_info_budget.py`, skipped without
+`SEVEN_DAYS_TO_DIE_DIR`). The full commands and artifact context are
+recorded in the
 [unityz capability audit](../research/unityz-capability-audit.md).
 
 ## UnityPy removal blockers

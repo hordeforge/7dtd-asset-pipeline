@@ -14,6 +14,8 @@ tag has no changelog section.
 
 ### Changed
 
+- `gltfpack`'s capability install hint is `shamway script install-tools --with-extras`, matching Compressonator and AssetRipper.
+
 - `scripts/install-unityz.sh` pins unityz 0.1.6 (commit 154332a): the
   release whose default `info` reads the UnityFS block table and
   decompresses only the blocks covering serialized metadata. Binary and

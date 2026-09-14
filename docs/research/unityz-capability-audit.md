@@ -168,10 +168,11 @@ At the initial 2026-09-04 measurement, `gh release list --repo
 hordeforge/unityz` returned no releases, so the first reproducible integration
 built merged commit `b3fc09b38f7d0b1d3870981b50164740c5cbeeb7` from a
 checksum-pinned source archive. Unityz subsequently published 0.1.3 and,
-on 2026-09-05, 0.1.4 (the release carrying PRs 156 and 157). The current
-`scripts/install-unityz.sh` installs the checksum-verified 0.1.4 release
+on 2026-09-05, 0.1.4 (the release carrying PRs 156 and 157), and on
+2026-09-14, 0.1.6 (metadata-only `info`, unityz PR 173). The current
+`scripts/install-unityz.sh` installs the checksum-verified 0.1.6 release
 binary on Linux x86_64 and macOS arm64, and builds pinned commit
-`92186817dda98b75683f38aacedf417d47b763cc` elsewhere or when
+`154332a273ac14d081fbcd4893081d3ed4b7fc85` elsewhere or when
 `UNITYZ_FROM_SOURCE=1`. Neither route reads a sibling checkout.
 
 Version 0.1.2 is the explicit downstream contract. It includes the nested
@@ -215,8 +216,9 @@ stdout.
 The command-level benchmark now covers a small shipped bundle and one large
 LZ4 shipped bundle as well as the synthesized self-test. It is still not a
 durable performance budget: LZMA and sidecar-backed game artifacts and peak
-memory remain not checked. A unityz metadata-only streaming path would remove
-the measured large-fallback regression without restoring a second parser.
+memory remain not checked. The metadata-only `info` path in unityz 0.1.6
+removed the measured large-fallback regression without restoring a second
+parser (1.22 s whole-container to 0.006 s on the installed `trees` bundle).
 
 ## Where it landed
 

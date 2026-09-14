@@ -446,9 +446,9 @@ texture, sprite, mesh, shader, FSB5, hierarchy and managed-field diagnostics
 this repository previously reached through Python, and its JSON commands are
 the migration boundary for pipeline code.
 
-`scripts/install-tools.sh` installs the checksum-verified unityz 0.1.4 release
+`scripts/install-tools.sh` installs the checksum-verified unityz 0.1.6 release
 binary on its supported hosts, or builds pinned commit
-`92186817dda98b75683f38aacedf417d47b763cc` as the fallback. It does not use a
+`154332a273ac14d081fbcd4893081d3ed4b7fc85` as the fallback. It does not use a
 sibling checkout. The accepted minimum is a format contract, not a general
 freshness preference: 0.1.2 introduced the nested `info --json` metadata and
 the `fsb --json` validation/status contract this pipeline consumes, and 0.1.4
@@ -511,7 +511,7 @@ integration. This table says which is which, so nobody has to guess — and so
 
 | Tool | State |
 |---|---|
-| **unityz** | **base tool** — pinned 0.1.4 release install (source fallback) and a >=0.1.2 contract probe; reader/verify/extract, FSB reference decode, the built-in type trees and the from-empty writer behind `shamway pack` and `build` |
+| **unityz** | **base tool** — pinned 0.1.6 release install (source fallback) and a >=0.1.2 contract probe; reader/verify/extract, FSB reference decode, metadata-only `info`, the built-in type trees and the from-empty writer behind `shamway pack` and `build` |
 | **UnityPy** | **removed 2026-09-05** — its type trees and serializer are unityz's `trees --builtin` and `create` |
 | **trimesh** | **wired** — `check-mesh`, and reads glTF/OBJ/STL/PLY into a bundle `Mesh` |
 | **Blender** | **wired** — `generate mesh` (GLB), `generate mesh-icon` (headless Cycles render), `generate bind` (skin an authored mesh onto a shipped rig) |

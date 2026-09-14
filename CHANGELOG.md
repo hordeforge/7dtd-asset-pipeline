@@ -12,6 +12,13 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Changed
+
+- `scripts/install-unityz.sh` pins unityz 0.1.6 (commit 154332a): the
+  release whose default `info` reads the UnityFS block table and
+  decompresses only the blocks covering serialized metadata. Binary and
+  source checksums were verified against the GitHub release assets.
+
 ## [0.5.0] - 2026-09-11
 
 ### Changed

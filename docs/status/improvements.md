@@ -28,22 +28,21 @@ Closed recently, kept here so the pattern is visible:
   comparing every `TOPICS` page byte-for-byte (`tests/test_assets.py`,
   `DocumentationTests`); it caught seven drifted pages on its first run.
 
-## Unityz metadata-only streaming
+## Unityz metadata-only streaming — **done (2026-09-14)**
 
-The unified reader is faster on the normal installed-game discovery artifact:
-`Data/Bundles/Standalone/Entities/Entities` is 1.6 KB here, where
-`unityz info --json` took 0.002 seconds versus 0.101 seconds for the Python CLI
-and its old prefix parser. The fallback `trees` bundle exposes the opposite
-cost: it is 621 MB, the prefix parser took 0.116 seconds, and unityz's current
-whole-container read took 1.365 seconds.
+**Closed.** Upstream [unityz PR 173](https://github.com/hordeforge/unityz/pull/173)
+landed the metadata-only `info` path (release 0.1.6): it reads the UnityFS
+block table and decompresses only the blocks covering each SerializedFile's
+type trees and object table. Default `info --json` no longer walks shader
+payloads. The installer pins that release. Restoring a pipeline-local prefix
+parser is still rejected.
 
-What closes this is a metadata-only unityz path that reads the UnityFS block
-table and only decompresses the blocks covering the serialized type/object
-tables. The pipeline should keep one reader and take that optimization
-upstream; restoring a pipeline-local parser would recreate the two-contract
-problem this migration removes. LZMA and sidecar-backed bundles and peak
-memory still need measurement before setting a performance budget. The full
-commands and artifact context are recorded in the
+On the installed 621 MB `trees` fallback, ReleaseSafe `unityz info --json`
+dropped from 1.22 s (whole-container) to 0.006 s; nested revision
+`2022.3.62f2`, 23 types, 3145 objects and 20 class IDs match the full
+read. LZMA and sidecar-backed bundles and peak memory still need
+measurement before setting a performance budget. The full commands and
+artifact context are recorded in the
 [unityz capability audit](../research/unityz-capability-audit.md).
 
 ## UnityPy removal blockers

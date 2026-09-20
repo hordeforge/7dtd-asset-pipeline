@@ -12,6 +12,8 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-20
+
 ### Changed
 
 - `gltfpack`'s capability install hint is `shamway script install-tools --with-extras`, matching Compressonator and AssetRipper.

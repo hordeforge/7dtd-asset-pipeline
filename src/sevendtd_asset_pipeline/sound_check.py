@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import array
 import math
-import sys
 import wave
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .errors import PipelineError
+from .generators.audio import read_wav
 
 FULL_SCALE = 32768.0
 # Shared with the published schema (operations.py) and the CLI (--max-seconds).
@@ -63,36 +63,20 @@ class SoundReport:
 
 
 def _read(path: Path) -> tuple[array.array[int], int, int, int]:
+    """Read a clip through the audio lane's one WAV reader.
+
+    `read_wav` validates the same things (16-bit PCM, a sane header) and
+    reports them as the generator's `SystemExit` contract; this gate is an API
+    operation, so its failures must be `PipelineError` and get converted here.
+    `read_wav` only ever returns 16-bit PCM, hence the fixed bit width.
+    """
     try:
-        with wave.open(str(path), "rb") as handle:
-            channels = handle.getnchannels()
-            width = handle.getsampwidth()
-            rate = handle.getframerate()
-            frames = handle.readframes(handle.getnframes())
+        samples, channels, rate = read_wav(path)
+    except SystemExit as exc:
+        raise PipelineError(str(exc).removeprefix("ERROR: ")) from None
     except (OSError, wave.Error) as exc:
         raise PipelineError(f"cannot read WAV {path}: {exc}") from exc
-    if width != 2:
-        raise PipelineError(
-            f"{path} is {width * 8}-bit PCM; convert it to 16-bit first "
-            f"(shamway generate audio convert)"
-        )
-    # A header can declare either field zero (or negative, which reads back
-    # wrapped); every duration and silence measure below divides by them.
-    if channels < 1 or rate < 1:
-        raise PipelineError(
-            f"{path} declares {channels} channel(s) at {rate} Hz; the WAV header "
-            "is damaged beyond measurement"
-        )
-    # The samples stay in a two-byte array buffer rather than a list of Python
-    # ints: a contract-max clip is 2.9 million samples, and materializing each
-    # one as an int object peaked at 172 MB where the buffer needs about 6.
-    samples = array.array("h")
-    samples.frombytes(frames)
-    # WAV holds little-endian samples; 'h' is native order, so a big-endian
-    # host reads every measurement from byte-swapped values without this.
-    if sys.byteorder == "big":
-        samples.byteswap()
-    return samples, channels, rate, width * 8
+    return samples, channels, rate, 16
 
 
 def _silence_edges(mono: array.array[int], rate: int, floor: float) -> tuple[float, float]:

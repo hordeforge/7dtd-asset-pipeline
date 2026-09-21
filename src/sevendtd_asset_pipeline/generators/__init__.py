@@ -51,7 +51,7 @@ GENERATORS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "cutout": (
         "cutout",
         "cut a generated image out of its flat key background, or a grayscale mask into a card",
-        ("pillow",),
+        ("pillow", "numpy"),
     ),
     "particle-card": (
         "particle_card",

@@ -20,7 +20,7 @@ extra. Ask what is usable
 right now with `shamway capabilities --json`.
 `shamway generate` already ships working generators
 built on this stack — sound synthesis and audio conversion (standard library
-only), background cutout and icons (Pillow), texture maps (Pillow + NumPy), and
+only), icons (Pillow), background cutout and texture maps (Pillow + NumPy), and
 meshes (Blender). A mod that opted into an editor additionally gets
 `GeneratedAsset.cs`, for prefabs, materials, imports, particles and audio, and
 `IconRenderer.cs`, for rendering a prefab into an atlas icon. Start from those.
@@ -516,7 +516,7 @@ integration. This table says which is which, so nobody has to guess — and so
 | **trimesh** | **wired** — `check-mesh`, and reads glTF/OBJ/STL/PLY into a bundle `Mesh` |
 | **Blender** | **wired** — `generate mesh` (GLB), `generate mesh-icon` (headless Cycles render), `generate bind` (skin an authored mesh onto a shipped rig) |
 | **Pillow** | **wired** — cutouts, atlas cells, contact sheets, the texture lane |
-| **NumPy** | **wired** — `generate texture-maps`, and the BC1/BC3 block compressor |
+| **NumPy** | **wired** — `generate texture-maps`, `generate cutout`, and the BC1/BC3 block compressor |
 | **Khronos glTF Validator** | **wired** — `check-mesh --strict`; degrades to a `skipped:` line when absent |
 | **screenshot backends** | **wired** — `client capture` picks one per session type |
 | **xvfb** | **wired** — `render-icon` on a headless host |

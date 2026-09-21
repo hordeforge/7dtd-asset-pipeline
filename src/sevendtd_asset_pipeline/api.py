@@ -66,7 +66,7 @@ from .icon_render import (
 )
 from .localization_check import LocalizationReport, check_localization
 from .mesh_check import DEFAULT_MAX_EXTENT, MeshReport, check_mesh
-from .operations import Operation
+from .operations import PATH_PARAM, Operation
 from .operations import get as get_operation
 from .patch_check import PatchReport, check_patches
 from .prompts import PromptResult
@@ -530,9 +530,35 @@ def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str,
             raise PipelineError(
                 f"operation {operation.name!r} got {name}={value!r}; expected one of: {options}"
             )
+    arguments = _coerced(operation, arguments)
     for capability in operation.capabilities:
         require_capability(capability)
     return arguments
+
+
+def _coerced(operation: Operation, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Coerce JSON-shaped params to the Python types the facade methods take.
+
+    Driven by the operation's published schema, so a new parameter converts
+    itself instead of growing a hand-written converter: a `filesystem path`
+    property becomes a `Path`, an array property becomes a tuple (numbers as
+    floats, for the float-sequence parameters). Enums and booleans pass
+    through: neither can drift, one is validated above and the other has only
+    one JSON shape.
+    """
+    coerced: dict[str, Any] = {}
+    for name, value in arguments.items():
+        prop = operation.parameters["properties"][name]
+        if PATH_PARAM.items() <= prop.items() and isinstance(value, str):
+            coerced[name] = Path(value)
+        elif prop.get("type") == "array":
+            if prop.get("items", {}).get("type") == "number":
+                coerced[name] = tuple(float(item) for item in value)
+            else:
+                coerced[name] = tuple(value)
+        else:
+            coerced[name] = value
+    return coerced
 
 
 def _as_json(value: Any) -> Any:
@@ -579,12 +605,12 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "refs": lambda self, p: self.refs(),
     "inspect": lambda self, p: self.inspect(p.get("bundle")),
     "inspect_deep": lambda self, p: self.inspect_deep(p.get("bundle")),
-    "check_mesh": lambda self, p: self.check_mesh(**_mesh_params(p)),
+    "check_mesh": lambda self, p: self.check_mesh(**p),
     "check_log": lambda self, p: _check_log_result(Path(p["log"])),
-    "check_sound": lambda self, p: self.check_sound(**_sound_params(p)),
-    "review_audio": lambda self, p: self.review_audio(**_review_params(p)),
-    "review_video": lambda self, p: self.review_video(**_review_video_params(p)),
-    "check_texture": lambda self, p: self.check_texture(**_texture_params(p)),
+    "check_sound": lambda self, p: self.check_sound(**p),
+    "review_audio": lambda self, p: self.review_audio(**p),
+    "review_video": lambda self, p: self.review_video(**p),
+    "check_texture": lambda self, p: self.check_texture(**p),
     "check_icons": lambda self, p: self.check_icons(p["atlas_root"], p["cell"]),
     "check_localization": lambda self, p: self.check_localization(p["allow_vanilla_keys"]),
     "check_patches": lambda self, p: self.check_patches(),
@@ -622,7 +648,7 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "client_log": lambda self, p: self.client_log(
         p.get("path"), p.get("log_dir"), p.get("mod_name")
     ),
-    "prompt": lambda self, p: self.prompt(**_prompt_params(p)),
+    "prompt": lambda self, p: self.prompt(**p),
 }
 
 
@@ -633,80 +659,6 @@ def _client_log(
         return client.scan_log(Path(path), mod_name)
     directory = Path(log_dir) if log_dir else client.client_log_dir(game_dir)
     return client.scan_log(client.latest_client_log(directory), mod_name)
-
-
-# Shared parameter plumbing for the operations that run identically with and
-# without a configuration. Parameters whose default is published in the
-# schema are read directly: `_validated` has already applied it, so there is
-# exactly one copy of each default value (operations.py).
-def _prompt_params(params: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "kind": params["kind"],
-        "subject": params["subject"],
-        "role": params.get("role", ""),
-        "palette": params.get("palette", ""),
-        "key": params.get("key", ""),
-        "avoid": tuple(params.get("avoid", ())),
-        "stem": params["stem"],
-    }
-
-
-def _mesh_params(params: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "mesh": Path(params["mesh"]),
-        "max_extent": params["max_extent"],
-        "strict": params["strict"],
-    }
-
-
-def _review_video_params(params: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "stem": params["stem"],
-        "clip": Path(params["clip"]),
-        "intent": Path(params["intent"]) if params.get("intent") else None,
-        "intent_text": params.get("intent_text"),
-        "provider": params["provider"],
-        "model": params.get("model"),
-        "allow_network": params["allow_network"],
-        "timeout_seconds": params["timeout_seconds"],
-        "keep_raw_response": params["keep_raw_response"],
-        "output": Path(params["output"]) if params.get("output") else None,
-        "force": params["force"],
-    }
-
-
-def _texture_params(params: dict[str, Any]) -> dict[str, Any]:
-    matches = params.get("matches")
-    return {
-        "texture": Path(params["texture"]),
-        "matches": tuple(float(c) for c in matches) if matches else None,
-        "tolerance": params["tolerance"],
-        "tileable": params["tileable"],
-        "max_tile_ratio": params["max_tile_ratio"],
-    }
-
-
-def _sound_params(params: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "clip": Path(params["clip"]),
-        "max_seconds": params["max_seconds"],
-        "require_mono": params["require_mono"],
-    }
-
-
-def _review_params(params: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "clip": Path(params["clip"]),
-        "intent": Path(params["intent"]) if params.get("intent") else None,
-        "intent_text": params.get("intent_text"),
-        "provider": params["provider"],
-        "model": params.get("model"),
-        "output": Path(params["output"]) if params.get("output") else None,
-        "allow_network": params["allow_network"],
-        "keep_raw_response": params["keep_raw_response"],
-        "force": params["force"],
-        "timeout_seconds": params["timeout_seconds"],
-    }
 
 
 def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
@@ -789,23 +741,25 @@ def _init(params: dict[str, Any]) -> dict[str, Any]:
 _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "capabilities": lambda p: capabilities(p.get("probe_versions", False)),
     # A prompt is rendered before the modlet exists as often as after it.
-    "prompt": lambda p: render_prompt(**_prompt_params(p)),
-    "check_mesh": lambda p: check_mesh(**_mesh_params(p)),
+    "prompt": lambda p: render_prompt(**p),
+    "check_mesh": lambda p: check_mesh(**p),
     "check_log": lambda p: _check_log_result(Path(p["log"])),
-    "check_sound": lambda p: check_sound(**_sound_params(p)),
+    "check_sound": lambda p: check_sound(**p),
+    # run_audio_review takes the schema's `intent` as `intent_path`, so the
+    # keyword mapping stays here for that one name.
     "review_audio": lambda p: run_audio_review(
-        Path(p["clip"]),
+        p["clip"],
         provider=resolve_provider(p["provider"]),
-        intent_path=Path(p["intent"]) if p.get("intent") else None,
+        intent_path=p.get("intent"),
         intent_text=p.get("intent_text"),
         model=p.get("model"),
         allow_network=p["allow_network"],
         timeout_seconds=p["timeout_seconds"],
         keep_raw_response=p["keep_raw_response"],
-        output=Path(p["output"]) if p.get("output") else None,
+        output=p.get("output"),
         force=p["force"],
     ),
-    "check_texture": lambda p: check_texture(**_texture_params(p)),
+    "check_texture": lambda p: check_texture(**p),
     "unity_release": lambda p: fetch_release(
         p["version"] if p.get("version") else _needs_version(), p["platform"]
     ),

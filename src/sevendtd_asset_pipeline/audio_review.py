@@ -29,7 +29,6 @@ than averaged.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import uuid
@@ -38,10 +37,39 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import atomic
+from . import atomic, evidence
 from ._version import __version__
 from .errors import PipelineError
+from .evidence import (
+    SENSITIVE_KEY_PARTS,
+    USAGE_SENSITIVE_KEY_PARTS,
+    load_intent_file,
+    redact,
+    sha256_bytes,
+    sha256_file,
+)
+from .evidence import parse_intent_text as _parse_intent_text
 from .providers.base import AudioPayload, ReviewRequest
+
+# Re-exported from the shared evidence module: the tests and the CLI surface
+# import them from this lane module, where they have always lived.
+__all__ = [
+    "SENSITIVE_KEY_PARTS",
+    "USAGE_SENSITIVE_KEY_PARTS",
+    "load_intent_file",
+    "parse_intent",
+    "parse_intent_text",
+    "redact",
+    "run_review",
+    "sha256_bytes",
+    "sha256_file",
+]
+
+
+def parse_intent_text(text: str) -> tuple[AudioReviewIntent, bytes]:
+    """Validate an inline intent document; return it with its exact bytes."""
+    return _parse_intent_text(text, parse_intent)
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -59,20 +87,6 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 ONE_SHOT = "one-shot"
 LOOP = "loop"
 PLAYBACK_MODES = (ONE_SHOT, LOOP)
-
-# Keys whose names look credential-bearing are dropped wherever they would
-# otherwise land in stored evidence. Credentials are never accepted as
-# arguments in the first place; this is the backstop for parameters a caller
-# hands the API directly.
-SENSITIVE_KEY_PARTS = (
-    "api_key",
-    "apikey",
-    "authorization",
-    "credential",
-    "password",
-    "secret",
-    "token",
-)
 
 ADVISORY_NOTE = (
     "Advisory only: a model critique is evidence about the submitted bytes "
@@ -130,24 +144,6 @@ class AudioReviewIntent:
         }
 
 
-def _string_field(data: dict[str, Any], key: str, origin: str) -> str:
-    value = data.get(key)
-    if value is None:
-        return ""
-    if not isinstance(value, str):
-        raise PipelineError(f"{origin}: field {key!r} must be a string, got {type(value).__name__}")
-    return value.strip()
-
-
-def _string_list(data: dict[str, Any], key: str, origin: str) -> tuple[str, ...]:
-    value = data.get(key)
-    if value is None:
-        return ()
-    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-        raise PipelineError(f"{origin}: field {key!r} must be a list of strings")
-    return tuple(item.strip() for item in value if item.strip())
-
-
 def parse_intent(data: Any, origin: str) -> AudioReviewIntent:
     """Validate one intent document, refusing with every missing requirement.
 
@@ -185,7 +181,7 @@ def parse_intent(data: Any, origin: str) -> AudioReviewIntent:
     missing = [name for name in ("purpose", "playback") if name not in data]
     if missing:
         raise PipelineError(f"{origin}: intent is missing required field(s): {', '.join(missing)}")
-    purpose = _string_field(data, "purpose", origin)
+    purpose = evidence.string_field(data, "purpose", origin)
     if not purpose:
         raise PipelineError(
             f"{origin}: 'purpose' must not be empty; context is never inferred from a filename"
@@ -244,37 +240,15 @@ def parse_intent(data: Any, origin: str) -> AudioReviewIntent:
         playback_mode=mode,
         expected_duration_seconds=positive("expected_duration_seconds"),
         repeat_rate_seconds=positive("repeat_rate_seconds"),
-        pitch_variation=_string_field(playback, "pitch_variation", origin),
-        spatial_context=_string_field(data, "spatial_context", origin),
-        mix_context=_string_field(data, "mix_context", origin),
-        listener=_string_field(data, "listener", origin),
-        desired_qualities=_string_field(data, "desired_qualities", origin),
-        avoid=_string_list(data, "avoid", origin),
-        questions=_string_list(data, "questions", origin),
+        pitch_variation=evidence.string_field(playback, "pitch_variation", origin),
+        spatial_context=evidence.string_field(data, "spatial_context", origin),
+        mix_context=evidence.string_field(data, "mix_context", origin),
+        listener=evidence.string_field(data, "listener", origin),
+        desired_qualities=evidence.string_field(data, "desired_qualities", origin),
+        avoid=evidence.string_list(data, "avoid", origin),
+        questions=evidence.string_list(data, "questions", origin),
         references=tuple(references),
     )
-
-
-def load_intent_file(path: Path) -> tuple[AudioReviewIntent, bytes]:
-    """Read and validate an intent file; return it with its exact bytes."""
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        raise PipelineError(f"cannot read intent file {path}: {exc}") from exc
-    return parse_intent(_decode_json(raw, f"intent file {path}"), f"intent file {path}"), raw
-
-
-def parse_intent_text(text: str) -> tuple[AudioReviewIntent, bytes]:
-    """Validate an inline intent document; return it with its exact bytes."""
-    raw = text.encode("utf-8")
-    return parse_intent(_decode_json(raw, "--intent-text"), "--intent-text"), raw
-
-
-def _decode_json(raw: bytes, origin: str) -> Any:
-    try:
-        return json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise PipelineError(f"{origin} is not valid JSON: {exc}") from exc
 
 
 # -- rubric and prompt --------------------------------------------------------
@@ -540,45 +514,6 @@ def validate_result(
 # -- redaction and hashing ----------------------------------------------------
 
 
-def redact(value: Any, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> Any:
-    """Deep-copy a JSON-shaped value, dropping credential-bearing mapping keys."""
-    if isinstance(value, dict):
-        return {
-            key: redact(item, parts)
-            for key, item in value.items()
-            if isinstance(key, str) and not _is_sensitive_key(key, parts)
-        }
-    if isinstance(value, list):
-        return [redact(item, parts) for item in value]
-    return value
-
-
-def _is_sensitive_key(key: str, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> bool:
-    lowered = key.lower()
-    return lowered == "key" or any(part in lowered for part in parts)
-
-
-# A provider's usage block reports its cost through names like
-# `totalTokenCount`, so it cannot share the broad rule above: there "token"
-# is billing, not authentication. It keeps every count and still drops the
-# names a secret actually travels in.
-USAGE_SENSITIVE_KEY_PARTS = tuple(part for part in SENSITIVE_KEY_PARTS if part != "token")
-
-
-def sha256_bytes(payload: bytes) -> str:
-    return hashlib.sha256(payload).hexdigest()
-
-
-def sha256_file(path: Path) -> tuple[str, int]:
-    digest = hashlib.sha256()
-    total = 0
-    with path.open("rb") as handle:
-        while chunk := handle.read(1024 * 1024):
-            digest.update(chunk)
-            total += len(chunk)
-    return digest.hexdigest(), total
-
-
 # -- orchestration ------------------------------------------------------------
 
 
@@ -616,9 +551,9 @@ def run_review(
             "review-audio takes exactly one of --intent PATH or --intent-text JSON, never both"
         )
     if intent_path is not None:
-        intent, intent_raw = load_intent_file(Path(intent_path))
+        intent, intent_raw = load_intent_file(Path(intent_path), parse_intent)
     elif intent_text is not None:
-        intent, intent_raw = parse_intent_text(intent_text)
+        intent, intent_raw = _parse_intent_text(intent_text, parse_intent)
     else:
         raise PipelineError(
             "review-audio needs exactly one of --intent PATH (the reproducible route, "
@@ -649,7 +584,7 @@ def run_review(
             )
         if not path.is_file():
             raise PipelineError(f"no such file: {path}")
-    digests = {str(path): sha256_file(path) for _, path in uploads}
+    digests = {str(path): evidence.sha256_file(path) for _, path in uploads}
     total_bytes = sum(size for _, size in digests.values())
     if limits.max_bytes is not None and total_bytes > limits.max_bytes:
         raise PipelineError(
@@ -720,7 +655,7 @@ def run_review(
                         result=None,
                         error="the model response failed structural validation; see "
                         "raw_provider_response",
-                        raw_response=redact(response.raw_text),
+                        raw_response=evidence.redact(response.raw_text),
                         usage=response.usage,
                         total_bytes=total_bytes,
                         params={},
@@ -757,7 +692,7 @@ def run_review(
         prompt=prompt,
         result=result,
         error=None,
-        raw_response=redact(response.raw_text) if keep_raw_response else None,
+        raw_response=evidence.redact(response.raw_text) if keep_raw_response else None,
         usage=response.usage,
         total_bytes=total_bytes,
         params=params,
@@ -774,10 +709,12 @@ def run_review(
         payload = json.dumps(document, indent=2, sort_keys=True)
         atomic.write(output, payload)
         evidence_path = output
-        evidence_sha256 = sha256_bytes(payload.encode("utf-8"))
+        evidence_sha256 = evidence.sha256_bytes(payload.encode("utf-8"))
 
     usage: dict[str, Any] = (
-        redact(response.usage, USAGE_SENSITIVE_KEY_PARTS) if response.usage else {}
+        evidence.redact(response.usage, evidence.USAGE_SENSITIVE_KEY_PARTS)
+        if response.usage
+        else {}
     )
     usage.setdefault("reported_by_provider", response.usage is not None)
     return {
@@ -842,7 +779,7 @@ def _evidence(
             if path != str(clip)
         ],
         "intent": {
-            "sha256": sha256_bytes(intent_raw),
+            "sha256": evidence.sha256_bytes(intent_raw),
             "schema_version": INTENT_SCHEMA_VERSION,
             "content": intent.as_dict(),
         },
@@ -863,7 +800,7 @@ def _evidence(
         # may reach stdout, a JSON result, or evidence without the backstop.
         "raw_provider_response": raw_response,
         "usage": (
-            redact(dict(usage), USAGE_SENSITIVE_KEY_PARTS)
+            evidence.redact(dict(usage), evidence.USAGE_SENSITIVE_KEY_PARTS)
             if usage
             else {"reported_by_provider": False}
         ),
@@ -872,5 +809,5 @@ def _evidence(
             "third_party": provider_name,
             "total_bytes": total_bytes,
         },
-        "parameters": redact(params),
+        "parameters": evidence.redact(params),
     }

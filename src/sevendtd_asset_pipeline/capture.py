@@ -33,7 +33,6 @@ unsynchronized write rather than refusing evidence.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import secrets
@@ -47,7 +46,7 @@ from datetime import UTC, datetime
 from importlib.util import find_spec
 from pathlib import Path
 
-from . import atomic
+from . import atomic, evidence
 from .errors import PipelineError
 
 MANIFEST_NAME = "manifest.json"
@@ -156,14 +155,6 @@ class Capture:
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
-
-
-def _digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _utc_mtime(mtime: float) -> str:
@@ -454,7 +445,7 @@ def _looks_like_a_clip(directory: Path) -> bool:
 
 
 def _clip_file(path: Path) -> ClipFile:
-    return ClipFile(name=path.name, sha256=_digest(path), bytes=path.stat().st_size)
+    return ClipFile(name=path.name, sha256=evidence.sha256_file(path)[0], bytes=path.stat().st_size)
 
 
 def record_existing(
@@ -532,7 +523,7 @@ def _record(
         backend=backend,
         session=session,
         bytes=stat.st_size,
-        sha256=_digest(staged),
+        sha256=evidence.sha256_file(staged)[0],
         captured_at=_utc_mtime(stat.st_mtime),
         notes=[] if observable else ["no observable recorded; a frame without one proves nothing"],
     )

@@ -31,7 +31,6 @@ Three boundaries are load-bearing, mirroring the audio-review lane:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import shutil
@@ -45,12 +44,27 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import atomic
+from . import atomic, evidence
 from ._version import __version__
 from .capture import DEFAULT_ROOT, read_manifest
 from .config import PipelineConfig
 from .errors import PipelineError
+from .evidence import (  # noqa: F401 - published lane surface
+    SENSITIVE_KEY_PARTS,
+    USAGE_SENSITIVE_KEY_PARTS,
+    load_intent_file,
+    redact,
+    sha256_bytes,
+    sha256_file,
+)
+from .evidence import parse_intent_text as _parse_intent_text
 from .references import manifest_assets
+
+
+def parse_intent_text(text: str) -> tuple[VideoReviewIntent, bytes]:
+    """Validate an inline intent document; return it with its exact bytes."""
+    return _parse_intent_text(text, parse_intent)
+
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -73,16 +87,6 @@ GATEWAY = "deadeye"
 GATEWAY_INSTALL_HINT = (
     "install the deadeye gateway from hordeforge/7dtd-vision-review and put it "
     "on PATH, e.g. with: uv tool install --from git+https://github.com/hordeforge/7dtd-vision-review"
-)
-
-SENSITIVE_KEY_PARTS = (
-    "api_key",
-    "apikey",
-    "authorization",
-    "credential",
-    "password",
-    "secret",
-    "token",
 )
 
 
@@ -127,24 +131,6 @@ class VideoReviewIntent:
         }
 
 
-def _string_field(data: dict[str, Any], key: str, origin: str) -> str:
-    value = data.get(key)
-    if value is None:
-        return ""
-    if not isinstance(value, str):
-        raise PipelineError(f"{origin}: field {key!r} must be a string, got {type(value).__name__}")
-    return value.strip()
-
-
-def _string_list(data: dict[str, Any], key: str, origin: str) -> tuple[str, ...]:
-    value = data.get(key)
-    if value is None:
-        return ()
-    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-        raise PipelineError(f"{origin}: field {key!r} must be a list of strings")
-    return tuple(item.strip() for item in value if item.strip())
-
-
 def parse_intent(data: Any, origin: str) -> VideoReviewIntent:
     """Validate one intent document, refusing with every missing requirement.
 
@@ -180,7 +166,7 @@ def parse_intent(data: Any, origin: str) -> VideoReviewIntent:
         )
     if "purpose" not in data:
         raise PipelineError(f"{origin}: intent is missing required field 'purpose'")
-    purpose = _string_field(data, "purpose", origin)
+    purpose = evidence.string_field(data, "purpose", origin)
     if not purpose:
         raise PipelineError(
             f"{origin}: 'purpose' must not be empty; context is never inferred from a filename"
@@ -207,37 +193,15 @@ def parse_intent(data: Any, origin: str) -> VideoReviewIntent:
 
     return VideoReviewIntent(
         purpose=purpose,
-        subject=_string_field(data, "subject", origin),
-        camera_path=_string_field(data, "camera_path", origin),
-        desired_qualities=_string_field(data, "desired_qualities", origin),
-        avoid=_string_list(data, "avoid", origin),
+        subject=evidence.string_field(data, "subject", origin),
+        camera_path=evidence.string_field(data, "camera_path", origin),
+        desired_qualities=evidence.string_field(data, "desired_qualities", origin),
+        avoid=evidence.string_list(data, "avoid", origin),
         references=tuple(references),
-        questions=_string_list(data, "questions", origin),
-        suite=_string_field(data, "suite", origin),
-        case=_string_field(data, "case", origin),
+        questions=evidence.string_list(data, "questions", origin),
+        suite=evidence.string_field(data, "suite", origin),
+        case=evidence.string_field(data, "case", origin),
     )
-
-
-def load_intent_file(path: Path) -> tuple[VideoReviewIntent, bytes]:
-    """Read and validate an intent file; return it with its exact bytes."""
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        raise PipelineError(f"cannot read intent file {path}: {exc}") from exc
-    return parse_intent(_decode_json(raw, f"intent file {path}"), f"intent file {path}"), raw
-
-
-def parse_intent_text(text: str) -> tuple[VideoReviewIntent, bytes]:
-    """Validate an inline intent document; return it with its exact bytes."""
-    raw = text.encode("utf-8")
-    return parse_intent(_decode_json(raw, "--intent-text"), "--intent-text"), raw
-
-
-def _decode_json(raw: bytes, origin: str) -> Any:
-    try:
-        return json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise PipelineError(f"{origin} is not valid JSON: {exc}") from exc
 
 
 # -- structured result --------------------------------------------------------
@@ -404,41 +368,6 @@ def _moment(value: Any, *, non_negative: bool) -> list[float] | None:
     return None
 
 
-def redact(value: Any, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> Any:
-    """Deep-copy a JSON-shaped value, dropping credential-bearing mapping keys."""
-    if isinstance(value, dict):
-        return {
-            key: redact(item, parts)
-            for key, item in value.items()
-            if isinstance(key, str) and not _is_sensitive_key(key, parts)
-        }
-    if isinstance(value, list):
-        return [redact(item, parts) for item in value]
-    return value
-
-
-def _is_sensitive_key(key: str, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> bool:
-    lowered = key.lower()
-    return lowered == "key" or any(part in lowered for part in parts)
-
-
-USAGE_SENSITIVE_KEY_PARTS = tuple(part for part in SENSITIVE_KEY_PARTS if part != "token")
-
-
-def sha256_bytes(payload: bytes) -> str:
-    return hashlib.sha256(payload).hexdigest()
-
-
-def sha256_file(path: Path) -> tuple[str, int]:
-    digest = hashlib.sha256()
-    total = 0
-    with path.open("rb") as handle:
-        while chunk := handle.read(1024 * 1024):
-            digest.update(chunk)
-            total += len(chunk)
-    return digest.hexdigest(), total
-
-
 # -- the deadeye boundary -----------------------------------------------------
 
 
@@ -534,7 +463,7 @@ def _asset_record(stem: str, config: PipelineConfig) -> dict[str, Any]:
             "generation_parameters": None,
             "note": "no source file recorded for this stem in the tracked manifest",
         }
-    digest, size = sha256_file(source)
+    digest, size = evidence.sha256_file(source)
     return {
         "stem": stem,
         "bundle_source": config.bundle_source,
@@ -589,9 +518,9 @@ def run_review(
             "review-video takes exactly one of --intent PATH or --intent-text JSON, never both"
         )
     if intent_path is not None:
-        intent, intent_raw = load_intent_file(Path(intent_path))
+        intent, intent_raw = load_intent_file(Path(intent_path), parse_intent)
     elif intent_text is not None:
-        intent, intent_raw = parse_intent_text(intent_text)
+        intent, intent_raw = _parse_intent_text(intent_text, parse_intent)
     else:
         raise PipelineError(
             "review-video needs exactly one of --intent PATH (the reproducible route, "
@@ -685,7 +614,7 @@ def run_review(
         keep_raw_response=keep_raw_response,
     )
 
-    evidence: dict[str, str | None] = {"path": None, "sha256": None}
+    document["evidence"] = {"path": None, "sha256": None}
     if output is not None:
         if output.is_file() and not force:
             raise PipelineError(
@@ -703,11 +632,15 @@ def run_review(
                 f"{output} already holds an earlier review and a later review never "
                 "overwrites one by default; compare the documents, or pass --force"
             ) from exc
-        evidence = {"path": str(output), "sha256": sha256_bytes(payload.encode("utf-8"))}
-    document["evidence"] = evidence
+        document["evidence"] = {
+            "path": str(output),
+            "sha256": evidence.sha256_bytes(payload.encode("utf-8")),
+        }
 
     usage: dict[str, Any] = (
-        redact(dict(envelope["usage"]), USAGE_SENSITIVE_KEY_PARTS) if envelope.get("usage") else {}
+        evidence.redact(dict(envelope["usage"]), evidence.USAGE_SENSITIVE_KEY_PARTS)
+        if envelope.get("usage")
+        else {}
     )
     usage.setdefault("reported_by_provider", envelope.get("usage") is not None)
     return {
@@ -760,7 +693,7 @@ def _evidence(
             "files": media,
         },
         "intent": {
-            "sha256": sha256_bytes(intent_raw),
+            "sha256": evidence.sha256_bytes(intent_raw),
             "schema_version": INTENT_SCHEMA_VERSION,
             "content": intent.as_dict(),
         },
@@ -778,12 +711,12 @@ def _evidence(
         "result": review,
         "error": envelope.get("error"),
         "raw_provider_response": (
-            redact(envelope["raw_provider_response"]) if keep_raw_response else None
+            evidence.redact(envelope["raw_provider_response"]) if keep_raw_response else None
         ),
-        "usage": redact(dict(envelope["usage"]), USAGE_SENSITIVE_KEY_PARTS)
+        "usage": evidence.redact(dict(envelope["usage"]), evidence.USAGE_SENSITIVE_KEY_PARTS)
         if envelope.get("usage")
         else {"reported_by_provider": False},
         "disclosure": envelope.get("disclosure", {}),
         "gateway": envelope,
-        "parameters": redact(params),
+        "parameters": evidence.redact(params),
     }

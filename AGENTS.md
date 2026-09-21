@@ -305,8 +305,8 @@ They are named suites, and they stay named:
 Look-versus-block is the form the harness can gate by name.
 **Never comma-list `*_look` with `*_block_*` in one `PLAYTEST_SUITE`.**
 `playtest-acceptance.sh` dies if you do; the generated provider throws if
-that script is bypassed; `reject_mixed_visual_suites` is the same rule in
-Python; `7dtd-playtest`'s orchestrator refuses it too.
+that script is bypassed; the generated provider refuses it too, as does
+`7dtd-playtest`'s orchestrator.
 `playtest-synthesized` runs `_bundle`, `_block_model`, and `_editorless`
 (mechanical loads) — never `_look`. Visual sign-off of a floating prefab
 is `playtest-synthesized.sh --look`, its own invocation.

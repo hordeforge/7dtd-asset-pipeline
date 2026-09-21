@@ -165,28 +165,6 @@ class SynthesizedNamingTests(unittest.TestCase):
         self.assertEqual({"beep": "AudioClip", "notes": "TextAsset", "panel": "Texture2D"}, cases)
 
 
-class MixedVisualSuiteTests(unittest.TestCase):
-    """Prefab-look and block-place are different pictures. Never one list."""
-
-    def test_look_plus_block_is_mixed(self) -> None:
-        self.assertTrue(acceptance.mixed_visual_suites("mod_look,mod_block_model"))
-        self.assertTrue(acceptance.mixed_visual_suites("mod_block_place; mod_look"))
-        self.assertTrue(acceptance.mixed_visual_suites("a_look a_block_model"))
-
-    def test_load_plus_block_is_not_mixed(self) -> None:
-        self.assertFalse(acceptance.mixed_visual_suites("mod_bundle,mod_block_model"))
-        self.assertFalse(
-            acceptance.mixed_visual_suites("mod_bundle,mod_block_model,mod_editorless")
-        )
-        self.assertFalse(acceptance.mixed_visual_suites("mod_look"))
-        self.assertFalse(acceptance.mixed_visual_suites("mod_block_model"))
-        self.assertFalse(acceptance.mixed_visual_suites(""))
-
-    def test_a_mixed_list_is_refused_by_name(self) -> None:
-        with self.assertRaisesRegex(PipelineError, "different pictures"):
-            acceptance.reject_mixed_visual_suites("self_look,self_block_model")
-
-
 class RenderTests(unittest.TestCase):
     def test_the_rendered_source_carries_the_uri_the_engine_resolves(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

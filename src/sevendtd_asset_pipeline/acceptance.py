@@ -116,38 +116,6 @@ PROVIDER_DIRECTORY = "tools/shamway/acceptance"
 # that answered every request would read as a pass on every case above.
 ABSENT_STEM = "shamwayAbsentStemProbe"
 _IDENTIFIER = re.compile(r"[^A-Za-z0-9_]")
-_SUITE_SPLIT = re.compile(r"[,;\s]+")
-
-
-def mixed_visual_suites(suite_list: str) -> bool:
-    """True when a PLAYTEST_SUITE list asks for both prefab-look and block-place.
-
-    Those are different pictures. Instantiating a prefab in front of the camera
-    (`*_look`) and `SetBlockRpc` onto a voxel (`*_block_*`) must never share a
-    client session: the self-test rendered a texture mid-air AND a placed
-    block in the same run, repeatedly, whenever they were comma-listed.
-
-    The name is the picture. This function only sees suite ids. Putting a
-    camera-staged instantiate on a suite that is not named `*_look` so it can
-    ride with `*_block_*` is the same mix, and this cannot catch it. Not a
-    mix: a particle system that is already a child of the staged prefab;
-    consecutive cases of one feature in one suite.
-    """
-    tokens = [token for token in _SUITE_SPLIT.split(suite_list.strip()) if token]
-    look = any(token.endswith("_look") for token in tokens)
-    block = any("_block_" in token for token in tokens)
-    return look and block
-
-
-def reject_mixed_visual_suites(suite_list: str) -> None:
-    """Refuse a suite list that would paint two different pictures in one run."""
-    if mixed_visual_suites(suite_list):
-        raise PipelineError(
-            f"refusing mixed visual suites {suite_list!r}: a prefab-look suite "
-            "(*_look) and a block-placement suite (*_block_*) are different "
-            "pictures. Run them as separate playtest invocations, never in one "
-            "PLAYTEST_SUITE list."
-        )
 
 
 def _cs_body(text: str) -> str:
@@ -647,7 +615,7 @@ def render(plan_: ProviderPlan) -> dict[str, str]:
     # skinned mesh and a cube pile up in one spot — that is mixing unrelated
     # pictures, not a sign-off. Each GameObject gets `<mod>_<stem>_look`.
     # Instantiating in front of the camera is not placing a block;
-    # `reject_mixed_visual_suites` refuses those two in one PLAYTEST_SUITE.
+    # playtest-acceptance.sh refuses those two in one PLAYTEST_SUITE.
     # The suite id is lowercased because the orchestrator lowercases suite
     # tokens (playtest_run.py splits `suite.lower()`), and a provider that
     # compares case-sensitively would never match a stem with uppercase — a

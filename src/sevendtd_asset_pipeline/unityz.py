@@ -137,8 +137,3 @@ class Unityz:
 def run_json(command: str, path: Path, *arguments: str) -> JsonObject:
     """Run one unityz JSON command through a newly resolved reader."""
     return Unityz(path).json(command, *arguments)
-
-
-def run_json_lines(command: str, path: Path, *arguments: str) -> list[JsonObject]:
-    """Run one unityz JSON-lines command through a newly resolved reader."""
-    return Unityz(path).json_lines(command, *arguments)

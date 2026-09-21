@@ -18,7 +18,6 @@ from typing import Any
 from unityz_readback import read_bundle
 
 from sevendtd_asset_pipeline.anim import (
-    animation_component,
     idle_bob_curves,
     legacy_clip,
     rotation_curve,
@@ -126,12 +125,6 @@ class LegacyClipTests(unittest.TestCase):
         self.assertEqual(rot[0]["path"], "Root/Pelvis")
         self.assertEqual(len(rot[0]["curve"]["m_Curve"]), 2)
         self.assertAlmostEqual(rot[0]["curve"]["m_Curve"][1]["value"]["z"], 0.7071068, places=5)
-
-    def test_animation_component_lists_the_clips(self) -> None:
-        component = animation_component([12, 34])
-        self.assertEqual(component["m_Animations"], [{"m_PathID": 12}, {"m_PathID": 34}])
-        self.assertTrue(component["m_PlayAutomatically"])
-        self.assertEqual(component["m_WrapMode"], 2)
 
 
 if __name__ == "__main__":

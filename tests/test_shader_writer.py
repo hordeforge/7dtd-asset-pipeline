@@ -168,7 +168,6 @@ class CompileTimeoutTests(unittest.TestCase):
                 lambda: shader_blob.compile_hlsl(shader_blob.UNLIT_VERTEX_HLSL, "vs_4_0"),
                 "vkd3d-compiler",
             ),
-            (lambda: shader_blob.compile_spirv(b"DXBC"), "vkd3d-compiler"),
             (
                 lambda: shader_blob.compile_spirv_glslang(shader_blob.UNLIT_VERTEX_HLSL, "vert"),
                 "glslangValidator",
@@ -971,9 +970,10 @@ class DescriptorSetTests(unittest.TestCase):
     """
 
     def _spirv(self, hlsl: str, profile: str) -> bytes:
-        if not has_capability("vkd3d-compiler"):
-            self.skipTest("vkd3d-compiler that reads HLSL is not installed")
-        return shader_blob.compile_spirv(shader_blob.compile_hlsl(hlsl, profile))
+        if not has_capability("glslangValidator"):
+            self.skipTest("glslangValidator is not installed")
+        stage = "vert" if profile.startswith("vs") else "frag"
+        return shader_blob.compile_spirv_glslang(hlsl, stage)
 
     @staticmethod
     def _descriptor_sets(spirv: bytes) -> dict[int, int]:

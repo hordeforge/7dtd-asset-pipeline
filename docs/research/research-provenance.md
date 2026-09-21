@@ -1186,11 +1186,13 @@ the SMOL-V encoder is available, giving `platforms [4, 15, 18]` and
 
 The route, all three steps now real:
 
-1. `compile_spirv` translates this writer's own DXBC with
-   `vkd3d-compiler -x dxbc-tpf -b spirv-binary`. The d3d11 and Vulkan
-   sub-programs therefore come from **one** source and cannot drift apart,
-   which is worth more than the hop it costs: a day was spent on d3d11 and
-   GLCore disagreeing about a constant-buffer layout.
+1. `compile_spirv_glslang` compiles this writer's HLSL straight to SPIR-V with
+   `glslangValidator`, the way Unity compiles its own Vulkan modules. A
+   DXBC-to-SPIR-V translation through `vkd3d-compiler` was tried first and
+   removed 2026-09-07: it also produced valid SPIR-V, but a live client
+   refused the module (a `gl_PointSize` output Unity never emits, no
+   `GLSL.std.450` import, five times the id count), so the translator route
+   has no caller.
 2. `compress_smolv` loads [ywy50/zmol-v](https://github.com/ywy50/zmol-v)
    through its C ABI. Not vendored: a SPIR-V codec has nothing to do with this
    game.

@@ -486,40 +486,6 @@ VULKAN_PROGRAM = 25
 VULKAN_SECTION_HEADER = 176
 
 
-def compile_spirv(dxbc: bytes) -> bytes:
-    """Translate a DXBC container to SPIR-V with `vkd3d-compiler`.
-
-    The same translation DXVK performs at runtime, which is why this needs no
-    second compiler: the HLSL is already compiled, and Vulkan wants the same
-    program in SPIR-V rather than a differently-authored one.
-    """
-    binary = shutil.which("vkd3d-compiler")
-    if binary is None:
-        raise PipelineError(
-            "vkd3d-compiler is not installed; it translates this writer's DXBC "
-            "into the SPIR-V a Vulkan sub-program carries. Install it with "
-            "'shamway script install-tools'."
-        )
-    with scratch_dir("shader-spv-") as work:
-        src = work / "shader.dxbc"
-        out = work / "shader.spv"
-        src.write_bytes(dxbc)
-        result = _compile(
-            [binary, "-x", "dxbc-tpf", "-b", "spirv-binary", str(src), "-o", str(out)],
-            "vkd3d-compiler",
-            "translating the DXBC to SPIR-V",
-        )
-        if result.returncode != 0 or not out.exists():
-            detail = (result.stderr or result.stdout).strip()
-            raise PipelineError(f"vkd3d-compiler could not produce SPIR-V: {detail}")
-        data = out.read_bytes()
-    if len(data) < 4 or struct.unpack_from("<I", data, 0)[0] != SPIRV_MAGIC:
-        raise PipelineError(
-            f"vkd3d-compiler produced {len(data)} bytes that are not a SPIR-V module"
-        )
-    return data
-
-
 # Unity's Vulkan sub-programs do not use the d3d11 constant-buffer names. Their
 # parameter records declare one buffer per stage - `VGlobals<hash>` for the
 # vertex stage, `PGlobals<hash>` for the pixel stage - and the built-in

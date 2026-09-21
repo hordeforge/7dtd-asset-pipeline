@@ -74,56 +74,8 @@ def _curve(keyframes: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _typetree_default(node: typetrees.TreeNode) -> Any:
-    """A default value for every type-tree node, mirroring particles.py.
-
-    The writer (`unityz create`) requires every field the tree names, so a
-    clip dict is the tree's defaults deep-merged with the fields this module
-    authors. The walker is small; duplicating it beats importing a sibling
-    module's private.
-    """
-    kind = node.kind
-    children = node.children
-    if kind in {
-        "int",
-        "SInt32",
-        "UInt32",
-        "unsigned int",
-        "SInt64",
-        "UInt64",
-        "SInt16",
-        "UInt16",
-        "UInt8",
-        "SInt8",
-        "char",
-        "short",
-        "unsigned short",
-        "long long",
-        "unsigned long long",
-    }:
-        return 0
-    if kind in {"float", "double"}:
-        return 0.0
-    if kind == "bool":
-        return False
-    if kind == "string":
-        return ""
-    if kind == "TypelessData":
-        return b""
-    if kind.startswith("PPtr"):
-        return {"m_FileID": 0, "m_PathID": 0}
-    if kind in {"vector", "staticvector", "Array", "map"}:
-        return []
-    fields: dict[str, Any] = {}
-    for child in children:
-        if child.kind == "Array" and child.name == "Array":
-            return []
-        fields[child.name] = _typetree_default(child)
-    return fields
-
-
 def _clip_defaults() -> dict[str, Any]:
-    default = _typetree_default(typetrees.release_tree(ANIMATION_CLIP, "2022.3.62f2"))
+    default = typetrees.typetree_default(typetrees.release_tree(ANIMATION_CLIP, "2022.3.62f2"))
     return dict(default)
 
 
@@ -177,27 +129,6 @@ def rotation_curve(path: str, keyframes: list[dict[str, Any]]) -> dict[str, Any]
 def position_curve(path: str, keyframes: list[dict[str, Any]]) -> dict[str, Any]:
     """One position curve entry bound to a bone path."""
     return {"curve": _curve(keyframes), "path": path}
-
-
-def animation_component(
-    clip_path_ids: list[int],
-    play_automatically: bool = True,
-    wrap_mode: int = WRAP_LOOP,
-) -> dict[str, Any]:
-    """The legacy `Animation` component a generated entity prefab carries.
-
-    `m_Animations` lists the clip PPtrs; `GameObjectAnimalAnimation.Awake`
-    then resolves `Idle1` etc. by name off this component.
-    """
-    return {
-        "m_Animation": {"m_PathID": 0},
-        "m_Animations": [{"m_PathID": path_id} for path_id in clip_path_ids],
-        "m_PlayAutomatically": play_automatically,
-        "m_AnimatePhysics": False,
-        "m_CullingType": 0,
-        "m_WrapMode": wrap_mode,
-        "m_Enabled": True,
-    }
 
 
 def idle_bob_curves(

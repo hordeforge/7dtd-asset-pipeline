@@ -15,6 +15,7 @@ from __future__ import annotations
 import functools
 import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from . import unityz
 from .errors import PipelineError
@@ -112,3 +113,50 @@ def release_tree(class_id: int, unity_version: str) -> TreeNode:
     if root is None:
         raise PipelineError(f"the built-in tree for class {class_id} at {unity_version} is empty")
     return root
+
+
+def typetree_default(node: TreeNode) -> Any:
+    """A default value for every type-tree node.
+
+    The writer (`unityz create`) requires every field the tree names, so an
+    object dict is the tree's defaults deep-merged with the fields an author
+    module sets. This is the one walker; `anim.py` and `particles.py` import it.
+    """
+    kind = node.kind
+    children = node.children
+    if kind in {
+        "int",
+        "SInt32",
+        "UInt32",
+        "unsigned int",
+        "SInt64",
+        "UInt64",
+        "SInt16",
+        "UInt16",
+        "UInt8",
+        "SInt8",
+        "char",
+        "short",
+        "unsigned short",
+        "long long",
+        "unsigned long long",
+    }:
+        return 0
+    if kind in {"float", "double"}:
+        return 0.0
+    if kind == "bool":
+        return False
+    if kind == "string":
+        return ""
+    if kind == "TypelessData":
+        return b""
+    if kind.startswith("PPtr"):
+        return {"m_FileID": 0, "m_PathID": 0}
+    if kind in {"vector", "staticvector", "Array", "map"}:
+        return []
+    fields: dict[str, Any] = {}
+    for child in children:
+        if child.kind == "Array" and child.name == "Array":
+            return []
+        fields[child.name] = typetree_default(child)
+    return fields

@@ -358,7 +358,7 @@ _DEFAULTS: dict[int, dict[str, Any]] = {}
 def _class_default(class_id: int) -> dict[str, Any]:
     cached = _DEFAULTS.get(class_id)
     if cached is None:
-        cached = _typetree_default(_release_node(class_id))
+        cached = typetrees.typetree_default(_release_node(class_id))
         _fix_curves_and_gradients(cached)
         _DEFAULTS[class_id] = cached
     return deepcopy(cached)
@@ -366,47 +366,6 @@ def _class_default(class_id: int) -> dict[str, Any]:
 
 def _release_node(class_id: int) -> typetrees.TreeNode:
     return typetrees.release_tree(class_id, "2022.3.62f2")
-
-
-def _typetree_default(node: typetrees.TreeNode) -> Any:
-    kind = node.kind
-    children = node.children
-    if kind in {
-        "int",
-        "SInt32",
-        "UInt32",
-        "unsigned int",
-        "SInt64",
-        "UInt64",
-        "SInt16",
-        "UInt16",
-        "UInt8",
-        "SInt8",
-        "char",
-        "short",
-        "unsigned short",
-        "long long",
-        "unsigned long long",
-    }:
-        return 0
-    if kind in {"float", "double"}:
-        return 0.0
-    if kind == "bool":
-        return False
-    if kind == "string":
-        return ""
-    if kind == "TypelessData":
-        return b""
-    if kind.startswith("PPtr"):
-        return {"m_FileID": 0, "m_PathID": 0}
-    if kind in {"vector", "staticvector", "Array", "map"}:
-        return []
-    fields: dict[str, Any] = {}
-    for child in children:
-        if child.kind == "Array" and child.name == "Array":
-            return []
-        fields[child.name] = _typetree_default(child)
-    return fields
 
 
 def _fix_curves_and_gradients(value: Any) -> None:

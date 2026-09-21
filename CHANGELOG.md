@@ -12,6 +12,35 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-21
+
+### Removed
+
+- `shader_blob.compile_spirv`, the vkd3d DXBC-to-SPIR-V translation path.
+  Production compiles Vulkan sub-programs with `compile_spirv_glslang`
+  (glslangValidator), the route Unity itself uses; a live client refused the
+  translated module.
+- `acceptance.mixed_visual_suites` and `acceptance.reject_mixed_visual_suites`.
+  The gate lives in `scripts/playtest-acceptance.sh`, the generated provider,
+  and the playtest orchestrator; the Python pair had no production caller.
+- `anim.animation_component`, a legacy Animation component dict builder with
+  zero production callers.
+- `unityz.run_json_lines`, a module-level wrapper only one test used.
+
+### Changed
+
+- `generate cutout` requires numpy (like texture-maps and hide); the
+  numpy-free per-pixel fallbacks are gone.
+- `Pipeline` call dispatch coerces parameters from each operation's published
+  schema instead of six hand-written per-operation converters.
+- The type-tree default walker lives in `typetrees.typetree_default`, shared
+  by `anim` and `particles` instead of duplicated.
+- The audio and video review lanes share one `evidence` module for intent
+  decoding, string validation, redaction, and SHA-256; `capture` digests
+  through it too.
+- `check-sound` reads WAV through `generators/audio.read_wav` instead of its
+  own near-identical reader.
+
 ## [0.6.0] - 2026-09-20
 
 ### Changed

@@ -62,11 +62,21 @@ all = [
 # mypy type-checks it, so a silent setuptools major is a gate change too.
 # texture2ddecoder is the suite's independent block-compression decoder; the
 # suite is unittest, so this is where a test-only decoder belongs.
+# coverage is pinned for the same reason ruff and mypy are: it produces the
+# number the README badge publishes, and the run that computes it used to
+# resolve it per invocation with `uv run --with coverage`, outside the lock,
+# so a release could move that number with nothing recorded here.
 # Declared here (PEP 735) rather than inline in ci.yml so the pins have a
 # single home and land in uv.lock with hashes, which `uv sync --locked`
 # verifies on every install.
 [dependency-groups]
-dev = ["ruff==0.16.6", "mypy==2.3.1", "setuptools==84.0.0", "texture2ddecoder>=1"]
+dev = [
+    "ruff==0.16.6",
+    "mypy==2.3.1",
+    "setuptools==84.0.0",
+    "texture2ddecoder>=1",
+    "coverage==7.10.7",
+]
 
 [project.scripts]
 shamway = "sevendtd_asset_pipeline.cli:main"

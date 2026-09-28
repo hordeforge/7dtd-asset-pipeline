@@ -45,7 +45,7 @@ jobs:
       # is how most consumers first run it.
       # `uv sync --locked` resolves from the committed uv.lock and verifies
       # its hashes — never a fresh resolution against PyPI — and brings the
-      # dev group (ruff, mypy, setuptools) that `make check` needs.
+      # dev group (ruff, mypy, setuptools, coverage) that `make check` needs.
       - run: uv sync --locked --python ${{ matrix.python-version }}
       # Later steps (and the Makefile's `uv run`) resolve ./.venv from PATH.
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
@@ -248,11 +248,13 @@ jobs:
           enable-cache: true
       - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
       - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
-      # Core only, no dev tools: coverage runs the unit suite directly.
-      - run: uv sync --locked --no-dev
+      # The dev group carries the pinned coverage this job measures with, so
+      # the badge's denominator comes from uv.lock rather than from whatever
+      # PyPI served on the day it ran.
+      - run: uv sync --locked
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: make coverage
-      - run: uv run --no-project --with coverage python scripts/coverage_badge.py "$RUNNER_TEMP/coverage.svg"
+      - run: python scripts/coverage_badge.py "$RUNNER_TEMP/coverage.svg"
       - name: Publish the badge to the badges branch
         env:
           # The default token is not in the environment unless mapped here,

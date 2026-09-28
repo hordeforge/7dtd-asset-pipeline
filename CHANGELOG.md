@@ -37,6 +37,13 @@ tag has no changelog section.
 
 ### Changed
 
+- `coverage` pinned to `7.10.7` in the `dev` dependency group. It produces
+  the number the README coverage badge publishes, and the run that computed
+  it resolved it per invocation with `uv run --with coverage`, outside
+  `uv.lock` and unpinned, so a release could move the published percentage
+  with nothing recorded in the repository. `make coverage` and the
+  `coverage-badge` CI job now take it from the same locked dev group as
+  `ruff` and `mypy`.
 - `texture2ddecoder` moved from the `writer`, `inspect` and `all` extras to
   the `dev` dependency group. Only the block-compression cross-check in
   `tests/test_block_compress.py` imports it, so a consumer installing

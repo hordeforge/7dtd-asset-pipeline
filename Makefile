@@ -84,8 +84,10 @@ test:
 
 # Line coverage of src/ under the unit suite. Writes .coverage in the repo
 # root; CI renders it into the README badge with scripts/coverage_badge.py.
-COV := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project --with coverage python" || echo python3)
-
+# coverage rides in the pinned dev group, so $(PYTHON) resolves it from
+# uv.lock and a run cannot grade against whatever PyPI served that day.
 coverage:
-	PYTHONPATH=src $(COV) -m coverage run --source=src -m unittest discover -s tests
-	$(COV) -m coverage report -m
+	@$(PYTHON) -c "import coverage" 2>/dev/null || \
+		{ echo "ERROR: coverage is not installed; run scripts/bootstrap" >&2; exit 1; }
+	PYTHONPATH=src $(PYTHON) -m coverage run --source=src -m unittest discover -s tests
+	$(PYTHON) -m coverage report -m

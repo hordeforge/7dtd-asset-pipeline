@@ -277,6 +277,35 @@ class DispatchTests(unittest.TestCase):
                 call_json(None, "init", {"mod_root": str(mod_root), "bundle_source": "bogus"})
             self.assertFalse((mod_root / ".shamway.toml").exists(), "nothing may be written")
 
+    def test_a_parameter_of_the_wrong_type_is_refused_naming_it(self) -> None:
+        """JSON has one spelling per type, so nothing here coerces.
+
+        `allow_network="false"` is truthy and would upload the clip, and
+        `install="false"` wrote into the shared `Mods/` folder. Every other
+        boundary this package owns refuses the quoted form, so the operation
+        params do too, with a message that names the parameter.
+        """
+        with self.assertRaisesRegex(PipelineError, "allow_network='false'"):
+            call_json(
+                None,
+                "review_audio",
+                {"clip": "falling.wav", "allow_network": "false"},
+            )
+        with self.assertRaisesRegex(PipelineError, "expected boolean"):
+            self.pipeline.call("client_deploy", {"replace": "false"})
+
+    def test_an_integer_parameter_will_not_accept_a_boolean(self) -> None:
+        """`bool` is an `int` subclass, so `True` would pass an integer gate."""
+        with self.assertRaisesRegex(PipelineError, "expected integer"):
+            self.pipeline.call("client_launch", {"run_seconds": True, "mute": False})
+
+    def test_a_path_parameter_accepts_what_the_facade_documents(self) -> None:
+        from sevendtd_asset_pipeline.api import _validated
+        from sevendtd_asset_pipeline.operations import get as get_operation
+
+        arguments = _validated(get_operation("inspect"), {"bundle": Path("a.unity3d")})
+        self.assertIsInstance(arguments["bundle"], Path)
+
     def test_the_published_enums_cannot_drift_from_their_registries(self) -> None:
         from sevendtd_asset_pipeline.config import BUNDLE_SOURCES
         from sevendtd_asset_pipeline.prompts import KEYS, KINDS
@@ -421,6 +450,28 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(2, len(responses))
         self.assertFalse(responses[0]["ok"])
         self.assertTrue(responses[1]["ok"], "the session must survive a malformed request")
+
+    def test_falsy_non_object_params_are_refused(self) -> None:
+        """`params: []` or `""` is not an absent params object.
+
+        Coercing every falsy value to `{}` made the declared type error
+        unreachable for exactly those and ran the operation with schema
+        defaults instead, so a caller that serialized an argument list got a
+        different operation than the one it named.
+        """
+        for value in cast("list[object]", [[], "", 0, False]):
+            with self.subTest(params=value):
+                response = handle(
+                    {"id": 1, "op": "check_mesh", "params": value}, lambda: self.pipeline, False
+                )
+                self.assertFalse(response["ok"])
+                self.assertIn(
+                    "must be a JSON object", cast(str, _nested(response, "error")["message"])
+                )
+
+    def test_absent_params_is_an_empty_object(self) -> None:
+        response = handle({"id": 1, "op": "capabilities"}, lambda: self.pipeline, False)
+        self.assertTrue(response["ok"])
 
     def test_non_object_request_is_an_error_not_a_crash(self) -> None:
         response = handle([1, 2, 3], lambda: self.pipeline, False)

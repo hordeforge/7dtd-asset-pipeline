@@ -93,6 +93,21 @@ class ReferenceTests(unittest.TestCase):
         )
         self.assertEqual(["Assets/A.prefab", "Assets/B.wav"], manifest_assets(manifest))
 
+    def test_a_manifest_of_another_file_version_is_refused(self) -> None:
+        """Only the `Assets:` block is parsed, so a file of another shape
+        would be read as a complete membership list. A version this reader
+        does not implement is refused instead."""
+        manifest = self.root / "bundle.manifest"
+        manifest.write_text("ManifestFileVersion: 2\nAssets:\n- Assets/A.prefab\n")
+        with self.assertRaisesRegex(PipelineError, "ManifestFileVersion 2"):
+            manifest_assets(manifest)
+
+    def test_a_manifest_with_no_file_version_is_refused(self) -> None:
+        manifest = self.root / "bundle.manifest"
+        manifest.write_text("Assets:\n- Assets/A.prefab\n")
+        with self.assertRaisesRegex(PipelineError, "ManifestFileVersion none"):
+            manifest_assets(manifest)
+
     def test_a_manifest_listing_no_assets_is_rejected(self) -> None:
         manifest = self.root / "bundle.manifest"
         manifest.write_text("ManifestFileVersion: 0\nAssets:\nDependencies: {}\n")

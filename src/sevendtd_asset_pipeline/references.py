@@ -16,6 +16,16 @@ BUNDLE_URI = re.compile(r"#[^\s\"'<>]+\?[^\s\"'<>]+")
 # '@modfolder:').
 MODFOLDER = re.compile(r"@modfolder(?:\(([^)]*)\))?:", re.IGNORECASE)
 
+# The tracked manifest's own version marker, and the only one this reader
+# implements. Both backends emit it (see `bundle_writer.render_manifest`) and
+# `stage` copies an editor-produced one over the tracked file, so a manifest
+# written by any of them is read here. A file declaring any other version is
+# refused: the `Assets:` block is the only section parsed below, so a
+# differently shaped file would otherwise be read as a complete membership
+# list out of whatever precedes the first unindented line, and every
+# downstream stem, case and reference gate would treat that as authoritative.
+MANIFEST_FILE_VERSION = "0"
+
 
 @dataclass(frozen=True)
 class AssetReference:
@@ -146,15 +156,24 @@ def manifest_assets(manifest: Path) -> list[str]:
         raise PipelineError(f"cannot read manifest {manifest}: {exc}") from exc
     assets: list[str] = []
     in_assets = False
+    version = None
     for line in lines:
         stripped = line.strip()
-        if stripped == "Assets:":
+        if stripped.startswith("ManifestFileVersion:"):
+            version = stripped.partition(":")[2].strip()
+        elif stripped == "Assets:":
             in_assets = True
             continue
-        if in_assets and stripped.startswith("- "):
+        elif in_assets and stripped.startswith("- "):
             assets.append(stripped[2:].strip())
         elif in_assets and stripped and not line[:1].isspace():
             break
+    if version != MANIFEST_FILE_VERSION:
+        raise PipelineError(
+            f"{manifest} declares ManifestFileVersion {version or 'none'}; this reader "
+            f"implements version {MANIFEST_FILE_VERSION} only, and would read a file of "
+            "another shape as a complete membership list"
+        )
     if not assets:
         raise PipelineError(f"{manifest} lists no Assets")
     return assets

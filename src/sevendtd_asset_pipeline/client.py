@@ -52,7 +52,7 @@ import sys
 import threading
 import time
 import unicodedata
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -469,7 +469,7 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
 
 
 @contextmanager
-def hold_for_write(action: str, env: Mapping[str, str] | None = None) -> Iterator[None]:
+def hold_for_write(action: str, env: MutableMapping[str, str] | None = None) -> Iterator[None]:
     """Hold the shared client lock across a write into the shared Mods/ folder.
 
     Refuse-then-copy is check-then-act across processes: between the refusal
@@ -480,6 +480,9 @@ def hold_for_write(action: str, env: Mapping[str, str] | None = None) -> Iterato
     flock the launcher uses. On a host without flock there is no protocol to
     hold, so it degrades to today's refuse-only check instead of taking the
     write away from a native Windows client.
+
+    The session is published into `env` for the duration, so a command this
+    hold wraps inherits it and borrows rather than refusing itself.
     """
     environment = os.environ if env is None else env
     if find_spec("fcntl") is None:
@@ -488,7 +491,55 @@ def hold_for_write(action: str, env: Mapping[str, str] | None = None) -> Iterato
         return
     session = environment.get(LOCK_SESSION_ENV) or new_session_id()
     with held_lock(session, lock_path(environment)):
-        yield
+        # Publish the session for the duration of the hold, so a pipeline
+        # command this one wraps inherits it. `shamway client hold -- shamway
+        # client deploy MOD` is the composition `hold` exists for, and without
+        # this the child mints a second id and refuses itself against the very
+        # hold that invoked it, naming that hold in the error. The value is
+        # restored rather than popped: an outer caller may have had one.
+        inherited = environment.get(LOCK_SESSION_ENV)
+        environment[LOCK_SESSION_ENV] = session
+        try:
+            yield
+        finally:
+            if inherited is None:
+                environment.pop(LOCK_SESSION_ENV, None)
+            else:
+                environment[LOCK_SESSION_ENV] = inherited
+
+
+def run_held_command(argv: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
+    """Run a held command so the lock is only released once nothing writes.
+
+    `subprocess.run` lets a `KeyboardInterrupt` out of `wait` and returns,
+    which unwinds `hold_for_write` and frees the lock while the child may
+    still be running: a `bash -c 'rm -rf … && cp -a …'` mid-copy, a command
+    that traps SIGINT, or any descendant put in its own session, which never
+    sees the terminal's signal at all. A lock that says "nobody is writing"
+    while something is writing is worse than no lock, because the next
+    session trusts it.
+
+    So the child gets its own session, and every exit that is not a clean
+    return signals that whole session first, exactly as `unity_process` does
+    for the editor's AssetImportWorkers. Where there are no process groups
+    (Windows) the direct-child kill is all the platform offers.
+    """
+    process = subprocess.Popen(
+        list(argv),
+        # False where there are no sessions (Windows); True nowhere else.
+        start_new_session=hasattr(os, "setsid"),
+    )
+    try:
+        returncode = process.wait()
+    except BaseException:
+        with contextlib.suppress(ProcessLookupError):
+            if hasattr(os, "killpg"):
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+        process.wait()
+        raise
+    return subprocess.CompletedProcess(list(argv), returncode)
 
 
 def new_session_id(prefix: str = "shamway") -> str:
@@ -1486,7 +1537,7 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
         # rewritten underneath it. Running them here puts them behind the same
         # flock every other writer serializes through.
         with hold_for_write(args.action):
-            completed = subprocess.run(args.argv, check=False)
+            completed = run_held_command(args.argv)
         return completed.returncode
     if args.command == "log":
         path = args.path or latest_client_log(args.log_dir or client_log_dir(game_dir))

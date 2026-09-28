@@ -59,6 +59,7 @@ from . import particles as particle_fields
 from .capabilities import has_capability, require_capability
 from .errors import PipelineError
 from .gltf_scene import GltfNode, GltfPrimitive, GltfScene, parse_gltf
+from .references import MANIFEST_FILE_VERSION
 from .vfx import parse_vfx
 from .workdir import scratch_dir
 
@@ -2594,7 +2595,7 @@ def render_manifest(bundle_name: str, assets: list[str]) -> str:
     stem, case and reference gates working unchanged.
     """
     lines = [
-        "ManifestFileVersion: 0",
+        f"ManifestFileVersion: {MANIFEST_FILE_VERSION}",
         f"AssetBundleManifest: {bundle_name}",
         "Assets:",
         *[f"- {asset}" for asset in assets],

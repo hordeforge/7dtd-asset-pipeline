@@ -25,6 +25,28 @@ class StatusTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_a_gate_that_could_not_run_is_published_beside_valid(self) -> None:
+        """`valid: true` must not be the only word about a mod with no game.
+
+        The machine-readable surface is what an agent orients with, so an
+        unrun gate that is only implied reads exactly like a passed one there.
+        """
+        self.config.resources_dir.mkdir()
+        self.config.bundle_output.write_bytes(unityfs_bundle([1, 142]))
+        self.config.tracked_manifest.parent.mkdir(parents=True, exist_ok=True)
+        self.config.tracked_manifest.write_text(
+            "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n",
+            encoding="utf-8",
+        )
+        self.config.config_dir.mkdir()
+        status = collect_status(self.config)
+        self.assertTrue(status.valid, status.problems)
+        self.assertEqual([], status.problems)
+        self.assertTrue(
+            any("game-revision gate" in line for line in status.skipped), status.skipped
+        )
+        self.assertIn("skipped", status.as_dict())
+
     def test_reports_a_missing_bundle_without_raising(self) -> None:
         status = collect_status(self.config)
         self.assertFalse(status.bundle_present)
@@ -64,7 +86,8 @@ class StatusTests(unittest.TestCase):
         self.config.bundle_output.write_bytes(unityfs_bundle([1, 142]))
         self.config.tracked_manifest.parent.mkdir(parents=True, exist_ok=True)
         self.config.tracked_manifest.write_text(
-            "Assets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n", encoding="utf-8"
+            "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n",
+            encoding="utf-8",
         )
         self.config.config_dir.mkdir()
         (self.config.config_dir / "blocks.xml").write_text(

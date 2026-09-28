@@ -49,8 +49,17 @@ class Status:
     valid: bool | None = None
     problems: list[str] = field(default_factory=list)
     not_run: list[str] = field(default_factory=list)
-    """Gates whose evidence never arrived. An empty list with `valid` true means
-    every gate ran; a non-empty one means `valid` is narrower than a pass."""
+    """Gates whose evidence never arrived, without the `not run: ` prefix. An
+    empty list with `valid` true means every gate ran; a non-empty one means
+    `valid` is narrower than a pass."""
+    skipped: list[str] = field(default_factory=list)
+    """The same gates, each a `not run:` line.
+
+    Separate from `problems` because a gate that could not run is not a
+    failure, and separate from the absence of a problem because `valid:
+    true` is printed from that absence: an unrun gate that is only implicit
+    reads exactly like a passed one.
+    """
     capabilities: dict[str, bool] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, object]:
@@ -154,11 +163,8 @@ def collect_status(config: PipelineConfig) -> Status:
         # The validator's report is the only place an unrun gate is named, and
         # dropping it here reported a mod whose block-Class or patch gate never
         # ran as `valid: true` with no problems at all.
-        status.not_run = [
-            line.removeprefix("not run: ")
-            for line in report.messages
-            if line.startswith("not run:")
-        ]
+        status.skipped.extend(report.skipped)
+        status.not_run = [line.removeprefix("not run: ") for line in report.skipped]
         status.valid = True
     except PipelineError as exc:
         status.valid = False

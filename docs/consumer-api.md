@@ -66,6 +66,13 @@ and exits non-zero. Unknown operations list the known ones, unknown parameters
 list what is accepted, and a missing one is named — so a caller does not have
 to guess from a traceback.
 
+A parameter is also held to the type `shamway schema` publishes, and refused
+rather than coerced: JSON has one spelling per type, so `allow_network` as the
+string `"false"` is a caller bug and not a way to spell `false`. Every
+operation rejects a wrong-typed parameter by name before any work starts. A
+`string` parameter also accepts a `pathlib.Path`, because the Python facade is
+the same entry point.
+
 ## 2. `serve` — many operations, one process
 
 Each `call` pays process start. `serve` pays it once and then answers one JSON
@@ -212,6 +219,14 @@ produces a blank image; run it under `xvfb-run -a` on a headless host.
 The orientation call. It never raises for a mod-state problem; problems are
 collected into the structure so one broken thing does not hide the rest.
 
+`skipped` is separate from `problems` on purpose. A gate whose evidence did
+not arrive is not a failure, so `valid` stays `true`; but `valid: true` is
+derived from the absence of a failure, so an unrun gate that was only implied
+would read exactly like a passed one. Each entry is a `not run:` line naming
+the gate and what would let it run (no game directory configured, for the
+game-revision gate). `shamway validate`'s `ValidationReport.skipped` carries
+the same lines.
+
 ```json
 {
   "mod_name": "MyMod",
@@ -240,6 +255,7 @@ collected into the structure so one broken thing does not hide the rest.
   ],
   "valid": true,
   "problems": [],
+  "skipped": [],
   "capabilities": {"unityz": true, "trimesh": false,
                    "vkd3d-compiler": false,
                    "libzmolv": false, "glslangValidator": false, "fsb5": false,
@@ -507,6 +523,8 @@ status = collect_status(config)  # never raises for a mod-state problem
 if not status.valid:
     for problem in status.problems:
         print(problem)
+for gate in status.skipped:  # ran nothing; not a failure, and not a pass
+    print(gate)
 
 try:
     bundle = run_build(config)  # returns the staged bundle path

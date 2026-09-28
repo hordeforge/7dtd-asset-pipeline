@@ -168,6 +168,23 @@ class PipelineTests(unittest.TestCase):
         self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
         self.assertEqual(1, validate_mod(self.config).reference_count)
 
+    def test_a_gate_that_could_not_run_is_reported_and_is_not_a_problem(self) -> None:
+        """`valid` is derived from the absence of a failure, so a gate that ran
+        nothing must say so rather than read as a pass.
+
+        This mod has no game directory, so the game-revision gate cannot hold
+        the bundle's Unity revision against an installed game. `stage` has
+        always carried that line in its own `skipped` list; the same gap in
+        `validate` was reported as a green run.
+        """
+        self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
+        report = validate_mod(self.config)
+        self.assertTrue(
+            any("game-revision gate" in line for line in report.skipped), report.messages
+        )
+        self.assertEqual(report.skipped, report.messages[: len(report.skipped)])
+        self.assertTrue(all(line.startswith("not run: ") for line in report.skipped))
+
     def test_a_modinfo_name_disagreement_fails(self) -> None:
         """The configuration and the modlet must describe the same mod."""
         self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")

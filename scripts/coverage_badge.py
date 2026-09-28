@@ -66,7 +66,7 @@ def main(argv: list[str]) -> int:
         print("usage: coverage_badge.py OUTPUT.svg", file=sys.stderr)
         return 2
     pct = percentage()
-    Path(argv[1]).write_text(badge(pct, colour(pct)), newline="\n")
+    Path(argv[1]).write_text(badge(pct, colour(pct)), encoding="utf-8", newline="\n")
     return 0
 
 

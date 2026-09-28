@@ -531,6 +531,8 @@ def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str,
         if required not in arguments:
             raise PipelineError(f"operation {operation.name!r} requires parameter {required!r}")
     for name, value in arguments.items():
+        _typed(operation, name, properties[name], value)
+    for name, value in arguments.items():
         allowed = properties[name].get("enum")
         if allowed and value not in allowed:
             options = ", ".join(repr(option) for option in allowed)
@@ -543,6 +545,54 @@ def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str,
     return arguments
 
 
+_JSON_TYPES: dict[str, type | tuple[type, ...]] = {
+    "string": str,
+    "boolean": bool,
+    "integer": int,
+    "number": (int, float),
+    "array": (list, tuple),
+    "object": dict,
+}
+
+
+def _typed(operation: Operation, name: str, prop: dict[str, Any], value: Any) -> None:
+    """Hold a supplied parameter to the type its published schema declares.
+
+    The other three checks in `_validated` cover keys, enums and defaults, so
+    a value that arrived as a string where the schema says boolean or integer
+    was the one shape that reached the facade unchecked. JSON has one
+    spelling per type, so nothing here coerces: `allow_network="false"` is
+    truthy, `install="false"` wrote into the shared `Mods/` folder, and
+    `run_seconds="10"` died inside `time.sleep` with a traceback instead of a
+    message naming the parameter. Every other boundary this package owns
+    (see `_flag` in `config.py`) refuses rather than coerces for the same
+    reason, and a caller who serializes parameters from another language
+    should get that answer, not a different result.
+
+    A `string` property is the one exception, because a `Path` is the other
+    spelling of a path and every in-process caller hands one over: the
+    published schema says `string` and JSON has one string, but this facade
+    is the documented entry point for Python too, and `_coerced` below
+    already converts a string path into a `Path`. Keying the exception on
+    `PATH_PARAM` identity instead would reject a path for any property that
+    overrode its description, which most of them do.
+    """
+    kind = prop.get("type")
+    if kind is None or (kind == "string" and isinstance(value, Path)):
+        return
+    expected = _JSON_TYPES.get(kind)
+    if expected is None:
+        return
+    if isinstance(value, bool) and kind in ("integer", "number"):
+        # `bool` is an `int` subclass, so `True` would pass an integer gate.
+        raise PipelineError(f"operation {operation.name!r} got {name}=true; expected {kind}")
+    if not isinstance(value, expected):
+        raise PipelineError(
+            f"operation {operation.name!r} got {name}={value!r}; expected {kind}, "
+            f"not {type(value).__name__}"
+        )
+
+
 def _coerced(operation: Operation, arguments: dict[str, Any]) -> dict[str, Any]:
     """Coerce JSON-shaped params to the Python types the facade methods take.
 
@@ -550,8 +600,8 @@ def _coerced(operation: Operation, arguments: dict[str, Any]) -> dict[str, Any]:
     itself instead of growing a hand-written converter: a `filesystem path`
     property becomes a `Path`, an array property becomes a tuple (numbers as
     floats, for the float-sequence parameters). Enums and booleans pass
-    through: neither can drift, one is validated above and the other has only
-    one JSON shape.
+    through: both are held to their declared type above, and JSON has one
+    spelling for each.
     """
     coerced: dict[str, Any] = {}
     for name, value in arguments.items():
@@ -635,7 +685,7 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "pack": lambda self, p: _pack(p, self.config.game_dir),
     "verify_bundle": lambda self, p: self.verify_bundle(p.get("bundle")),
     "acceptance_provider": lambda self, p: self.acceptance_provider(
-        p.get("harness_dll"), bool(p.get("install", False)), p.get("mods_dir")
+        p.get("harness_dll"), p.get("install", False), p.get("mods_dir")
     ),
     "stage": lambda self, p: _stage_result(
         self.stage(p["bundle"], p.get("manifest"), p.get("log"))

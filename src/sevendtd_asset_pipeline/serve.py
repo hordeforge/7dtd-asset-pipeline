@@ -59,7 +59,12 @@ def handle(
     if operation_name == "ping":
         return {"id": identifier, "ok": True, "result": {"protocol": PROTOCOL}}
 
-    params = request.get("params") or {}
+    # `or {}` would rewrite every falsy value first, so `[]`, `""`, `0` and
+    # `false` all reached the operation as an empty object and ran it with
+    # schema defaults: the declared type error was unreachable for exactly
+    # those, and a caller that serialized an argument list got a different
+    # operation than the one it asked for.
+    params = request.get("params", {})
     if not isinstance(params, dict):
         return _error(identifier, PipelineError("'params' must be a JSON object"))
     try:

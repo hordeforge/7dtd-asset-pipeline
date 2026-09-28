@@ -21,11 +21,24 @@ from .references import (
 )
 from .unityfs import BundleInfo, inspect_bundle
 
+# The shape every gate uses to say its evidence did not arrive, and the
+# prefix `ValidationReport.skipped` recognises. A gate that cannot run must
+# not report a pass, because every other surface here prints `valid: true`
+# from the absence of a failure.
+NOT_RUN_PREFIX = "not run: "
+
 
 @dataclass(frozen=True)
 class ValidationReport:
     messages: tuple[str, ...]
     reference_count: int
+    skipped: tuple[str, ...] = ()
+    """Gates whose evidence did not arrive, each a `not run:` line.
+
+    Also at the head of `messages`, so a caller that prints the report cannot
+    miss one; bound separately so a machine-readable surface can publish what
+    did not run instead of reporting only what did.
+    """
 
 
 def validate_bundle(
@@ -187,16 +200,32 @@ def validate_mod(
     notes = [f"not run: {note}" for note in patch_report.notes]
     if not config.has_bundle:
         report = _validate_bundle_free(config)
-        return ValidationReport(
-            report.messages + tuple(mod_schema) + tuple(class_messages) + tuple(notes),
-            report.reference_count,
-        )
+        messages = [
+            *report.messages,
+            *mod_schema,
+            *class_messages,
+            *notes,
+        ]
+        # No bundle to gate, so the report keeps the order the gates produced:
+        # the first line a caller prints is the one about the mod, and the
+        # unrun lines stay bound in `skipped` rather than leading.
+        skipped = tuple(line for line in messages if line.startswith(NOT_RUN_PREFIX))
+        return ValidationReport(tuple(messages), report.reference_count, skipped)
+    not_run: list[str] = []
     if game_version is not None:
         expected_version: str | None = game_version[0]
     elif config.game_dir:
         expected_version = game_unity_version(config.game_dir)[0]
     else:
         expected_version = None
+        # The repository's own rule: an unrun gate must never read like a
+        # passed one. `stage` already carries this in its own `skipped` list;
+        # the gate is the same one, and it is not run here either.
+        not_run.append(
+            NOT_RUN_PREFIX + "the game-revision gate: no game directory is configured, so the "
+            "bundle's Unity revision was not held against the installed game's. Set "
+            "SEVEN_DAYS_TO_DIE_DIR."
+        )
     validate_bundle(config.bundle_output, expected_version, bundle_info)
     if assets is None:
         assets = manifest_assets(config.tracked_manifest)
@@ -211,7 +240,21 @@ def validate_mod(
     messages += mod_schema
     messages += class_messages
     messages += notes
-    return ValidationReport(tuple(messages), len(references) + len(config.code_references))
+    return _report([*not_run, *messages], len(references) + len(config.code_references))
+
+
+def _report(messages: list[str], reference_count: int) -> ValidationReport:
+    """One rule for what did not run, applied to every message this module emits.
+
+    A gate whose evidence did not arrive says so in the `not run:` shape the
+    staging gates use; those lines move to the head of the report so a caller
+    that prints `messages` cannot scroll past one, and are bound separately so
+    a machine-readable surface publishes the gap rather than reporting only
+    what passed.
+    """
+    skipped = [message for message in messages if message.startswith(NOT_RUN_PREFIX)]
+    ran = [message for message in messages if not message.startswith(NOT_RUN_PREFIX)]
+    return ValidationReport((*skipped, *ran), reference_count, tuple(skipped))
 
 
 def check_block_classes(config: PipelineConfig) -> list[str]:
@@ -236,7 +279,7 @@ def check_block_classes(config: PipelineConfig) -> list[str]:
     except PipelineError as exc:
         # The repository's own rule: an unrun gate must never read like a
         # passed one. This is the `not run:` shape the staging gates use.
-        return [f"not run: block Class check ({exc})"]
+        return [f"{NOT_RUN_PREFIX}block Class check ({exc})"]
     unknown = [(block, value, path) for block, value, path in declared if value not in legal]
     if unknown:
         block, value, path = unknown[0]

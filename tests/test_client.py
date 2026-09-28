@@ -10,6 +10,7 @@ import contextlib
 import io
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -892,6 +893,83 @@ class LockTests(unittest.TestCase):
                 inside.append(client.lock_holder(path))
             self.assertEqual(inside, ["mine-1"], "the body ran while nobody held the lock")
             self.assertEqual(client.lock_holder(path), "mine-1", "the borrow released the run")
+
+    def test_a_held_command_inherits_the_hold_session(self) -> None:
+        """`client hold -- shamway client deploy MOD` must not refuse itself.
+
+        The composition `hold` exists for, and the composition that composes
+        the two commands this package owns. Without publishing the session,
+        the child mints a second id and refuses against the hold that invoked
+        it.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(Path(tmp), running="no")
+            env = {client.LOCK_ENV: str(path)}
+            with client.hold_for_write("deploy into the shared Mods folder", env=env):
+                session = env.get(client.LOCK_SESSION_ENV)
+                self.assertIsNotNone(session, "the hold did not publish its session")
+                # The command the hold wraps reads the same environment, so
+                # its own hold borrows this one instead of refusing.
+                with client.hold_for_write("deploy into the shared Mods folder", env=env):
+                    self.assertEqual(client.lock_holder(path), session)
+            self.assertIsNone(client.lock_holder(path))
+
+    def test_an_inherited_session_is_restored_after_the_hold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {client.LOCK_ENV: str(self._lock(Path(tmp), running="no"))}
+            with client.hold_for_write("deploy into the shared Mods folder", env=env):
+                pass
+            self.assertNotIn(client.LOCK_SESSION_ENV, env)
+
+    def test_an_interrupted_held_command_ends_before_the_lock_releases(self) -> None:
+        """The lock may only be released once nothing is writing.
+
+        A `KeyboardInterrupt` out of `subprocess.run` unwinds the hold while
+        a child that traps SIGINT, or a descendant in its own session, is
+        still copying into the shared Mods folder. The held command puts the
+        child alone in a session and signals that whole session, so the
+        grandchild's heartbeat stops before the record is cleared.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            beats = Path(tmp) / "beats"
+            # A child that ignores SIGINT and a grandchild in its own
+            # session, which never sees the terminal's signal at all.
+            script = (
+                "import os, subprocess, sys, time\n"
+                "beat = open(sys.argv[1], 'a', buffering=1)\n"
+                "subprocess.Popen([sys.executable, '-c',\n"
+                "  \"import sys,time\\nopen(sys.argv[1],'a',buffering=1).write('x')\\n"
+                '  while True: time.sleep(0.1)", sys.argv[1]],\n'
+                "  start_new_session=True)\n"
+                "import signal\n"
+                "signal.signal(signal.SIGINT, signal.SIG_IGN)\n"
+                "while True:\n"
+                "    beat.write('.')\n"
+                "    time.sleep(0.1)\n"
+            )
+
+            def _interrupt(_signum: int, _frame: object) -> None:
+                raise KeyboardInterrupt
+
+            previous = signal.signal(signal.SIGALRM, _interrupt)
+            try:
+                signal.setitimer(signal.ITIMER_REAL, 0.5)
+                with self.assertRaises(KeyboardInterrupt):
+                    client.run_held_command([sys.executable, "-c", script, str(beats)])
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                signal.signal(signal.SIGALRM, previous)
+            size = beats.stat().st_size
+            time.sleep(1.0)
+            self.assertEqual(
+                size,
+                beats.stat().st_size,
+                "the held command's session outlived the interruption that released the lock",
+            )
+
+    def test_run_held_command_returns_the_child_status(self) -> None:
+        completed = client.run_held_command([sys.executable, "-c", "raise SystemExit(3)"])
+        self.assertEqual(3, completed.returncode)
 
     def test_a_borrow_keeps_the_run_acquired_stamp(self) -> None:
         """A borrowed hold refreshes the heartbeat and dates nothing else."""

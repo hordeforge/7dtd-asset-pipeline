@@ -952,11 +952,10 @@ def run(args: argparse.Namespace) -> int:
         else:
             validation = validate_mod(config)
             print(*validation.messages, sep="\n")
-            unrun = [line for line in validation.messages if line.startswith("not run:")]
-            if unrun:
+            if validation.skipped:
                 print(
                     f"PARTIAL: bundle and {validation.reference_count} reference(s) validated"
-                    f" (XML and code_references); {len(unrun)} gate(s) did not run"
+                    f" (XML and code_references); {len(validation.skipped)} gate(s) did not run"
                 )
             else:
                 print(
@@ -986,6 +985,8 @@ def run(args: argparse.Namespace) -> int:
                 print(f"{key}: {data[key]}")
             for problem in status_report.problems:
                 print(f"problem: {problem}")
+            for gate in status_report.skipped:
+                print(gate)
         return 0 if status_report.valid else 1
     if args.command == "check-icons":
         icons = check_icons(config.mod_root, config.config_dir, args.atlas_root, args.cell)

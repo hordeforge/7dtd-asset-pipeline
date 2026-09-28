@@ -29,6 +29,12 @@ from sevendtd_asset_pipeline.video_review import (
     validate_result,
 )
 
+# The reaping test bounds a real process group, so the timeout must outlast the
+# fixture's own interpreter boot (tens of milliseconds, more on a loaded host)
+# with room to spare, and the poll must outlast the kernel delivering SIGKILL.
+SPAWN_BOUND_SECONDS = 2.0
+REAP_POLL_SECONDS = 5.0
+
 VALID_INTENT: dict[str, object] = {
     "schema_version": INTENT_SCHEMA_VERSION,
     "purpose": "show the garment survives a full turn without clipping",
@@ -324,7 +330,14 @@ class RunReviewTests(_ReviewHarness):
 
     @unittest.skipUnless(os.name == "posix", "process groups are POSIX")
     def test_a_timed_out_gateway_reaps_its_worker_group(self) -> None:
-        """A gateway timeout must not leave a worker alive behind its request."""
+        """A gateway timeout must not leave a worker alive behind its request.
+
+        The bound has to outlast the fixture actually starting: the worker pid
+        only exists once the interpreter has booted and forked it, and a bound
+        tighter than that expires before the group under test is ever
+        populated. The fixture asserts its own precondition, so a slow host
+        fails as "never started" rather than as a worker that survived.
+        """
         with tempfile.TemporaryDirectory() as directory:
             pid_file = Path(directory) / "worker.pid"
             program = (
@@ -333,18 +346,22 @@ class RunReviewTests(_ReviewHarness):
                 "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(60)"
             )
             with self.assertRaisesRegex(PipelineError, "did not answer within"):
-                video_review._default_runner([sys.executable, "-c", program, str(pid_file)], 0.1)
-            deadline = time.monotonic() + 5
+                video_review._default_runner(
+                    [sys.executable, "-c", program, str(pid_file)], SPAWN_BOUND_SECONDS
+                )
+            self.assertTrue(
+                pid_file.is_file(),
+                f"the fixture never started a worker within {SPAWN_BOUND_SECONDS:g}s",
+            )
+            pid = int(pid_file.read_text())
+            deadline = time.monotonic() + REAP_POLL_SECONDS
             while time.monotonic() < deadline:
-                if pid_file.is_file():
-                    pid = int(pid_file.read_text())
-                    try:
-                        os.kill(pid, 0)
-                    except ProcessLookupError:
-                        break
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    return
                 time.sleep(0.05)
-            else:
-                self.fail("the gateway worker survived its timed-out process group")
+            self.fail(f"worker {pid} survived its timed-out process group")
 
     def test_evidence_names_the_source_hash_and_gateway_envelope(self) -> None:
         output = self.root / "evidence" / "review.json"

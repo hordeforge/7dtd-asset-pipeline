@@ -52,7 +52,22 @@ fi
 # enough, so the Python version is a constraint here rather than a
 # prerequisite. The dev group (ruff, mypy, setuptools, coverage) rides along so
 # `make check test` works out of the box.
-SYNC_ARGS=(--locked --project "$ROOT" --python '>=3.11')
+#
+# The version is the one .python-version pins, not an open range: a range
+# resolved on a host with 3.15 installed builds a .venv out of the matrix CI
+# tests and out of the version the release artifact is built with. The floor in
+# pyproject.toml still says what the package supports; this says what this
+# checkout develops against.
+PINNED_PYTHON="$(tr -d '[:space:]' < "$ROOT/.python-version")"
+if [[ -z "$PINNED_PYTHON" ]]; then
+	cat >&2 <<'MISSING'
+ERROR: .python-version is empty or unreadable; it is the pinned interpreter.
+
+Restore it, or pass an explicit --python to uv sync yourself.
+MISSING
+	exit 1
+fi
+SYNC_ARGS=(--locked --project "$ROOT" --python "$PINNED_PYTHON")
 if [[ -n "$EXTRAS" ]]; then
 	IFS=',' read -r -a extras <<<"$EXTRAS"
 	for extra in "${extras[@]}"; do

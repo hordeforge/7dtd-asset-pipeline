@@ -19,6 +19,17 @@ tag has no changelog section.
   and the mod-supplied bundle URI, manifest and `ModInfo.xml` parsing in
   `references`. Each asserts the parser is total and its accepted result
   well-formed, over structure-aware seeds built from real report shapes.
+- `make dist` and `make reproducible`, and the release workflow builds through
+  the first. Two builds of one tree used to differ in the sdist's tar metadata
+  (the build machine's clock, uid, and user name), which made a shipped
+  artifact impossible to rebuild and compare; `SOURCE_DATE_EPOCH`, `TZ`, and
+  `LC_ALL` are pinned and `scripts/normalize_dist.py` replaces what the epoch
+  cannot reach. `make reproducible` builds twice and compares, and both the
+  pull-request workflow and the release job run it.
+- `.python-version`, pinning the interpreter `scripts/bootstrap` and `make`
+  build against. A range resolved on a host with a newer Python installed gave
+  a `.venv` outside the matrix CI tests and outside the version a release is
+  built with.
 - A public-API snapshot gate in `tests/test_release_contract.py`.
   `sevendtd_asset_pipeline.__all__` is the supported surface, and a name
   dropping out of it broke a consumer with an `ImportError` and nothing in

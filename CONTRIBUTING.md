@@ -61,6 +61,25 @@ parser that gains a new rejection rule gets the assertion that states it.
 PYTHONPATH=src .venv/bin/python -m unittest tests.test_fuzz
 ```
 
+## Building a distribution
+
+`make dist` is the only command that builds the sdist and wheel, and the
+release workflow runs it rather than calling `uv build` itself. It is
+reproducible: the epoch defaults to the last commit's own date, `TZ` and
+`LC_ALL` are pinned so neither a sorted file list nor a formatted name varies
+with the host, and `scripts/normalize_dist.py` replaces the sdist's tar
+metadata, which is otherwise the build machine's clock and user. `make clean-dist`
+removes what the build leaves behind (`build/`, `dist/`, and the staged copies
+of `docs/` and `scripts/`).
+
+`make reproducible` builds twice and compares the artifacts byte for byte. CI
+runs it on every pull request and the release workflow runs it before
+publishing, so a timestamp or a uid reaching a shipped artifact fails a build
+rather than being discovered later. Pass `SOURCE_DATE_EPOCH` to build from
+something other than a commit (an unpacked sdist, a shallow copy with no git
+history); without it and without a commit, `make dist` fails rather than
+guessing.
+
 ## The editorless path is a CI gate, not a claim
 
 "Unity is opt-in" is the kind of statement that rots quietly, because the

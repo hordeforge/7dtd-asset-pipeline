@@ -1,13 +1,25 @@
-.PHONY: check lint typecheck locked test coverage all
+.PHONY: check lint typecheck locked test coverage all dist reproducible clean-dist
+
+# bash is the shell this repository's scripts and CI both run, and `-o pipefail`
+# is the difference between a failing command on the left of a pipe and a green
+# target. Every recipe inherits both, so a recipe cannot swallow a failure.
+SHELL := /bin/bash
+.SHELLFLAGS := -euo pipefail -c
 
 # scripts/bootstrap installs the pinned analyzers into .venv/bin without
 # putting them on PATH; prefer them so a bootstrapped checkout always runs
 # exactly what CI runs instead of silently skipping gates CI enforces.
 export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
-# uv runs the suite when it is available so contributors share one toolchain;
-# the plain interpreter still works, because the core has no dependencies.
-PYTHON := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project python3" || echo python3)
+# The interpreter every target here runs on, read from the one file that pins
+# it. `uv run --no-project` would otherwise pick whatever the host or uv
+# considers current, which is a different Python on every machine and moves
+# under a checkout that never changed.
+PYTHON_PIN := $(strip $(shell cat .python-version 2>/dev/null))
+PYTHON := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project --python $(or $(PYTHON_PIN),3.11) python" || echo python3)
+
+# Where `dist` writes. Overridden by `reproducible`, which builds twice.
+DIST_DIR ?= dist
 
 all: check test
 
@@ -91,3 +103,54 @@ coverage:
 		{ echo "ERROR: coverage is not installed; run scripts/bootstrap" >&2; exit 1; }
 	PYTHONPATH=src $(PYTHON) -m coverage run --source=src -m unittest discover -s tests
 	$(PYTHON) -m coverage report -m
+
+# The published sdist and wheel, and the only command in the repository that
+# builds them; the release workflow calls this rather than `uv build` so a tag
+# is cut by the same recipe a contributor can run.
+#
+# Reproducible by construction: the epoch defaults to the commit's own date
+# rather than the wall clock, and the locale and timezone are pinned so a
+# sorted file list and a formatted name cannot vary with the host. uv honors
+# SOURCE_DATE_EPOCH for the wheel's zip entries; the sdist's tar metadata is the
+# build machine's clock and user, which normalize_dist.py replaces.
+dist:
+	@command -v uv >/dev/null 2>&1 || { \
+		echo "ERROR: uv not found; install it with scripts/install-tools.sh" >&2; \
+		exit 1; \
+	}
+	@epoch="$${SOURCE_DATE_EPOCH:-$$(git log -1 --format=%ct 2>/dev/null)}"; \
+	if [ -z "$$epoch" ]; then \
+		echo "ERROR: no SOURCE_DATE_EPOCH in the environment and no git commit date;" >&2; \
+		echo "       build from a checkout, or set SOURCE_DATE_EPOCH yourself" >&2; \
+		exit 1; \
+	fi; \
+	echo "building distributions into $(DIST_DIR) with SOURCE_DATE_EPOCH=$$epoch"; \
+	TZ=UTC LC_ALL=C SOURCE_DATE_EPOCH="$$epoch" uv build --out-dir '$(DIST_DIR)'; \
+	$(PYTHON) scripts/normalize_dist.py --epoch "$$epoch" $(DIST_DIR)/*.tar.gz
+
+# Two builds of this tree, compared byte for byte. The reproducibility claim is
+# otherwise untested, and the ways it breaks (a timestamp, a uid, an unsorted
+# file list) are invisible until something diffs the two.
+reproducible:
+	@first="$$(mktemp -d)"; second="$$(mktemp -d)"; \
+	trap 'rm -rf "$$first" "$$second"' EXIT; \
+	$(MAKE) --no-print-directory dist DIST_DIR="$$first" >/dev/null; \
+	$(MAKE) --no-print-directory dist DIST_DIR="$$second" >/dev/null; \
+	compared=0; \
+	for artifact in "$$first"/*; do \
+		name="$$(basename "$$artifact")"; \
+		cmp "$$artifact" "$$second/$$name" >/dev/null || { \
+			echo "ERROR: two builds of this tree disagree on $$name" >&2; \
+			exit 1; \
+		}; \
+		compared=$$((compared + 1)); \
+	done; \
+	test "$$compared" -gt 0 || { echo "ERROR: no distribution was built" >&2; exit 1; }; \
+	echo "OK: $$compared artifacts are byte-identical across two builds"
+
+# The build leaves `build/`, setuptools' `src/*.egg-info`, and the staged copies
+# of docs/ and scripts/ that setup.py writes into the package. All four are
+# regenerated on every build.
+clean-dist:
+	rm -rf build $(DIST_DIR) src/*.egg-info \
+		src/sevendtd_asset_pipeline/docs src/sevendtd_asset_pipeline/scripts

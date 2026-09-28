@@ -182,10 +182,18 @@ will rebuild from scratch, and an undocumented gate is one it will delete.
 ```bash
 scripts/bootstrap          # uv sync from the committed lockfile, with extras
 make check test            # compile, shellcheck, lint, types, and the unit suite
+make reproducible          # two builds of this tree, compared byte for byte
 ```
 
 `make check test` must pass before you hand work back. It needs no network,
 no Unity, and no game install.
+
+`make dist` is the only command that builds the sdist and wheel, and the
+release workflow runs it. It pins `SOURCE_DATE_EPOCH` to the last commit's own
+date along with `TZ` and `LC_ALL`, and normalizes the sdist's tar metadata, so
+the same tree builds the same bytes; `make clean-dist` removes what a build
+leaves behind. Touching `setup.py`, `MANIFEST.in`, the package data, or the
+staging rules means `make reproducible` must pass.
 
 - Changes to `unityfs.py` require generated fixtures for **both** acceptance
   and rejection. Never loosen a parser bound to make a real file work without

@@ -56,6 +56,22 @@ jobs:
       - run: shamway schema
       - run: make check test
 
+  reproducible:
+    # The claim that one source tree builds one artifact, checked on every
+    # pull request rather than only when a tag is pushed. The release job runs
+    # the same target before it publishes; this is where a regression is still
+    # cheap to fix, and the suite above cannot see a timestamp or a uid.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The epoch is the commit's own date, which a shallow clone of a PR
+          # merge ref still resolves; `make dist` falls back to it anyway.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - run: make reproducible
+
   macos:
     # docs/getting-started/quickstart.md claims the CLI itself is portable beyond Linux; this
     # job is that claim's only mechanical evidence, and it gates. Lint,

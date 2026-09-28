@@ -64,7 +64,20 @@ jobs:
             exit 1
           fi
 
-      - run: uv build
+      # `make dist` is the only command that builds a distribution, and it
+      # pins what a build otherwise inherits from the runner: the epoch
+      # defaults to the tagged commit's own date, and the locale and timezone
+      # are fixed so a sorted file list cannot vary with the host.
+      - run: make dist
+
+      # Two builds of the same tagged tree must be the same bytes. Without this
+      # the reproducibility claim is untested, and a release is published with
+      # no way to tell a payload change from a timestamp, a uid, or a
+      # different build machine. It runs before the release exists, so a
+      # disagreement stops the publish instead of shipping a second artifact.
+      - name: The published artifacts must be reproducible
+        shell: bash
+        run: make reproducible
 
       # setup.py stages docs/ and scripts/ into the package at build time, and
       # `uv build` builds the wheel from the sdist. When the sdist carried no

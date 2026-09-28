@@ -206,10 +206,11 @@ exclude = ["^build/", "examples/SelfTestMod/reference"]
 # The optional-capability modules ship stubs only (numpy), which
 # follow_imports otherwise keeps parsing regardless of the override below.
 follow_imports_for_stubs = true
-# Resolve `sevendtd_asset_pipeline` from the checkout and the tests' helper
-# imports (`fixtures`, cross-test modules) without requiring env vars.
-# explicit-package-bases keeps each file mapped under exactly one module name.
-mypy_path = ["src", "tests"]
+# Resolve `sevendtd_asset_pipeline` from the checkout, the tests' helper
+# imports (`fixtures`, cross-test modules), and the build glue the suite drives
+# (`normalize_dist`) without requiring env vars. explicit-package-bases keeps
+# each file mapped under exactly one module name.
+mypy_path = ["src", "tests", "scripts"]
 explicit_package_bases = true
 # --strict does not include these; the tree already passes them.
 strict_bytes = true

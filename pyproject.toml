@@ -75,6 +75,11 @@ all = [
 # number the README badge publishes, and the run that computes it used to
 # resolve it per invocation with `uv run --with coverage`, outside the lock,
 # so a release could move that number with nothing recorded here.
+# hypothesis is the generator behind tests/test_fuzz.py and belongs here for
+# the same reason: a checkout without it cannot import the module at all, and
+# `unittest discover` reports that as `unittest.loader._FailedTest`, which
+# reads as a broken suite rather than a missing dev dependency. It was
+# undeclared, so `make check test` failed on a clean clone.
 # Declared here (PEP 735) rather than inline in ci.yml so the pins have a
 # single home and land in uv.lock with hashes, which `uv sync --locked`
 # verifies on every install.
@@ -85,6 +90,7 @@ dev = [
     "setuptools==84.0.0",
     "texture2ddecoder>=1",
     "coverage==7.10.7",
+    "hypothesis==6.168.2",
 ]
 
 [project.scripts]

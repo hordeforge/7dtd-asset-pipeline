@@ -1,4 +1,4 @@
-.PHONY: check lint typecheck locked test coverage all dist reproducible clean-dist
+.PHONY: help check lint typecheck locked test coverage stage all dist reproducible clean-dist
 
 # bash is the shell this repository's scripts and CI both run, and `-o pipefail`
 # is the difference between a failing command on the left of a pipe and a green
@@ -22,6 +22,18 @@ PYTHON := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project --p
 DIST_DIR ?= dist
 
 all: check test
+
+# The whole task list, in the order a contributor meets it. `make` alone used
+# to run `all` silently, and the Makefile's comments explain each gate to
+# someone reading the file, not to someone running it.
+help:
+	@echo "Setup:    scripts/bootstrap     (uv sync from uv.lock into .venv)"
+	@echo "Gate:     make check           compile, shellcheck, ruff, mypy, lockfile"
+	@echo "Suite:    make test            the unit suite, as CI runs it"
+	@echo "One test: make test TESTS=tests.test_fuzz"
+	@echo "Both:     make all             check + test, the pre-push pair"
+	@echo "Coverage: make coverage         line coverage of src/"
+	@echo "Stage:    make stage            re-copy docs/ and scripts/ into the package"
 
 # actionlint is the workflow half of the shellcheck contract, and it checks the
 # thing nothing else can: a workflow is only exercised by pushing it. It caught
@@ -91,8 +103,19 @@ locked:
 		echo "note: uv not installed; skipped the lockfile check"; \
 	fi
 
+# TESTS narrows the suite the way the interpreter already can, so the
+# edit-test loop is a make target rather than a line of PYTHONPATH a
+# contributor has to reconstruct: `make test TESTS=tests.test_fuzz`, or a
+# single dotted name to run one case. Left empty, this is the same discover
+# run CI makes.
+TESTS ?=
+
 test:
+ifeq ($(strip $(TESTS)),)
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -v
+else
+	PYTHONPATH=src $(PYTHON) -m unittest -v $(TESTS)
+endif
 
 # Line coverage of src/ under the unit suite. Writes .coverage in the repo
 # root; CI renders it into the README badge with scripts/coverage_badge.py.
@@ -103,6 +126,13 @@ coverage:
 		{ echo "ERROR: coverage is not installed; run scripts/bootstrap" >&2; exit 1; }
 	PYTHONPATH=src $(PYTHON) -m coverage run --source=src -m unittest discover -s tests
 	$(PYTHON) -m coverage report -m
+
+# Re-run the copy half of setup.py's build_py, so a change to docs/ or to a
+# shipped script does not leave a stale staged copy behind to fail the
+# packaged-pages tests. Both staged trees are gitignored build output, and
+# `uv build` does this for a release; this is the same step without the wheel.
+stage:
+	$(PYTHON) setup.py build_py --build-lib build/lib
 
 # The published sdist and wheel, and the only command in the repository that
 # builds them; the release workflow calls this rather than `uv build` so a tag

@@ -1164,20 +1164,32 @@ class ScaffoldLineEndingsTests(unittest.TestCase):
     """
 
     PACKAGE = Path(__file__).resolve().parents[1] / "src" / "sevendtd_asset_pipeline"
+    # The package's own scripts/ directory, staged by setup.py, is a build-time
+    # copy of the repository's scripts/. Scanning it would grade a stale copy
+    # of a file whose source no longer has the defect, so the source is scanned
+    # instead: coverage_badge.py writes the committed README badge, which is a
+    # generated text file on exactly the terms this test states.
+    SCRIPTS = PACKAGE.parent.parent / "scripts"
 
     def test_no_generated_text_write_omits_the_line_ending(self) -> None:
         offenders: list[str] = []
-        for path in sorted(self.PACKAGE.rglob("*.py")):
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.Call):
+        roots = (self.PACKAGE, self.SCRIPTS)
+        for root in roots:
+            for path in sorted(root.rglob("*.py")):
+                if root is self.PACKAGE and self.PACKAGE / "scripts" in path.parents:
                     continue
-                func = node.func
-                name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-                if name != "write_text":
-                    continue
-                if not any(keyword.arg == "newline" for keyword in node.keywords):
-                    offenders.append(f"{path.relative_to(self.PACKAGE)}:{node.lineno}")
+                tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Call):
+                        continue
+                    func = node.func
+                    name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+                    if name != "write_text":
+                        continue
+                    if not any(keyword.arg == "newline" for keyword in node.keywords):
+                        offenders.append(
+                            f"{path.relative_to(roots[0].parent.parent)}:{node.lineno}"
+                        )
         self.assertEqual([], offenders, "text writers without newline=\\n write CRLF on Windows")
 
     def test_no_scaffolded_text_file_carries_a_carriage_return(self) -> None:

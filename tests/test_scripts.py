@@ -66,7 +66,7 @@ class ScriptRegistryTests(unittest.TestCase):
                     (source_root / filename).read_bytes(),
                     (packaged_root / filename).read_bytes(),
                     f"{filename} differs between scripts/ and the packaged copy; "
-                    "re-copy it (or rebuild the wheel) so both readers see one script",
+                    "run `make stage` (or rebuild the wheel) so both readers see one script",
                 )
 
     def test_an_unknown_script_lists_the_known_ones(self) -> None:

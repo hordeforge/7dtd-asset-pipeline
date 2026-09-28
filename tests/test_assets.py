@@ -1180,14 +1180,14 @@ class DocumentationTests(unittest.TestCase):
             source_pages,
             packaged_pages,
             "docs/ and the packaged copy disagree on which pages exist; "
-            "re-copy the tree (or rebuild the wheel)",
+            "re-copy the tree with `make stage` (or rebuild the wheel)",
         )
         for relative in source_pages:
             with self.subTest(str(relative)):
                 self.assertTrue(
                     (packaged / relative).read_bytes() == (source / relative).read_bytes(),
                     f"{relative} differs between docs/ and the packaged copy; "
-                    "re-copy it (or rebuild the wheel) so both readers see one page",
+                    "run `make stage` (or rebuild the wheel) so both readers see one page",
                 )
 
 

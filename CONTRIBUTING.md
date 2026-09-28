@@ -8,6 +8,10 @@ scripts/bootstrap
 make check test
 ```
 
+`make help` lists every target. `make stage` re-runs the copy half of the
+package build, which is what the packaged-docs and packaged-scripts tests ask
+for after a change to `docs/` or to a shipped script.
+
 Every Python step goes through uv, **in this checkout**. `scripts/bootstrap`
 creates `.venv` from `uv.lock`; then `uv run --project . shamway` or
 `.venv/bin/shamway`. A worktree bootstraps itself — do not borrow another
@@ -58,8 +62,13 @@ Every crash artifact becomes a pinned `@example` in the same change, and a
 parser that gains a new rejection rule gets the assertion that states it.
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m unittest tests.test_fuzz
+make test TESTS=tests.test_fuzz
 ```
+
+`make test` is the whole suite, and `TESTS=` narrows it to any dotted unittest
+name: a module, a class, or a single case. Empty `TESTS` is the same discovery
+run CI makes, so the narrowed form cannot drift from the full one. `make help`
+lists every target.
 
 ## Building a distribution
 

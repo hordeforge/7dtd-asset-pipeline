@@ -179,6 +179,129 @@ class PackagingMetadataTests(ReleaseContractCase):
         self.assertEqual(claimed, tested, "classifiers and ci.yml's matrix disagree")
 
 
+class OptionalDependencyTests(ReleaseContractCase):
+    """The capability extras, and the `all` extra that stands for all of them.
+
+    `all` used to be a hand-copied list of the six requirement strings the five
+    capability extras declare. Nothing compared the two, so a capability extra
+    that gained a dependency kept resolving while `pip install .[all]`
+    under-installed the lane the caller was told it covers, and nothing in the
+    suite, in `shamway capabilities`, or in a consumer's install said so. `all`
+    is now one self-reference, and these assertions are what keep it that way.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+            "project"
+        ]
+        self.extras = self.project.get("optional-dependencies", {})
+
+    def test_all_covers_every_capability_extra(self) -> None:
+        """`all` names the capability extras rather than restating their contents.
+
+        A hand-copied list is a second copy that drifts silently. The
+        self-reference is the fix; this is the assertion that says which
+        extras it must name, so adding a capability extra without adding it
+        here fails the suite instead of shipping a hole in `all`.
+        """
+        self.assertIn(
+            "all", self.extras, "the `all` extra is how a caller asks for every capability"
+        )
+        referenced = self.extras["all"]
+        self.assertEqual(
+            len(referenced),
+            1,
+            "`all` must be a single self-reference; a requirement listed beside "
+            "it is a second copy of a capability extra's contents and will "
+            "drift from it",
+        )
+        requirement = referenced[0]
+        name, _, extras = requirement.partition("[")
+        self.assertTrue(
+            extras.endswith("]"),
+            f"`all` must be written as {self.project['name']}[<extras>], not {requirement!r}",
+        )
+        self.assertEqual(
+            name,
+            self.project["name"],
+            "a self-reference must name this project, or it is a dependency on "
+            "something else on the index",
+        )
+        named = {e.strip() for e in extras[:-1].split(",")}
+        capabilities = set(self.extras) - {"all"}
+        self.assertEqual(
+            named,
+            capabilities,
+            "`all` and the capability extras disagree; a consumer installing "
+            "`.[all]` gets what is named there and not what was left out",
+        )
+
+    def test_no_requirement_is_declared_in_two_extras(self) -> None:
+        """One package, one home. A requirement repeated across extras is a
+        second place to raise a floor, and a floor raised in one lane and not
+        the other resolves to two different resolved versions."""
+        owners: dict[str, list[str]] = {}
+        for extra, requirements in self.extras.items():
+            if extra == "all":
+                continue
+            for requirement in requirements:
+                package = re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0]
+                owners.setdefault(package, []).append(extra)
+        duplicated = {p: e for p, e in owners.items() if len(e) > 1}
+        self.assertEqual(duplicated, {}, "each package is declared by exactly one capability extra")
+
+    def test_capability_requirements_are_floors(self) -> None:
+        """A capability extra states what a lane needs, not what one resolution
+        happened to pick. `uv.lock` is where the resolved version is recorded,
+        with hashes, and it is what `uv sync --locked` verifies; a ceiling or an
+        exact pin here would only second-guess that file."""
+        for extra, requirements in self.extras.items():
+            if extra == "all":
+                continue
+            for requirement in requirements:
+                with self.subTest(extra=extra, requirement=requirement):
+                    self.assertRegex(
+                        requirement,
+                        r"^[\w.-]+>=\d",
+                        "a capability requirement is a lower bound; the resolved "
+                        "version belongs in uv.lock",
+                    )
+
+    def test_the_optional_capabilities_are_imported_somewhere(self) -> None:
+        """Every package an extra names is imported by something that ships.
+
+        An extra is the promise that a lane installs, and an extra whose
+        package no module imports is an install cost with no lane behind it:
+        attack surface, download bytes, and a floor to keep in step for
+        nothing. `texture2ddecoder` is deliberately in the dev group instead,
+        which is the other correct answer.
+        """
+        declared = {
+            re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0]
+            for extra, requirements in self.extras.items()
+            if extra != "all"
+            for requirement in requirements
+        }
+        # The distribution name and the import name differ for two of them.
+        module = {"pillow": "PIL", "lxml": "lxml", "fsb5": "fsb5"}
+        for package in sorted(declared):
+            with self.subTest(package=package):
+                name = module.get(package, package)
+                found = any(
+                    re.search(rf"^\s*(?:import|from)\s+{re.escape(name)}\b", source, re.MULTILINE)
+                    for source in (
+                        path.read_text(encoding="utf-8", errors="replace")
+                        for path in (REPO_ROOT / "src").rglob("*.py")
+                    )
+                )
+                self.assertTrue(
+                    found,
+                    f"{package!r} is declared in an optional extra but no module "
+                    f"under src/ imports {name!r}",
+                )
+
+
 class ChangelogTests(ReleaseContractCase):
     def setUp(self) -> None:
         super().setUp()

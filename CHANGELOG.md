@@ -72,6 +72,16 @@ tag has no changelog section.
 
 ### Changed
 
+- The `all` extra is one self-reference,
+  `7dtd-asset-pipeline[writer,authoring,mesh,audio,patch]`, instead of a
+  hand-copied list of the six requirement strings the five capability extras
+  declare. A capability extra that gained a dependency used to keep resolving
+  while `pip install .[all]` under-installed the lane the caller was told it
+  covers, silently, and the two prose lists of what `[all]` brings were already
+  short of it. `tests/test_release_contract.py` now fails when `all` and the
+  capability extras disagree, when a package is declared by two extras, when a
+  requirement is not a lower bound, and when an extra names a package no
+  module under `src/` imports.
 - `texture2ddecoder` is pinned to `1.0.6` in the dev group, beside ruff, mypy,
   setuptools, coverage and hypothesis. It is the suite's independent
   block-compression decoder, so a new major that changes its BCn output moves

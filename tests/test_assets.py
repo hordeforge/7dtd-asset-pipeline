@@ -568,23 +568,20 @@ class GeneratorTests(unittest.TestCase):
     def test_a_wedged_blender_is_killed_and_reported(self) -> None:
         """A headless Blender that never finishes must not hang the generator.
 
-        Both mesh lanes run Blender as a child with no other bound: a wedged
-        start (a broken userpref, a stuck GPU probe) would otherwise block
-        forever, because nothing here times the child out. The timeout is what
-        turns that into a killed child and an error line.
+        Both mesh lanes run Blender as a child through `generators/blender.py`,
+        which is where the bound lives: a wedged start (a broken userpref, a
+        stuck GPU probe) would otherwise block forever, because nothing else
+        times the child out. The timeout is what turns that into a killed child
+        and an error line.
         """
         import subprocess as subprocess_module
         import tempfile
         from unittest import mock
 
-        from sevendtd_asset_pipeline.generators.mesh import BLENDER_TIMEOUT
+        from sevendtd_asset_pipeline.generators import blender
+        from sevendtd_asset_pipeline.generators.bind import main as bind_main
         from sevendtd_asset_pipeline.generators.mesh import main as mesh_main
-        from sevendtd_asset_pipeline.generators.mesh_icon import (
-            BLENDER_TIMEOUT as ICON_TIMEOUT,
-        )
-        from sevendtd_asset_pipeline.generators.mesh_icon import (
-            main as icon_main,
-        )
+        from sevendtd_asset_pipeline.generators.mesh_icon import main as icon_main
 
         def wedge(command: list[str], **kwargs: object) -> None:
             raise subprocess_module.TimeoutExpired(command[0], 300)
@@ -593,11 +590,11 @@ class GeneratorTests(unittest.TestCase):
             root = Path(name)
             with (
                 mock.patch(
-                    "sevendtd_asset_pipeline.generators.mesh.shutil.which",
+                    "sevendtd_asset_pipeline.generators.blender.shutil.which",
                     return_value="/usr/bin/fake-blender",
                 ),
                 mock.patch(
-                    "sevendtd_asset_pipeline.generators.mesh.subprocess.run",
+                    "sevendtd_asset_pipeline.generators.blender.subprocess.run",
                     side_effect=wedge,
                 ),
             ):
@@ -608,18 +605,50 @@ class GeneratorTests(unittest.TestCase):
             mesh_file.write_bytes(b"glTF-fake-bytes")
             with (
                 mock.patch(
-                    "sevendtd_asset_pipeline.generators.mesh_icon.shutil.which",
+                    "sevendtd_asset_pipeline.generators.blender.shutil.which",
                     return_value="/usr/bin/fake-blender",
                 ),
                 mock.patch(
-                    "sevendtd_asset_pipeline.generators.mesh_icon.subprocess.run",
+                    "sevendtd_asset_pipeline.generators.blender.subprocess.run",
                     side_effect=wedge,
                 ),
             ):
                 self.assertEqual(1, icon_main([str(mesh_file), str(root / "cell.png")]))
             self.assertFalse((root / "cell.png").exists(), "a timed-out run wrote no cell")
-        # The two lanes share one convention with gltfpack's bound next door.
-        self.assertEqual(BLENDER_TIMEOUT, ICON_TIMEOUT)
+
+            with (
+                mock.patch(
+                    "sevendtd_asset_pipeline.generators.blender.shutil.which",
+                    return_value="/usr/bin/fake-blender",
+                ),
+                mock.patch(
+                    "sevendtd_asset_pipeline.generators.blender.subprocess.run",
+                    side_effect=wedge,
+                ),
+            ):
+                self.assertEqual(
+                    1, bind_main([str(mesh_file), str(root / "bound.glb"), "--rig", "humanoid"])
+                )
+            self.assertFalse((root / "bound.glb").exists(), "a timed-out run bound nothing")
+        # One bound for all three lanes, and the gltfpack lane's convention
+        # next door.
+        self.assertEqual(blender.BLENDER_TIMEOUT, 300)
+
+    def test_the_blender_lanes_share_one_bound_and_one_invocation(self) -> None:
+        """The three lanes that shell out to Blender go through the one module.
+
+        A fourth lane restating the `which`, the argv and the timeout would
+        drift from the other three, and a wedge would then hang that lane only —
+        the failure this test cannot catch any other way.
+        """
+        from sevendtd_asset_pipeline.generators import bind, mesh, mesh_icon
+
+        for lane in (mesh, mesh_icon, bind):
+            with self.subTest(lane.__name__):
+                self.assertNotIn("subprocess", vars(lane), "the lane shells out itself")
+                self.assertFalse(
+                    hasattr(lane, "BLENDER_TIMEOUT"), "the bound is owned by generators/blender.py"
+                )
 
     @unittest.skipUnless(has_capability("pillow"), "the cutout lane needs Pillow")
     def test_cutout_alpha_keeps_an_alpha_that_is_not_the_luma(self) -> None:

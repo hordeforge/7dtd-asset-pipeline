@@ -36,7 +36,6 @@ import argparse
 import json
 import shutil
 import struct
-import subprocess
 import sys
 from pathlib import Path
 
@@ -45,8 +44,8 @@ from ..rigs import load_rig, rig_to_glb, scaled
 from ..workdir import scratch_dir
 from . import command_parser
 from . import entity as entity_gen
+from .blender import find_blender, run_script
 
-BLENDER_TIMEOUT = 300
 GLB_MAGIC = b"glTF"
 JSON_CHUNK = 0x4E4F534A
 MESH_SUFFIXES = {".glb", ".gltf", ".obj"}
@@ -911,12 +910,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
-    blender = shutil.which("blender")
-    if not blender:
-        print(
-            "ERROR: blender is not on PATH. Run scripts/install-tools.sh --with-authoring.",
-            file=sys.stderr,
-        )
+    blender = find_blender()
+    if blender is None:
         return 1
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -926,48 +921,34 @@ def main(argv: list[str] | None = None) -> int:
         rig_glb = directory / "rig.glb"
         rig_glb.write_bytes(rig_to_glb(rig))
         staged = directory / "out.glb"
-        try:
-            result = subprocess.run(
-                [
-                    blender,
-                    "--background",
-                    "--factory-startup",
-                    "--python",
-                    str(script),
-                    "--",
-                    str(rig_glb),
-                    str(staged),
-                    args.name,
-                    str(args.height),
-                    str(args.stretch_x),
-                    str(args.stretch_y),
-                    str(args.stretch_z),
-                    str(args.displace),
-                    str(args.decimate),
-                    str(args.solidify),
-                    str(args.warp),
-                    "1" if args.head_lift else "0",
-                    "1" if args.double_sided else "0",
-                    str(args.neck),
-                    str(args.voxel),
-                    *(str(source.resolve()) for source in sources),
-                ],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=BLENDER_TIMEOUT,
-            )
-        except subprocess.TimeoutExpired:
-            print(
-                f"ERROR: Blender did not finish within {BLENDER_TIMEOUT}s and was killed; "
-                "a wedged headless start is the usual cause.",
-                file=sys.stderr,
-            )
+        run = run_script(
+            blender,
+            script,
+            [
+                str(rig_glb),
+                str(staged),
+                args.name,
+                str(args.height),
+                str(args.stretch_x),
+                str(args.stretch_y),
+                str(args.stretch_z),
+                str(args.displace),
+                str(args.decimate),
+                str(args.solidify),
+                str(args.warp),
+                "1" if args.head_lift else "0",
+                "1" if args.double_sided else "0",
+                str(args.neck),
+                str(args.voxel),
+                *(str(source.resolve()) for source in sources),
+            ],
+        )
+        if run is None:
             return 1
-        if result.returncode != 0 or not staged.is_file():
-            print(result.stdout, file=sys.stderr)
-            print(f"ERROR: Blender exited {result.returncode} without binding", file=sys.stderr)
+        code, output = run
+        if code != 0 or not staged.is_file():
+            print(output, file=sys.stderr)
+            print(f"ERROR: Blender exited {code} without binding", file=sys.stderr)
             return 1
         promote_root(staged)
         shutil.move(str(staged), args.output)
@@ -984,7 +965,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             shutil.copy2(anim, args.output.with_suffix(".anim.json"))
 
-    for line in result.stdout.splitlines():
+    for line in output.splitlines():
         if line.startswith("BIND_"):
             print(line)
     print(f"wrote {args.output} (rig {rig.name!r})")

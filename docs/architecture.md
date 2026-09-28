@@ -54,21 +54,28 @@ The package is one flat layer of leaf modules, two feature subpackages
 (`generators/`, `providers/`), and a thin surface stack on top of it. Three
 rules keep that flat layer flat:
 
-- A root module never imports from `generators/` or `providers/`. The
-  subpackages are features; the gates and writers they would otherwise reach
-  into are the base. `sound_check.py` owns the WAV reader that
-  `generators/audio.py` converts through, rather than the other way round.
+- No root module reaches into `generators/`. The subpackage is a feature; the
+  gates and writers it would otherwise reach into are the base.
+  `sound_check.py` owns the WAV reader that `generators/audio.py` converts
+  through, rather than the other way round.
+- `providers/` has one root importer outside the surface stack, and it is
+  load-bearing: `capabilities.py` reads `providers.configuration_state()` to
+  answer whether a credential is present, because "is this host capability
+  usable" is that registry's whole job and a model review *is* one. It reads
+  the credential state, never an adapter, and never contacts a provider.
 - A module every other module imports (`errors`, `atomic`, `capabilities`,
-  `workdir`) imports nothing feature-shaped. `capabilities.py` is imported by
-  eighteen modules, so the zmol-v library probe lives there; `shader_blob.py`
-  asks it for the library rather than making the registry import a 1500-line
-  shader compiler to answer a one-line question.
+  `workdir`) imports nothing feature-shaped beyond that one credential read.
+  `capabilities.py` is imported by eighteen modules, so the zmol-v library
+  probe lives there; `shader_blob.py` asks it for the library rather than
+  making the registry import a 1500-line shader compiler to answer a one-line
+  question.
 - The surface stack only points down. `cli` → `api` → `operations` → the
   leaves. `operations.py` is where a leaf is named for a published contract,
   because the registry is what `shamway schema` publishes.
 
 `tests/test_module_graph.py` checks the first two: it walks the import graph and
-fails on a cycle or on a root module reaching into a subpackage.
+fails on a cycle, on a root module reaching into `generators/`, or on a base
+module reaching outside the base layer plus the `providers` credential read.
 
 ## Trust boundaries
 

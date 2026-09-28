@@ -33,21 +33,15 @@ Pillow. Gate the result with `shamway check-icons`.
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 from .. import atomic
 from ..workdir import scratch_dir
 from . import command_parser
+from .blender import find_blender, run_script
 
 MINIMUM_COVERAGE = 0.02
-
-# A headless Blender that wedges (a broken userpref, a stuck GPU probe) must
-# fail this generator, not hang it: the same lane bounds gltfpack at 300s in
-# mesh_optimize.py. Rendering one clay cell is seconds of work.
-BLENDER_TIMEOUT = 300
 
 BLENDER_SCRIPT = """
 import math
@@ -186,12 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--samples", type=int, default=32, help="Cycles samples per pixel")
     args = parser.parse_args(argv)
 
-    blender = shutil.which("blender")
-    if not blender:
-        print(
-            "ERROR: blender is not on PATH. Run scripts/install-tools.sh --with-authoring.",
-            file=sys.stderr,
-        )
+    blender = find_blender()
+    if blender is None:
         return 1
     if not args.mesh.is_file():
         print(f"ERROR: no mesh at {args.mesh}", file=sys.stderr)
@@ -207,40 +197,25 @@ def main(argv: list[str] | None = None) -> int:
         script = directory / "render.py"
         script.write_text(BLENDER_SCRIPT, encoding="utf-8", newline="\n")
         rendered = directory / "icon.png"
-        try:
-            result = subprocess.run(
-                [
-                    blender,
-                    "--background",
-                    "--factory-startup",
-                    "--python",
-                    str(script),
-                    "--",
-                    str(args.mesh),
-                    str(rendered),
-                    str(args.size * args.supersample),
-                    str(args.yaw),
-                    str(args.pitch),
-                    str(args.padding),
-                    str(args.samples),
-                ],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=BLENDER_TIMEOUT,
-            )
-        except subprocess.TimeoutExpired:
-            # run() killed the child; its partial output still explains the wedge.
-            print(
-                f"ERROR: Blender did not finish within {BLENDER_TIMEOUT}s and was killed; "
-                "a wedged headless start is the usual cause.",
-                file=sys.stderr,
-            )
+        run = run_script(
+            blender,
+            script,
+            [
+                str(args.mesh),
+                str(rendered),
+                str(args.size * args.supersample),
+                str(args.yaw),
+                str(args.pitch),
+                str(args.padding),
+                str(args.samples),
+            ],
+        )
+        if run is None:
             return 1
-        if result.returncode != 0 or not rendered.is_file():
-            print(result.stdout, file=sys.stderr)
-            print(f"ERROR: Blender exited {result.returncode} without rendering", file=sys.stderr)
+        code, output = run
+        if code != 0 or not rendered.is_file():
+            print(output, file=sys.stderr)
+            print(f"ERROR: Blender exited {code} without rendering", file=sys.stderr)
             return 1
         coverage = _downscale(rendered, args.output, args.size)
 

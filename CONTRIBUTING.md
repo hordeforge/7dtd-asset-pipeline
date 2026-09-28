@@ -35,6 +35,34 @@ the editor), probed
 (`shamway build --probe` ran it), or executed for real (`render-icon`, a
 generator, a fresh client). Never describe the first as the third.
 
+## Where new code goes
+
+`src/sevendtd_asset_pipeline/` is one flat layer of leaf modules, two feature
+subpackages, and a thin surface stack. [docs/architecture.md](docs/architecture.md)
+states the dependency rules and why each exists; this is where a change lands.
+
+| A change to | Goes in |
+|---|---|
+| A gate that reads a finished artifact and fails the build | a new `<subject>_check.py`, beside the ones it shares a subject with |
+| The bundle the tool writes itself | `bundle_writer.py`, and its shader lane in `shader_blob.py` |
+| A reproducible asset | `generators/<name>.py`, then `generators.GENERATORS` |
+| An advisory model review, or the evidence either lane records | `providers/`, or the lane module, with the shared half in `evidence.py` |
+| A `shamway` subcommand | `cli.py`, unless the command tree is large enough to own its parser (`client.py`, `prompts.py` do) |
+| A published operation contract | `operations.OPERATIONS` **and** `api._DISPATCH`; a test fails if the two disagree |
+| An optional tool the pipeline probes for | `capabilities.REGISTRY`, with what it unlocks and its install command |
+| A page shipped in the package, or a host script | `docs.TOPICS` / `scripts.SCRIPTS`, after the file exists under `docs/` or `scripts/` |
+| Editor C# a consuming mod vendors | `templates/UnityProject/`, then `scaffold.PIPELINE_EDITOR_SCRIPTS` |
+
+A new root module is a last resort: the flat layer stays navigable because
+there are few of them, and `tests/test_module_graph.py` fails on a cycle, on a
+root module reaching into a subpackage, and on a base module
+(`errors`, `atomic`, `capabilities`, `workdir`) reaching outside the base layer.
+
+Tests are `tests/test_<module>.py`, one file per module, and they drive the
+public entry point rather than a helper — the shipped stdout, a written file, a
+raised `PipelineError` — because a test that re-does the logic in the test body
+proves nothing about the code that ships.
+
 ## Fuzzing the untrusted-input parsers
 
 `tests/test_fuzz.py` holds the property-based harnesses (Hypothesis, a

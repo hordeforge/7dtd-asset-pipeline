@@ -62,6 +62,18 @@ tag has no changelog section.
 
 ### Changed
 
+- The three lanes that shell out to a headless Blender (`generate mesh`,
+  `generate mesh-icon`, `generate bind`) share one `generators/blender.py`,
+  which owns the PATH probe, the `--background --factory-startup` invocation,
+  and the 300s bound. Each lane had its own copy, so a fourth lane restating
+  them would drift, and a wedge would then hang that lane alone. Behaviour,
+  messages, and exit codes are unchanged.
+- `docs/architecture.md` states the `providers` credential read that
+  `capabilities.py` makes, which the rule it sat under did not admit and
+  `tests/test_module_graph.py` has always allowed.
+- `CONTRIBUTING.md` gained "Where new code goes", the placement table for a
+  change and the registries each one has to be added to.
+
 - `coverage` pinned to `7.10.7` in the `dev` dependency group. It produces
   the number the README coverage badge publishes, and the run that computed
   it resolved it per invocation with `uv run --with coverage`, outside

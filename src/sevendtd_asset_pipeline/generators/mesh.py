@@ -40,17 +40,12 @@ Requires Blender on PATH (scripts/install-tools.sh --with-authoring).
 from __future__ import annotations
 
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 from ..workdir import scratch_dir
 from . import command_parser
-
-# A headless Blender that wedges (a broken userpref, a stuck GPU probe) must
-# fail this generator, not hang it: the same lane bounds gltfpack at 300s in
-# mesh_optimize.py. Generating one primitive is seconds of work.
-BLENDER_TIMEOUT = 300
+from .blender import find_blender, run_script
 
 BLENDER_SCRIPT = """
 import sys, bpy
@@ -142,12 +137,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--name", default="generatedMesh", help="object and mesh name")
     args = parser.parse_args(argv)
 
-    blender = shutil.which("blender")
-    if not blender:
-        print(
-            "ERROR: blender is not on PATH. Run scripts/install-tools.sh --with-authoring.",
-            file=sys.stderr,
-        )
+    blender = find_blender()
+    if blender is None:
         return 1
     if any(value <= 0 for value in args.size):
         raise SystemExit("ERROR: every --size component must be positive")
@@ -159,42 +150,27 @@ def main(argv: list[str] | None = None) -> int:
         script = directory / "generate.py"
         script.write_text(BLENDER_SCRIPT, encoding="utf-8", newline="\n")
         staged = directory / "out.glb"
-        try:
-            result = subprocess.run(
-                [
-                    blender,
-                    "--background",
-                    "--factory-startup",
-                    "--python",
-                    str(script),
-                    "--",
-                    args.shape,
-                    args.name,
-                    str(staged),
-                    *(str(value) for value in args.size),
-                ],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=BLENDER_TIMEOUT,
-            )
-        except subprocess.TimeoutExpired:
-            # run() killed the child; its partial output still explains the wedge.
-            print(
-                f"ERROR: Blender did not finish within {BLENDER_TIMEOUT}s and was killed; "
-                "a wedged headless start is the usual cause.",
-                file=sys.stderr,
-            )
+        run = run_script(
+            blender,
+            script,
+            [
+                args.shape,
+                args.name,
+                str(staged),
+                *(str(value) for value in args.size),
+            ],
+        )
+        if run is None:
             return 1
-        if result.returncode != 0 or not staged.is_file():
-            print(result.stdout, file=sys.stderr)
-            print(f"ERROR: Blender exited {result.returncode} without exporting", file=sys.stderr)
+        code, output = run
+        if code != 0 or not staged.is_file():
+            print(output, file=sys.stderr)
+            print(f"ERROR: Blender exited {code} without exporting", file=sys.stderr)
             return 1
         # Replace only on success, so a failed run never leaves a broken mesh.
         shutil.move(str(staged), args.output)
 
-    for line in result.stdout.splitlines():
+    for line in output.splitlines():
         if line.startswith("BLENDER_EXTENTS"):
             x, y, z = line.split()[1:]
             print(f"extents:  {float(x):.4f} x {float(y):.4f} x {float(z):.4f} m")

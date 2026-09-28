@@ -80,7 +80,9 @@ class ScriptRegistryTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "install-tools"):
             path("no-such-script")
 
-    def test_install_tools_extras_installs_gltfpack_compressonator_and_assetripper(self) -> None:
+    def test_install_tools_extras_installs_gltfpack_compressonator_and_assetripper(
+        self,
+    ) -> None:
         source = Path(__file__).resolve().parents[1] / "scripts" / "install-tools.sh"
         text = source.read_text(encoding="utf-8")
         extras = text[text.index("install_extras()") :]
@@ -155,6 +157,35 @@ class ScriptRegistryTests(unittest.TestCase):
         self.assertIn("WALK_ENTITY_LOOK=1", text)
         self.assertIn("surfaceHit", text)
         self.assertIn("the $LOOK_STEM prefab staged", text)
+
+    def test_the_predates_message_renders_both_instants_in_utc(self) -> None:
+        """The client-log freshness failure prints two instants; local time collapses them.
+
+        At a fall-back the host clock repeats an hour, so two instants an hour
+        apart in Europe/Warsaw (2026-10-25 00:30Z and 01:30Z) render as the
+        same local "02:30" and the printed "predates" reads as a contradiction
+        in the one message that explains a red run.
+        """
+        synth = Path(__file__).resolve().parents[1] / "scripts" / "playtest-synthesized.sh"
+        text = synth.read_text(encoding="utf-8")
+        self.assertNotRegex(text, r"date -d \"@\$\{?[A-Z_]+\}?")
+        date = shutil.which("date")
+        if date is None:
+            self.skipTest("no date(1) on PATH to render the two instants with")
+        earlier, later = 1792888200, 1792891800  # 2026-10-25 00:30Z and 01:30Z
+
+        def render(args: list[str], zone: str | None = None) -> str:
+            env = dict(os.environ) if zone is None else {**os.environ, "TZ": zone}
+            return subprocess.run(
+                [date, *args], env=env, capture_output=True, text=True, check=True
+            ).stdout.strip()
+
+        local = [
+            render(["-d", f"@{stamp}", "+%H:%M"], "Europe/Warsaw") for stamp in (earlier, later)
+        ]
+        utc = [render(["-u", "-d", f"@{stamp}", "+%H:%M"]) for stamp in (earlier, later)]
+        self.assertEqual(local[0], local[1], "the zone must really repeat that hour here")
+        self.assertNotEqual(utc[0], utc[1], "UTC is what the message must render")
 
     def test_the_listing_names_every_registered_script(self) -> None:
         out = io.StringIO()

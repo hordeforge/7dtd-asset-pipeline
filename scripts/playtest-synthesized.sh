@@ -232,9 +232,14 @@ CLIENT_LOG="$(sed -n 's/^  client log *//p' "$LOG" | head -1)"
 [[ -n "$CLIENT_LOG" ]] || die "could not find the client log path in the acceptance output"
 [[ -f "$CLIENT_LOG" ]] || die "the acceptance run named a client log that is not there: $CLIENT_LOG"
 CLIENT_LOG_AT="$(stat -c %Y "$CLIENT_LOG" 2>/dev/null || echo 0)"
+# Both stamps are instants, so the message renders them in UTC: at a
+# fall-back the host clock repeats an hour, and two instants an hour apart
+# (2026-10-25 00:30Z and 01:30Z) would print as the same local "02:30" on
+# Europe/Warsaw, making the printed "predates" read as a contradiction. A
+# UTC date and time also survives a run that crosses local midnight.
 ((CLIENT_LOG_AT >= STARTED_AT)) ||
-	die "$CLIENT_LOG predates this run ($(date -d "@$CLIENT_LOG_AT" '+%H:%M:%S') <
-       $(date -d "@$STARTED_AT" '+%H:%M:%S')): the client never wrote one, and
+	die "$CLIENT_LOG predates this run ($(date -u -d "@$CLIENT_LOG_AT" '+%Y-%m-%dT%H:%M:%SZ') <
+       $(date -u -d "@$STARTED_AT" '+%Y-%m-%dT%H:%M:%SZ')): the client never wrote one, and
        asserting against it would grade a previous run"
 
 grep -qE "SUMMARY pass=[0-9]+ fail=0 " "$LOG" || fail "a case failed (see the summary above)"

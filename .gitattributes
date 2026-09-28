@@ -23,11 +23,18 @@ Makefile.assets text eol=lf
 *.json text eol=lf
 *.txt text eol=lf
 *.in text eol=lf
+*.vfx text eol=lf
+*.manifest text eol=lf
 .gitkeep text eol=lf
 
-# Binary artifacts: never convert, never diff.
+# Binary artifacts: never convert, never diff. `* text=auto` guesses these
+# from their content, which is a heuristic rather than a guarantee: a .glb or
+# .dll whose bytes happen to look like text is normalized on checkout, and the
+# result is a mesh or an assembly that no longer matches its own SHA-256.
 *.png binary
 *.wav binary
 *.unity3d binary
 *.ico binary
 *.pdf binary
+*.glb binary
+*.dll binary

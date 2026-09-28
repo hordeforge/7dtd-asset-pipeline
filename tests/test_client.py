@@ -545,6 +545,59 @@ class ProcessAndAudioTests(unittest.TestCase):
             self.assertNotIn(301, [pid for pid, _ in signalled])
             self.assertIn(300, [pid for pid, _ in signalled])
 
+    def test_a_host_without_proc_asks_ps_instead_of_reporting_no_client(self) -> None:
+        """macOS has no `/proc`, and "nothing found" there is a wrong answer.
+
+        `client launch` would start over a live client and `client capture`
+        would refuse a screenshot of one, so the process table is queried
+        through `ps` when the `/proc` walk has nothing to walk.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            absent = Path(temp) / "no-proc-here"
+            table = [
+                (100, "Z:\\games\\7DaysToDie.exe"),
+                (101, "/opt/7DaysToDie_EAC.exe"),
+                (102, "/srv/7DaysToDieServer.x86_64"),
+            ]
+            with mock.patch.object(client, "_ps_process_table", return_value=table):
+                self.assertEqual(client.running_client_pids(absent), [100, 101])
+                self.assertTrue(client._is_client_pid(100, absent))
+                self.assertFalse(client._is_client_pid(102, absent))
+                self.assertFalse(client._is_client_pid(999999, absent))
+
+    def test_the_ps_process_table_is_parsed_by_executable_not_by_substring(self) -> None:
+        def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            self.assertIn("ps", argv)
+            self.assertEqual("utf-8", kwargs.get("encoding"))
+            return subprocess.CompletedProcess(
+                argv,
+                0,
+                "  100 /games/7DaysToDie.exe -skipintro\n"
+                "  101 /usr/bin/python3 tool 7DaysToDie_Data/x\n"
+                "  102 /srv/7DaysToDieServer.x86_64\n"
+                "garbage\n",
+                "",
+            )
+
+        with mock.patch("sevendtd_asset_pipeline.client.subprocess.run", side_effect=fake_run):
+            table = client._ps_process_table()
+        self.assertEqual(
+            table,
+            [
+                (100, "/games/7DaysToDie.exe"),
+                (101, "/usr/bin/python3"),
+                (102, "/srv/7DaysToDieServer.x86_64"),
+            ],
+        )
+
+    def test_a_ps_that_cannot_answer_reads_as_nothing_running(self) -> None:
+        def unavailable(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(argv, 1, "", "ps: not supported\n")
+
+        for failure in (unavailable, OSError("no ps here")):
+            with mock.patch("sevendtd_asset_pipeline.client.subprocess.run", side_effect=failure):
+                self.assertEqual(client._ps_process_table(), [])
+
     def test_sink_inputs_are_selected_by_application_name_or_binary(self) -> None:
         inputs = [
             {"index": 3, "properties": {"application.name": "Firefox"}},

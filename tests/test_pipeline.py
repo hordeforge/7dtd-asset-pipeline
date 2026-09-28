@@ -1239,5 +1239,47 @@ class ScaffoldLineEndingsTests(unittest.TestCase):
                 self.assertNotIn(b"\r", path.read_bytes(), f"{path.name} was written with CRLF")
 
 
+class SubprocessDecodingTests(unittest.TestCase):
+    """A tool's output is decoded as UTF-8, whatever the host's locale says.
+
+    `text=True` alone decodes with `locale.getpreferredencoding`, which is
+    ASCII under `LC_ALL=C` and the ANSI code page on a Windows console. Every
+    tool this package shells out to (unityz, vkd3d-compiler, glslangValidator,
+    Blender, ffmpeg, the glTF validator) writes UTF-8, and a mod path carrying
+    a non-ASCII character is enough to put one in the output, so a C-locale CI
+    job or a Windows host raised `UnicodeDecodeError` from inside a gate
+    instead of reporting the tool's verdict. `errors="replace"` keeps a stray
+    byte from turning a diagnostic into a traceback.
+    """
+
+    PACKAGE = Path(__file__).resolve().parents[1] / "src" / "sevendtd_asset_pipeline"
+
+    def test_every_text_mode_subprocess_call_names_its_encoding(self) -> None:
+        offenders: list[str] = []
+        for path in sorted(self.PACKAGE.rglob("*.py")):
+            if self.PACKAGE / "scripts" in path.parents:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+                if name not in ("run", "Popen", "check_output", "call"):
+                    continue
+                if not any(
+                    keyword.arg == "text" and getattr(keyword.value, "value", None)
+                    for keyword in node.keywords
+                ):
+                    continue
+                if not any(keyword.arg == "encoding" for keyword in node.keywords):
+                    offenders.append(f"{path.relative_to(self.PACKAGE.parents[1])}:{node.lineno}")
+        self.assertEqual(
+            [],
+            offenders,
+            "a text-mode subprocess call without encoding= decodes with the host locale",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

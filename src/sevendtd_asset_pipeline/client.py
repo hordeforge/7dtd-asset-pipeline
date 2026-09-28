@@ -201,6 +201,12 @@ MIN_STALE_HEARTBEATS = 2
 # against a lock nobody can see being used.
 STEAM_LAUNCH_TIMEOUT = 120.0
 
+# A process-table query is `ps` over a few hundred lines and answers in
+# milliseconds; the bound is there so a wedged one cannot hold the client lock
+# open, not because the query is slow. Ten seconds is already generous for the
+# platform's own process lister.
+PROCESS_TABLE_TIMEOUT_SECONDS = 10.0
+
 
 def lock_path(env: Mapping[str, str] | None = None) -> Path:
     """The shared client lock: `PLAYTEST_LOCK_FILE`, else 7dtd-playtest's default."""
@@ -732,11 +738,51 @@ def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = Tr
 # ------------------------------------------------------------------ process
 
 
+def _ps_process_table(selector: str | None = None) -> list[tuple[int, str]]:
+    """Every process as `(pid, argv0)`, from `ps` rather than from `/proc`.
+
+    macOS has no `/proc`, so the walk below finds nothing there, and a caller
+    that reads that as "no client is running" is wrong in the way this module
+    exists to prevent: `client launch` would start over a live client, whose
+    bundle cache then makes the run prove nothing, and `client capture` would
+    refuse a screenshot of a client that is plainly on screen. `ps -o pid= -o
+    args=` is the same query in the portable spelling, and the executable is
+    the first whitespace-separated field of `args`.
+
+    Returns nothing when `ps` cannot answer, so an absent process table reads
+    as "nothing running" exactly as an unreadable `/proc` does.
+    """
+    argv = ["ps", "-o", "pid=", "-o", "args="]
+    if selector is not None:
+        argv = ["ps", "-p", selector, "-o", "pid=", "-o", "args="]
+    try:
+        listed = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=PROCESS_TABLE_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if listed.returncode != 0:
+        return []
+    table: list[tuple[int, str]] = []
+    for line in listed.stdout.splitlines():
+        fields = line.strip().split(None, 1)
+        if len(fields) != 2 or not fields[0].isdigit():
+            continue
+        table.append((int(fields[0]), fields[1].split(" ", 1)[0]))
+    return table
+
+
 def running_client_pids(proc: Path = Path("/proc")) -> list[int]:
     """PIDs of running game clients, found by executable name in `/proc`."""
-    pids: list[int] = []
     if not proc.is_dir():
-        return pids
+        return sorted(pid for pid, argv0 in _ps_process_table() if _names_client(argv0))
+    pids: list[int] = []
     for entry in proc.iterdir():
         if not entry.name.isdigit():
             continue
@@ -745,13 +791,22 @@ def running_client_pids(proc: Path = Path("/proc")) -> list[int]:
         except OSError:
             continue
         argv0 = cmdline.split(b"\0", 1)[0].decode("utf-8", "replace")
-        if any(argv0.endswith(name) for name in CLIENT_PROCESS_NAMES):
+        if _names_client(argv0):
             pids.append(int(entry.name))
     return sorted(pids)
 
 
+def _names_client(argv0: str) -> bool:
+    """Whether an argv[0] is the game client or its EAC wrapper, by suffix.
+
+    A suffix rather than a substring: the shipped server binary and this
+    package's own tooling both carry the client's name inside their own.
+    """
+    return any(argv0.endswith(name) for name in CLIENT_PROCESS_NAMES)
+
+
 def _is_client_pid(pid: int, proc: Path = Path("/proc")) -> bool:
-    """True while `/proc/<pid>` still names a game-client executable.
+    """True while the process named `pid` is still a game-client executable.
 
     A bare `kill(pid, 0)` cannot tell the launched client from whatever process
     later recycled its PID: between the SIGTERM grace loop and the SIGKILL
@@ -759,12 +814,16 @@ def _is_client_pid(pid: int, proc: Path = Path("/proc")) -> bool:
     unrelated one, and the stale id would then receive our SIGKILL. Re-reading
     the argv this module matched in the first place closes that window.
     """
+    if not proc.is_dir():
+        return any(
+            found == pid and _names_client(argv0) for found, argv0 in _ps_process_table(str(pid))
+        )
     try:
         cmdline = (proc / str(pid) / "cmdline").read_bytes()
     except OSError:
         return False
     argv0 = cmdline.split(b"\0", 1)[0].decode("utf-8", "replace")
-    return any(argv0.endswith(name) for name in CLIENT_PROCESS_NAMES)
+    return _names_client(argv0)
 
 
 def stop_client(pids: list[int], grace_seconds: float = 5.0, proc: Path = Path("/proc")) -> None:

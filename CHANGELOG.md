@@ -188,6 +188,25 @@ tag has no changelog section.
   a change to `scripts/install-tools.sh --with-vkd3d-source` kept restoring the
   binary the previous recipe built. `hashFiles` of the installer is part of the
   key now.
+- A `Config/**/*.xml` saved as UTF-16 or UTF-32 was refused whole. Its
+  encoding is stated with a byte-order mark and no readable declaration, which
+  is what a Windows editor's "Unicode" save, Visual Studio and every .NET
+  `Encoding.Unicode` writer emit. `validate`, `refs` and `check-localization`
+  all stopped with `cannot read`, so a mod whose every key is Cyrillic, CJK or
+  Arabic reported no reference and no missing row: a green localization check
+  that never read the file it was run against. `text.bom_encoding` is the
+  named answer and `references.decode_config_xml` reads the mark before the
+  declaration. `read_mod_info` already read one, through `ET.parse`, so the
+  package was answering this one question two ways.
+- `check-localization` failed a Japanese, Korean, Chinese, Thai or Vietnamese
+  `Description` as a missing localization key. The bare-token test that
+  separates a key from a sentence is written in English, and English is one of
+  the few languages that separates its words with spaces, so a description in
+  one of those scripts is a bare token and the gate asked its author for a
+  table row for their own sentence. A value carrying no ASCII is reconciled
+  only when a row answers for it, so a Russian mod that keys on Cyrillic is
+  unaffected, and otherwise it is reported in `notes` as undecided rather than
+  failed.
 - `tests/test_bundle_verify.py` indexed a `dict[str, object]` directly, so
   `make typecheck` failed on a correct checkout with `Value of type "object" is
   not indexable`. The assertion now compares the whole asset list, which also

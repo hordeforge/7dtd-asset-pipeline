@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import tempfile
 import unittest
 from pathlib import Path
@@ -166,6 +167,34 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual([], discover_references(nested))
         (nested / "items.xml").write_bytes(b"\xef\xbb\xbf" + body.encode("utf-8"))
         self.assertEqual([], discover_references(nested))
+
+    def test_a_config_whose_only_encoding_statement_is_a_mark_is_still_read(self) -> None:
+        """A Windows editor's "Unicode" save and every .NET `Encoding.Unicode`
+        writer state the encoding with a byte-order mark and nothing else.
+
+        The declaration is unreadable until the bytes are decoded, so a reader
+        that waits for one has nothing to wait for and refuses the file whole:
+        every reference in it goes unreported and a mod whose names are all
+        non-ASCII passes a localization check that never saw it. `ET.parse`
+        takes the mark — that is how `read_mod_info` has always read a UTF-16
+        `ModInfo.xml` — so this gate was the only one refusing them.
+        """
+        nested = self.root / "Config"
+        nested.mkdir()
+        for mark, encoding, declared in (
+            (codecs.BOM_UTF16_LE, "utf-16-le", "utf-16"),
+            (codecs.BOM_UTF16_BE, "utf-16-be", "utf-16"),
+            (codecs.BOM_UTF32_LE, "utf-32-le", "utf-32"),
+            (codecs.BOM_UTF32_BE, "utf-32-be", "utf-32"),
+        ):
+            with self.subTest(encoding=encoding):
+                body = (
+                    f'<?xml version="1.0" encoding="{declared}"?>\n'
+                    '<config><append xpath="/items"><item name="Кирка" '
+                    'Description="#@modfolder(MyMod):Resources/my.unity3d?pic.png"/></item></append></config>'
+                )
+                (nested / "items.xml").write_bytes(mark + body.encode(encoding))
+                self.assertEqual(["pic"], [ref.asset_stem for ref in discover_references(nested)])
 
     def test_a_manifest_with_an_invalid_byte_is_an_error_not_a_traceback(self) -> None:
         """`shamway stage` gates manifests built on other machines; one saved

@@ -86,6 +86,41 @@ case, in Unicode normalization form, or in both, because the engine resolves
 against the names it actually loaded and a fold in Python is not a fold there.
 `check-localization` reports the same pair the same way.
 
+### A file is decoded as the encoding its own bytes declare
+
+A mod's `Config/**/*.xml` is read as its own XML declaration names, because
+the declaration is the only statement of how the bytes are encoded and a
+mod authored on a non-English Windows locale gets `windows-1251` or
+`windows-1252`. A UTF-16 or UTF-32 file says the same thing with a
+byte-order mark and no readable declaration, because its declaration is ASCII
+sitting among bytes that are not; a Windows editor's "Unicode" save, Visual
+Studio and every .NET `Encoding.Unicode` writer produce exactly that. The mark
+is read from the raw bytes first (`text.bom_encoding`), and it is the statement
+a file with no ASCII in it can make. `read_mod_info` already took one, because
+`ET.parse` reads the mark, so before this a mod whose `ModInfo.xml` was UTF-16
+was read and whose `Config/` was UTF-16 was not.
+
+The alternative is not a warning about one name. `validate`, `refs` and
+`check-localization` all stop with `cannot read` on the whole file, so a mod
+whose every key is Cyrillic, CJK or Arabic reports no reference and no missing
+row: a green localization check that never read the file it was run against.
+
+### A bare value with no ASCII is a key or a sentence, and only a row says which
+
+`check-localization` separates a localization key from a literal description
+by a bare-token test: no spaces, no commas. That test is written in English,
+and English is one of the few languages that separates its words with spaces.
+`Description="これは丈夫な道具です"` is a sentence and is one bare token under
+that test, so the gate used to ask a Japanese author for a
+`Localization.csv` row for their own description and fail their mod over it.
+
+A value carrying no ASCII is therefore reconciled only when a row answers for
+it, which keeps a Russian mod that keys on Cyrillic whole. Otherwise it is
+**reported as undecided** in `notes`, naming the value: whether it is a key is
+a question the file cannot answer, and a gate that fails on it is a gate that
+excludes the author. The keys the gate still fails on are the ones it can
+prove: a definition name, or a value with ASCII in it, that no table provides.
+
 ### `isSupported` is not a verdict without a graphics device
 
 `shamway verify-bundle` runs the editor with `-nographics`, which is right for

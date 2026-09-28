@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import PipelineError
-from .text import folded
+from .text import UTF8_BOM_ENCODING, bom_encoding, folded
 
 BUNDLE_URI = re.compile(r"#[^\s\"'<>]+\?[^\s\"'<>]+")
 # 7DTD accepts both tokens; ReadPatchXmlWithFixedModFolders rewrites either.
@@ -130,10 +130,10 @@ def config_xml_texts(config_dir: Path) -> list[tuple[Path, str]]:
     """Every `Config/**/*.xml` with its text, in a stable order.
 
     The several gates that read a mod's XML all need the same walk, and every
-    file is decoded as its own XML declaration says, because a mod authored on
-    a non-English Windows locale can carry a legacy code page rather than
-    UTF-8. An absent directory is empty rather than an error: a mod that ships
-    no Config has nothing to check.
+    file is decoded as its own bytes declare, because a mod authored on a
+    non-English Windows locale can carry a legacy code page or a UTF-16
+    byte-order mark rather than plain UTF-8. An absent directory is empty
+    rather than an error: a mod that ships no Config has nothing to check.
     """
     if not config_dir.is_dir():
         return []
@@ -153,7 +153,7 @@ _UTF8_ALIASES = frozenset({"utf-8", "utf8"})
 
 
 def _read_config_xml(path: Path) -> str:
-    """One Config XML file, decoded as the encoding its own declaration names.
+    """One Config XML file, decoded as the encoding its own bytes declare.
 
     A hardcoded UTF-8 read fails on a mod whose editor wrote
     `<?xml ... encoding="windows-1252"?>`, which is what an author on a
@@ -162,11 +162,37 @@ def _read_config_xml(path: Path) -> str:
     all stop with "cannot read" instead of reporting that mod's keys. The
     declaration is read from the raw bytes because choosing the decoder is
     what the declaration is for.
+
+    A UTF-16 or UTF-32 file states the same thing with a byte-order mark
+    instead, because its declaration is not readable until the bytes are
+    decoded — which is the thing being chosen. A Windows editor's "Unicode"
+    save and every .NET `Encoding.Unicode` writer produce exactly that.
+    `read_mod_info` in this module already takes one: `ET.parse` reads the
+    mark, so a mod whose `ModInfo.xml` is UTF-16 is read and whose `Config/` is
+    UTF-16 is not, which is one package answering the same question two ways.
     """
     try:
         raw = path.read_bytes()
     except OSError as exc:
         raise PipelineError(f"cannot read {path}: {exc}") from exc
+    return decode_config_xml(raw, path)
+
+
+def decode_config_xml(raw: bytes, path: Path) -> str:
+    """`raw` as text, choosing the decoder from the file's own statements.
+
+    Split out from the file read so a caller holding bytes it did not read
+    from disk (a mod fetched, a fixture) gets the same answer, and so the two
+    statements are answered in one place rather than at each call site.
+    """
+    mark = bom_encoding(raw)
+    if mark is not None and mark != UTF8_BOM_ENCODING:
+        # A mark other than UTF-8's is the whole statement: there is no
+        # declaration to read first, and the codec consumes the mark.
+        try:
+            return raw.decode(mark)
+        except UnicodeDecodeError as exc:
+            raise PipelineError(f"cannot read {path}: {exc}") from exc
     declaration = _XML_DECLARATION.match(raw.removeprefix(codecs.BOM_UTF8))
     # No declaration leaves None, and the XML spec's default for that is
     # UTF-8 with a BOM allowed; one that names a UTF-8 alias is the same codec.

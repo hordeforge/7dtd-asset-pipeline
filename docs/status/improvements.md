@@ -204,7 +204,13 @@ key itself on a miss — is recorded in `docs/research/research-provenance.md`.
 *Why this shape:* a `Description` value of "A sturdy tool" is passed to
 `Localization.Get` too, but it is not a key the author must provide (it is
 shown as-is on a miss), so only bare tokens (single, no spaces/commas) are
-reconciled as keys.
+reconciled as keys. **Amended 2026-09-28:** that test is written in English,
+and English is one of the few languages that separates its words with spaces,
+so a Japanese, Korean, Chinese, Thai or Vietnamese description reads as a bare
+token and used to fail the gate as a key the mod had to supply. A value
+carrying no ASCII is now reconciled only when a row answers for it (a Russian
+mod may key on Cyrillic, and its row still settles it) and otherwise reported
+in `notes` as undecided rather than failed. See `docs/validation.md`.
 
 ## 3. ModInfo.xml Version is unread  — **done (2026-08-31)**
 

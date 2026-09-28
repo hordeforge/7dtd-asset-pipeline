@@ -12,6 +12,7 @@ outside UTF-8. None of them is exotic to the hosts this pipeline runs on.
 from __future__ import annotations
 
 import ast
+import codecs
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,7 @@ from sevendtd_asset_pipeline.text import (
     CHILD_DECODE_ERRORS,
     CHILD_ENCODING,
     NORMALIZATION,
+    bom_encoding,
     folded,
     spelling_differences,
 )
@@ -65,6 +67,41 @@ class NameFoldingTests(unittest.TestCase):
         """
         self.assertEqual(spelling_mismatches([COMPOSED], {DECOMPOSED}), [(COMPOSED, DECOMPOSED)])
         self.assertEqual(spelling_mismatches([COMPOSED], {COMPOSED}), [])
+
+
+class ByteOrderMarkTests(unittest.TestCase):
+    """A mark is the encoding statement a UTF-16 or UTF-32 file can make.
+
+    Its declaration is ASCII sitting among bytes that are not, so a reader that
+    waits for a declaration has nothing to read and refuses the file. The mark
+    is readable from any bytes and is what the Windows writers emit.
+    """
+
+    def test_each_mark_names_a_codec_that_decodes_its_own_bytes(self) -> None:
+        for mark, encoding in (
+            (codecs.BOM_UTF8, "utf-8"),
+            (codecs.BOM_UTF16_LE, "utf-16-le"),
+            (codecs.BOM_UTF16_BE, "utf-16-be"),
+            (codecs.BOM_UTF32_LE, "utf-32-le"),
+            (codecs.BOM_UTF32_BE, "utf-32-be"),
+        ):
+            with self.subTest(encoding=encoding):
+                raw = mark + "Кирка".encode(encoding)
+                named = bom_encoding(raw)
+                self.assertIsNotNone(named)
+                assert named is not None
+                self.assertEqual("Кирка", raw.decode(named))
+
+    def test_a_utf_32_mark_is_not_read_as_the_utf_16_mark_it_begins_with(self) -> None:
+        """`BOM_UTF32_LE` starts with the bytes of `BOM_UTF16_LE`, so the
+        longest mark has to be tried first or a UTF-32 file decodes to
+        gibberish rather than an error."""
+        self.assertEqual("utf-32", bom_encoding(codecs.BOM_UTF32_LE + b"x"))
+        self.assertEqual("utf-16", bom_encoding(codecs.BOM_UTF16_LE + b"x"))
+
+    def test_bytes_with_no_mark_name_no_codec(self) -> None:
+        self.assertIsNone(bom_encoding(b"<config/>"))
+        self.assertIsNone(bom_encoding(b""))
 
 
 class StemIdentityTests(unittest.TestCase):

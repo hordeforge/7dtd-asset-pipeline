@@ -12,6 +12,7 @@ ships no CSV reports (it is deliberately untranslated).
 
 from __future__ import annotations
 
+import codecs
 import tempfile
 import unicodedata
 import unittest
@@ -129,6 +130,74 @@ class LocalizationTests(unittest.TestCase):
         write_csv(self.config / "Localization.csv", ["Кирка"])
         report = check_localization(self.root, self.config)
         self.assertEqual(("Кирка",), report.resolved)
+        self.assertEqual((), report.missing)
+
+    def test_a_config_saved_as_unicode_is_still_a_key(self) -> None:
+        """A Windows editor's "Unicode" save says how it is encoded with a
+        byte-order mark and no readable declaration.
+
+        The same silence the legacy code page has: the gate cannot decode the
+        file, so it sees no key and a mod whose every name is Cyrillic or CJK
+        passes a localization check that never read it. The mark is the
+        statement, and `ET.parse` reads it — which is how `read_mod_info` has
+        always read a UTF-16 `ModInfo.xml`.
+        """
+        body = '<?xml version="1.0" encoding="utf-16"?>\n<configs><block name="Кирка" /></configs>'
+        (self.config / "blocks.xml").write_bytes(codecs.BOM_UTF16_LE + body.encode("utf-16-le"))
+        write_csv(self.config / "Localization.csv", ["Кирка"])
+        report = check_localization(self.root, self.config)
+        self.assertEqual(("Кирка",), report.resolved)
+        self.assertEqual((), report.missing)
+
+    def test_a_config_saved_as_unicode_reports_the_key_it_cannot_provide(self) -> None:
+        """The read is not a pass by itself: a missing row in such a file is
+        still a missing row, and the gate has to say so."""
+        body = '<?xml version="1.0" encoding="utf-16"?>\n<configs><block name="Топор" /></configs>'
+        (self.config / "blocks.xml").write_bytes(codecs.BOM_UTF16_LE + body.encode("utf-16-le"))
+        write_csv(self.config / "Localization.csv", ["Кирка"])
+        report = check_localization(self.root, self.config)
+        self.assertEqual(("Топор",), report.missing)
+        self.assertFalse(report.ok)
+
+    def test_a_description_in_a_script_without_spaces_is_not_failed_as_a_key(self) -> None:
+        """The bare-key test is written in English, and English is one of the few
+        languages that separates its words with spaces.
+
+        `これは丈夫な道具です` is a sentence, and under a test that asks "is this
+        one token?" it is one token, so the gate asks a Japanese author for a
+        table row for their own description and fails their mod over it. What
+        the file cannot answer is not what a gate should fail on: the value is
+        reported, and the verdict is withheld.
+        """
+        self._write(
+            "blocks.xml",
+            '<configs><block name="chisel"><property name="Description" '
+            'value="これは丈夫な道具です" /></block></configs>',
+        )
+        write_csv(self.config / "Localization.csv", ["chisel"])
+        report = check_localization(self.root, self.config)
+        self.assertTrue(report.ok, report.problems)
+        self.assertEqual((), report.missing)
+        self.assertEqual(("chisel",), report.resolved)
+        self.assertTrue(any("これは丈夫な道具です" in note for note in report.notes), report.notes)
+
+    def test_a_non_ascii_key_the_table_answers_for_is_still_a_key(self) -> None:
+        """A Russian mod may key on Cyrillic, and the row settles it.
+
+        Reporting the undecided values is only safe because a row still wins:
+        without this, a Cyrillic key that resolves would be reported as text
+        and the mod would show a raw name with nothing pointing at the row
+        that fixes it.
+        """
+        body = (
+            '<configs><block name="chisel"><property name="desc_key" '
+            'value="Название" /></block></configs>'
+        )
+        self._write("blocks.xml", body)
+        write_csv(self.config / "Localization.csv", ["chisel", "Название"])
+        report = check_localization(self.root, self.config)
+        self.assertTrue(report.ok, report.problems)
+        self.assertEqual(("chisel", "Название"), tuple(sorted(report.resolved)))
         self.assertEqual((), report.missing)
 
     def test_a_key_spelled_as_its_own_row_is_not_reported(self) -> None:

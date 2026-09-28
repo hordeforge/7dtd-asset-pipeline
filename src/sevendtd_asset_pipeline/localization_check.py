@@ -28,6 +28,14 @@ separates a key from a literal description. A `Description` value of
 `"A sturdy tool"` is passed to `Localization.Get` too, but it is not a key the
 author must provide — it is shown as-is on the miss — so only bare tokens are
 reconciled.
+
+That test is written in English, and English is the only language that puts
+spaces between its words. A Japanese, Korean, Chinese, Thai or Vietnamese
+description is a bare token under it, and a gate that reconciles it asks the
+author for a table row for their own sentence. A value carrying no ASCII is
+therefore reconciled only when a table row answers for it; otherwise it is
+reported as undecided, because whether it is a key is a question the file
+cannot answer and only a failing gate can hide.
 """
 
 from __future__ import annotations
@@ -64,6 +72,14 @@ _PROPERTY_PATTERNS = {
 # A value that could be a key: a single token, no whitespace or comma. Anything
 # else is literal text (an English sentence, a number list) and is not a key.
 _BARE_KEY = re.compile(r"^[^\s,;]+$")
+# The other half of that test, and it is script-dependent. An English sentence
+# is excluded from key-hood by its spaces; a Japanese, Korean, Chinese or Thai
+# sentence has none, so the same value reads as a bare token and the gate asks
+# the author for a table row for their own description. A key that carries no
+# ASCII is legal (a Russian mod may well key on Cyrillic), so the mark of a
+# key rather than of a sentence is the one the table settles: see
+# `check_localization`.
+_ASCII_KEY_CHARS = re.compile(r"[A-Za-z0-9_]")
 # The game and mod both keep the table at Config/Localization.csv.
 LOCALIZATION_FILENAME = "Localization.csv"
 
@@ -133,9 +149,30 @@ def discover_localization_keys(
     """Every localization key the mod references, mapped to its files.
 
     A key is a definition name (item/block/entity_class — the engine looks the
-    name up) or an explicit localize-bearing property value that is a bare token.
+    name up) or an explicit localize-bearing property value that is a bare token
+    with ASCII in it. A bare value with no ASCII in it is a key under one
+    reading of "bare" and a sentence under another, and this returns neither
+    verdict: `_scan_localization` hands those back apart, and
+    `check_localization` settles them against the tables.
+    """
+    keys, _ = _scan_localization(config_dir, texts)
+    return keys
+
+
+def _scan_localization(
+    config_dir: Path, texts: list[tuple[Path, str]] | None = None
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """The referenced keys, and the bare values whose key-ness is undecided.
+
+    The two differ only in what they can prove from the file: a value carrying
+    no ASCII in a bare token is a key under an English reading of "bare" and a
+    sentence under a Japanese one, and nothing in the file itself separates
+    them. Both are returned rather than one being dropped, because dropping the
+    undecided half is what makes the gate ask a Chinese author for a table row
+    for their own description.
     """
     keys: dict[str, list[str]] = {}
+    undecided: dict[str, list[str]] = {}
     for xml_file, text in texts if texts is not None else config_xml_texts(config_dir):
         for match in DEFINITION.finditer(text):
             # Group 2 is the name. Group 1 is the tag; entity_class resolves its
@@ -146,9 +183,13 @@ def discover_localization_keys(
         for pattern in _PROPERTY_PATTERNS.values():
             for match in pattern.finditer(text):
                 value = (match.group(1) or match.group(2)).strip()
-                if value and _BARE_KEY.match(value):
-                    keys.setdefault(value, []).append(str(xml_file))
-    return keys
+                if not value or not _BARE_KEY.match(value):
+                    continue
+                undecided.setdefault(value, []).append(str(xml_file))
+    for value, files in undecided.items():
+        if _ASCII_KEY_CHARS.search(value):
+            keys.setdefault(value, files)
+    return keys, {value: files for value, files in undecided.items() if value not in keys}
 
 
 def check_localization(
@@ -163,7 +204,7 @@ def check_localization(
     csv_path = config / LOCALIZATION_FILENAME
     texts = config_xml_texts(config)
 
-    referenced = discover_localization_keys(config, texts)
+    referenced, undecided = _scan_localization(config, texts)
     provided = read_csv_keys(csv_path) if csv_path.is_file() else set()
     game_keys: set[str] = set()
     if game_dir is not None:
@@ -176,6 +217,24 @@ def check_localization(
     resolved: list[str] = []
     vanilla_resolved: list[str] = []
     missing: list[str] = []
+
+    # The table settles what a bare value with no ASCII in it is: a row answers
+    # for it and it is a key that resolves; no row answers for it and nothing
+    # here can say whether the author wrote a key with no row or a sentence.
+    # Failing the second one is how a Japanese description comes back as a
+    # missing localization key, so it is reported as what it is: undecided.
+    for value in sorted(undecided):
+        if value in provided or value in game_keys:
+            referenced.setdefault(value, undecided[value])
+        else:
+            notes.append(
+                f"{value!r} is set as a localize-bearing property value and carries no ASCII, "
+                "so a key and a sentence are indistinguishable in it: a script that does not "
+                "separate words with spaces writes either the same way. No "
+                f"{LOCALIZATION_FILENAME} row provides it, so it is reported rather than failed: "
+                "if it is a key, the row is missing; if it is literal text, nothing is missing "
+                "and the engine shows it as it stands"
+            )
 
     for key in sorted(referenced):
         if key in provided:

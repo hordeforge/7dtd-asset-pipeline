@@ -15,6 +15,17 @@ than reporting the diagnostic that byte was part of. `CHILD_ENCODING` and
 `CHILD_DECODE_ERRORS` are the answer: UTF-8, with undecodable bytes replaced
 so a diagnostic survives the trip that produced it.
 
+**A file's own encoding statement.** A file on disk names its encoding twice
+over, in two statements that stand in for each other, and a decoder has to
+read whichever one it can. An XML declaration is readable, but only out of
+bytes that are already text, so it answers for a legacy code page and not for
+UTF-16 or UTF-32, whose declaration is ASCII sitting among bytes that are not.
+A byte-order mark is the reverse: it is readable from any bytes, and it is the
+only statement a Windows editor's "Unicode" save, Visual Studio, or a .NET
+`Encoding.Unicode` writer puts in the file. `bom_encoding` is that answer, and
+a boundary that has a declaration reads the mark first and the declaration
+only once the bytes are decoded far enough to hold one.
+
 **Names in.** A bundle member, an atlas PNG, a `CustomIcon` key and a
 `Localization.csv` row are all identity: 7DTD resolves an asset by its name,
 so two spellings of one name are two names. `folded` is what two names are
@@ -29,6 +40,7 @@ would turn a gate into a pass the game does not reproduce.
 
 from __future__ import annotations
 
+import codecs
 import unicodedata
 
 # What every child's stdout and stderr is decoded as. UTF-8 is the encoding
@@ -39,6 +51,42 @@ CHILD_ENCODING = "utf-8"
 # than raised: the caller still gets the line, and no traceback replaces the
 # single ERROR line the CLI promises.
 CHILD_DECODE_ERRORS = "replace"
+
+# A byte-order mark is the one encoding statement that is readable from bytes
+# that are not yet decoded: the four Unicode marks, longest first, because
+# UTF-32LE begins with the UTF-16LE mark. `utf-16` and `utf-32` are the
+# endianness-detecting codecs, so one entry answers both byte orders and
+# consumes the mark; `utf-8-sig` consumes the UTF-8 one the same way.
+UTF8_BOM_ENCODING = "utf-8-sig"
+_BOMS: tuple[tuple[bytes, str], ...] = (
+    (codecs.BOM_UTF32_LE, "utf-32"),
+    (codecs.BOM_UTF32_BE, "utf-32"),
+    (codecs.BOM_UTF16_LE, "utf-16"),
+    (codecs.BOM_UTF16_BE, "utf-16"),
+    (codecs.BOM_UTF8, UTF8_BOM_ENCODING),
+)
+
+
+def bom_encoding(raw: bytes) -> str | None:
+    """The codec a leading byte-order mark names, or `None` when there is none.
+
+    A file's own declaration cannot be read out of a UTF-16 or UTF-32 file: the
+    declaration is ASCII sitting among bytes that are not, so the question has
+    to be answered before the bytes are text. The mark is the standard answer
+    and it is what the writers emit: a Windows editor's "Unicode" save, Visual
+    Studio, Excel's "Unicode Text", and every .NET `Encoding.Unicode` /
+    `Encoding.BigEndianUnicode` writer put one at the front and say nothing
+    else. A reader that skips the mark has no declaration to fall back on
+    either, and reports the whole file as undecodable.
+
+    `UTF8_BOM_ENCODING` is the one answer that is not the whole statement: a
+    UTF-8 file may still carry a declaration, and a boundary that reads
+    declarations has to read it.
+    """
+    for mark, encoding in _BOMS:
+        if raw.startswith(mark):
+            return encoding
+    return None
 
 
 def nfc(text: str) -> str:

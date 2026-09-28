@@ -696,12 +696,15 @@ def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
     # Published through the package's one staged-write pattern: a body written
     # straight to the destination that dies midway (disk full, Ctrl+C) leaves a
     # truncated bundle at the final path, indistinguishable from a complete one
-    # until something fails to load it.
-    with atomic.staged_write(output) as staged:
-        staged.write_bytes(bundle)
+    # until something fails to load it. Evidence first and the runtime artifact
+    # last, the same commit-point order `build.py` uses: a manifest that fails
+    # to publish then leaves the previous bundle with no manifest change,
+    # rather than new bundle bytes whose evidence never landed.
     manifest = Path(params["manifest"]) if params.get("manifest") else Path(f"{output}.manifest")
     with atomic.staged_write(manifest) as staged:
         staged.write_text(manifest_text, encoding="utf-8", newline="\n")
+    with atomic.staged_write(output) as staged:
+        staged.write_bytes(bundle)
     return {
         "bundle": str(output),
         "manifest": str(manifest),

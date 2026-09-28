@@ -123,7 +123,21 @@ def release_unity_version(config: PipelineConfig) -> str:
         return expected_unity_version(config)
 
 
-def run_build(config: PipelineConfig, probe: bool = False) -> Path:
+BUILD_TIMEOUT_SECONDS = 3600.0
+"""A cold batch-mode import plus one bundle build, bounded.
+
+A cold editor import of a scaffolded project takes minutes, so this is far
+above a healthy build. It exists because an unbounded build leaves the exact
+orphan `unity_process` was written for: a wedged editor holding `Library/`
+open against its own `AssetImportWorker` children, which the next launch reads
+as a hung project. `run_unity`'s bounded path kills that whole session group on
+expiry; the unbounded one cannot.
+"""
+
+
+def run_build(
+    config: PipelineConfig, probe: bool = False, timeout: float = BUILD_TIMEOUT_SECONDS
+) -> Path:
     config.require_bundle()
     if not config.builds_locally:
         raise PipelineError(
@@ -176,7 +190,7 @@ def run_build(config: PipelineConfig, probe: bool = False) -> Path:
     ]
     if probe:
         command.append("-sapProbe")
-    result = run_unity(command, log=log)
+    result = run_unity(command, timeout=timeout, log=log)
     if result.returncode != 0:
         raise PipelineError(f"Unity exited {result.returncode}; inspect {log}")
     built = output / built_name

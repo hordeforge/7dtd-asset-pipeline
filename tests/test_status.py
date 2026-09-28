@@ -85,6 +85,29 @@ class StatusTests(unittest.TestCase):
 
         self.assertEqual(status.as_dict(), json.loads(json.dumps(status.as_dict())))
 
+    def test_a_gate_that_never_ran_is_named_in_the_status(self) -> None:
+        """An unrun gate reported as `valid: true` with no problems is a lie.
+
+        `collect_status` dropped the validator's report, so a mod whose patch
+        gate had no game directory to check against read exactly like one whose
+        every gate passed.
+        """
+        self.config.resources_dir.mkdir()
+        self.config.bundle_output.write_bytes(unityfs_bundle([1, 142]))
+        self.config.tracked_manifest.parent.mkdir(parents=True, exist_ok=True)
+        self.config.tracked_manifest.write_text(
+            "Assets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n", encoding="utf-8"
+        )
+        self.config.config_dir.mkdir()
+        (self.config.config_dir / "blocks.xml").write_text(
+            '<configs><append xpath="//nope"><x /></append></configs>', encoding="utf-8"
+        )
+        config = load_config(self.root / CONFIG_NAME)
+        status = collect_status(config)
+        self.assertTrue(status.valid, status.problems)
+        self.assertTrue(status.not_run, status.as_dict())
+        self.assertTrue(any("patch" in note for note in status.not_run), status.not_run)
+
     def test_scaffold_writes_a_consumer_agent_guide(self) -> None:
         guide = self.root / "tools" / "shamway" / "AGENTS.md"
         self.assertTrue(guide.is_file())

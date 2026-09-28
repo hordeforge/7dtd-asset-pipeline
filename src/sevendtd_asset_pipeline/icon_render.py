@@ -196,18 +196,26 @@ def render_icon(
     if not large.is_file():
         raise PipelineError(f"Unity reported success but wrote no image: {large}; inspect {log}")
 
-    coverage = _downscale(large, destination, size)
+    # Gated in the build directory, published last. Both failures below raise
+    # after a write, and the default destination is the shipped atlas cell: a
+    # `-nographics` run or a bad frame would replace a good cell with a blank
+    # one that passes every other check.
+    cell = work / f"{destination.stem}@{size}.cell.png"
+    coverage = _downscale(large, cell, size)
     if coverage < MINIMUM_COVERAGE:
         raise PipelineError(
             f"the render is {coverage * 100:.1f}% covered, which means the camera framed "
             "almost nothing. Check that the prefab has renderers, and that this ran with a "
             f"graphics device (never -nographics). Kept the full-size render at {large}."
         )
-    icon = inspect_icon(destination, atlas, size)
+    icon = inspect_icon(cell, atlas, size)
     if icon.problems:
         raise PipelineError(
             f"{destination} is not a usable atlas cell: " + "; ".join(icon.problems)
         )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with atomic.staged_write(destination) as staged:
+        staged.write_bytes(cell.read_bytes())
     return RenderResult(
         prefab=project_path,
         output=str(destination),

@@ -341,6 +341,15 @@ def check_icons(
     """Check this mod's atlas PNGs and reconcile them with its `CustomIcon` keys."""
     mod_root = Path(mod_root).resolve()
     atlas_dir = mod_root / atlas_root
+    # Every message below is a path relative to the mod root, so an atlas tree
+    # outside it has no such path; left unchecked, the first `relative_to`
+    # raised a ValueError out of a gate the operator expects to fail with one
+    # ERROR line.
+    if not atlas_dir.resolve().is_relative_to(mod_root):
+        raise PipelineError(
+            f"--atlas-root {atlas_root!r} resolves to {atlas_dir.resolve()}, outside the mod "
+            f"root {mod_root}; report paths are mod-relative, so the atlas must be inside it"
+        )
     problems: list[str] = []
     notes: list[str] = []
 

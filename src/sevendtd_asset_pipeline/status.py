@@ -48,6 +48,9 @@ class Status:
     references: list[dict[str, object]] = field(default_factory=list)
     valid: bool | None = None
     problems: list[str] = field(default_factory=list)
+    not_run: list[str] = field(default_factory=list)
+    """Gates whose evidence never arrived. An empty list with `valid` true means
+    every gate ran; a non-empty one means `valid` is narrower than a pass."""
     capabilities: dict[str, bool] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, object]:
@@ -141,13 +144,21 @@ def collect_status(config: PipelineConfig) -> Status:
     # that failed stays None, so the validator fails on the same read instead
     # of inventing a different answer.
     try:
-        validate_mod(
+        report = validate_mod(
             config,
             game_version=game_discovered,
             bundle_info=bundle_info,
             assets=assets_read,
             references=references_read,
         )
+        # The validator's report is the only place an unrun gate is named, and
+        # dropping it here reported a mod whose block-Class or patch gate never
+        # ran as `valid: true` with no problems at all.
+        status.not_run = [
+            line.removeprefix("not run: ")
+            for line in report.messages
+            if line.startswith("not run:")
+        ]
         status.valid = True
     except PipelineError as exc:
         status.valid = False

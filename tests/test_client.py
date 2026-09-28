@@ -1188,6 +1188,11 @@ class FreshClientRunTests(unittest.TestCase):
                 raise RuntimeError("the stop failed")
 
         def fake_sleep(seconds: float) -> None:
+            # `subprocess.run` with a timeout waits by polling the child on an
+            # exponential backoff capped at 50ms. That is the launcher waiting
+            # on Steam, not the run window, which is whole seconds.
+            if seconds < 1.0:
+                return
             self.slept.append(seconds)
             if sleep_side_effect is not None:
                 raise sleep_side_effect

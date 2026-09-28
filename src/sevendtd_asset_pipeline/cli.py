@@ -952,10 +952,17 @@ def run(args: argparse.Namespace) -> int:
         else:
             validation = validate_mod(config)
             print(*validation.messages, sep="\n")
-            print(
-                f"OK: bundle and {validation.reference_count} reference(s) validated"
-                " (XML and code_references)"
-            )
+            unrun = [line for line in validation.messages if line.startswith("not run:")]
+            if unrun:
+                print(
+                    f"PARTIAL: bundle and {validation.reference_count} reference(s) validated"
+                    f" (XML and code_references); {len(unrun)} gate(s) did not run"
+                )
+            else:
+                print(
+                    f"OK: bundle and {validation.reference_count} reference(s) validated"
+                    " (XML and code_references)"
+                )
         return 0
     if args.command == "status":
         status_report = collect_status(config)

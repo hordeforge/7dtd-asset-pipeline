@@ -36,7 +36,6 @@ import argparse
 import array
 import math
 import random
-import shutil
 import sys
 import wave
 from pathlib import Path
@@ -798,7 +797,10 @@ def main(argv: list[str] | None = None) -> int:
         # Promote from the generator, never by hand: the shipped clip is then
         # the recorded design by construction, and cannot drift from it.
         args.promote.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(args.output, args.promote)
+        # Atomic, like every other publish here: `copyfile` truncates the
+        # shipped clip in place, so a full disk or a kill leaves a truncated
+        # WAV in `assets-src/bundle/` for the next build to pack.
+        atomic.write(args.promote, args.output.read_bytes())
         print(f"promoted: {args.promote} (byte-identical)")
     return 0
 

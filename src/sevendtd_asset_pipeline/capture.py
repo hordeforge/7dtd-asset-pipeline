@@ -538,9 +538,11 @@ def record_existing(
         staged = _staged_path(destination)
         try:
             shutil.copy2(source, staged)
-        except OSError:
+        except OSError as exc:
             staged.unlink(missing_ok=True)
-            raise
+            raise PipelineError(
+                f"cannot copy the supplied frame {source} into {destination}: {exc}"
+            ) from exc
     try:
         return _record(
             destination if staged is None else staged,

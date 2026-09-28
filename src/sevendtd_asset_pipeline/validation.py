@@ -171,20 +171,24 @@ def validate_mod(
         raise PipelineError(
             f"ModInfo.xml Name is {actual_mod_name!r}, configuration says {config.mod_name!r}"
         )
+    # Schema problems are reported, not raised on: a missing Description shows
+    # a blank row in the mod list, which is not a reason to refuse a bundle.
     mod_schema = check_mod_info_schema(config.mod_root / "ModInfo.xml")
     class_messages = check_block_classes(config)
     # A Config/ patch XPath that selects zero nodes is a silent no-op in the
     # engine (see research-provenance); the patch gate is part of validate so
     # the default gate catches it, not only `shamway check-patches`. Needs the
-    # game dir; without it (or without a stock file) check_patches reports and
-    # adds no problems.
-    patch_problems = list(
-        check_patches(config.mod_root, config.config_dir, config.game_dir).problems
-    )
+    # game dir; without it (or without a stock file) check_patches reports the
+    # gap as a note, and a note that never reaches the report reads exactly
+    # like a gate that passed.
+    patch_report = check_patches(config.mod_root, config.config_dir, config.game_dir)
+    if patch_report.problems:
+        raise PipelineError("; ".join(patch_report.problems))
+    notes = [f"not run: {note}" for note in patch_report.notes]
     if not config.has_bundle:
         report = _validate_bundle_free(config)
         return ValidationReport(
-            report.messages + tuple(mod_schema) + tuple(class_messages) + tuple(patch_problems),
+            report.messages + tuple(mod_schema) + tuple(class_messages) + tuple(notes),
             report.reference_count,
         )
     if game_version is not None:
@@ -206,7 +210,7 @@ def validate_mod(
     messages += [_check_code_reference(config, stem, stems) for stem in config.code_references]
     messages += mod_schema
     messages += class_messages
-    messages += patch_problems
+    messages += notes
     return ValidationReport(tuple(messages), len(references) + len(config.code_references))
 
 

@@ -192,6 +192,13 @@ LOCK_HEARTBEAT_SECONDS = 30.0
 # it, which is the overwrite the lock exists to prevent. Two beats leaves a
 # whole missed beat of slack.
 MIN_STALE_HEARTBEATS = 2
+# Steam hands the app off to its own process and returns; a launch that has
+# not returned by now is Steam's single-instance lock or a modal, not progress.
+# Unbounded, it runs inside `held_lock`, whose heartbeat restamps the record
+# for as long as the body runs: the lock then never goes stale, no other
+# session on the host can reclaim it, and every deploy and launch refuses
+# against a lock nobody can see being used.
+STEAM_LAUNCH_TIMEOUT = 120.0
 
 
 def lock_path(env: Mapping[str, str] | None = None) -> Path:
@@ -616,7 +623,11 @@ def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = Tr
             destination.replace(replaced)
         try:
             staged.replace(destination)
-        except OSError:
+        except BaseException:
+            # BaseException, not OSError: a KeyboardInterrupt or a MemoryError
+            # between the two renames leaves the previous deployment parked
+            # under its `.old` name and the destination missing, and the
+            # client's Mods/ folder is shared with every other session here.
             if replaced is not None and not destination.exists():
                 replaced.replace(destination)
             raise
@@ -1221,12 +1232,18 @@ def fresh_client_run(
         started_at = time.time()
         command = launch_command(steam_bin, extra_args)
         try:
-            subprocess.run(command, check=False)
+            subprocess.run(command, check=False, timeout=STEAM_LAUNCH_TIMEOUT)
         except OSError as exc:
             # The which() probe above catches a missing binary; this catches
             # the exec that still failed (permissions, ENOEXEC), so it reaches
             # the caller as one ERROR line instead of a raw traceback.
             raise PipelineError(f"cannot launch through {steam_bin}: {exc}") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise PipelineError(
+                f"{steam_bin} did not return within {STEAM_LAUNCH_TIMEOUT:.0f}s of "
+                "-applaunch. Steam's own single-instance lock or a modal dialog is "
+                "the usual cause; the client lock has been released."
+            ) from exc
         muted_indexes: list[int] = []
         unmuted = False
         try:

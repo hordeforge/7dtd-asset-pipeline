@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest import mock
 
 from sevendtd_asset_pipeline.config import CONFIG_NAME, load_config
+from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.patch_check import _HAS_LXML, check_patches
 from sevendtd_asset_pipeline.scaffold import initialize
 from sevendtd_asset_pipeline.validation import validate_mod
@@ -95,8 +96,13 @@ class PatchCheckTests(unittest.TestCase):
         self.assertTrue(fallback.ok)
         self.assertTrue(any("cannot evaluate" in n for n in fallback.notes))
 
-    def test_validate_reports_a_zero_match_patch(self) -> None:
-        """`validate` folds the patch gate in, not only `shamway check-patches`."""
+    def test_validate_fails_a_zero_match_patch(self) -> None:
+        """`validate` folds the patch gate in, not only `shamway check-patches`.
+
+        A zero-match XPath is the silent no-op the gate exists for, so it has
+        to reach the caller as a failure: printed as one more line beside the
+        `OK:` summary it read as a pass.
+        """
         root = self.mod  # reuse a temp mod root
         root.joinpath("ModInfo.xml").write_text(
             '<xml><Name value="ExampleMod"/><Version value="1.0.0"/><Description value="x"/></xml>',
@@ -113,8 +119,9 @@ class PatchCheckTests(unittest.TestCase):
         )
         with mock.patch.dict(os.environ, {"SEVEN_DAYS_TO_DIE_DIR": str(self.game)}):
             config = load_config(root / CONFIG_NAME)
-            report = validate_mod(config)
-        self.assertTrue(any("missing" in message for message in report.messages))
+            with self.assertRaises(PipelineError) as caught:
+                validate_mod(config)
+        self.assertIn("missing", str(caught.exception))
 
 
 if __name__ == "__main__":

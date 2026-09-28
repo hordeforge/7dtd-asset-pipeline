@@ -1416,7 +1416,6 @@ def main(argv: list[str] | None = None) -> int:
     except PipelineError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
-    write(args.output, payload)
     if args.atlas:
         manifest = {
             "stem": stem,
@@ -1424,7 +1423,12 @@ def main(argv: list[str] | None = None) -> int:
             "parts": atlas_cells,
             "roles": part_role(part_names),
         }
+        # The manifest lands first: `generate hide --atlas` reads it, and a
+        # published glb whose UVs are remapped into an atlas nothing describes
+        # is a broken entity, not a missing file.
         write(Path(args.atlas), json.dumps(manifest, indent=2) + "\n")
+    write(args.output, payload)
+    if args.atlas:
         print(
             f"wrote {args.atlas}: {len(part_names)} parts in a per-part UV atlas"
             " (roles for `shamway generate hide --atlas`)"

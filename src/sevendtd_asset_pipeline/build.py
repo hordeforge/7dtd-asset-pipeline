@@ -234,6 +234,18 @@ def stage_bundle(
     bundle = bundle.resolve()
     if not bundle.is_file():
         raise PipelineError(f"no bundle to stage at {bundle}")
+    if bundle == config.bundle_output.resolve():
+        # Before the manifest lookup, not after it: the staged bundle has no
+        # `<bundle>.manifest` beside it by design (the tracked manifest is what
+        # describes membership), so a rerun staging the modlet's own artifact
+        # was answered with "no build manifest beside the bundle" and never
+        # reached the line that says what is actually wrong. The manifest
+        # travels with the build output; the artifact it was already copied to
+        # is not a build output.
+        raise PipelineError(
+            f"{bundle} is already the staged bundle; stage the build output, not the "
+            "artifact it would replace"
+        )
     if manifest is None:
         # Unity writes '<bundle>.manifest' beside the bundle it built; that
         # sibling is the default so the common case is one argument.
@@ -248,11 +260,6 @@ def stage_bundle(
     manifest = manifest.resolve()
     if not manifest.is_file():
         raise PipelineError(f"no build manifest at {manifest}")
-    if bundle == config.bundle_output.resolve():
-        raise PipelineError(
-            f"{bundle} is already the staged bundle; stage the build output, not the "
-            "artifact it would replace"
-        )
 
     skipped: list[str] = []
     if log is not None:

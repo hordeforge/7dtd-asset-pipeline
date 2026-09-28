@@ -32,7 +32,7 @@ by data the operator did not write.
 |---|---|---|---|---|
 | R1 | Four host tools are downloaded and installed as executables with no checksum, from a moving `releases/latest` URL | install script → host | `scripts/install-tools.sh:766`, `:809`, `:858`, `:886` | High |
 | R2 | A modlet is copied into the shared client `Mods/` directory, and the destination base is operator-supplied with no containment check | build tree → live game client | `src/sevendtd_asset_pipeline/client.py:643`, `:1375`, `:689` | High |
-| R3 | Asset bytes leave the host to a third-party model endpoint, and the gateway result is stored without redaction | host → third-party API | `src/sevendtd_asset_pipeline/providers/gemini.py:104`, `video_review.py:625`, `video_review.py:679` | High |
+| R3 | Asset bytes leave the host to a third-party model endpoint, and the gateway result is stored without redaction | host → third-party API | `src/sevendtd_asset_pipeline/providers/gemini.py:104`, `video_review.py:625`, `video_review.py:673` | High |
 | R4 | Mod-controlled and downloaded binary files are parsed in-process with length checks but no size ceilings | file → parser | `src/sevendtd_asset_pipeline/gltf_scene.py:152`, `generators/bind.py:704`, `shader_blob.py:666` | Medium |
 | R5 | Mod XML is parsed with the stdlib parser, with no hardened configuration | mod tree → parser | `src/sevendtd_asset_pipeline/references.py:51` | Medium |
 | R6 | `serve` has no caller identity: any process that can write the pipe may invoke operations, and only `writes` gates them | process → IPC | `src/sevendtd_asset_pipeline/serve.py:67` | Medium |
@@ -150,7 +150,7 @@ operator's environment and are revoked there.
   precedes credential read and socket open.
 - **Information disclosure, second path.** The gateway's whole `error`
   envelope is written into the evidence document unredacted
-  (`video_review.py:679`), and `evidence.redact` drops mapping keys only
+  (`video_review.py:673`), and `evidence.redact` drops mapping keys only
   (`evidence.py:84`), so a credential in free text survives.
 
 ### Host → release servers (R1)
@@ -227,7 +227,7 @@ operator's environment and are revoked there.
 2. **R2**: `--mods-dir` is joined without a containment check
    (`client.py:643`), and `shutil.rmtree(destination)` (`client.py:689`)
    deletes it on a replace. The name is validated; the base is not.
-3. **R3**: the unredacted gateway envelope (`video_review.py:679`) and the
+3. **R3**: the unredacted gateway envelope (`video_review.py:673`) and the
    free-text hole in `redact` (`evidence.py:84`).
 4. **R4/R5**: no size ceilings in the parsers, and the hardened XML parser
    is conditional on an optional dependency.

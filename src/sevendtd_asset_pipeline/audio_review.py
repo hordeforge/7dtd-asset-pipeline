@@ -37,7 +37,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import atomic, evidence
+from . import evidence
 from ._version import __version__
 from .errors import PipelineError
 from .evidence import (
@@ -615,7 +615,7 @@ def run_review(
         result = validate_result(parsed, dimensions)
     except PipelineError:
         if keep_raw_response and output is not None:
-            atomic.write(
+            evidence.publish_review(
                 output,
                 json.dumps(
                     _evidence(
@@ -639,6 +639,7 @@ def run_review(
                     indent=2,
                     sort_keys=True,
                 ),
+                force=force,
             )
             raise PipelineError(
                 "the model response failed structural validation; a redacted raw "
@@ -677,13 +678,8 @@ def run_review(
     evidence_path: Path | None = None
     evidence_sha256: str | None = None
     if output is not None:
-        if output.is_file() and not force:
-            raise PipelineError(
-                f"{output} already holds an earlier review and a later review never "
-                "overwrites one by default; compare the documents, or pass --force"
-            )
         payload = json.dumps(evidence.redact(document), indent=2, sort_keys=True)
-        atomic.write(output, payload)
+        evidence.publish_review(output, payload, force=force)
         evidence_path = output
         evidence_sha256 = evidence.sha256_bytes(payload.encode("utf-8"))
 

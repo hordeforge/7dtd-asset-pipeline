@@ -44,7 +44,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import atomic, evidence
+from . import evidence
 from ._version import __version__
 from .capture import DEFAULT_ROOT, read_manifest
 from .config import PipelineConfig
@@ -583,22 +583,8 @@ def run_review(
 
     document["evidence"] = {"path": None, "sha256": None}
     if output is not None:
-        if output.is_file() and not force:
-            raise PipelineError(
-                f"{output} already holds an earlier review and a later review never "
-                "overwrites one by default; compare the documents, or pass --force"
-            )
         payload = json.dumps(evidence.redact(document), indent=2, sort_keys=True)
-        try:
-            if force:
-                atomic.write(output, payload)
-            else:
-                atomic.write_new(output, payload)
-        except FileExistsError as exc:
-            raise PipelineError(
-                f"{output} already holds an earlier review and a later review never "
-                "overwrites one by default; compare the documents, or pass --force"
-            ) from exc
+        evidence.publish_review(output, payload, force=force)
         document["evidence"] = {
             "path": str(output),
             "sha256": evidence.sha256_bytes(payload.encode("utf-8")),

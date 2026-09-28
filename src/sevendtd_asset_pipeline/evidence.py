@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import atomic
 from .errors import PipelineError
 
 # Keys whose names look credential-bearing are dropped wherever they would
@@ -102,6 +103,33 @@ def redact(value: Any, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> Any:
 
 def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def publish_review(path: Path, payload: str, *, force: bool) -> Path:
+    """Publish a review document, never silently replacing an earlier one.
+
+    A review is evidence, and a second run of the same lane against the same
+    output path is the normal shape of a retry. Asking whether the file exists
+    and then writing it is not that guarantee: the two are separate steps, so
+    a run that dies, a second session, or a fresh review that arrives in the
+    gap replaces the first document with no trace it was there. The exclusive
+    create is one step, so the loser learns the path is taken instead of
+    destroying the winner's verdict.
+
+    `force` is the deliberate overwrite, and it is the only way one review
+    replaces another.
+    """
+    try:
+        if force:
+            atomic.write(path, payload)
+        else:
+            atomic.write_new(path, payload)
+    except FileExistsError as exc:
+        raise PipelineError(
+            f"{path} already holds an earlier review and a later review never "
+            "overwrites one by default; compare the documents, or pass --force"
+        ) from exc
+    return path
 
 
 def sha256_file(path: Path) -> tuple[str, int]:

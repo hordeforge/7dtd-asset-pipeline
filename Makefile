@@ -11,12 +11,17 @@ SHELL := /bin/bash
 # exactly what CI runs instead of silently skipping gates CI enforces.
 export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
-# The interpreter every target here runs on, read from the one file that pins
-# it. `uv run --no-project` would otherwise pick whatever the host or uv
-# considers current, which is a different Python on every machine and moves
-# under a checkout that never changed.
+# The interpreter every target here runs on: a bootstrapped checkout's own
+# `.venv` first, because `uv run --no-project` deliberately ignores that
+# `.venv` and so ran the suite without the dev group, then uv on the pinned
+# interpreter, then the plain one (the core has no dependencies). Without a
+# `.venv`, the pin is read from the one file that holds it rather than from
+# whatever the host or uv considers current.
 PYTHON_PIN := $(strip $(shell cat .python-version 2>/dev/null))
-PYTHON := $(shell command -v uv >/dev/null 2>&1 && echo "uv run --no-project --python $(or $(PYTHON_PIN),3.11) python" || echo python3)
+PYTHON := $(shell \
+	if [ -x "$(CURDIR)/.venv/bin/python" ]; then echo "$(CURDIR)/.venv/bin/python"; \
+	elif command -v uv >/dev/null 2>&1; then echo "uv run --no-project --python $(or $(PYTHON_PIN),3.11) python"; \
+	else echo python3; fi)
 
 # Where `dist` writes. Overridden by `reproducible`, which builds twice.
 DIST_DIR ?= dist

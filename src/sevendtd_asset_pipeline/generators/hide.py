@@ -61,7 +61,7 @@ from pathlib import Path
 
 from .. import atomic
 from ..capabilities import extra_install
-from . import command_parser
+from . import command_parser, texture_maps
 
 MISSING = None
 try:
@@ -139,27 +139,6 @@ def require_imaging() -> None:
         )
 
 
-def tileable_noise(
-    size: int, rng: np.random.Generator, exponent: float, anisotropy: float
-) -> np.ndarray:
-    """Periodic noise: white noise shaped in the frequency domain.
-
-    Filtering an FFT and transforming back yields a field that wraps exactly,
-    so a primitive's default UVs never show a seam. `exponent` is the spectral
-    slope (more negative = smoother, larger features); `anisotropy` > 1
-    stretches the surviving frequencies along V.
-    """
-    field = rng.standard_normal((size, size))
-    fy = np.fft.fftfreq(size)[:, None]
-    fx = np.fft.fftfreq(size)[None, :]
-    radius = np.sqrt((fx * anisotropy) ** 2 + (fy / anisotropy) ** 2)
-    radius[0, 0] = 1e-6
-    shaped = np.fft.ifft2(np.fft.fft2(field) * radius**exponent).real
-    shaped -= shaped.mean()
-    peak = np.abs(shaped).max()
-    return shaped / peak if peak > 1e-9 else shaped
-
-
 def hide_rgb(
     size: int,
     seed: int,
@@ -182,9 +161,9 @@ def hide_rgb(
     invisible with it.
     """
     rng = np.random.default_rng(seed)
-    patches = tileable_noise(size, rng, exponent=-1.6, anisotropy=1.0)
-    clumps = tileable_noise(size, rng, exponent=-1.1, anisotropy=2.6)
-    hair = tileable_noise(size, rng, exponent=-0.35, anisotropy=1.0)
+    patches = texture_maps.tileable_noise(size, rng, exponent=-1.6, anisotropy=1.0)
+    clumps = texture_maps.tileable_noise(size, rng, exponent=-1.1, anisotropy=2.6)
+    hair = texture_maps.tileable_noise(size, rng, exponent=-0.35, anisotropy=1.0)
 
     base_array = np.asarray(base, dtype=np.float64)
     fur_array = np.asarray(fur, dtype=np.float64)
@@ -221,9 +200,9 @@ def _cell_field(
     noise layers and the clump-anisotropy match `hide_rgb`, so an atlased hide
     and a whole-coat hide read as the same species.
     """
-    patches = tileable_noise(cell_px, rng, exponent=-1.6, anisotropy=1.0)
-    clumps = tileable_noise(cell_px, rng, exponent=-1.1, anisotropy=2.6)
-    hair = tileable_noise(cell_px, rng, exponent=-0.35, anisotropy=1.0)
+    patches = texture_maps.tileable_noise(cell_px, rng, exponent=-1.6, anisotropy=1.0)
+    clumps = texture_maps.tileable_noise(cell_px, rng, exponent=-1.1, anisotropy=2.6)
+    hair = texture_maps.tileable_noise(cell_px, rng, exponent=-0.35, anisotropy=1.0)
     mottle = 1.0 + patches * strength
     clump = np.clip(clumps * 0.5 + 0.5, 0.0, 1.0)
     field = mottle * (1.0 + clump * fur_strength)  # one planar field, no colour yet

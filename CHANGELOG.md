@@ -97,6 +97,10 @@ tag has no changelog section.
 
 ### Fixed
 
+- `make check test` runs the bootstrapped checkout's own `.venv` when there is
+  one. It preferred `uv run --no-project`, which ignores that `.venv` by
+  design, so the suite ran without the `dev` group and the Hypothesis
+  harnesses in `tests/test_fuzz.py` could not be collected.
 - `PLAYTEST_LOCK_STALE_SEC` is refused when it is shorter than two heartbeat
   beats. A hold rewrites its heartbeat every 30 s, so a window of 20 s (or 30)
   expired a live holder's own claim between its beats: `lock_holder` read the
@@ -122,13 +126,17 @@ tag has no changelog section.
 - The generator `--help` output names `shamway generate NAME` again. The
   program name was taken by swapping `sys.argv[0]`, which Python 3.14 stops
   reading when the host itself was started with `-m`; each generator now
-  states its own `prog` through the shared `generators.command_parser`.
+  states its own `prog` through the shared `generators.command_parser`, and
+  `generators.run` clears `__main__.__spec__` for the call alongside the swap,
+  so a host started with `-m` (the test suite, a mod's own script) no longer
+  advertises `python -m unittest` in the usage line.
 - The text form of a model review names the frame an issue sits at, not only
   its timestamp, and both review commands print through one shared function
   (`review-audio` and `review-video` had two copies that had drifted: the
   video one never reported unavailable usage).
-- `scripts/coverage_badge.py` writes its SVG with `newline="\n"`, so a
-  Windows host no longer gets CRLF line ends in the badge.
+- `scripts/coverage_badge.py` writes its SVG with `newline="\n"`, like every
+  other text writer in the project. A Windows host no longer gets CRLF line
+  ends, which had also tripped the packaged copy through the line-ending gate.
 - A hold that borrowed a lock the same session already held no longer clears
   it on the way out. An orchestrator exports `PLAYTEST_SESSION_ID` for the
   whole run, so every command it ran inherited the id, took a borrow, and

@@ -56,6 +56,19 @@ def read_objects(bundle: Path) -> dict[int, list[dict[str, Any]]]:
     return read_bundle(bundle).trees_by_class()
 
 
+def bone_positions(scene: Any, name: str) -> list[tuple[float, float, float]]:
+    """Vertex positions skinned to the named joint."""
+    primitive = scene.meshes[0].primitive
+    joints = primitive.joints
+    assert joints is not None
+    skin_joints = scene.skins[0].joints
+    return [
+        position
+        for position, joint_row in zip(primitive.positions, joints, strict=True)
+        if scene.nodes[skin_joints[joint_row[0]]].name == name
+    ]
+
+
 class EntityGeneratorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -662,19 +675,9 @@ class RemainingRigConstructionTests(unittest.TestCase):
         out = self.root / "bird-feet.glb"
         self.assertEqual(run("entity", [str(out), "--rig", "bird"]), 0)
         scene = parse_gltf(out)
-        primitive = scene.meshes[0].primitive
-        joints = primitive.joints
-        assert joints is not None
-        skin_joints = scene.skins[0].joints
 
-        def verts(name: str) -> list[tuple[float, float, float]]:
-            return [
-                position
-                for position, joint_row in zip(primitive.positions, joints, strict=True)
-                if scene.nodes[skin_joints[joint_row[0]]].name == name
-            ]
-
-        lower, foot = verts("LeftLegLower"), verts("LeftFoot")
+        lower = bone_positions(scene, "LeftLegLower")
+        foot = bone_positions(scene, "LeftFoot")
         self.assertTrue(lower and foot)
         self.assertLessEqual(min(p[1] for p in lower), max(p[1] for p in foot) + 0.02)
 
@@ -708,19 +711,10 @@ class RemainingRigConstructionTests(unittest.TestCase):
         out = self.root / "bird-neck.glb"
         self.assertEqual(run("entity", [str(out), "--rig", "bird"]), 0)
         scene = parse_gltf(out)
-        primitive = scene.meshes[0].primitive
-        joints = primitive.joints
-        assert joints is not None
-        skin_joints = scene.skins[0].joints
 
-        def verts(name: str) -> list[tuple[float, float, float]]:
-            return [
-                position
-                for position, joint_row in zip(primitive.positions, joints, strict=True)
-                if scene.nodes[skin_joints[joint_row[0]]].name == name
-            ]
-
-        neck, head, chest = verts("Neck"), verts("Head"), verts("Chest")
+        neck = bone_positions(scene, "Neck")
+        head = bone_positions(scene, "Head")
+        chest = bone_positions(scene, "Chest")
         self.assertTrue(neck and head and chest)
         self.assertGreaterEqual(max(p[2] for p in neck), min(p[2] for p in head) - 0.02)
         self.assertLessEqual(min(p[2] for p in neck), max(p[2] for p in chest) + 0.02)
@@ -734,41 +728,29 @@ class RemainingRigConstructionTests(unittest.TestCase):
         zs = [p[2] for p in primitive.positions]
         ys = [p[1] for p in primitive.positions]
         self.assertGreater(max(zs) - min(zs), (max(ys) - min(ys)) * 3.0)
-        joints = primitive.joints
-        assert joints is not None
-        skin_joints = scene.skins[0].joints
-
-        def verts(name: str) -> list[tuple[float, float, float]]:
-            return [
-                position
-                for position, joint_row in zip(primitive.positions, joints, strict=True)
-                if scene.nodes[skin_joints[joint_row[0]]].name == name
-            ]
-
-        tail, pelvis = verts("Tail1"), verts("Pelvis")
+        tail, pelvis = bone_positions(scene, "Tail1"), bone_positions(scene, "Pelvis")
         self.assertTrue(tail and pelvis)
         self.assertGreaterEqual(max(p[2] for p in tail), min(p[2] for p in pelvis) - 0.02)
         pelvis_x = max(abs(p[0]) for p in pelvis)
         pelvis_y = max(p[1] for p in pelvis) - min(p[1] for p in pelvis)
         self.assertGreater(pelvis_x * 2, pelvis_y)
-        upper = verts("LeftFrontUpper")
+        upper = bone_positions(scene, "LeftFrontUpper")
         self.assertTrue(upper)
         self.assertGreater(max(abs(p[0]) for p in upper), pelvis_x)
-        self.assertFalse(verts("LeftFrontLower"))
-        foot = verts("LeftFrontFoot")
+        self.assertFalse(bone_positions(scene, "LeftFrontLower"))
+        foot = bone_positions(scene, "LeftFrontFoot")
         self.assertTrue(foot)
         self.assertGreater(max(abs(p[0]) for p in foot), pelvis_x)
-        fang, head = verts("LeftFang"), verts("Head")
+        fang, head = bone_positions(scene, "LeftFang"), bone_positions(scene, "Head")
         self.assertTrue(fang and head)
         self.assertLess(min(p[1] for p in fang), min(p[1] for p in head))
-        chest = verts("Chest")
+        chest = bone_positions(scene, "Chest")
         self.assertTrue(chest)
         self.assertLess(abs(max(p[1] for p in chest) - max(p[1] for p in pelvis)), 0.15)
-        tail = verts("Tail1")
         tail_y = max(p[1] for p in tail) - min(p[1] for p in tail)
         tail_x = max(p[0] for p in tail) - min(p[0] for p in tail)
         self.assertGreater(tail_y, tail_x)
-        scute = verts("LeftScute1")
+        scute = bone_positions(scene, "LeftScute1")
         self.assertTrue(scute)
         self.assertGreater(max(p[1] for p in scute), max(p[1] for p in pelvis) - 0.02)
 
@@ -777,15 +759,7 @@ class RemainingRigConstructionTests(unittest.TestCase):
         out = self.root / "croc.glb"
         self.assertEqual(run("entity", [str(out), "--rig", "crocodile"]), 0)
         scene = parse_gltf(out)
-        primitive = scene.meshes[0].primitive
-        joints = primitive.joints
-        assert joints is not None
-        skin_joints = scene.skins[0].joints
-        head = [
-            position
-            for position, joint_row in zip(primitive.positions, joints, strict=True)
-            if scene.nodes[skin_joints[joint_row[0]]].name == "Head"
-        ]
+        head = bone_positions(scene, "Head")
         self.assertTrue(head)
         zs = [p[2] for p in head]
         ys = [p[1] for p in head]

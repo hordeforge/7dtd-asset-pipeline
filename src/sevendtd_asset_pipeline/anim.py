@@ -132,7 +132,6 @@ def position_curve(path: str, keyframes: list[dict[str, Any]]) -> dict[str, Any]
 
 
 def idle_bob_curves(
-    rig: Any,
     pelvis_bone: str = "Pelvis",
     bob: float = 0.03,
     rest_position: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -800,7 +799,6 @@ def clip_fields(
         for clip in entries:
             if clip.kind == "bob":
                 _, bob_positions, _ = idle_bob_curves(
-                    None,
                     pelvis_bone=clip.bone,
                     bob=clip.amplitude,
                     rest_position=rest_positions.get(clip.bone, (0.0, 0.0, 0.0)),

@@ -74,7 +74,7 @@ class LegacyClipTests(unittest.TestCase):
         self.assertEqual(back["m_WrapMode"], 2)
 
     def test_curves_come_back_with_their_keyframes(self) -> None:
-        rotations, positions, scales = idle_bob_curves(None, pelvis_bone="Root/Pelvis", bob=0.03)
+        rotations, positions, scales = idle_bob_curves(pelvis_bone="Root/Pelvis", bob=0.03)
         self.assertEqual(rotations, [])
         self.assertEqual(len(positions), 1)
         self.assertEqual(positions[0]["path"], "Root/Pelvis")

@@ -118,10 +118,15 @@ class GeminiProvider:
                 envelope = json.load(response)
         except urllib.error.HTTPError as exc:
             # A body that cannot be read must degrade to the status line, not
-            # to an unbound name when the message below formats it.
+            # to an unbound name when the message below formats it. The error
+            # is a response object with an open socket: leaving it to the
+            # collector emits a ResourceWarning from wherever the collection
+            # happens to land, which in this suite is another test's captured
+            # stderr.
             detail = ""
             with contextlib.suppress(OSError):
                 detail = exc.read().decode("utf-8", errors="replace")[:300]
+            exc.close()
             if exc.code in (401, 403):
                 raise PipelineError(
                     f"provider 'gemini' rejected the credential (HTTP {exc.code}); "

@@ -642,6 +642,29 @@ class LockTests(unittest.TestCase):
             self.assertIsNone(client.lock_holder(self._lock(Path(tmp), running="no")))
             self.assertIsNone(client.lock_holder(Path(tmp) / "absent"))
 
+    def test_an_unusable_stale_window_is_refused_not_defaulted(self) -> None:
+        """A window that silently became the default, or became zero, is the
+        overwrite path: every claim reads free and this session takes over a
+        live one. An unusable value must be named instead.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp),
+                running="yes",
+                session="other-20260823-120000-abc",
+                heartbeat=self._stamp(5),
+            )
+            for value in ("soon", "0", "-30", "nan", "inf"):
+                with (
+                    self.subTest(value=value),
+                    self.assertRaisesRegex(PipelineError, client.LOCK_STALE_ENV),
+                ):
+                    client.lock_holder(path, env={client.LOCK_STALE_ENV: value})
+            self.assertEqual(
+                client.lock_holder(path, env={client.LOCK_STALE_ENV: "600"}),
+                "other-20260823-120000-abc",
+            )
+
     def test_deploy_and_launch_refuse_while_another_session_holds_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._lock(

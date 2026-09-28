@@ -8,7 +8,13 @@ from fixtures import unityfs_bundle
 
 from sevendtd_asset_pipeline.build import reject_disabled_modules
 from sevendtd_asset_pipeline.capabilities import has_capability
-from sevendtd_asset_pipeline.config import CONFIG_NAME, PipelineConfig, load_config
+from sevendtd_asset_pipeline.config import (
+    CONFIG_NAME,
+    SYNTHESIZED_SOURCE_ROOT,
+    UNITY_SOURCE_ROOT,
+    PipelineConfig,
+    load_config,
+)
 from sevendtd_asset_pipeline.errors import PipelineError
 from sevendtd_asset_pipeline.scaffold import initialize
 from sevendtd_asset_pipeline.validation import reject_ambiguous_stems, validate_mod
@@ -687,6 +693,46 @@ class ConfigRejectionTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "resources_dir.*non-empty path string"):
             self._load(body)
 
+    def test_a_quoted_boolean_is_rejected_not_coerced(self) -> None:
+        """`bool("false")` is True, so a quoted flag would silently switch a
+        lossy encoder on while every gate still read the file it was given.
+        """
+        body = 'schema_version = 1\nmod_name = "M"\nbundle_source = "none"\n'
+        for key in ("compress_textures", "compress_audio"):
+            for quoted in ('"false"', '"true"', "0", "1"):
+                with (
+                    self.subTest(key=key, value=quoted),
+                    self.assertRaisesRegex(PipelineError, key),
+                ):
+                    self._load(body + f"{key} = {quoted}\n")
+
+    def test_a_non_string_scalar_is_rejected_not_stringified(self) -> None:
+        body = 'schema_version = 1\nmod_name = "M"\nbundle_source = "none"\n'
+        for line in ("target = 2022", "source_root = 5", "[unity]\nversion = 2022\n"):
+            with (
+                self.subTest(line=line),
+                self.assertRaises(PipelineError),
+            ):
+                self._load(body + line)
+
+    def test_a_misspelled_key_is_named_with_the_real_one(self) -> None:
+        """A key TOML cannot mark required is otherwise a silently absent
+        setting: the build runs as if the author had never asked for it.
+        """
+        cases = (
+            ("compress_texture = false\n", "compress_texture"),
+            ('[unity]\nedittor = ""\n', "[unity] edittor"),
+            ('[game]\ndirectoy = ""\n', "[game] directoy"),
+            ("[acceptance]\nmotion_kind = {}\n", "[acceptance] motion_kind"),
+        )
+        body = 'schema_version = 1\nmod_name = "M"\nbundle_source = "none"\n'
+        for line, named in cases:
+            with (
+                self.subTest(line=line),
+                self.assertRaisesRegex(PipelineError, named.replace("[", r"\[")),
+            ):
+                self._load(body + line)
+
     def test_a_config_that_does_not_exist_is_reported_with_the_search_root(self) -> None:
         nested = self.root / "a" / "b"
         nested.mkdir(parents=True)
@@ -710,6 +756,35 @@ class ConfigRejectionTests(unittest.TestCase):
                 config = load_config(root / CONFIG_NAME)
                 expected_base = getattr(config, base)
                 self.assertEqual(expected_base / config.source_root, config.bundle_source_dir)
+
+    def test_an_unstated_source_root_follows_the_bundle_source(self) -> None:
+        """A hand-written file with no `source_root` must not inherit the Unity
+        path: read against a mod that has no project, it names a folder that
+        does not exist, and the guard then refuses a key nobody wrote.
+        """
+        for bundle_source, expected in (
+            ("synthesized", SYNTHESIZED_SOURCE_ROOT),
+            ("unity", UNITY_SOURCE_ROOT),
+        ):
+            with (
+                self.subTest(bundle_source=bundle_source),
+                tempfile.TemporaryDirectory() as name,
+            ):
+                root = Path(name)
+                (root / "ModInfo.xml").write_text(
+                    '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+                )
+                initialize(
+                    root, None, "example.unity3d", "2022.3.62f2", bundle_source=bundle_source
+                )
+                config_file = root / CONFIG_NAME
+                kept = [
+                    line
+                    for line in config_file.read_text(encoding="utf-8").splitlines()
+                    if not line.startswith("source_root")
+                ]
+                config_file.write_text("\n".join(kept) + "\n", encoding="utf-8")
+                self.assertEqual(expected, load_config(config_file).source_root)
 
 
 needs_unityz = unittest.skipUnless(

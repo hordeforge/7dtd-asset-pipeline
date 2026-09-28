@@ -23,6 +23,12 @@ tag has no changelog section.
   cannot read as an addition nobody reviewed. This project is 0.x, so the
   minor bump carries the break; the changelog is where the consumer learns
   of it.
+- `.shamway.toml` loading refuses a key it does not read, naming the nearest
+  real one: a misspelled `compress_texture` was a setting nobody applied, and
+  the build behaved as if it had never been asked for.
+- Boolean keys must be TOML's unquoted `true`/`false`, and `target`,
+  `source_root` and `[unity] version` must be strings. A quoted `"false"`
+  became `True`, which switched a lossy encoder on silently.
 
 ### Changed
 
@@ -64,6 +70,15 @@ tag has no changelog section.
 - `check-localization` names a referenced key whose `Localization.csv` row is
   the same word in a different Unicode normalization form, instead of counting
   it resolved or missing with nothing said about the two spellings.
+- An unstated `source_root` now follows `bundle_source` instead of defaulting
+  to the Unity project path, which resolved against a mod with no project and
+  was then refused as a misconfiguration.
+- `PLAYTEST_LOCK_STALE_SEC` is validated: a non-numeric value used to fall back
+  to the default silently, and a zero or negative one made every claim read as
+  free, which is the path that takes over another session's live client lock.
+- The Gemini provider closes the `HTTPError` it reports on, so a failed request
+  no longer leaks its socket into a `ResourceWarning` from wherever the
+  collector happens to run.
 
 ## [0.7.0] - 2026-09-21
 

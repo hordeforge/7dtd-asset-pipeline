@@ -209,11 +209,31 @@ def read_lock(path: Path) -> dict[str, str]:
 
 
 def _stale_seconds(env: Mapping[str, str] | None = None) -> float:
+    """The staleness window, refused rather than defaulted when it is wrong.
+
+    A misspelled or non-numeric `PLAYTEST_LOCK_STALE_SEC` used to fall back to
+    the default silently, and a zero or negative one made every claim read as
+    free — which is the path that overwrites another session's live lock and
+    deploys into their run. An unusable value is a configuration error and is
+    named as one.
+    """
     environment = os.environ if env is None else env
-    try:
-        return float(environment.get(LOCK_STALE_ENV, "") or DEFAULT_LOCK_STALE_SECONDS)
-    except ValueError:
+    raw = environment.get(LOCK_STALE_ENV, "").strip()
+    if not raw:
         return DEFAULT_LOCK_STALE_SECONDS
+    try:
+        seconds = float(raw)
+    except ValueError as exc:
+        raise PipelineError(
+            f"{LOCK_STALE_ENV}={raw!r} is not a number of seconds; unset it for the "
+            f"default of {DEFAULT_LOCK_STALE_SECONDS:g}"
+        ) from exc
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise PipelineError(
+            f"{LOCK_STALE_ENV}={raw!r} must be a positive number of seconds; a window of "
+            "zero or less reads every claim as free and takes over a live session's lock"
+        )
+    return seconds
 
 
 def _parse_lock_timestamp(value: str) -> datetime | None:

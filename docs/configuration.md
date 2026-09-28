@@ -68,6 +68,14 @@ the staged bundle. A mod that opted into an editor also commits the Unity
 project's source and settings and every asset's `.meta` file. Ignore raw build
 output and machine paths.
 
+Every value is checked when the file is read, not when it is used: a key that
+is not one of the above is refused with the nearest real key named (a
+misspelled `compress_texture` would otherwise be a setting nobody applied), a
+boolean must be TOML's unquoted `true`/`false` (`"false"` is a string, and
+`bool("false")` is true), and a string must be a string rather than a number
+coerced into one. An unstated `source_root` follows `bundle_source`, so a
+hand-written file cannot inherit the Unity project path it has no project for.
+
 ## Environment variables
 
 Machine-local paths never go in the TOML. The pipeline reads these, and no
@@ -80,3 +88,10 @@ Machine-local paths never go in the TOML. The pipeline reads these, and no
 | `UNITY_EDITOR` | the game-matched editor executable. Read only by `bundle_source = "unity"`, `verify-bundle` and `render-icon`; unset is not a problem anywhere else |
 | `SEVEN_DAYS_TO_DIE_LOG_DIR` | overrides where `shamway client` looks for `output_log_client__*.txt` (derived from the game dir's Steam library on Proton hosts otherwise) |
 | `SEVEN_DAYS_TO_DIE_MODS_DIR` | overrides the per-user `Mods/` folder `shamway client deploy` writes to |
+| `PLAYTEST_LOCK_FILE` | the shared client lock this pipeline reads and holds. Defaults to 7dtd-playtest's `~/.cache/7dtd-playtest/playtest_running`; set it only to point at a lock this host is known to share |
+| `PLAYTEST_SESSION_ID` | the session this run belongs to. An exclusive-client action is refused while *another* session holds the lock; set this to that id when this run is genuinely part of it |
+| `PLAYTEST_LOCK_STALE_SEC` | how long without a heartbeat a claim is still honoured, default `120`. Must be a positive number of seconds: a value that is not one is refused, because a window of zero or less reads every claim as free and takes over a live session's lock |
+| `XDG_CACHE_HOME` | the base for the pipeline's scratch and cache directories (shader blobs, Blender renders, decoded audio). Defaults to `~/.cache` on Linux, `~/Library/Caches` on macOS, `%LOCALAPPDATA%` on Windows |
+| `ZMOLV_LIBRARY` | the exact zmol-v shared library to compile Vulkan sub-programs with, when the search order (`ctypes`, this checkout's `.local/lib`, the system library directories) is not what you want |
+| `GEMINI_API_KEY`, `GOOGLE_API_KEY` | the credential for `review-audio` / `review-video` with the Gemini provider. Never a CLI argument, never logged or written into evidence; `shamway review-audio --help` names the same variable. See [authoring/audio.md](authoring/audio.md) |
+| `SHAMWAY_SCRIPT_ROOT` | the directory a `shamway script` invocation passes to the script it runs. Set by the CLI; a caller need not set it |

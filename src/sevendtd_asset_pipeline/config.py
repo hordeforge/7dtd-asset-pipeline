@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import re
@@ -86,6 +87,38 @@ BUNDLE_SOURCE_ENV = "SHAMWAY_BUNDLE_SOURCE"
 # and drives it walking along the ground — the only kind that grounds the
 # entity with the game's own spawner rather than staging a prefab.
 MOTION_KINDS = ("turntable", "walk-cycle", "walk-entity", "fixed")
+
+# Every key the loader reads, per table. A key outside these is refused rather
+# than ignored: TOML has no required-key marker, so a misspelled
+# `compress_texture = true` (or a key from a future contract) is otherwise a
+# silently absent setting, and the build that follows behaves as if the author
+# had never asked for it. Refusing at load names the key, before any work
+# starts, and the error offers the nearest real one.
+TOP_LEVEL_KEYS = frozenset(
+    {
+        "schema_version",
+        "mod_root",
+        "mod_name",
+        "bundle_name",
+        "bundle_source",
+        "unity_project",
+        "source_root",
+        "build_dir",
+        "manifest_dir",
+        "resources_dir",
+        "config_dir",
+        "target",
+        "compress_textures",
+        "compress_audio",
+        "code_references",
+        "unity",
+        "game",
+        "acceptance",
+    }
+)
+UNITY_KEYS = frozenset({"editor", "version"})
+GAME_KEYS = frozenset({"directory"})
+ACCEPTANCE_KEYS = frozenset({"motion_kinds"})
 
 
 @dataclass(frozen=True)
@@ -204,6 +237,48 @@ def _path(base: Path, value: object, field: str) -> Path:
     return (base / path).resolve() if not path.is_absolute() else path.resolve()
 
 
+def _flag(value: object, field: str) -> bool:
+    """A TOML boolean, refused rather than coerced.
+
+    `bool("false")` is True, so a quoted value would turn a lossy feature on
+    and every gate would still report the file it was told to read. The writer
+    prints the PSNR of every texture and clip it compresses, but nothing makes
+    that visible to a build whose configuration said "do not compress".
+    """
+    if not isinstance(value, bool):
+        raise PipelineError(
+            f"{field} must be true or false, not {value!r}; TOML booleans are unquoted"
+        )
+    return value
+
+
+def _text(value: object, field: str, *, allow_empty: bool = False) -> str:
+    """A TOML string, refused rather than stringified.
+
+    `str(2022)` is a plausible-looking revision that names no Unity editor,
+    and it would only be discovered when a bundle fails to load in the game.
+    """
+    if not isinstance(value, str) or (not allow_empty and not value.strip()):
+        wanted = "a string" if allow_empty else "a non-empty string"
+        raise PipelineError(f"{field} must be {wanted}, not {value!r}")
+    return value
+
+
+def _reject_unknown(table: dict[str, object], known: frozenset[str], label: str) -> None:
+    unknown = sorted(key for key in table if key not in known)
+    if not unknown:
+        return
+    lines = []
+    for key in unknown:
+        near = difflib.get_close_matches(key, sorted(known), n=1)
+        lines.append(f"{label}{key}" + (f" (did you mean {label}{near[0]}?)" if near else ""))
+    raise PipelineError(
+        f"unknown configuration key{'s' if len(unknown) > 1 else ''}: "
+        + "; ".join(lines)
+        + f". Known keys: {', '.join(sorted(known))}"
+    )
+
+
 def _optional_path(base: Path, value: object, env_name: str) -> Path | None:
     raw = os.environ.get(env_name) or (value if isinstance(value, str) else "")
     return _path(base, raw, env_name) if raw else None
@@ -260,6 +335,7 @@ def load_config(path: Path | None = None) -> PipelineConfig:
 
     if data.get("schema_version") != 1:
         raise PipelineError(f"{config_file}: schema_version must be 1")
+    _reject_unknown(data, TOP_LEVEL_KEYS, "")
     base = config_file.parent
     mod_root = _path(base, data.get("mod_root", "."), "mod_root")
     mod_name = data.get("mod_name")
@@ -291,6 +367,8 @@ def load_config(path: Path | None = None) -> PipelineConfig:
     game = data.get("game", {})
     if not isinstance(unity, dict) or not isinstance(game, dict):
         raise PipelineError("[unity] and [game] must be TOML tables")
+    _reject_unknown(unity, UNITY_KEYS, "[unity] ")
+    _reject_unknown(game, GAME_KEYS, "[game] ")
     code_references = data.get("code_references", [])
     if not isinstance(code_references, list) or not all(
         isinstance(item, str) and item.strip() for item in code_references
@@ -303,6 +381,7 @@ def load_config(path: Path | None = None) -> PipelineConfig:
     acceptance = data.get("acceptance", {})
     if not isinstance(acceptance, dict):
         raise PipelineError("[acceptance] must be a TOML table")
+    _reject_unknown(acceptance, ACCEPTANCE_KEYS, "[acceptance] ")
     motion_kinds = acceptance.get("motion_kinds", {})
     if not isinstance(motion_kinds, dict) or any(
         not isinstance(stem, str)
@@ -316,6 +395,14 @@ def load_config(path: Path | None = None) -> PipelineConfig:
             f"({', '.join(MOTION_KINDS)})"
         )
 
+    # An unstated `source_root` follows the bundle source rather than naming
+    # the Unity path unconditionally: that default resolved a hand-written
+    # `bundle_source = "synthesized"` file to <mod>/Assets/ModAssets/Bundle,
+    # which does not exist, and the guard below then refused the key the
+    # author never wrote.
+    source_root = _text(data.get("source_root", default_source_root(bundle_source)), "source_root")
+    unity_version = _text(unity.get("version", ""), "[unity] version", allow_empty=True)
+
     config = PipelineConfig(
         config_file=config_file,
         mod_root=mod_root,
@@ -324,20 +411,20 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         unity_project=_path(
             base, data.get("unity_project", "tools/shamway/UnityProject"), "unity_project"
         ),
-        source_root=str(data.get("source_root", "Assets/ModAssets/Bundle")),
+        source_root=source_root,
         build_dir=_path(base, data.get("build_dir", ".shamway/build"), "build_dir"),
         manifest_dir=_path(
             base, data.get("manifest_dir", "tools/shamway/manifests"), "manifest_dir"
         ),
         resources_dir=_path(mod_root, data.get("resources_dir", "Resources"), "resources_dir"),
         config_dir=_path(mod_root, data.get("config_dir", "Config"), "config_dir"),
-        target=str(data.get("target", "StandaloneWindows64")),
+        target=_text(data.get("target", "StandaloneWindows64"), "target"),
         bundle_source=bundle_source,
-        unity_version=str(unity.get("version") or "") or None,
+        unity_version=unity_version or None,
         unity_editor=_optional_path(base, unity.get("editor"), "UNITY_EDITOR"),
         game_dir=_optional_path(base, game.get("directory"), "SEVEN_DAYS_TO_DIE_DIR"),
-        compress_textures=bool(data.get("compress_textures", False)),
-        compress_audio=bool(data.get("compress_audio", False)),
+        compress_textures=_flag(data.get("compress_textures", False), "compress_textures"),
+        compress_audio=_flag(data.get("compress_audio", False), "compress_audio"),
         code_references=tuple(item.strip() for item in code_references),
         acceptance_motion_kinds=dict(motion_kinds),
     )

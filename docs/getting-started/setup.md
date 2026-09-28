@@ -115,6 +115,27 @@ shamway init /path/to/MyMod --unity-version 2022.3.62f2
 
 Record how that revision was verified in the mod's documentation.
 
+### Running `init` again
+
+`init` is safe to re-run with the same arguments. It converges: a second run
+leaves the mod byte-for-byte as one run leaves it, and a run that died half way
+through is finished by the next one rather than refused. Two things follow.
+
+Re-running after a failure is the recovery path. `.shamway.toml`,
+`Makefile.assets`, `tools/shamway/AGENTS.md` and the Unity project are published
+in that order, so a disk-full or an interrupted copy leaves some of them behind;
+the next `init` with the same arguments fills in what is missing and rewrites
+the rest identically.
+
+Re-running with *different* arguments is refused, and so is any file the mod
+has edited. The check is content, not existence: a file already holding the
+body `init` would write is this scaffold, and rewriting it is a no-op; anything
+else is the mod's own and is reported by name, to be moved aside or updated on
+purpose. That includes the Unity project, compared file by file, so art and
+scripts a mod added under it are never touched. Changing an argument that the
+mod already has (a different `--bundle-name`, a different `--unity-version`)
+means a different scaffold, and is the case that stays an error.
+
 ## 3. (Optional) Install Unity and Windows Build Support
 
 **Skip this whole section unless the mod opted into an editor.** Three of the

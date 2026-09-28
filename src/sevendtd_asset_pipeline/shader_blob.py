@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 
 from .capabilities import smolv_library
 from .errors import PipelineError
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 from .workdir import scratch_dir
 
 BLOB_VERSION = 202012090
@@ -412,7 +413,8 @@ def _compile(argv: list[str], tool: str, what: str) -> subprocess.CompletedProce
         return subprocess.run(
             argv,
             capture_output=True,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             check=False,
             timeout=SHADER_COMPILE_TIMEOUT,
         )

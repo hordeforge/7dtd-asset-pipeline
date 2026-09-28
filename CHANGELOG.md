@@ -123,6 +123,30 @@ tag has no changelog section.
   a correct checkout with `None != 77`. It now reads both forms and treats an
   exact pin as the floor it is, and still fails a pin below 77 or an
   unconstrained requirement.
+- Every child process this package runs is decoded as UTF-8 with undecodable
+  bytes replaced, through the named pair in the new `text` module. Sixteen
+  call sites passed `text=True` and nothing else, so the encoding was
+  `locale.getpreferredencoding(False)`: the same `unityz`, `dotnet`, Blender,
+  pactl or glTF-validator invocation read differently on a German and a
+  C-locale host, and one byte a Windows tool emitted in its own code page
+  raised `UnicodeDecodeError` out of `communicate()`, which no call site
+  caught, ending the run in a traceback rather than the single `ERROR:` line
+  the CLI promises. `tests/test_text.py` fails if a text-mode call site stops
+  naming its encoding.
+- Bundle stems, atlas PNG stems and `CustomIcon` keys are compared on one
+  folded spelling (NFC, then case-folded) instead of `str.casefold()` alone,
+  and so is case-insensitive resolution of a `@modfolder` bundle path. A mod
+  authored on macOS stores `café` decomposed while `Config/` spells it
+  composed: the lookup missed a bundle that was there, and two cells of that
+  pair in one atlas passed as two keys where the engine loads one. A name that
+  is not byte-identical to the one that answered it is still reported, now
+  naming whether it differs in case, in Unicode normalization form, or both.
+  `localization_check` now takes its composed spelling from the same module.
+- A mod name with no ASCII in it (`日本`, `中文`) produced the same acceptance
+  provider assembly name and the same playtest suite id for every such mod, so
+  a live-client run could report one mod's suite under another's. The
+  identifier now carries a short digest of the name the author typed, as the
+  bundle stem already did.
 - The DXBC readers in `shader_blob` bound-check every field they address
   before using it as an offset or a length: the chunk count, the chunk table,
   a chunk offset, a chunk size, the SHDR dword count, and the RDEF and ISGN

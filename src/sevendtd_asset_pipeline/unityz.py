@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .capabilities import require_capability
 from .errors import PipelineError
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 
 UNITYZ_TIMEOUT_SECONDS = 120
 JsonObject = dict[str, object]
@@ -33,7 +34,8 @@ def invoke(command: str, *arguments: str, subject: str) -> subprocess.CompletedP
         return subprocess.run(
             [executable(), command, *arguments],
             capture_output=True,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             timeout=UNITYZ_TIMEOUT_SECONDS,
             check=False,
         )

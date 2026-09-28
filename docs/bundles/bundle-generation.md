@@ -138,6 +138,10 @@ shamway script compile-editor-scripts --scripts tools/shamway/UnityProject/Asset
 directory and extension. Therefore:
 
 - every stem must be unique across the whole bundle, case-insensitively;
+- uniqueness and lookup are case-insensitive **and** Unicode-normalization
+  insensitive, so `café` and the same word decomposed are one stem and cannot
+  both ship; a reference that is not byte-identical to the stem it resolves to
+  is reported by name, not quietly accepted;
 - the referenced stem's case must equal the loaded object's name;
 - two files such as `Meshes/Radio.fbx` and `Prefabs/radio.prefab` are a
   collision even though their paths and extensions differ;

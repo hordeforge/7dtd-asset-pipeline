@@ -20,6 +20,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from ..text import CHILD_DECODE_ERRORS, CHILD_ENCODING
+
 # A headless Blender that wedges (a broken userpref, a stuck GPU probe) must
 # fail the generator, not hang it. Generating one primitive is seconds of work,
 # and the same lane bounds gltfpack at 300s in mesh_optimize.py.
@@ -57,7 +59,8 @@ def run_script(blender: str, script: Path, arguments: Sequence[str]) -> tuple[in
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             timeout=BLENDER_TIMEOUT,
         )
     except subprocess.TimeoutExpired:

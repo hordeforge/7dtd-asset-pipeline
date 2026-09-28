@@ -31,6 +31,7 @@ import subprocess
 from pathlib import Path
 
 from .errors import PipelineError
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 
 # `monodis --typedef` lists every type in the assembly, one per line, in a
 # format that carries the name among other columns; the names are matched
@@ -58,7 +59,8 @@ def _from_assembly(game_dir: Path) -> set[str] | None:
             # above, and the same PATH lookup the capability registry gates on.
             ["monodis", "--typedef", str(assembly)],  # noqa: S607
             capture_output=True,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             timeout=120,
             check=False,
         )

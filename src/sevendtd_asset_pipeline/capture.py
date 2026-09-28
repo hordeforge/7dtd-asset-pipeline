@@ -48,6 +48,7 @@ from pathlib import Path
 
 from . import atomic, evidence
 from .errors import PipelineError
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 
 MANIFEST_NAME = "manifest.json"
 DEFAULT_ROOT = Path(".local/acceptance")
@@ -308,7 +309,14 @@ def capture(
     try:
         argv = backend.command(staged)
         try:
-            result = subprocess.run(argv, check=False, capture_output=True, text=True, timeout=120)
+            result = subprocess.run(
+                argv,
+                check=False,
+                capture_output=True,
+                encoding=CHILD_ENCODING,
+                errors=CHILD_DECODE_ERRORS,
+                timeout=120,
+            )
         except (OSError, subprocess.SubprocessError) as exc:
             raise PipelineError(f"{backend.name} could not run: {exc}") from exc
         if result.returncode != 0:

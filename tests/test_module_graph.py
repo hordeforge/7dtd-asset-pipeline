@@ -34,7 +34,7 @@ SURFACE = frozenset({"", "api", "cli", "operations", "serve"})
 # Imported by more than a handful of modules, so anything they pull in is paid
 # for by the whole package. Each may only reach another base module, or the
 # credential state behind `providers`, which is itself a host capability.
-BASE_MODULES = frozenset({"atomic", "capabilities", "errors", "workdir"})
+BASE_MODULES = frozenset({"atomic", "capabilities", "errors", "text", "workdir"})
 BASE_ALLOWED_EXTRAS = frozenset({"providers", "providers.base"})
 
 

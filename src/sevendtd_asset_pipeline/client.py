@@ -71,6 +71,7 @@ from .capture import (
 )
 from .errors import PipelineError
 from .references import read_mod_name
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 
 STEAM_APP_ID = 251570
 # Proton launches the Windows client; the EAC wrapper is a second executable.
@@ -840,7 +841,8 @@ def _run_pactl(*args: str, subject: str = "pactl") -> subprocess.CompletedProces
             # PATH lookup is deliberate: pactl is a user tool located by shutil.which.
             ["pactl", *args],  # noqa: S607
             capture_output=True,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             check=False,
             timeout=10,
         )

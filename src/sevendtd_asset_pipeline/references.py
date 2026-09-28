@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import PipelineError
+from .text import folded
 
 BUNDLE_URI = re.compile(r"#[^\s\"'<>]+\?[^\s\"'<>]+")
 # 7DTD accepts both tokens; ReadPatchXmlWithFixedModFolders rewrites either.
@@ -218,7 +219,13 @@ def manifest_assets(manifest: Path) -> list[str]:
 
 
 def resolve_case_insensitive(root: Path, relative: str) -> Path | None:
-    """Resolve under root as 7DTD does, refusing traversal outside it."""
+    """Resolve under root as 7DTD does, refusing traversal outside it.
+
+    Each component is matched folded, so a reference spelled in composed NFC
+    finds a file macOS stored decomposed (NFD) and vice versa: two spellings
+    of one directory name are one name to every filesystem 7DTD runs on, and
+    a byte comparison would report the bundle as absent.
+    """
     current = root.resolve()
     parts = [part for part in relative.replace("\\", "/").split("/") if part not in ("", ".")]
     if any(part == ".." for part in parts):
@@ -226,7 +233,7 @@ def resolve_case_insensitive(root: Path, relative: str) -> Path | None:
     for part in parts:
         if not current.is_dir():
             return None
-        matches = [child for child in current.iterdir() if child.name.casefold() == part.casefold()]
+        matches = [child for child in current.iterdir() if folded(child.name) == folded(part)]
         if len(matches) > 1:
             raise PipelineError(f"case-insensitive path collision below {current}: {part}")
         if not matches:

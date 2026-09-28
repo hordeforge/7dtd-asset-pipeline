@@ -70,6 +70,22 @@ every item or block that sets no `CustomIcon`, because that is the engine's
 default sprite lookup. A key this mod does not provide is reported, never
 failed: referencing a vanilla key is normal.
 
+### One spelling of a name, folded for the comparison and named in the error
+
+Bundle stems, atlas PNG stems, `CustomIcon` keys and `Localization.csv` rows
+are identity: 7DTD resolves an asset by its name, so two spellings of one name
+are two names to the engine. Every comparison between them here is made on
+the name normalized to NFC and case-folded (`text.folded`), so the pair a
+macOS filename produces (`café` stored decomposed, the word typed into
+`Config/` composed) is one key rather than a lookup that misses, and two such
+cells in one atlas are reported as the collision they are.
+
+Folding is for the comparison only. A name that is not byte-identical to the
+one that answered it is **reported by name**, naming whether it differs in
+case, in Unicode normalization form, or in both, because the engine resolves
+against the names it actually loaded and a fold in Python is not a fold there.
+`check-localization` reports the same pair the same way.
+
 ### `isSupported` is not a verdict without a graphics device
 
 `shamway verify-bundle` runs the editor with `-nographics`, which is right for

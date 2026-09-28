@@ -19,6 +19,7 @@ from .references import (
     read_mod_name,
     resolve_case_insensitive,
 )
+from .text import NORMALIZATION, folded, spelling_differences
 from .unityfs import BundleInfo, inspect_bundle
 
 # The shape every gate uses to say its evidence did not arrive, and the
@@ -76,9 +77,16 @@ def validate_bundle(
 
 
 def reject_ambiguous_stems(assets: list[str]) -> None:
+    """Refuse two members 7DTD's stem-only lookup could not tell apart.
+
+    The key each member is filed under is its folded stem, so `Chair.png` and
+    `CHAIR.png` collide, and so do `café.png` composed and `café.png`
+    decomposed: one word, two members, and whichever the engine loads first
+    silently wins.
+    """
     by_stem: dict[str, list[str]] = defaultdict(list)
     for asset in assets:
-        by_stem[Path(asset).stem.casefold()].append(asset)
+        by_stem[folded(Path(asset).stem)].append(asset)
     collisions = [paths for paths in by_stem.values() if len(paths) > 1]
     if collisions:
         detail = "; ".join(", ".join(paths) for paths in collisions)
@@ -89,16 +97,24 @@ def _stem_index(assets: list[str]) -> dict[str, list[str]]:
     """Fold each asset's stem once, so per-reference lookups stop rescanning."""
     index: dict[str, list[str]] = defaultdict(list)
     for asset in assets:
-        index[Path(asset).stem.casefold()].append(Path(asset).stem)
+        index[folded(Path(asset).stem)].append(Path(asset).stem)
     return index
 
 
 def _check_stem(where: str, stem: str, index: dict[str, list[str]], manifest: Path) -> None:
-    matches = index.get(stem.casefold(), [])
+    matches = index.get(folded(stem), [])
     if not matches:
         raise PipelineError(f"{where}: asset stem {stem!r} is absent from {manifest}")
     if len(matches) != 1:
         raise PipelineError(f"{where}: asset stem {stem!r} is ambiguous")
+    if matches[0] != stem and NORMALIZATION in spelling_differences(stem, matches[0]):
+        # Folded alike, so the lookup finds it and the engine does not: 7DTD
+        # resolves a stem against the names the bundle actually carries.
+        raise PipelineError(
+            f"{where}: asset stem {stem!r} and the manifest's {matches[0]!r} differ in "
+            f"{' and in '.join(spelling_differences(stem, matches[0]))}. Spell the "
+            f"reference in {manifest} exactly as the asset is named, composed (NFC)"
+        )
     if matches[0] != stem:
         raise PipelineError(f"{where}: asset case is {stem!r}, manifest has {matches[0]!r}")
 

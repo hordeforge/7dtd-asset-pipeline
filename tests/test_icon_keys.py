@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import filesystem_is_case_insensitive
 from test_assets import write_png
 
 from sevendtd_asset_pipeline.errors import PipelineError
@@ -21,6 +22,11 @@ from sevendtd_asset_pipeline.icon_check import (
     discover_icon_references,
     discover_implicit_icon_names,
 )
+
+# "café" as macOS stores a filename, decomposed, against the composed form an
+# author types into Config/.
+COMPOSED = "caf\u00e9"
+DECOMPOSED = "cafe\u0301"
 
 
 class IconKeyTests(unittest.TestCase):
@@ -92,6 +98,34 @@ class IconKeyTests(unittest.TestCase):
         self.assertTrue(
             any("myModVariant" in note and "inherited" in note for note in report.notes)
         )
+
+    def test_a_key_spelled_the_other_unicode_form_resolves_and_is_reported(self) -> None:
+        """A macOS filename is decomposed; the key in XML is composed.
+
+        The key and the cell are one name, so the key resolves rather than
+        being reported as a vanilla key nothing draws, and the problem names
+        the form because that, not the key, is what has to be renamed.
+        """
+        self._write(
+            "items.xml",
+            f'<configs><item name="a">'
+            f'<property name="CustomIcon" value="{COMPOSED}" /></item></configs>',
+        )
+        write_png(self.atlas / f"{DECOMPOSED}.png", 160, 160)
+        report = check_icons(self.root, self.config)
+        self.assertFalse(report.ok)
+        self.assertIn("normalization form", " ".join(report.problems))
+        self.assertEqual((COMPOSED,), report.resolved)
+
+    def test_two_cells_spelled_in_different_unicode_forms_collide(self) -> None:
+        """One atlas key, two cells: whichever the client loads first wins."""
+        if filesystem_is_case_insensitive(self.root):
+            self.skipTest("this filesystem folds name case; two spellings cannot coexist")
+        write_png(self.atlas / f"{COMPOSED}.png", 160, 160)
+        write_png(self.atlas / f"{DECOMPOSED}.png", 160, 160)
+        report = check_icons(self.root, self.config)
+        self.assertFalse(report.ok)
+        self.assertIn("normalization forms", " ".join(report.problems))
 
     def test_report_dict_carries_implicit(self) -> None:
         report = check_icons(self.root, self.config)

@@ -25,6 +25,7 @@ from pathlib import Path
 
 from .capabilities import extra_install, has_capability
 from .errors import PipelineError
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 
 GLTF_SUFFIXES = (".glb", ".gltf")
 # Shared with the published schema (operations.py) and the CLI (--max-extent),
@@ -114,7 +115,8 @@ def _validate_gltf(path: Path, report: MeshReport, strict: bool) -> None:
             [validator, "--stdout", "--validate-resources", str(path)],
             check=False,
             capture_output=True,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             timeout=120,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:

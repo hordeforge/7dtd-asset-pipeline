@@ -42,7 +42,8 @@ class UnityzProcessTests(unittest.TestCase):
         invoked.assert_called_once_with(
             ["/bin/unityz", "info", str(self.path.resolve()), "--json"],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=120,
             check=False,
         )
@@ -75,7 +76,8 @@ class UnityzProcessTests(unittest.TestCase):
         invoked.assert_called_once_with(
             ["/bin/unityz", "fsb", str(self.path.resolve()), "--outdir", output_dir],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=120,
             check=False,
         )

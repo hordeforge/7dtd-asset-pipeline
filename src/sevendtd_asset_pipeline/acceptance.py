@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -55,6 +56,7 @@ from .client import hold_for_write, user_mods_dir
 from .config import PipelineConfig, load_config
 from .errors import PipelineError
 from .references import manifest_assets, read_mod_name
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 
 # The `LoadAsset<T>` expression that proves each loaded class actually loaded.
 KIND_ASSERTIONS: dict[str, str] = {
@@ -196,8 +198,19 @@ class ProviderPlan:
 
 
 def _identifier(text: str) -> str:
+    """A C#-safe identifier for `text`, distinct for distinct names.
+
+    Anything outside `[A-Za-z0-9_]` is dropped, which is what keeps a stem like
+    `blast-loop` compilable. A name written in a script with no ASCII in it
+    (Cyrillic, CJK, Arabic) leaves nothing behind, and every such mod would
+    then take the same assembly name and the same playtest suite id, so a
+    client run could report one mod's suite under another's. A short digest
+    of the name the author typed is what keeps those apart.
+    """
     cleaned = _IDENTIFIER.sub("", text)
-    return cleaned or "Mod"
+    if cleaned:
+        return cleaned
+    return f"Mod{hashlib.sha256(text.encode('utf-8')).hexdigest()[:8]}"
 
 
 def _template(name: str) -> str:
@@ -756,7 +769,8 @@ def _run_dotnet_build(command: list[str]) -> subprocess.CompletedProcess[str]:
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             start_new_session=os.name == "posix",
             env=environment,
         )

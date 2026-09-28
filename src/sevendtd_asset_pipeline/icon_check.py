@@ -41,6 +41,7 @@ from pathlib import Path
 from .capabilities import extra_install
 from .errors import PipelineError
 from .references import config_xml_texts
+from .text import CASES, NORMALIZATION, folded, spelling_differences
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # Colour types that carry an alpha channel. 3 (palette) can carry tRNS
@@ -230,18 +231,29 @@ def _scan_atlases(
             notes.append(f"{folder.relative_to(mod_root)} contains no icons")
         seen: dict[str, Path] = {}
         for png in pngs:
-            folded = png.stem.casefold()
-            collision = seen.get(folded)
+            key = folded(png.stem)
+            collision = seen.get(key)
             if collision is not None:
+                spelling = _spelling_phrase(png.stem, collision.stem)
                 problems.append(
-                    f"{folder.name}: {png.name} and {collision.name} differ only in case; "
+                    f"{folder.name}: {png.name} and {collision.name} are {spelling}; "
                     "the atlas key is the filename stem and one of them will win silently"
                 )
-            seen[folded] = png
+            seen[key] = png
             icons.append(inspect_icon(png, folder.name, cell))
     for icon in icons:
         problems.extend(f"{icon.atlas}/{icon.stem}.png: {problem}" for problem in icon.problems)
     return icons, problems, notes
+
+
+def _spelling_phrase(key: str, shipped: str) -> str:
+    """The differences two files sharing one atlas key have, as a phrase."""
+    differences = spelling_differences(key, shipped)
+    if differences == (CASES,):
+        return "two names that differ only in case"
+    if differences == (NORMALIZATION,):
+        return "the same name in different Unicode normalization forms"
+    return "one name differing in " + " and in ".join(differences)
 
 
 def _match_shipped(
@@ -250,7 +262,7 @@ def _match_shipped(
     """The shipped stem that answers `key`: itself, a case-variant, or None."""
     if key in provided:
         return key
-    return provided_ci.get(key.casefold())
+    return provided_ci.get(folded(key))
 
 
 def _reconcile_explicit_keys(
@@ -273,8 +285,9 @@ def _reconcile_explicit_keys(
             continue
         if shipped != key:
             problems.append(
-                f'icon key "{key}" differs in case from the shipped {shipped}.png; '
-                "keep the key and the filename stem byte-identical"
+                f'icon key "{key}" differs in '
+                f"{' and in '.join(spelling_differences(key, shipped))} from the shipped "
+                f"{shipped}.png; keep the key and the filename stem byte-identical"
             )
         resolved.append(key)
     return resolved, external, problems
@@ -301,7 +314,9 @@ def _reconcile_implicit_names(
         if shipped != name:
             problems.append(
                 f'"{name}" sets no CustomIcon, so its icon is looked up by name, and the '
-                f"shipped {shipped}.png differs from it in case; rename one of them"
+                f"shipped {shipped}.png differs from it in "
+                f"{' and in '.join(spelling_differences(name, shipped))}; "
+                "rename one of them"
             )
         implicit.append(name)
     return implicit, unnamed, problems
@@ -380,7 +395,7 @@ def check_icons(
         icons, problems, notes = _scan_atlases(mod_root, atlas_dir, cell)
 
     provided = {icon.stem: icon for icon in icons}
-    provided_ci = {stem.casefold(): stem for stem in provided}
+    provided_ci = {folded(stem): stem for stem in provided}
     config = config_dir if config_dir else mod_root / "Config"
 
     # Both reconciliations scan the same Config/ XML; read it once.

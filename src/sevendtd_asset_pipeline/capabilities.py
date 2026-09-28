@@ -27,6 +27,7 @@ from pathlib import Path
 
 from .errors import PipelineError
 from .providers import configuration_state
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 
 
 @dataclass(frozen=True)
@@ -132,7 +133,8 @@ def _unityz_has_metadata_contract(path: str) -> str | None:
         reported = subprocess.run(
             [path, "--version"],
             capture_output=True,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             timeout=15,
             check=False,
         )
@@ -156,7 +158,8 @@ def _vkd3d_reads_hlsl(path: str) -> str | None:
         listed = subprocess.run(
             [path, "--print-source-types"],
             capture_output=True,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             timeout=15,
             check=False,
         )
@@ -530,7 +533,8 @@ def _command_version(executable: str) -> str | None:
                 check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
+                encoding=CHILD_ENCODING,
+                errors=CHILD_DECODE_ERRORS,
                 timeout=10,
             )
         except (OSError, subprocess.SubprocessError):

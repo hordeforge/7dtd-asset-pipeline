@@ -16,6 +16,7 @@ from .config import BUNDLE_SOURCES, PipelineConfig
 from .errors import PipelineError
 from .game import game_unity_version, project_unity_version
 from .references import read_mod_name
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 from .unity_process import windows_standalone_support
 
 REQUIRED_MODULES = ("com.unity.modules.assetbundle",)
@@ -324,7 +325,8 @@ def _editor_checks(config: PipelineConfig) -> list[Check]:
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             timeout=30,
         )
     except subprocess.TimeoutExpired:

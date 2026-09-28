@@ -35,13 +35,13 @@ from __future__ import annotations
 import csv
 import io
 import re
-import unicodedata
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .errors import PipelineError
 from .references import config_xml_texts
+from .text import nfc
 
 # A definition whose name is the display string: the engine looks the name up.
 DEFINITION = re.compile(r'<(item|block|entity_class)\s+name\s*=\s*"([^"]+)"', re.DOTALL)
@@ -88,11 +88,6 @@ class LocalizationReport:
         return asdict(self) | {"ok": self.ok}
 
 
-def _nfc(text: str) -> str:
-    """The composed (NFC) spelling of a key, as ICU's `uconv -x Any-NFC` writes it."""
-    return unicodedata.normalize("NFC", text)
-
-
 def spelling_mismatches(referenced: Iterable[str], provided: set[str]) -> list[tuple[str, str]]:
     """Referenced keys that only a table row with a different spelling would answer.
 
@@ -107,10 +102,10 @@ def spelling_mismatches(referenced: Iterable[str], provided: set[str]) -> list[t
     """
     by_form: dict[str, set[str]] = {}
     for key in provided:
-        by_form.setdefault(_nfc(key), set()).add(key)
+        by_form.setdefault(nfc(key), set()).add(key)
     mismatches: list[tuple[str, str]] = []
     for key in referenced:
-        for candidate in sorted(by_form.get(_nfc(key), set())):
+        for candidate in sorted(by_form.get(nfc(key), set())):
             if candidate != key:
                 mismatches.append((key, candidate))
     return mismatches

@@ -59,6 +59,7 @@ from .evidence import (  # noqa: F401 - published lane surface
 )
 from .evidence import parse_intent_text as _parse_intent_text
 from .references import manifest_assets
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 
 
 def parse_intent_text(text: str) -> tuple[VideoReviewIntent, bytes]:
@@ -339,7 +340,8 @@ def _default_runner(argv: Sequence[str], timeout: float) -> subprocess.Completed
             list(argv),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            encoding=CHILD_ENCODING,
+            errors=CHILD_DECODE_ERRORS,
             start_new_session=os.name == "posix",
         )
         try:

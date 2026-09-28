@@ -20,7 +20,7 @@ def percentage() -> int:
         [sys.executable, "-m", "coverage", "json", "-q", "-o", str(out)],
         check=True,
     )
-    data = json.loads(out.read_text())
+    data = json.loads(out.read_text(encoding="utf-8"))
     out.unlink()
     totals = data["totals"]
     return round(float(totals["percent_covered"]))

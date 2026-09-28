@@ -234,17 +234,16 @@ def validate_mod(
     else:
         # Without a game directory the `[unity] version` the mod's own config
         # records is the next best answer, and it is the same revision
-        # `build` stamps (see `expected_revision`).
-        expected_version = config.unity_version or None
-        if expected_version is None:
-            # The repository's own rule: an unrun gate must never read like a
-            # passed one. `stage` already carries this in its own `skipped`
-            # list; the gate is the same one, and it is not run here either.
-            not_run.append(
-                NOT_RUN_PREFIX + "the game-revision gate: no game directory is configured, so the "
-                "bundle's Unity revision was not held against the installed game's. Set "
-                "SEVEN_DAYS_TO_DIE_DIR."
-            )
+        # `build` stamps. That fallback gates the bundle against the revision
+        # it was written at, which is not the same gate: nothing here was
+        # checked against an installed game, so the line is emitted whether or
+        # not the config recorded a version.
+        expected_version = expected_revision(config)
+        not_run.append(
+            NOT_RUN_PREFIX + "the game-revision gate: no game directory is configured, so the "
+            "bundle's Unity revision was not held against the installed game's. Set "
+            "SEVEN_DAYS_TO_DIE_DIR."
+        )
     validate_bundle(config.bundle_output, expected_version, bundle_info)
     if assets is None:
         assets = manifest_assets(config.tracked_manifest)

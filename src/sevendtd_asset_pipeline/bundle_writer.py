@@ -752,36 +752,7 @@ def mesh_prefab(
         BundleObject(
             MESH_RENDERER,
             "",
-            {
-                "m_GameObject": Ref(game_object),
-                "m_Enabled": True,
-                "m_CastShadows": 1,
-                "m_ReceiveShadows": 1,
-                "m_DynamicOccludee": 1,
-                "m_StaticShadowCaster": 0,
-                "m_MotionVectors": 1,
-                "m_LightProbeUsage": 1,
-                "m_ReflectionProbeUsage": 1,
-                "m_RayTracingMode": 2,
-                "m_RayTraceProcedural": 0,
-                "m_RenderingLayerMask": 1,
-                "m_RendererPriority": 0,
-                # 65535 is Unity's "no lightmap", not a missing value.
-                "m_LightmapIndex": 65535,
-                "m_LightmapIndexDynamic": 65535,
-                "m_LightmapTilingOffset": {"x": 1.0, "y": 1.0, "z": 0.0, "w": 0.0},
-                "m_LightmapTilingOffsetDynamic": {"x": 1.0, "y": 1.0, "z": 0.0, "w": 0.0},
-                "m_Materials": [Ref(key) for key in material_keys],
-                "m_StaticBatchInfo": {"firstSubMesh": 0, "subMeshCount": 0},
-                "m_StaticBatchRoot": NULL_PPTR,
-                "m_ProbeAnchor": NULL_PPTR,
-                "m_LightProbeVolumeOverride": NULL_PPTR,
-                "m_SortingLayerID": 0,
-                "m_SortingLayer": 0,
-                "m_SortingOrder": 0,
-                "m_AdditionalVertexStreams": NULL_PPTR,
-                "m_EnlightenVertexStream": NULL_PPTR,
-            },
+            _mesh_renderer_fields(game_object, material_keys),
             key=f"{name}:renderer",
             in_container=False,
         ),
@@ -1444,6 +1415,21 @@ def _mesh_from_primitive(
     )
 
 
+def _mesh_renderer_fields(game_object: str, material_keys: tuple[str, ...]) -> dict[str, Any]:
+    """Every `MeshRenderer` (class 33) this writer emits, in one place.
+
+    `_renderer_shared` covers the fields class 33 and class 137 agree on; the
+    two Enlighten/vertex-stream pointers belong to class 33's type tree only,
+    and a `SkinnedMeshRenderer` built from the same helper does not carry
+    them. One definition, so a prefab and a hierarchy node cannot serialize
+    the same class differently.
+    """
+    fields = _renderer_shared(game_object, material_keys)
+    fields["m_AdditionalVertexStreams"] = NULL_PPTR
+    fields["m_EnlightenVertexStream"] = NULL_PPTR
+    return fields
+
+
 def _renderer_shared(game_object: str, material_keys: tuple[str, ...]) -> dict[str, Any]:
     return {
         "m_GameObject": Ref(game_object),
@@ -1459,6 +1445,7 @@ def _renderer_shared(game_object: str, material_keys: tuple[str, ...]) -> dict[s
         "m_RayTraceProcedural": 0,
         "m_RenderingLayerMask": 1,
         "m_RendererPriority": 0,
+        # 65535 is Unity's "no lightmap", not a missing value.
         "m_LightmapIndex": 65535,
         "m_LightmapIndexDynamic": 65535,
         "m_LightmapTilingOffset": {"x": 1.0, "y": 1.0, "z": 0.0, "w": 0.0},
@@ -1616,9 +1603,7 @@ def hierarchy_prefab_objects(
                     in_container=False,
                 )
             )
-            renderer_fields = _renderer_shared(go_key, (material_key,))
-            renderer_fields["m_AdditionalVertexStreams"] = NULL_PPTR
-            renderer_fields["m_EnlightenVertexStream"] = NULL_PPTR
+            renderer_fields = _mesh_renderer_fields(go_key, (material_key,))
             node_objects.append(
                 BundleObject(
                     MESH_RENDERER, "", renderer_fields, key=renderer_key, in_container=False

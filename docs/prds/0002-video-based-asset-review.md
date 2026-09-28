@@ -98,10 +98,11 @@ than hard-coding one vendor, exactly as `0001` already requires for audio.
    size, or the source file's hash for an adopted/external asset) in the
    evidence document, so a later revision's review is comparable to the one
    it replaced.
-4. Let `shamway acceptance-provider` generate a `StagedClip`-shaped case
-   (turntable or walk-cycle, per asset kind) instead of only a bare `Live`
-   load, and let `shamway client capture` adopt the resulting clip directory
-   the same way it already adopts a single external screenshot.
+4. Let `shamway acceptance-provider` generate a staged-motion case
+   (`turntable`, `walk-cycle` or `walk-entity`, per asset kind) instead of
+   only a bare `Live` load, and let `shamway client capture` adopt the
+   resulting clip directory the same way it already adopts a single external
+   screenshot.
 5. Make network use, credentials, provider, model, cost exposure, and asset
    disclosure explicit before submission, and preserve the same advisory,
    never-auto-accepting posture `0001` already establishes for audio.
@@ -154,7 +155,7 @@ of playback/spatial/mix context:
 | Field | Meaning |
 |---|---|
 | `purpose` | What the clip is supposed to demonstrate |
-| `camera_path` | `turntable`, `walk-cycle`, `fixed`, or a description |
+| `camera_path` | `turntable`, `walk-cycle`, `walk-entity`, `fixed`, or a description |
 | `desired_qualities` | Proportions, silhouette, material read, timing |
 | `avoid` | Clipping, popping, wrong scale, z-fighting, jitter |
 | `references` | Optional comparison assets, with their purpose stated |
@@ -206,7 +207,8 @@ This PRD adds one optional declaration per mesh/prefab entry, in the mod's
 motion_kinds = { thing = "turntable" }
 ```
 
-A motion kind (`turntable` | `walk-cycle` | `fixed`) changes that entry's
+A motion kind (`turntable` | `walk-cycle` | `walk-entity` | `fixed`,
+`config.MOTION_KINDS`) changes that entry's
 generated look case: `turntable` stages the prefab in front of the camera
 and rotates it one full turn over a `CaseDef.StagedClip` hold, so the
 captured frames prove the silhouette from every side; `walk-cycle` generates
@@ -215,7 +217,14 @@ a `CaseDef.Live` case that equips the item on the player
 (`Helpers.BeginClip`/`EndClip`) while the player actually walks with stock
 autorun (`Helpers.StartWalk`), then stops both — the motion is the game's own
 animation, not a staged spin, and a walk-cycle declared on a non-wearable
-asset fails the case rather than holding silently; `fixed` keeps today's
+asset fails the case rather than holding silently; `walk-entity` generates a
+`CaseDef.WalkEntity` case that spawns the stem's entity class beside the
+player (`EntityFactory.CreateEntity` + `SpawnEntityInWorld`) and drives it
+forward, so the avatar controller plays the walk gait and the game's own
+physics grounds the feet — a second `<mod>_<stem>_prefab_look` suite stages
+the identical prefab without that engine wrapper, which is the control that
+separates an asset draw failure from entity setup
+([authoring/entities.md](../authoring/entities.md)); `fixed` keeps today's
 generation byte-for-byte — a world-fixed thing has no motion worth
 capturing. The `Live`/`Staged` load case stays in every case: a clip is
 motion evidence, not the load gate. When the field is absent, generation is
@@ -371,7 +380,9 @@ in-repo provider adapter (the gateway owns that surface).
   `test_an_earlier_evidence_document_is_never_overwritten_by_default`,
   `test_two_reviews_of_one_candidate_are_both_preserved`).
 - [x] Goal 4: a mesh/prefab declared with a `turntable` or `walk-cycle` motion
-  kind generates a `CaseDef.StagedClip` case; one without a declaration, or
+  kind generates a `CaseDef.StagedClip` case, and a `walk-entity` one
+  generates a `CaseDef.WalkEntity` case plus its separate
+  `<mod>_<stem>_prefab_look` control; one without a declaration, or
   with `fixed`, generates today's cases byte-for-byte unchanged
   (`MotionKindTests`).
 - [x] Goal 4: `client capture --clip` adopts an externally captured clip
@@ -389,8 +400,8 @@ in-repo provider adapter (the gateway owns that surface).
   the running tool on 2026-08-25; `OperationSurfaceTests` pins the registry
   side)
 - [x] Offline tests pass with stubbed runners and no network. (`make check
-  test`; the shader-writer and packaged-mirror failures are the pre-existing
-  baseline, present on main)
+  test`; the only skipped cases are the opt-in live-provider runs in
+  `tests/test_video_review_live.py`)
 - [x] A fresh client stages and plays the reviewed candidate's clip in its
   intended path. Recorded 2026-08-25 on a real client: a synthesized box
   bundle was staged in game by the generated `CaseDef.StagedClip` turntable

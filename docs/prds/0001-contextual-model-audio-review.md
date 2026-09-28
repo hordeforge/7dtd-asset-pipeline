@@ -271,11 +271,18 @@ It does not add a generator, prompt kind, host script, or Unity editor script.
 
 ## Open questions
 
-- Which provider adapter should ship first, based on non-speech audio
-  understanding, structured output, retention controls, cost, and SDK weight?
-- Should raw provider responses be retained by default, opt-in, or never, given
-  their debugging value and possible sensitive metadata?
-- Should the versioned default rubric live as package data or Python data, and
-  how should consuming mods extend it without making results incomparable?
+- ~~Which provider adapter should ship first, based on non-speech audio
+  understanding, structured output, retention controls, cost, and SDK weight?~~
+  **Resolved**: gemini, behind one resolve point in `providers/`
+  (`audio_review.py`), so a second adapter does not change the operation.
+- ~~Should raw provider responses be retained by default, opt-in, or never,
+  given their debugging value and possible sensitive metadata?~~ **Resolved**:
+  opt-in through `--keep-raw-response`; an unredacted response is never stored
+  by default.
+- ~~Should the versioned default rubric live as package data or Python data?~~
+  **Resolved**: Python data (`RUBRIC_VERSION`, `BASE_RUBRIC`, `LOOP_RUBRIC` in
+  `audio_review.py`). **Open**: how a consuming mod extends it without making
+  its results incomparable with the defaults.
 - Which consuming-project policy, if any, may require advisory review before
-  promotion while still making human sign-off the final authority?
+  promotion while still making human sign-off the final authority? **Open**:
+  nothing in the pipeline reads a promotion policy; a mod enforces it.

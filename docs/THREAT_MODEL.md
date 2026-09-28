@@ -31,8 +31,8 @@ by data the operator did not write.
 | # | Risk | Boundary | Where | Severity |
 |---|---|---|---|---|
 | R1 | Four host tools are downloaded and installed as executables with no checksum, from a moving `releases/latest` URL | install script → host | `scripts/install-tools.sh:766`, `:809`, `:858`, `:886` | High |
-| R2 | A modlet is copied into the shared client `Mods/` directory, and the destination base is operator-supplied with no containment check | build tree → live game client | `src/sevendtd_asset_pipeline/client.py:540`, `:1377`, `:568` | High |
-| R3 | Asset bytes leave the host to a third-party model endpoint, and the gateway result is stored without redaction | host → third-party API | `src/sevendtd_asset_pipeline/providers/gemini.py:104`, `video_review.py:392`, `video_review.py:720` | High |
+| R2 | A modlet is copied into the shared client `Mods/` directory, and the destination base is operator-supplied with no containment check | build tree → live game client | `src/sevendtd_asset_pipeline/client.py:643`, `:1375`, `:689` | High |
+| R3 | Asset bytes leave the host to a third-party model endpoint, and the gateway result is stored without redaction | host → third-party API | `src/sevendtd_asset_pipeline/providers/gemini.py:104`, `video_review.py:625`, `video_review.py:679` | High |
 | R4 | Mod-controlled and downloaded binary files are parsed in-process with length checks but no size ceilings | file → parser | `src/sevendtd_asset_pipeline/gltf_scene.py:152`, `generators/bind.py:704`, `shader_blob.py:666` | Medium |
 | R5 | Mod XML is parsed with the stdlib parser, with no hardened configuration | mod tree → parser | `src/sevendtd_asset_pipeline/references.py:51` | Medium |
 | R6 | `serve` has no caller identity: any process that can write the pipe may invoke operations, and only `writes` gates them | process → IPC | `src/sevendtd_asset_pipeline/serve.py:67` | Medium |
@@ -98,7 +98,7 @@ Secrets: `GEMINI_API_KEY` or `GOOGLE_API_KEY` enter from the environment
 (`providers/gemini.py:60`), travel as an `x-goog-api-key` header rather than
 a query string (`providers/gemini.py:107`), and are never placed in argv. The
 video gateway inherits the parent environment
-(`video_review.py:392`), so every key in the operator's environment reaches
+(`video_review.py:333`), so every key in the operator's environment reaches
 that child. There is no rotation path in this repository: keys live in the
 operator's environment and are revoked there.
 
@@ -121,11 +121,11 @@ operator's environment and are revoked there.
 ### Mod author → pipeline (STRIDE)
 
 - **Tampering.** A crafted `ModInfo.xml` or manifest steers bundle resolution;
-  the traversal guard covers the URI path (`references.py:153`) and nothing
+  the traversal guard covers the URI path (`references.py:184`) and nothing
   else.
 - **Information disclosure.** A bundle URI that resolves outside the mod root
   is refused, so a mod cannot read the operator's tree; the case-insensitive
-  walk also refuses a case collision (`references.py:159`).
+  walk also refuses a case collision (`references.py:191`).
 - **Denial of service.** No bundle size, member count, or vertex count ceiling
   exists in the writer, so a large source exhausts memory in the build
   process rather than failing fast.
@@ -146,12 +146,12 @@ operator's environment and are revoked there.
 ### Host → third-party API
 
 - **Information disclosure.** Clip bytes and the intent document are uploaded
-  deliberately, behind `--allow-network` (`audio_review.py:542`). The gate
+  deliberately, behind `--allow-network` (`audio_review.py:514`). The gate
   precedes credential read and socket open.
 - **Information disclosure, second path.** The gateway's whole `error`
   envelope is written into the evidence document unredacted
-  (`video_review.py:720`), and `evidence.redact` drops mapping keys only
-  (`evidence.py:46`), so a credential in free text survives.
+  (`video_review.py:679`), and `evidence.redact` drops mapping keys only
+  (`evidence.py:84`), so a credential in free text survives.
 
 ### Host → release servers (R1)
 
@@ -206,17 +206,17 @@ operator's environment and are revoked there.
 
 | Control | Covers | Location |
 |---|---|---|
-| `--allow-network` gate, default off | unwanted upload | `audio_review.py:542`, `video_review.py:509`, `api.py:269` |
+| `--allow-network` gate, default off | unwanted upload | `audio_review.py:514`, `video_review.py:476`, `api.py:269` |
 | API key in a header, never in argv | credential leak via the process table | `providers/gemini.py:107` |
 | Fixed API hosts, https-only redirects | endpoint substitution | `providers/gemini.py:29`, `install-tools.sh:15` |
 | Download digest comparison, refusal when none is published | supply chain on the editor, `unityz`, uv, vkd3d, and Blender downloads | `install-tools.sh:552`, `scripts/install-unityz.sh:165` |
-| URI traversal refusal for bundle and glTF paths | filesystem escape | `references.py:153`, `gltf_scene.py:180` |
+| URI traversal refusal for bundle and glTF paths | filesystem escape | `references.py:184`, `gltf_scene.py:181` |
 | Deploy name validation, symlink refusal, mod-root refusal | writes outside the intended directory | `client.py:458`, `:484`, `:544` |
 | `flock` held across the deploy write | a second session clobbering a live run | `client.py:1384` |
 | `shell=True` absent; argv arrays everywhere | command injection | repo-wide; `scripts.py:106` |
 | Script registry allowlist | running an arbitrary file | `scripts.py:81` |
 | Staged then atomically replaced writes | partial artifact on failure | `atomic.py:25`, `client.py:569` |
-| Evidence redaction of sensitive keys | secrets in stored evidence | `evidence.py:46` |
+| Evidence redaction of sensitive keys | secrets in stored evidence | `evidence.py:84` |
 | Unknown config keys refused | silent misconfiguration | `config.py:91` |
 | `serve` write gate | accidental mutation over a pipe | `serve.py:67` |
 
@@ -225,10 +225,10 @@ operator's environment and are revoked there.
 1. **R1**: unverified executable downloads. Highest impact on this host, and
    the only gap with a direct path to arbitrary code execution.
 2. **R2**: `--mods-dir` is joined without a containment check
-   (`client.py:540`), and `shutil.rmtree(destination)` (`client.py:568`)
+   (`client.py:643`), and `shutil.rmtree(destination)` (`client.py:689`)
    deletes it on a replace. The name is validated; the base is not.
-3. **R3**: the unredacted gateway envelope (`video_review.py:720`) and the
-   free-text hole in `redact` (`evidence.py:46`).
+3. **R3**: the unredacted gateway envelope (`video_review.py:679`) and the
+   free-text hole in `redact` (`evidence.py:84`).
 4. **R4/R5**: no size ceilings in the parsers, and the hardened XML parser
    is conditional on an optional dependency.
 5. **R6**: no authentication on the `serve` pipe beyond the `writes` flag.
@@ -286,7 +286,7 @@ investigate from:
   (`capture.py:184`); every other event in the offline gates leaves a console
   line and no file.
 - Model reviews write an evidence document with a content hash
-  (`audio_review.py:812`), which is the strongest trail in the tool.
+  (`audio_review.py:688`), which is the strongest trail in the tool.
 
 ## Keeping this current
 

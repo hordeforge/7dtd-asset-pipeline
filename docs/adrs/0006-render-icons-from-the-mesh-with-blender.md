@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted (2026-08-24).
+Accepted (2026-08-24). Partially superseded the same day: the material premise
+in Context ("there was no material on this path") was overtaken by
+[ADR 0001](0001-synthesize-bundles-without-an-editor.md)'s shipped shader and
+material rows. The decision itself stands, for the reason Context restates
+under "Superseded in part, same day".
 
 ## Context
 

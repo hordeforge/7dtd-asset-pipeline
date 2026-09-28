@@ -119,7 +119,8 @@ class StatusTests(unittest.TestCase):
         self.config.bundle_output.write_bytes(unityfs_bundle([1, 142]))
         self.config.tracked_manifest.parent.mkdir(parents=True, exist_ok=True)
         self.config.tracked_manifest.write_text(
-            "Assets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n", encoding="utf-8"
+            "ManifestFileVersion: 0\nAssets:\n- Assets/ModAssets/Bundle/exampleThing.prefab\n",
+            encoding="utf-8",
         )
         self.config.config_dir.mkdir()
         (self.config.config_dir / "blocks.xml").write_text(

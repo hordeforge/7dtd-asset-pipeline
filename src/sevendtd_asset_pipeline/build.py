@@ -282,12 +282,22 @@ def stage_bundle(
             "success while stripping engine-module classes would not be caught here. "
             "Pass --log with the log that built this bundle."
         )
-    expected_version = game_unity_version(config.game_dir)[0] if config.game_dir else None
-    if expected_version is None:
+    # The same revision `build` stamps and `validate` gates on (see
+    # validation.expected_revision), so a bundle staged here is not refused by
+    # the next `validate` for carrying the revision the mod itself records.
+    expected_version = (
+        game_unity_version(config.game_dir)[0] if config.game_dir else config.unity_version or None
+    )
+    if not config.game_dir:
+        against = (
+            f"the mod's own recorded [unity] version {expected_version}"
+            if expected_version
+            else "nothing, because the mod records no [unity] version either"
+        )
         skipped.append(
             "the game-revision gate: no game directory is configured, so the bundle's "
-            "Unity revision was not held against the installed game's. Set "
-            "SEVEN_DAYS_TO_DIE_DIR."
+            "Unity revision was not held against an installed game's; it was checked "
+            f"against {against}. Set SEVEN_DAYS_TO_DIE_DIR."
         )
     validate_bundle(bundle, expected_version)
     reject_ambiguous_stems(manifest_assets(manifest))

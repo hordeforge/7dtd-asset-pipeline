@@ -132,6 +132,11 @@ def read_png_header(path: Path) -> tuple[int, int, int, int]:
             width, height, depth, colour = struct.unpack(">IIBB", handle.read(10))
     except OSError as exc:
         raise PipelineError(f"cannot read {path}: {exc}") from exc
+    except struct.error as exc:
+        # A truncated PNG ends mid-chunk; every other failure on this boundary
+        # is a PipelineError, and a traceback out of an atlas scan loses the
+        # report on every other icon in it.
+        raise PipelineError(f"{path} is a truncated PNG: {exc}") from exc
     return width, height, depth, colour
 
 

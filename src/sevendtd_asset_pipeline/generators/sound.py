@@ -755,6 +755,11 @@ def main(argv: list[str] | None = None) -> int:
 
     generator = random.Random(args.seed)  # noqa: S311 - seeded waveform noise, not secrets
     if args.command == "blast":
+        # A non-positive duration samples no frames, and the drift removal
+        # indexes the sample list it did not fill. whoosh and bomb-whistle
+        # already refuse; this is its twin.
+        if args.seconds <= 0:
+            raise SystemExit("ERROR: --seconds must be positive")
         duration = args.seconds or (15.0 if args.distant else 11.0)
         samples = blast(duration, generator, args.distant)
     elif args.command == "nuclear-blast":

@@ -491,9 +491,29 @@ def record_existing_clip(
 
 
 def _looks_like_a_clip(directory: Path) -> bool:
-    return any(
-        entry.is_file() and entry.suffix.lower() in _CLIP_SUFFIXES for entry in directory.iterdir()
-    )
+    """Whether this directory holds clip media, at the top level or nested.
+
+    A harness nests its frames one level down (`<case>/cam/frame-0000.png`),
+    and `_skip_non_media` descends to copy them, so the check that admits the
+    directory has to look where the copy looks.
+    """
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        return False
+    for entry in entries:
+        if entry.is_file() and entry.suffix.lower() in _CLIP_SUFFIXES:
+            return True
+        if entry.is_dir() and not entry.is_symlink():
+            try:
+                if any(
+                    nested.is_file() and nested.suffix.lower() in _CLIP_SUFFIXES
+                    for nested in entry.iterdir()
+                ):
+                    return True
+            except OSError:
+                continue
+    return False
 
 
 def _skip_non_media(directory: str, names: list[str]) -> set[str]:

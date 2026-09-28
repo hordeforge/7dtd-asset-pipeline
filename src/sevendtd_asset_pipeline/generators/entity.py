@@ -1361,10 +1361,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--entity-name", default=None, help="entity_class name (default: stem)")
     parser.add_argument(
         "--entity-class",
-        default="EntityAnimalStag",
+        default="EntityAnimalSnake",
         help="the C# entity type emitted as Class for an animated creature"
-        " (default: EntityAnimalStag — the game's concrete wandering animal)."
-        " A mod's own entity type name works too",
+        " (default: EntityAnimalSnake, the game's concrete EntityAlive sub-type"
+        " that a generated rig animates as itself; a stock animal type such as"
+        " EntityAnimalStag binds a pre-authored model and a PhysicsBody whose"
+        " bone paths this rig does not have). A mod's own entity type name"
+        " works too",
     )
     parser.add_argument(
         "--minimal-entity",

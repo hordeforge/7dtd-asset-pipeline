@@ -556,14 +556,19 @@ def _print_review(report: dict[str, Any], *, usage: dict[str, Any] | None = None
 
 
 def _resolve_version(args: argparse.Namespace, demand: str) -> str:
-    """The revision a bundle must carry: detected from the game, or named."""
+    """The revision a bundle must carry: named, or detected from the game.
+
+    The named revision wins, as `call pack`'s parameter does: `--unity-version`
+    is documented as the fallback the game directory defaults to, and a caller
+    who names one is building for it even on a machine with a game installed.
+    """
+    if getattr(args, "unity_version", None):
+        named: str = args.unity_version
+        return named
     if args.game_dir:
         version, source = game_unity_version(args.game_dir.resolve())
         print(f"Detected Unity {version} from {source}")
         return version
-    if args.unity_version:
-        named: str = args.unity_version
-        return named
     raise PipelineError(demand)
 
 

@@ -1562,6 +1562,11 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
         print(f"deployed {name} to {mods_dir / name}: {', '.join(copied)}")
         return 0
     if args.command == "launch":
+        if args.run_seconds is not None and args.run_seconds < 0:
+            # time.sleep raises a bare ValueError, and a traceback names
+            # neither the flag nor the command; every other boundary here
+            # refuses with a single ERROR line.
+            raise PipelineError("--run-seconds must not be negative")
         run = fresh_client_run(
             game_dir,
             args.mod_name,
@@ -1591,11 +1596,14 @@ def _dispatch(args: argparse.Namespace, game_dir: Path | None) -> int:
         return completed.returncode
     if args.command == "log":
         path = args.path or latest_client_log(args.log_dir or client_log_dir(game_dir))
-        report = scan_log(
-            path,
-            args.mod_name,
-            ships_localization(user_mods_dir(game_dir), args.mod_name),
-        )
+        # The Mods/ directory only refines the verdict (whether a missing
+        # localization line is a failure); a host that cannot derive it can
+        # still classify the log it was handed, so it answers "do not require
+        # it" rather than refusing, the way launch does.
+        mods: Path | None = None
+        with contextlib.suppress(PipelineError, OSError):
+            mods = user_mods_dir(game_dir)
+        report = scan_log(path, args.mod_name, ships_localization(mods, args.mod_name))
         if args.json:
             print(json.dumps(report.as_dict(), indent=2))
         else:
@@ -1664,7 +1672,7 @@ def _capture(args: argparse.Namespace) -> int:
         print("A recorded frame is not a verdict. Only a person signs these off.")
         return 0
 
-    if not args.label:
+    if not args.label.strip():
         raise PipelineError("capture needs a LABEL, or --list to print the manifest")
 
     entry: Capture | ClipCapture

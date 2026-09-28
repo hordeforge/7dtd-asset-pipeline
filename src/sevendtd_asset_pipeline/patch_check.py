@@ -163,7 +163,7 @@ def check_patches(
         if not target.is_file():
             notes.append(f"{patch_file.name}: no stock {stem}.xml to patch it against; not checked")
             continue
-        target_root = _parse_xml(target, patch_file)
+        target_root = _parse_xml(target, target)
         patch_root = _parse_xml(patch_file, patch_file)
         # The patch file's children ARE the operations. The root tag of a mod
         # patch is usually '<configs>'; the engine applies each child element.

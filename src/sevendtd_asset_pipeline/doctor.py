@@ -336,7 +336,16 @@ def _editor_checks(config: PipelineConfig) -> list[Check]:
         ]
     checks = [
         Check("OK", "Unity editor", f"{editor} ({reported})"),
-        Check("OK", "Windows support", str(windows)),
+        # Only claimed when the module is there. A target that is not Windows
+        # never needs it, and reporting the path of a file that is not
+        # installed reads as a check that passed.
+        Check("OK", "Windows support", str(windows))
+        if windows.is_file()
+        else Check(
+            "WARN",
+            "Windows support",
+            f"not installed, and not needed by {config.target}: {windows}",
+        ),
     ]
     checks.append(editor_matches_project(reported, config))
     return checks

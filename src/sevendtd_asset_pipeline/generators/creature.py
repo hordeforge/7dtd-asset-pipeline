@@ -64,8 +64,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--entity-name", default=None, help="entity_class name (default: stem)")
     parser.add_argument(
         "--entity-class",
-        default="EntityAnimalStag",
-        help="the C# entity type emitted as Class for an animated creature",
+        default="EntityAnimalSnake",
+        help="the C# entity type emitted as Class for an animated creature"
+        " (default: EntityAnimalSnake, matching `generate entity`; a stock"
+        " animal type binds a pre-authored model this rig does not have)",
     )
     parser.add_argument(
         "--minimal-entity",

@@ -465,10 +465,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.atlas:
         try:
             manifest = json.loads(Path(args.atlas).read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
+        except OSError as error:
             raise SystemExit(
                 f"ERROR: cannot read the atlas manifest {args.atlas}: {error}"
             ) from error
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"ERROR: {args.atlas} is not valid JSON: {exc}") from None
+        if not isinstance(manifest, dict):
+            raise SystemExit(f"ERROR: {args.atlas} is not an atlas manifest object")
         cells = manifest.get("parts")
         roles = manifest.get("roles")
         grid = manifest.get("grid")

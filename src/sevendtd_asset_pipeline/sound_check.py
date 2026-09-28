@@ -133,9 +133,16 @@ def check_sound(
         raise PipelineError(f"{clip} contains no audio frames")
 
     frames = len(samples) // channels
-    # The downmix stays an array too, for the same reason as in _read: the
-    # zip groups one frame's channels at C speed and the generator is drained
-    # straight into the buffer, so no per-sample list is ever built.
+    # Every measurement is taken on the clip's own samples, per channel. A
+    # stereo file downmixed first measures the difference between its channels,
+    # not its level: a clip hard-panned left reads as digital silence, and one
+    # clipping in a single channel reports none.
+    peak = max(map(abs, samples))
+    clipped = sum(1 for value in samples if value >= 32767 or value <= -32767)
+    rms = math.sqrt(sum(value * value for value in samples) / len(samples))
+    mean = sum(samples) / len(samples)
+    # The edge scan is about where audible content starts and stops, so it runs
+    # on the frame-wise downmix and keeps the mono argument it was written for.
     mono = (
         samples
         if channels == 1
@@ -146,10 +153,6 @@ def check_sound(
             (int(sum(frame) / channels) for frame in zip(*[iter(samples)] * channels, strict=True)),
         )
     )
-    peak = max(map(abs, mono))
-    clipped = sum(1 for value in mono if value >= 32767 or value <= -32767)
-    rms = math.sqrt(sum(value * value for value in mono) / len(mono))
-    mean = sum(mono) / len(mono)
     leading, trailing = _silence_edges(mono, rate, silence_floor)
 
     problems: list[str] = []

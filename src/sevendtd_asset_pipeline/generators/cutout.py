@@ -335,6 +335,14 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     require_imaging()
+    # A zero or negative cell either raises inside Pillow or silently skips
+    # the resize, writing a source-sized card the caller asked to be 160 px.
+    if args.size is not None and args.size < 1:
+        raise SystemExit("ERROR: --size must be at least 1 pixel")
+    if args.pad is not None and not 0 < args.pad <= 1:
+        raise SystemExit("ERROR: --pad must be greater than 0 and at most 1")
+    if args.pad is not None and not args.size:
+        raise SystemExit("ERROR: --pad is a fraction of --size, so --size is required with it")
     if not args.source.is_file():
         raise SystemExit(f"ERROR: no such image: {args.source}")
     with Image.open(args.source) as opened:

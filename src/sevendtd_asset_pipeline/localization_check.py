@@ -219,10 +219,13 @@ def check_localization(
             "strings, so a lookup that compares them does not match; spell the key in "
             "Config/ exactly as the table spells it, composed (NFC)."
         )
-    if (
-        game_dir is not None
-        and not (Path(game_dir) / "Data" / "Config" / LOCALIZATION_FILENAME).is_file()
-    ):
+    if game_dir is None:
+        notes.append(
+            "the game's Localization.csv was never looked for, because no game directory "
+            "is configured; every vanilla key is reported as missing. Set "
+            "SEVEN_DAYS_TO_DIE_DIR, or pass --no-vanilla-keys, to know the difference"
+        )
+    elif not (Path(game_dir) / "Data" / "Config" / LOCALIZATION_FILENAME).is_file():
         notes.append("the game's Localization.csv was not found; vanilla keys were not checked")
 
     return LocalizationReport(

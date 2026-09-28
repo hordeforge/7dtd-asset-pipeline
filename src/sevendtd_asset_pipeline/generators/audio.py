@@ -149,6 +149,10 @@ def main(argv: list[str] | None = None) -> int:
     tone.add_argument("--seed", type=int, default=0, help="recorded seed keeps output reproducible")
 
     args = parser.parse_args(argv)
+    if getattr(args, "rate", None) is not None and args.rate < 1:
+        # wave refuses a zero rate with a wave.Error that names neither the
+        # flag nor the command; every other boundary here says which one.
+        raise SystemExit("ERROR: --rate must be at least 1 Hz")
 
     if args.command == "report":
         samples, channels, rate = read_wav(args.clip)

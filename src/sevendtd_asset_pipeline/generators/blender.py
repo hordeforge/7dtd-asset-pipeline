@@ -41,9 +41,10 @@ def find_blender() -> str | None:
 def run_script(blender: str, script: Path, arguments: Sequence[str]) -> tuple[int, str] | None:
     """Run `script` headless, returning its exit code and combined output.
 
-    `None` means Blender was killed for exceeding `BLENDER_TIMEOUT`, and the
-    reason is already on stderr. Every other failure is the caller's to judge,
-    because only the caller knows what the script was supposed to write.
+    `None` means Blender could not be run, or was killed for exceeding
+    `BLENDER_TIMEOUT`, and the reason is already on stderr. Every other failure
+    is the caller's to judge, because only the caller knows what the script was
+    supposed to write.
     """
     try:
         result = subprocess.run(
@@ -69,5 +70,14 @@ def run_script(blender: str, script: Path, arguments: Sequence[str]) -> tuple[in
             "a wedged headless start is the usual cause.",
             file=sys.stderr,
         )
+        return None
+    except OSError as exc:
+        # `find_blender` resolved a path a moment ago; between that and the
+        # exec it can lose its executable bit, be replaced by a build for
+        # another architecture, or sit on a filesystem that reports ENOEXEC.
+        # That is a fact about the host the caller can report, not a traceback
+        # out of a generator, and it is the same "could not run" answer the
+        # timeout gives.
+        print(f"ERROR: could not run Blender at {blender}: {exc}", file=sys.stderr)
         return None
     return result.returncode, result.stdout

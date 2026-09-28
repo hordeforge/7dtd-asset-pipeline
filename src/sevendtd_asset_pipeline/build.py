@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 from . import atomic
@@ -202,7 +203,17 @@ def run_build(
     ]
     if probe:
         command.append("-sapProbe")
-    result = run_unity(command, timeout=timeout, log=log)
+    try:
+        result = run_unity(command, timeout=timeout, log=log)
+    except subprocess.TimeoutExpired as exc:
+        # TimeoutExpired is a SubprocessError, not a TimeoutError, so without
+        # this it escapes cli.main's handler as a raw traceback over the one
+        # failure surface `build` promises. run_unity has already killed the
+        # editor and its workers, and the log it managed to write is named.
+        raise PipelineError(
+            f"Unity did not finish building within {timeout}s and was killed; its "
+            f"partial log is {log}. Rule out a hang before raising the limit."
+        ) from exc
     if result.returncode != 0:
         raise PipelineError(f"Unity exited {result.returncode}; inspect {log}")
     built = output / built_name

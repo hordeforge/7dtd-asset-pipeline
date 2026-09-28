@@ -862,6 +862,51 @@ class GeminiFaultTests(unittest.TestCase):
             provider.review(request)
         self.assertEqual(1, urlopen.call_count)
 
+    def test_a_transport_failure_is_resubmitted_and_can_succeed(self) -> None:
+        """A connection that never produced a response cost the provider nothing."""
+        import urllib.error
+
+        provider = GeminiProvider()
+        request = ReviewRequest(prompt="x", audios=(), model="gemini-2.5-flash", timeout_seconds=1)
+        body = json.dumps(
+            {
+                "candidates": [{"content": {"parts": [{"text": "{}"}]}, "finishReason": "STOP"}],
+                "modelVersion": "gemini-2.5-flash",
+            }
+        ).encode("utf-8")
+        with (
+            mock.patch.dict("os.environ", {"GEMINI_API_KEY": "k"}, clear=True),
+            mock.patch(
+                "urllib.request.urlopen",
+                side_effect=[urllib.error.URLError("connection reset"), _JsonResponse(body)],
+            ) as urlopen,
+            mock.patch("time.sleep") as sleep,
+        ):
+            response = provider.review(request)
+        self.assertEqual(2, urlopen.call_count)
+        self.assertEqual(1, sleep.call_count)
+        self.assertTrue(
+            all(call.args[0] <= MAX_RETRY_DELAY_SECONDS for call in sleep.call_args_list)
+        )
+        self.assertEqual("{}", response.raw_text)
+
+    def test_a_transport_failure_gives_up_inside_the_attempt_budget(self) -> None:
+        """Bounded, like the status retries: never a loop that multiplies cost."""
+        import urllib.error
+
+        provider = GeminiProvider()
+        request = ReviewRequest(prompt="x", audios=(), model="gemini-2.5-flash", timeout_seconds=1)
+        with (
+            mock.patch.dict("os.environ", {"GEMINI_API_KEY": "k"}, clear=True),
+            mock.patch(
+                "urllib.request.urlopen", side_effect=urllib.error.URLError("no route to host")
+            ) as urlopen,
+            mock.patch("time.sleep"),
+            self.assertRaisesRegex(PipelineError, "could not be reached after 3 attempt"),
+        ):
+            provider.review(request)
+        self.assertEqual(MAX_ATTEMPTS, urlopen.call_count)
+
 
 class _JsonResponse(io.BytesIO):
     """The bytes of a provider answer, shaped like the real HTTP response."""

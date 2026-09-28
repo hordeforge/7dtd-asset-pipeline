@@ -55,6 +55,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from .errors import PipelineError
+
 # How many times a build may be retried after an abort that never reached a
 # bundle. Two extra attempts: enough for an intermittent crash observed at
 # roughly one in six, few enough that a genuinely broken project fails in under
@@ -137,12 +139,18 @@ def _run(command: Sequence[str], timeout: float | None) -> subprocess.CompletedP
     tests) can observe it exactly as before.
     """
     if timeout is None:
-        return subprocess.run(list(command), check=False)
-    process = subprocess.Popen(
-        list(command),
-        # False where there are no sessions (Windows); True nowhere else.
-        start_new_session=hasattr(os, "setsid"),
-    )
+        try:
+            return subprocess.run(list(command), check=False)
+        except OSError as exc:
+            raise _cannot_start(command, exc) from exc
+    try:
+        process = subprocess.Popen(
+            list(command),
+            # False where there are no sessions (Windows); True nowhere else.
+            start_new_session=hasattr(os, "setsid"),
+        )
+    except OSError as exc:
+        raise _cannot_start(command, exc) from exc
     try:
         returncode = process.wait(timeout=timeout)
     except BaseException:
@@ -155,6 +163,20 @@ def _run(command: Sequence[str], timeout: float | None) -> subprocess.CompletedP
         _kill_group(process)
         raise
     return subprocess.CompletedProcess(list(command), returncode)
+
+
+def _cannot_start(command: Sequence[str], exc: OSError) -> PipelineError:
+    """The editor could not be exec'd at all.
+
+    `doctor` checks that `UNITY_EDITOR` is an executable file, but the exec can
+    still fail afterwards: the install moved, the binary is a build for another
+    architecture, the mount went away. Every caller of `run_unity` is a
+    command whose one promised failure surface is a single `ERROR:` line, so
+    the fact belongs here rather than arriving as an `OSError` traceback from
+    each of the three call sites.
+    """
+    editor = command[0] if command else "the editor"
+    return PipelineError(f"cannot run the Unity editor at {editor}: {exc}")
 
 
 def _kill_group(process: subprocess.Popen[bytes]) -> None:

@@ -113,13 +113,30 @@ def main(argv: list[str] | None = None) -> int:
         command.append("-noq")
 
     try:
-        result = subprocess.run(
-            command,
-            check=False,
-            timeout=GLTFPACK_TIMEOUT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
+        try:
+            result = subprocess.run(
+                command,
+                check=False,
+                timeout=GLTFPACK_TIMEOUT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+        except subprocess.TimeoutExpired:
+            # A wedged gltfpack is killed by the bound; the staged name is taken
+            # by the finally below. Reported like any other tool failure, not as
+            # a TimeoutExpired traceback out of the generator.
+            print(
+                f"ERROR: gltfpack did not finish within {GLTFPACK_TIMEOUT}s and was killed",
+                file=sys.stderr,
+            )
+            return 1
+        except OSError as exc:
+            # `shutil.which` resolved gltfpack above, so this is a host that
+            # changed under the run: the binary lost its executable bit, or is a
+            # build for another architecture. Either way the operator needs to
+            # see it, not a traceback out of a mesh lane.
+            print(f"ERROR: could not run gltfpack at {gltfpack}: {exc}", file=sys.stderr)
+            return 1
         if result.returncode != 0 or not staged.is_file():
             print(result.stdout.decode("utf-8", errors="replace").strip(), file=sys.stderr)
             print(f"ERROR: gltfpack exited {result.returncode}", file=sys.stderr)

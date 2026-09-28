@@ -564,11 +564,17 @@ def run_held_command(argv: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
     for the editor's AssetImportWorkers. Where there are no process groups
     (Windows) the direct-child kill is all the platform offers.
     """
-    process = subprocess.Popen(
-        list(argv),
-        # False where there are no sessions (Windows); True nowhere else.
-        start_new_session=hasattr(os, "setsid"),
-    )
+    try:
+        process = subprocess.Popen(
+            list(argv),
+            # False where there are no sessions (Windows); True nowhere else.
+            start_new_session=hasattr(os, "setsid"),
+        )
+    except OSError as exc:
+        # Nothing was started, so there is nothing to reap and the lock is
+        # released by the caller's context. The command is the operator's own
+        # argv, so naming it is the whole of the context they need.
+        raise PipelineError(f"cannot run {argv[0] if argv else 'the command'}: {exc}") from exc
     try:
         returncode = process.wait()
     except BaseException:

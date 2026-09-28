@@ -56,6 +56,12 @@ def _run(command: list[str], timeout: int, what: str) -> None:
         )
     except FileNotFoundError as exc:  # pragma: no cover - guarded by the caller
         raise PipelineError(f"{command[0]} is not on PATH: {exc}") from exc
+    except OSError as exc:
+        # A resolved converter can still fail to exec: no executable bit, a
+        # build for another architecture, a mount that went away. Same question
+        # as "not on PATH", answered the same way instead of as a traceback out
+        # of an asset lane.
+        raise PipelineError(f"cannot run {command[0]} to convert {what}: {exc}") from exc
     except subprocess.TimeoutExpired as exc:
         raise PipelineError(f"{command[0]} did not finish converting {what} in {timeout}s") from exc
     if result.returncode != 0:

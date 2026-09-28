@@ -422,6 +422,13 @@ def _compile(argv: list[str], tool: str, what: str) -> subprocess.CompletedProce
         raise PipelineError(
             f"{tool} did not finish {what} within {SHADER_COMPILE_TIMEOUT}s and was killed"
         ) from exc
+    except OSError as exc:
+        # The binary was resolved with `shutil.which` before this call, so the
+        # exec can still fail on a host that changed under the run (no
+        # executable bit, a build for another architecture, a vanished mount).
+        # A shader lane that reports a traceback here tells the operator nothing
+        # about the tool they were pointed at.
+        raise PipelineError(f"cannot run {tool} to {what}: {exc}") from exc
 
 
 def compile_hlsl(source: str, profile: str) -> bytes:

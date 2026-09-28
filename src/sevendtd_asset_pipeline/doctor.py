@@ -331,6 +331,12 @@ def _editor_checks(config: PipelineConfig) -> list[Check]:
         )
     except subprocess.TimeoutExpired:
         return [Check("FAIL", "Unity editor", "Unity -version did not finish within 30 seconds")]
+    except OSError as exc:
+        # The executable bit was checked above, but the editor can still be
+        # unrunnable: a build for another architecture, a mount that went
+        # away, a stub the loader refuses. A check whose whole job is to report
+        # a verdict must report one here rather than abort the report.
+        return [Check("FAIL", "Unity editor", f"cannot run {editor} -version: {exc}")]
     reported = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "unknown"
     if result.returncode != 0:
         return [

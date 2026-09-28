@@ -50,12 +50,13 @@ MAX_REQUEST_BYTES = 20 * 1024 * 1024
 # invoice.
 MAX_OUTPUT_TOKENS = 8192
 # A 429 or a 5xx is the provider saying it did not take the request, so
-# resubmitting it is not a second billable call. Nothing else is retried: a
-# refused credential, a malformed model id, or a 4xx is this caller's problem
-# and repeating it only multiplies the cost. The budget is three attempts
-# total, and the wait between them is bounded whatever `Retry-After` asks
-# for, because a provider that answers 429 with an hour is not one to sit in
-# front of.
+# resubmitting it is not a second billable call. A transport failure with no
+# response at all says the same thing. Nothing else is retried: a refused
+# credential, a malformed model id, a 4xx, or a read timeout (where the request
+# may have been taken and billed) is this caller's problem and repeating it only
+# multiplies the cost. The budget is three attempts total, and the wait between
+# them is bounded whatever `Retry-After` asks for, because a provider that
+# answers 429 with an hour is not one to sit in front of.
 MAX_ATTEMPTS = 3
 RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 MAX_RETRY_DELAY_SECONDS = 8.0
@@ -186,8 +187,25 @@ class GeminiProvider:
                     "no verdict was produced"
                 ) from exc
             except urllib.error.URLError as exc:
+                # A transport failure (a reset connection, a DNS answer that did
+                # not come back, a proxy that dropped the socket) arrives with no
+                # response, which is the same "the request was not taken"
+                # statement a 5xx makes and belongs to the same attempt budget.
+                # A read timeout is deliberately not here: there the request may
+                # have been taken and billed, and only the caller can judge
+                # whether to submit it again.
+                if attempt < MAX_ATTEMPTS:
+                    time.sleep(
+                        min(
+                            BASE_RETRY_DELAY_SECONDS * 2.0 ** (attempt - 1),
+                            MAX_RETRY_DELAY_SECONDS,
+                        )
+                    )
+                    continue
+                attempts = f" after {attempt} attempt(s)" if attempt > 1 else ""
                 raise PipelineError(
-                    f"provider 'gemini' could not be reached: {exc.reason}; no verdict was produced"
+                    f"provider 'gemini' could not be reached{attempts}: {exc.reason}; "
+                    "no verdict was produced"
                 ) from exc
             except json.JSONDecodeError as exc:
                 raise PipelineError(

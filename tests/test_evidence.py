@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 from sevendtd_asset_pipeline import PipelineError, evidence
 
@@ -190,3 +192,38 @@ class RedactionTests(unittest.TestCase):
         self.assertEqual(
             '{"parameters": {"seed": 3}}', json.dumps(evidence.redact(document), sort_keys=True)
         )
+
+
+class HomeAbbreviationTests(unittest.TestCase):
+    """A stored document must not carry the account name of whoever ran the run."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        patcher = mock.patch.dict(os.environ, {"HOME": self.temporary.name})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.home = os.path.realpath(self.temporary.name)
+
+    def test_a_path_under_the_home_directory_loses_the_account_name(self) -> None:
+        document = {"clip": {"path": f"{self.home}/MyMod/.local/acceptance/thing/frame-0000.png"}}
+        self.assertEqual(
+            {"clip": {"path": "~/MyMod/.local/acceptance/thing/frame-0000.png"}},
+            evidence.redact(document),
+        )
+
+    def test_the_home_directory_alone_becomes_a_tilde(self) -> None:
+        self.assertEqual("~", evidence.abbreviate_home(self.home))
+
+    def test_a_path_outside_the_home_directory_is_left_alone(self) -> None:
+        self.assertEqual("/opt/7DaysToDie/Mods", evidence.abbreviate_home("/opt/7DaysToDie/Mods"))
+
+    def test_a_sibling_sharing_the_prefix_characters_is_not_a_path(self) -> None:
+        """`/tmp/user-archive` is beside the home directory, not inside it."""
+        self.assertEqual(
+            f"{self.home}-archive/mod", evidence.abbreviate_home(f"{self.home}-archive/mod")
+        )
+
+    def test_a_host_without_a_home_leaves_every_string_alone(self) -> None:
+        with mock.patch.dict(os.environ, {"HOME": ""}):
+            self.assertEqual(f"{self.home}/mod", evidence.abbreviate_home(f"{self.home}/mod"))

@@ -5,12 +5,19 @@ evidence and redact credential-bearing keys before anything is stored. The
 helpers below are that one copy: intent documents are decoded and read by the
 per-lane `parse_intent` these modules own, so only the decode, read, hashing,
 and redaction halves live here.
+
+Redaction also abbreviates the host's home directory. An evidence document is
+written to be read by somebody else, and an absolute path carries the account
+name of whoever ran the review: `/home/<user>/...` names a person in every
+document that cites a clip, an intent file, or an asset source. The path stays
+citeable as `~/...`, which is all a reader ever used it for.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -43,8 +50,42 @@ def _is_sensitive_key(key: str, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) ->
     return lowered == "key" or any(part in lowered for part in parts)
 
 
+def _home_prefix() -> str:
+    """This host's home directory as a literal prefix, or `""` when it has none.
+
+    `expanduser("~")` rather than `Path.home()`: a host with no home set
+    (`HOME=""`) expands to nothing, and matching the empty string would rewrite
+    every string in the document.
+    """
+    home = os.path.expanduser("~")
+    if not home or home == os.sep:
+        return ""
+    return os.path.normpath(home) + os.sep
+
+
+def abbreviate_home(text: str) -> str:
+    """`/home/someone/...` becomes `~/...`, leaving every other path untouched.
+
+    Only the home prefix goes: the rest of a path is what makes an evidence
+    document citeable, and a Windows or relative path that happens to contain
+    the same word is not this host's account.
+    """
+    prefix = _home_prefix()
+    if not prefix:
+        return text
+    if text == prefix.rstrip(os.sep):
+        return "~"
+    if text.startswith(prefix):
+        return "~/" + text[len(prefix) :]
+    return text
+
+
 def redact(value: Any, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> Any:
-    """Deep-copy a JSON-shaped value, dropping credential-bearing mapping keys."""
+    """Deep-copy a JSON-shaped value, dropping credential-bearing mapping keys.
+
+    Every string is passed through `abbreviate_home`, so a stored document
+    never names the account that produced it.
+    """
     if isinstance(value, dict):
         return {
             key: redact(item, parts)
@@ -53,6 +94,8 @@ def redact(value: Any, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> Any:
         }
     if isinstance(value, list):
         return [redact(item, parts) for item in value]
+    if isinstance(value, str):
+        return abbreviate_home(value)
     return value
 
 

@@ -63,11 +63,14 @@ process's own framebuffer — no desktop grab, no compositor, the same
 `scripts/capture_video.sh` (also in `7dtd-playtest`) waits for the
 `clip complete <id>` log line and muxes the frames into an mp4.
 
-`shamway client capture LABEL --clip DIR` adopts that clip directory (frames,
-muxed video, `client.log`) into `.local/acceptance/`, hashed and labeled the
-same way a single adopted screenshot already is. It records; it never
-re-captures, muxes, or reviews. Re-adopting a label replaces its earlier
-entry, exactly like a re-captured single frame.
+`shamway client capture LABEL --clip DIR` adopts that clip's media (frames
+and the muxed video) into `.local/acceptance/`, hashed and labeled the
+same way a single adopted screenshot already is. Everything else in the
+capture directory is left behind, `client.log` above all: the log carries the
+host's absolute paths and every mod the session loaded, the evidence tree
+deploys with the modlet, and `review-video` hands it to an external gateway.
+It records; it never re-captures, muxes, or reviews. Re-adopting a label
+replaces its earlier entry, exactly like a re-captured single frame.
 
 ## The review
 

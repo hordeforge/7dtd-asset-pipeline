@@ -621,7 +621,7 @@ def run_review(
                 f"{output} already holds an earlier review and a later review never "
                 "overwrites one by default; compare the documents, or pass --force"
             )
-        payload = json.dumps(document, indent=2, sort_keys=True)
+        payload = json.dumps(evidence.redact(document), indent=2, sort_keys=True)
         try:
             if force:
                 atomic.write(output, payload)

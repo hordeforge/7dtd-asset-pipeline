@@ -314,11 +314,12 @@ class ClipCapture:
     """One adopted clip directory, and what it was adopted to show.
 
     The clip is the `7dtd-playtest` multi-frame capture shape: a directory of
-    `frame-XXXX.png` frames, optionally a muxed video and the capture's
-    `client.log`. Adoption records the whole directory under the label and
-    hashes every file in it, so a later `review-video` reads a stable,
-    hash-addressed input instead of re-deriving it from wherever the clip was
-    captured.
+    `frame-XXXX.png` frames and optionally a muxed video. Adoption records the
+    clip's media under the label and hashes every file it copied, so a later
+    `review-video` reads a stable, hash-addressed input instead of re-deriving
+    it from wherever the clip was captured. Non-media files that share the
+    capture directory, `client.log` above all, are not adopted: the evidence
+    tree deploys with the modlet and is handed to an external review.
     """
 
     label: str
@@ -365,11 +366,13 @@ def record_existing_clip(
     """Adopt an already-captured clip directory into the evidence tree.
 
     The one-level-up form of `record_existing`: instead of one screenshot,
-    adopt the whole `7dtd-playtest` clip directory (frames, muxed video,
-    `client.log`) into `<root>/<safe-label>/`, hashed and labeled the same way
-    a single adopted screenshot already is. Re-adopting a label replaces its
-    earlier entry, exactly like a re-captured single frame. Nothing here
-    re-captures, muxes, or reviews anything — adoption only.
+    adopt the `7dtd-playtest` clip directory (frames and the muxed video) into
+    `<root>/<safe-label>/`, hashed and labeled the same way a single adopted
+    screenshot already is. Everything else in the capture directory, the
+    `client.log` above all, stays behind (see `_skip_non_media`): the evidence
+    tree is what deploys and what an external review is handed. Re-adopting a
+    label replaces its earlier entry, exactly like a re-captured single frame.
+    Nothing here re-captures, muxes, or reviews anything — adoption only.
     """
     source = Path(source_dir)
     if not label.strip():
@@ -392,7 +395,7 @@ def record_existing_clip(
     if not in_place:
         staged = directory / f".{safe}.clip.tmp.{os.getpid()}.{secrets.token_hex(4)}"
         try:
-            shutil.copytree(source, staged, dirs_exist_ok=False)
+            shutil.copytree(source, staged, dirs_exist_ok=False, ignore=_skip_non_media)
         except (OSError, shutil.Error) as exc:
             shutil.rmtree(staged, ignore_errors=True)
             raise PipelineError(f"cannot copy clip {source} into evidence: {exc}") from exc
@@ -442,6 +445,28 @@ def _looks_like_a_clip(directory: Path) -> bool:
     return any(
         entry.is_file() and entry.suffix.lower() in _CLIP_SUFFIXES for entry in directory.iterdir()
     )
+
+
+def _skip_non_media(directory: str, names: list[str]) -> set[str]:
+    """`copytree` ignore hook: adopt the clip, leave everything else where it is.
+
+    A `7dtd-playtest` capture directory sits next to the `client.log` the run
+    wrote. That log carries the whole host: absolute paths under the operator's
+    account, the game install, every mod name loaded, the session's timestamps.
+    Nothing about a visual sign-off needs it, and adoption is the step that
+    moves the directory into the modlet where `client deploy` ships it and
+    `review-video` hands it to an external gateway. So only frames and the muxed
+    video are copied, and the log stays in the live log directory it belongs to.
+
+    Directories are always descended: a clip nests its frames one level down in
+    some harnesses, and a name is not a role.
+    """
+    base = Path(directory)
+    return {
+        name
+        for name in names
+        if not (base / name).is_dir() and (base / name).suffix.lower() not in _CLIP_SUFFIXES
+    }
 
 
 def _clip_file(path: Path) -> ClipFile:

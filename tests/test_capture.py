@@ -377,7 +377,6 @@ class ClipAdoptionTests(unittest.TestCase):
         names = {item.name for item in entry.files}
         self.assertIn("frame-0000.png", names)
         self.assertIn("thing.mp4", names)
-        self.assertIn("client.log", names)
         for item in entry.files:
             source = self.capture_root / "thing" / item.name
             self.assertEqual(
@@ -388,6 +387,20 @@ class ClipAdoptionTests(unittest.TestCase):
         manifest = read_manifest(self.capture_root)
         self.assertEqual(1, len(manifest))
         self.assertEqual("thing", manifest[0]["directory"])
+
+    def test_adoption_leaves_the_capture_log_and_its_hosts_paths_behind(self) -> None:
+        """Only media is adopted: the log names the operator's account and the install."""
+        from sevendtd_asset_pipeline.capture import record_existing_clip
+
+        (self.source / "client.log").write_text(
+            "loading from /home/someone/.steam/root/7DaysToDie\n", encoding="utf-8"
+        )
+        entry = record_existing_clip(self.source, "thing", "reads right", self.capture_root)
+        self.assertNotIn("client.log", {item.name for item in entry.files})
+        self.assertFalse((self.capture_root / "thing" / "client.log").exists())
+        self.assertTrue(
+            (self.source / "client.log").exists(), "adoption must not delete the source"
+        )
 
     def test_re_adopting_a_label_replaces_the_earlier_entry(self) -> None:
         from sevendtd_asset_pipeline.capture import record_existing_clip

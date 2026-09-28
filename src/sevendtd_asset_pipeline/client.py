@@ -40,6 +40,8 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import csv
+import io
 import json
 import math
 import os
@@ -71,7 +73,12 @@ from .capture import (
 )
 from .errors import PipelineError
 from .references import read_mod_name
-from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
+from .text import (
+    CHILD_DECODE_ERRORS,
+    CHILD_ENCODING,
+    WINDOWS_RESERVED_CHARS,
+    names_windows_device,
+)
 
 STEAM_APP_ID = 251570
 # Proton launches the Windows client; the EAC wrapper is a second executable.
@@ -609,6 +616,12 @@ def _deploy_name(mod_name: str) -> str:
     `../../elsewhere` or `/tmp/x` would aim the `rmtree`/`mkdir` below outside
     the Mods directory. Control characters and bidi overrides are refused too:
     they do not traverse, but they spoof the name in logs and listings.
+
+    The set refused is the one every host agrees on, so a deployment written
+    on Linux is the same folder a Windows host makes: separators, control
+    characters, the characters Windows forbids, a trailing dot or space
+    (silently dropped there, kept here, so the two hosts deploy to different
+    folders), and the reserved device names.
     """
     name = mod_name.strip()
     if (
@@ -619,6 +632,9 @@ def _deploy_name(mod_name: str) -> str:
         or "\0" in name
         or any(ord(character) < 32 or ord(character) == 0x7F for character in name)
         or any(unicodedata.bidirectional(character) in _BIDI_CLASSES for character in name)
+        or (WINDOWS_RESERVED_CHARS & set(name))
+        or name.endswith((".", " "))
+        or names_windows_device(name)
     ):
         raise PipelineError(
             f"mod name {mod_name!r} is not a single folder name; refusing to derive "
@@ -755,8 +771,8 @@ def _ps_process_table(selector: str | None = None) -> list[tuple[int, str]]:
     args=` is the same query in the portable spelling, and the executable is
     the first whitespace-separated field of `args`.
 
-    Returns nothing when `ps` cannot answer, so an absent process table reads
-    as "nothing running" exactly as an unreadable `/proc` does.
+    Returns nothing when `ps` cannot answer; `_process_table` decides what to
+    try next.
     """
     argv = ["ps", "-o", "pid=", "-o", "args="]
     if selector is not None:
@@ -784,10 +800,64 @@ def _ps_process_table(selector: str | None = None) -> list[tuple[int, str]]:
     return table
 
 
+def _tasklist_process_table(pid: int | None = None) -> list[tuple[int, str]]:
+    """Every process as `(pid, image name)`, from Windows' own `tasklist`.
+
+    A native Windows client has neither `/proc` nor `ps`, and the `ps` query
+    above answers nothing there, so the result read as "no client is
+    running" in the exact way this module exists to prevent: `client launch`
+    would start over a live client, whose bundle cache then makes the run
+    prove nothing. `tasklist /FO CSV /NH` is the platform's own spelling of
+    the same question, and the image name is the field `_names_client`
+    matches on, as the argv[0] is everywhere else.
+
+    Returns nothing when `tasklist` cannot answer, the same contract
+    `_ps_process_table` keeps.
+    """
+    argv = ["tasklist", "/FO", "CSV", "/NH"]
+    if pid is not None:
+        argv += ["/FI", f"PID eq {pid}"]
+    try:
+        listed = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=PROCESS_TABLE_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if listed.returncode != 0:
+        return []
+    table: list[tuple[int, str]] = []
+    # CSV, not split: tasklist's memory column is localized and thousands-
+    # separated, so only a real reader parses this portably.
+    for row in csv.reader(io.StringIO(listed.stdout)):
+        if len(row) < 2 or not row[1].strip().isdigit():
+            continue
+        table.append((int(row[1].strip()), row[0].strip()))
+    return table
+
+
+def _process_table(selector: str | None = None) -> list[tuple[int, str]]:
+    """The process table from whichever of the two platform tools answers.
+
+    `ps` is the Unix query and `tasklist` the Windows one; probing the tools
+    rather than branching on the OS name means a host with either one, and
+    only that host, can answer.
+    """
+    table = _ps_process_table(selector)
+    if table or shutil.which("ps") is not None:
+        return table
+    return _tasklist_process_table(int(selector) if selector is not None else None)
+
+
 def running_client_pids(proc: Path = Path("/proc")) -> list[int]:
     """PIDs of running game clients, found by executable name in `/proc`."""
     if not proc.is_dir():
-        return sorted(pid for pid, argv0 in _ps_process_table() if _names_client(argv0))
+        return sorted(pid for pid, argv0 in _process_table() if _names_client(argv0))
     pids: list[int] = []
     for entry in proc.iterdir():
         if not entry.name.isdigit():
@@ -822,7 +892,7 @@ def _is_client_pid(pid: int, proc: Path = Path("/proc")) -> bool:
     """
     if not proc.is_dir():
         return any(
-            found == pid and _names_client(argv0) for found, argv0 in _ps_process_table(str(pid))
+            found == pid and _names_client(argv0) for found, argv0 in _process_table(str(pid))
         )
     try:
         cmdline = (proc / str(pid) / "cmdline").read_bytes()

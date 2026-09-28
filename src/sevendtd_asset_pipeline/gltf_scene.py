@@ -144,7 +144,10 @@ def _load_document(source: Path) -> tuple[dict[str, Any], bytes]:
     data = source.read_bytes()
     if data[:4] == GLB_MAGIC:
         return _parse_glb(data, source)
-    document = json.loads(data.decode("utf-8"))
+    # `utf-8-sig`, not `utf-8`: a `.gltf` authored or re-saved on Windows
+    # picks up a UTF-8 BOM, and `json.loads` rejects a leading U+FEFF. The
+    # TextAsset lane already strips it for the same reason.
+    document = json.loads(data.decode("utf-8-sig"))
     if not isinstance(document, dict):
         raise PipelineError(f"{source.name} is not a JSON object")
     return document, b""

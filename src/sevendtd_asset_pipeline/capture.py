@@ -48,7 +48,7 @@ from pathlib import Path
 
 from . import atomic, evidence
 from .errors import PipelineError
-from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
+from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING, names_windows_device
 
 MANIFEST_NAME = "manifest.json"
 DEFAULT_ROOT = Path(".local/acceptance")
@@ -272,9 +272,16 @@ def _safe_stem(label: str) -> str:
     Both capture paths share this: a label is how a frame is cited later, and
     `../../secrets.png` must never become where that frame is written.
     """
-    return "".join(
+    stem = "".join(
         character if character.isalnum() or character in "-_" else "-" for character in label
     )
+    # Windows keeps the reserved device names reserved behind any extension,
+    # so a sanitized `CON` is still the console device and the write lands
+    # nowhere. Prefix rather than refuse: the label is the citation, and a
+    # differently named frame is better than no frame.
+    if names_windows_device(stem):
+        stem = f"shot-{stem}"
+    return stem
 
 
 def capture(

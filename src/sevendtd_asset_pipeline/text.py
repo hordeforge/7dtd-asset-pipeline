@@ -36,6 +36,11 @@ byte-identical the callers report the pair by name (`spelling_differences`
 exists for that message), because the engine resolves against the table it
 loaded and a fold here is not a fold there: silently treating them as equal
 would turn a gate into a pass the game does not reproduce.
+
+A name is also a path component on a host this package does not choose, and
+Windows refuses more of them than every other target does. The reserved
+characters and device names below are the shared answer, so a name a
+generator writes on Linux is the same name one written on Windows.
 """
 
 from __future__ import annotations
@@ -118,14 +123,37 @@ def spelling_differences(left: str, right: str) -> tuple[str, ...]:
     The two aspects are answered apart and both are reported when both apply,
     because a name differing in case *and* in composition needs both renamed
     and a message naming one of them brings the reader back with the same
-    failure. The two are compared composed, so neither answer is decided by
-    the other: `mymodthing` against `myModThing` is a case difference, and
+    failure. The two are compared composed, so neither answer is decided by the
+    other: `mymodthing` against `myModThing` is a case difference, and
     `café` against the same word decomposed is a normalization one.
     """
     composed, other = nfc(left), nfc(right)
     differences: list[str] = []
     if composed != other:
         differences.append(CASES)
-    if left != composed or right != other:
+    if left != composed or other != composed:
         differences.append(NORMALIZATION)
     return tuple(differences)
+
+
+# What a path component may not be, on the platform that refuses the most.
+# Every POSIX host accepts these names, so one carrying any of them is created
+# without complaint on Linux and refused inside the next `mkdir` on Windows,
+# as a raw OSError rather than the PipelineError the caller promised.
+WINDOWS_RESERVED_CHARS = frozenset(': * ? " < > |')
+# A reserved device name stays reserved behind any extension, so `CON.png` is
+# the console device and not a file.
+WINDOWS_RESERVED_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{index}" for index in range(1, 10)}
+    | {f"LPT{index}" for index in range(1, 10)}
+)
+
+
+def names_windows_device(name: str) -> bool:
+    """Whether a path component names a reserved Windows device.
+
+    The device is named by the part before the first dot, so the extension a
+    caller appends later does not change the answer.
+    """
+    return name.partition(".")[0].upper() in WINDOWS_RESERVED_NAMES

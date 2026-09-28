@@ -13,6 +13,7 @@ import json
 import math
 import struct
 from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 from typing import Any
 
@@ -444,15 +445,23 @@ def _read_accessor(
         raise PipelineError(f"{source.name} {what} buffer {buffer_index} is missing")
     offset = int(view.get("byteOffset", 0)) + int(accessor.get("byteOffset", 0))
     stride = int(view.get("byteStride", 0)) or (COMPONENT_SIZES[component] * n)
-    fmt = "<" + COMPONENT_STRUCT[component] * n
-    size = struct.calcsize(fmt)
+    layout = struct.Struct("<" + COMPONENT_STRUCT[component] * n)
     blob = buffers[buffer_index]
+    past_end = f"{source.name} {what} accessor reads past the end of its buffer"
+    # A tightly packed accessor is one flat run of values, so the whole run
+    # unpacks in a single call; only an interleaved one needs an offset per
+    # element. Every buffer this repository writes is tightly packed, and a
+    # mesh accessor's element count is in the tens of thousands.
+    packed = count >= 0 and stride == layout.size and offset >= 0
+    if packed and offset + count * layout.size <= len(blob):
+        run = memoryview(blob)[offset : offset + count * layout.size]
+        return list(chain.from_iterable(layout.iter_unpack(run))), atype, count
     values: list[Any] = []
     for i in range(count):
         start = offset + i * stride
-        if start + size > len(blob):
-            raise PipelineError(f"{source.name} {what} accessor reads past the end of its buffer")
-        values.extend(struct.unpack_from(fmt, blob, start))
+        if start + layout.size > len(blob):
+            raise PipelineError(past_end)
+        values.extend(layout.unpack_from(blob, start))
     return values, atype, count
 
 

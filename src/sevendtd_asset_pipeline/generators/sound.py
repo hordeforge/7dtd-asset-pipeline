@@ -313,6 +313,10 @@ def blast(duration: float, generator: random.Random, distant: bool) -> list[floa
         shape = 0.0 if time < 0.12 else min(age / 0.08, 1.0) * math.exp(-age / 1.45)
         thunder.append(value * shape * (0.78 + 0.22 * math.sin(2.0 * math.pi * 2.1 * age)))
 
+    # As in `nuclear_blast`: the bands are dead once shaped, and each costs
+    # about 32 bytes a sample for as long as it is held.
+    del shock_noise, fracture_band, thunder_band
+
     mixed = mix(
         (0.82, shock),
         (0.86, sweep),
@@ -410,6 +414,12 @@ def nuclear_blast(duration: float, generator: random.Random) -> list[float]:
         (1.15 * low + 0.42 * mid) * min(time / 0.18, 1.0) * math.exp(-time / (duration * 0.31))
         for low, mid, time in zip(low_coda, mid_coda, times, strict=True)
     ]
+
+    # The filtered bands are dead once their layer is shaped, and a list of
+    # floats costs about 32 bytes a sample, so a 16-second clip carries roughly
+    # 23 MB per surviving band. Releasing them here keeps the peak near the
+    # nine shaped layers the mix needs rather than every intermediate.
+    del pressure_noise, shatter_band, thunder_band, return_noise, low_coda, mid_coda
 
     mixed = mix(
         (0.22, shock),

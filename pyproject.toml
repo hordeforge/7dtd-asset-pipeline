@@ -92,11 +92,11 @@ all = ["7dtd-asset-pipeline[writer,authoring,mesh,audio,patch]"]
 # verifies on every install.
 [dependency-groups]
 dev = [
-    "ruff==0.16.6",
+    "ruff==0.16.9",
     "mypy==2.3.1",
     "setuptools==84.0.0",
     "texture2ddecoder==1.0.6",
-    "coverage==7.10.7",
+    "coverage==7.16.1",
     "hypothesis==6.168.2",
 ]
 

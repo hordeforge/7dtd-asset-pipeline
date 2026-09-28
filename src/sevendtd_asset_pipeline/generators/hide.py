@@ -232,7 +232,6 @@ def hide_atlas_rgb(
     outline: tuple[int, int, int],
     strength: float,
     fur_strength: float,
-    patch_strength: float,
     grain: float,
 ) -> np.ndarray:
     """A (size, size, 3) albedo for an atlased entity: one field per cell.
@@ -249,10 +248,9 @@ def hide_atlas_rgb(
 
     Each cell is drawn with its own periodic field (see `_cell_field`) so a
     primitive's wrapping default UVs never show a seam inside the cell, and the
-    same seed gives the same bytes in the same cells. `patch_strength` is
-    accepted for signature parity with `hide_rgb` but does not shift the base
-    coat here — in atlas mode the role colour is the discrimination, and a spot
-    on a paw cell would dilute it.
+    same seed gives the same bytes in the same cells. There is no spot layer
+    here as in `hide_rgb`: in atlas mode the role colour is the discrimination,
+    and a spot on a paw cell would dilute it.
     """
     cell_px = max(16, size // grid)
     rng = np.random.default_rng(seed)
@@ -541,7 +539,6 @@ def main(argv: list[str] | None = None) -> int:
             outline,
             args.strength,
             args.fur_strength,
-            args.patch_strength,
             args.grain,
         )
         save(rgb, args.output)

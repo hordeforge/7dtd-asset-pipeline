@@ -135,8 +135,30 @@ tag has no changelog section.
   sdist with build isolation is who meets that backend; the dev-group pin keeps
   CI green and does not reach their environment.
 
+### Removed
+
+- `audio_review` and `video_review` re-exported the shared `evidence` helpers
+  (`redact`, `sha256_bytes`, `sha256_file`, `SENSITIVE_KEY_PARTS`,
+  `USAGE_SENSITIVE_KEY_PARTS`) and an `__all__` that named them, for callers
+  that import from the lane module. Both lanes already call them as
+  `evidence.<name>`, so the imports existed only to satisfy a test. Import
+  them from `sevendtd_asset_pipeline.evidence`, which is where they are
+  defined.
+- `shader_blob.vulkan_shader_hash`, a two-argument function that ignored both
+  arguments and returned 32 zero bytes. The field it filled is not validated
+  (a live client renders a stock blob with every byte of it corrupted), so the
+  bytes are now the named constant `VULKAN_UNVALIDATED_HASH` the record
+  builder splices in directly.
+- `capabilities._availability`, a third way to ask the question
+  `capabilities()` and `has_capability()` already answer, with no caller
+  outside its own test.
+
 ### Fixed
 
+- `tests/test_bundle_verify.py` indexed a `dict[str, object]` directly, so
+  `make typecheck` failed on a correct checkout with `Value of type "object" is
+  not indexable`. The assertion now compares the whole asset list, which also
+  pins its length.
 - `tests/test_release_contract.py` read the PEP 639 setuptools floor with a
   `setuptools>=N` pattern, so the exact `build-system.requires` pin
   (`setuptools==84.0.0`) read as no constraint at all and the test failed on

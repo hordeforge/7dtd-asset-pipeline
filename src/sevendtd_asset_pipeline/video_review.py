@@ -50,22 +50,15 @@ from ._version import __version__
 from .capture import DEFAULT_ROOT, read_manifest
 from .config import PipelineConfig
 from .errors import PipelineError
-from .evidence import (  # noqa: F401 - published lane surface
-    SENSITIVE_KEY_PARTS,
-    USAGE_SENSITIVE_KEY_PARTS,
-    load_intent_file,
-    redact,
-    sha256_bytes,
-    sha256_file,
-)
-from .evidence import parse_intent_text as _parse_intent_text
+from .evidence import load_intent_file
+from .evidence import parse_intent_text as _shared_parse_intent_text
 from .references import manifest_assets
 from .text import CHILD_DECODE_ERRORS, CHILD_ENCODING
 
 
 def parse_intent_text(text: str) -> tuple[VideoReviewIntent, bytes]:
     """Validate an inline intent document; return it with its exact bytes."""
-    return _parse_intent_text(text, parse_intent)
+    return _shared_parse_intent_text(text, parse_intent)
 
 
 if TYPE_CHECKING:
@@ -505,7 +498,7 @@ def run_review(
     if intent_path is not None:
         intent, intent_raw = load_intent_file(Path(intent_path), parse_intent)
     elif intent_text is not None:
-        intent, intent_raw = _parse_intent_text(intent_text, parse_intent)
+        intent, intent_raw = parse_intent_text(intent_text)
     else:
         raise PipelineError(
             "review-video needs exactly one of --intent PATH (the reproducible route, "

@@ -254,12 +254,12 @@ def smolv_library() -> ctypes.CDLL | None:
     A load is cached: it is an open handle to a mapped object, and re-probing
     it per shader would reopen the same file each time. Absence is not cached.
     The other probes in this module are deliberately recomputed on every ask
-    (`_availability`), because a `shamway serve` session outlives the install
-    its own error message calls for, and a frozen `None` would leave that
-    session reporting the Vulkan lane unavailable and packing every later
-    shader without its Vulkan sub-program. A miss drops the cached answer so
-    the next ask re-probes, which costs the handful of `Path.is_file()` calls
-    an uncached probe already paid.
+    (`has_capability`, `capabilities`), because a `shamway serve` session
+    outlives the install its own error message calls for, and a frozen `None`
+    would leave that session reporting the Vulkan lane unavailable and packing
+    every later shader without its Vulkan sub-program. A miss drops the cached
+    answer so the next ask re-probes, which costs the handful of `Path.is_file()`
+    calls an uncached probe already paid.
     """
     library = _loaded_smolv_library()
     if library is None:
@@ -624,15 +624,6 @@ def capabilities(probe_versions: bool = False) -> list[Capability]:
 
 
 _SPEC_BY_NAME: dict[str, _Spec] = {spec.name: spec for spec in REGISTRY}
-
-
-def _availability() -> dict[str, bool]:
-    # Deliberately recomputed on every ask rather than cached: a `shamway serve`
-    # session outlives the installs its own error messages call for, and a
-    # frozen answer would have `capabilities` report a capability as present
-    # while every gated operation keeps refusing it. The probes are
-    # `find_spec` and `which` — cheap next to any operation they gate.
-    return {capability.name: capability.available for capability in capabilities()}
 
 
 def has_capability(name: str) -> bool:

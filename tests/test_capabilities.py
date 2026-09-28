@@ -8,6 +8,7 @@ from sevendtd_asset_pipeline.capabilities import (
     REGISTRY,
     SOURCE_URL,
     Capability,
+    has_capability,
     require_capability,
 )
 
@@ -32,12 +33,10 @@ class CapabilityTests(unittest.TestCase):
         this ever contacted a provider, `doctor`, `status`, `schema`, and every
         offline build would grow a network dependency and a bill.
         """
-        from sevendtd_asset_pipeline.capabilities import _availability
-
         with mock.patch.dict("os.environ", {"GEMINI_API_KEY": "k"}, clear=True):
-            self.assertTrue(_availability()["model-audio-review"])
+            self.assertTrue(has_capability("model-audio-review"))
         with mock.patch.dict("os.environ", {}, clear=True):
-            self.assertFalse(_availability()["model-audio-review"])
+            self.assertFalse(has_capability("model-audio-review"))
             # And the refusal route names how to configure it.
             with self.assertRaises(PipelineError) as caught:
                 require_capability("model-audio-review")

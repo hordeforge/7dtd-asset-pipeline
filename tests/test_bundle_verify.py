@@ -119,8 +119,8 @@ class ClassifyTests(BundleCase):
             payload, json.loads(json.dumps(payload)), "the report must survive a JSON hop"
         )
         self.assertEqual(
-            {"key": "k", "type": "TextAsset", "name": "k", "detail": ""},
-            payload["assets"][0],
+            [{"key": "k", "type": "TextAsset", "name": "k", "detail": ""}],
+            payload["assets"],
         )
         self.assertEqual("b.unity3d", payload["bundle"])
         self.assertTrue(payload["ok"], payload["problems"])

@@ -29,13 +29,18 @@ from sevendtd_asset_pipeline.audio_review import (
     build_prompt,
     parse_intent,
     parse_intent_text,
-    redact,
     rubric_for,
     run_review,
     validate_result,
 )
 from sevendtd_asset_pipeline.cli import main
-from sevendtd_asset_pipeline.evidence import MAX_INTENT_BYTES, MAX_TIMEOUT_SECONDS, RESULT_KEYS
+from sevendtd_asset_pipeline.evidence import (
+    MAX_INTENT_BYTES,
+    MAX_TIMEOUT_SECONDS,
+    RESULT_KEYS,
+    USAGE_SENSITIVE_KEY_PARTS,
+    redact,
+)
 from sevendtd_asset_pipeline.providers import (
     PROVIDERS,
     configuration_state,
@@ -271,8 +276,6 @@ class RedactionTests(unittest.TestCase):
 
     def test_usage_redaction_keeps_token_counts_but_drops_secret_names(self) -> None:
         """In a usage block 'token' means billing; elsewhere it means auth."""
-        from sevendtd_asset_pipeline.audio_review import USAGE_SENSITIVE_KEY_PARTS
-
         usage = {
             "totalTokenCount": 10,
             "promptTokenCount": 4,

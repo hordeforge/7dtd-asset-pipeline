@@ -797,21 +797,15 @@ def vulkan_bind_channels() -> bytes:
     return bytes(writer.out)
 
 
-def vulkan_shader_hash(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
-    """The 32 bytes at payload words 20..27 of a Vulkan code record, as zero.
-
-    An earlier session read these bytes as a content hash and spent ~1.5M
-    seed sweeps trying to reproduce the stored halves
-    `c9dae3ee4501d8bee8b28c965c85e3f9` / `c6db081ec58e178a3377170abf47ac70`
-    from the SMOL-V or decoded SPIR-V modules. They are not validated: a live
-    client rendered a stock blob with every byte of the field corrupted, and
-    renders a synthesized record whose bytes here do not match stock's at all
-    (see research-provenance.md, "The Vulkan hash is not validated"). The
-    content is irrelevant, so the writer emits zeros.
-
-    Returns a 32-byte field of zeros.
-    """
-    return b"\x00" * 32
+# The 32 bytes at payload words 20..27 of a Vulkan code record, which an
+# earlier session read as a content hash and spent ~1.5M seed sweeps trying to
+# reproduce the stored halves `c9dae3ee4501d8bee8b28c965c85e3f9` /
+# `c6db081ec58e178a3377170abf47ac70` from the SMOL-V or decoded SPIR-V modules.
+# They are not validated: a live client rendered a stock blob with every byte of
+# the field corrupted, and renders a synthesized record whose bytes here do not
+# match stock's at all (see research-provenance.md, "The Vulkan hash is not
+# validated"). The content is irrelevant, so the writer emits zeros.
+VULKAN_UNVALIDATED_HASH = b"\x00" * 32
 
 
 def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
@@ -826,13 +820,12 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     the decoded modules (a size argument only, in the first survey), and the
     32 bytes at payload words 20..27 are not validated (measured: a live
     client renders a corrupted stock blob and a synthesized record with
-    non-stock bytes there - see `vulkan_shader_hash`). What the live Vulkan
+    non-stock bytes there - see `VULKAN_UNVALIDATED_HASH`). What the live Vulkan
     acceptance proves is the whole shape: this record plus the parameter
     record's stock-shaped binding entries draws the textured prop in a fresh
     client, where every earlier shape drew the magenta error shader or lost
     the device.
     """
-    hash_bytes = vulkan_shader_hash(fragment_smolv, vertex_smolv)
     header = bytearray(VULKAN_SECTION_HEADER)
     section_a = VULKAN_SECTION_HEADER + len(fragment_smolv)
     struct.pack_into(
@@ -855,10 +848,8 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     for _ in range(4):
         writer.i32(0)
     writer.i32(0)  # keyword count
-    # Inject the computed hash at payload words 20..27 (bytes 80..112).
-    # `vulkan_shader_hash` returns zeros today, so the splice is
-    # content-neutral until the recipe is known.
-    payload_with_hash = payload[:80] + hash_bytes + payload[112:]
+    # The unvalidated hash field at payload words 20..27 (bytes 80..112).
+    payload_with_hash = payload[:80] + VULKAN_UNVALIDATED_HASH + payload[112:]
     # The runtime reads the record's payload length and then the bind-channels
     # block, so the length must be a multiple of 4 - a SMOL-V pair that sums to
     # 882 bytes made the runtime read the bind block from mid-padding and fault

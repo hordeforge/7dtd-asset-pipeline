@@ -41,35 +41,14 @@ from typing import TYPE_CHECKING, Any
 from . import evidence
 from ._version import __version__
 from .errors import PipelineError
-from .evidence import (
-    SENSITIVE_KEY_PARTS,
-    USAGE_SENSITIVE_KEY_PARTS,
-    load_intent_file,
-    redact,
-    sha256_bytes,
-    sha256_file,
-)
-from .evidence import parse_intent_text as _parse_intent_text
+from .evidence import load_intent_file
+from .evidence import parse_intent_text as _shared_parse_intent_text
 from .providers.base import AudioPayload, ReviewRequest
-
-# Re-exported from the shared evidence module: the tests and the CLI surface
-# import them from this lane module, where they have always lived.
-__all__ = [
-    "SENSITIVE_KEY_PARTS",
-    "USAGE_SENSITIVE_KEY_PARTS",
-    "load_intent_file",
-    "parse_intent",
-    "parse_intent_text",
-    "redact",
-    "run_review",
-    "sha256_bytes",
-    "sha256_file",
-]
 
 
 def parse_intent_text(text: str) -> tuple[AudioReviewIntent, bytes]:
     """Validate an inline intent document; return it with its exact bytes."""
-    return _parse_intent_text(text, parse_intent)
+    return _shared_parse_intent_text(text, parse_intent)
 
 
 if TYPE_CHECKING:
@@ -527,7 +506,7 @@ def run_review(
     if intent_path is not None:
         intent, intent_raw = load_intent_file(Path(intent_path), parse_intent)
     elif intent_text is not None:
-        intent, intent_raw = _parse_intent_text(intent_text, parse_intent)
+        intent, intent_raw = parse_intent_text(intent_text)
     else:
         raise PipelineError(
             "review-audio needs exactly one of --intent PATH (the reproducible route, "

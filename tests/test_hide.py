@@ -254,7 +254,6 @@ class HideAtlasTests(unittest.TestCase):
             outline=(0, 0, 0),
             strength=0.8,
             fur_strength=0.4,
-            patch_strength=0.0,
             grain=0.3,
         )
         field = _cell_field(np.random.default_rng(seed), cell_px, 0.8, 0.4, 0.3)

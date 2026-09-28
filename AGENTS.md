@@ -64,21 +64,20 @@ Do not add `pip`, `pipx`, `venv`, or `python -m pip` invocations to scripts,
 docs, or CI; `scripts/install-tools.sh` installs uv itself, from the
 distribution package or the official checksum-verified release.
 
-### Fix it upstream, do not work around it here
+### Fix it upstream, not around it
 
-This repository is the generalized extraction of an asset pipeline that grew
-inside a mod repository. Its whole reason to exist is that the general thing
-lives in one place instead of being re-solved locally. That rule does not stop
-at this repository's edge.
+This repository is the generalized extraction of a pipeline that grew inside a
+mod repository; the general thing lives in one place instead of being re-solved
+locally. That does not stop at this repository's edge: a bug, a missing check,
+or a confusing default in a sibling `hordeforge/7dtd-*` repository is fixed
+**there**, in the same change, with the test that would have caught it and that
+repository's own documentation updated. A workaround here is a second copy of
+the problem.
 
-**When work here runs into a bug, a missing check, or a confusing default in a
-sibling `hordeforge/7dtd-*` repository, fix it there.** Not with a workaround
-here, not with a note in a doc, not by telling the user. In that sibling:
-branch, fix, add the test that would have caught it, **update that
-repository's own documentation**, push, open a pull request, and merge it —
-autonomously, the same lifecycle this repository uses. Then come back. A
-local workaround for someone else's bug is a second copy of the problem, and
-the next project to hit it starts from zero.
+**Writes outside this checkout need the user's go-ahead first.** Branch, fix,
+and open the pull request once they have it; never push, merge, or rewrite
+history in a sibling without it, and never suppress the report of what you
+found there. Say which repository is affected and what you changed in it.
 
 This has a track record. `shamway client deploy` was blind to the shared
 client lock and deployed into another session's run; `playtest_run.py`
@@ -89,70 +88,43 @@ error line. Both were fixed where they belonged.
 ### Never declare an impossibility you did not test
 
 **Do not write "impossible", "cannot", "the wall", "not a temporary gap", or
-"nothing offline produces that" unless you ran a check that returned it.** If
-no check was run, the only honest phrasing is "I have not checked whether X is
-possible". This binds a passing remark in a report exactly as hard as a
-conclusion in an ADR, and hardest of all when the sentence is about to be
-written into a page the next session will read as settled.
+"nothing offline produces that" unless a check returned it.** With no check, the
+honest phrasing is "I have not checked whether X is possible". This binds a
+passing remark in a report exactly as hard as a conclusion in an ADR, and
+hardest of all when the sentence is about to be written into a page the next
+session will read as settled.
 
-Two failures are the same failure: over-generalizing a positive observation
-("it worked here, so it works"), and over-generalizing a negative one ("I
-could not find a way, so there is none"). The second is worse, because it
-forecloses work rather than merely overstating it, and nobody re-opens a
-question the documentation calls closed.
+Before any such sentence, run **both**, not either:
 
-This rule has a scar. On 2026-08-24 this repository's documentation said, in
-six places and in an ADR, that a Unity shader "cannot be produced offline,
-ever — only Unity's shader compiler produces that". It was false, and the
-disproof was already installed on the machine that wrote it:
+1. **Check locally.** `which`, a package search, or one probe script, and cite
+   what it returned in the same paragraph.
+2. **Search online, thoroughly.** An absent local tool proves nothing about
+   whether the tool exists. Look for the format specification, the open-source
+   implementation, the reverse-engineering write-up, the issue thread where
+   someone already did it. Search the *format* and the *artifact* by name, not
+   only your framing of the problem: "Unity shader sub-program blob format"
+   finds what "can I make a shader without Unity" does not, and every parser is
+   a specification someone already paid for. Name the sources you found, and
+   say what you searched if you found nothing.
 
-```bash
-which vkd3d-compiler glslangValidator
-```
-
-`vkd3d-compiler` (WineHQ, OSS) compiles HLSL to SM4/SM5 **DXBC** — the exact
-bytecode Unity's d3d11 sub-programs carry — and `glslangValidator` emits the
-SPIR-V the Vulkan sub-programs carry. Two *borrowing* routes had genuinely been
-measured closed (the shipped player carries only internal shaders; the game's
-own bundles embed theirs same-file), and the report leapt from "cannot borrow
-one" to "cannot author one". That does not follow, and it deleted the exact
-capability the work had been asked for.
-
-So, concretely, before any such sentence — **both** of these, not either:
-
-1. **Check locally.** Run `which`, a package search, or one probe script, and
-   **cite what it returned** in the same paragraph.
-2. **Search online, thoroughly.** The local host is not the state of the art;
-   an absent tool proves nothing about whether the tool exists. Look for the
-   format specification, the open-source implementation, the reverse-
-   engineering write-up, the issue thread where someone already did it. Search
-   the *format* and the *artifact* by name, not only your framing of the
-   problem: "Unity shader sub-program blob format" finds what "can I make a
-   shader without Unity" does not. Prior art for reading a format is prior art
-   for writing it — every parser is a specification someone already paid for.
-   Name the sources you found, and say what you searched if you found nothing.
-
-A local `which` that comes back empty and no search is **not** a check; that
-combination is how the shader claim above got written. Off-the-shelf pieces
-for this repository's own problems have turned up in Wine, in Khronos, in
-HearthSim's game-modding tools and in a decade of Unity reverse-engineering
-projects — none of which were installed here, and all of which were one search
-away.
+A local `which` that comes back empty and no search is **not** a check.
 
 Then, when writing it down:
 
 - name the *specific* route measured closed, never the whole problem — "the
   player has no shader a mod may reference" is a finding, "shaders are
   impossible" is not;
-- prefer **"unbuilt, and here is the route"** to "impossible". If the route is
-  long, that is a cost, and a cost belongs in
+- prefer **"unbuilt, and here is the route"** to "impossible". A long route is
+  a cost, and a cost belongs in
   [docs/status/improvements.md](docs/status/improvements.md), not in a page
   that tells the next session to stop;
-- if you genuinely could not settle it, write "**not checked**" and say what
-  would settle it. That is an honest state; "impossible" is a claim.
+- if you could not settle it, write "**not checked**" and say what would settle
+  it. An impossibility claim is a gate on future work, and needs the same
+  evidence this file demands of every other gate.
 
-An impossibility claim is a gate on future work. It needs the same evidence
-this file demands of every other gate.
+The scar behind this rule, and the tool that disproved the claim
+(`vkd3d-compiler`, sitting installed on the machine that wrote it), is in
+[docs/adrs/0001-synthesize-bundles-without-an-editor.md](docs/adrs/0001-synthesize-bundles-without-an-editor.md).
 
 ### Documentation is written while the work happens, never afterwards
 
@@ -240,9 +212,11 @@ staging rules means `make reproducible` must pass.
   directory it lands in. The tests fail when any of those drifts, and the
   first two are published in `shamway schema`.
 - `docs/` is categorized: every subdirectory is a genre with its own
-  `README.md`, and every genre carries a `TEMPLATE.md` to start a page from — an ADR for a decision made, an RFC for one still open, a
-  PRD for behaviour not built yet, a runbook for a recurring procedure, a
-  research page for an engine fact, a report for an investigation.
+  `README.md`, and the genres that author pages carry a `TEMPLATE.md` to start
+  one from — an ADR for a decision made, an RFC for one still open, a PRD for
+  behaviour not built yet, a runbook for a recurring procedure, a research page
+  for an engine fact, a report for an investigation. `authoring/`, `bundles/`,
+  `getting-started/` and `status/` are reference sets and have none.
   [docs/README.md](docs/README.md) is the index, served as `shamway docs index`.
 
 ## Gates you must not weaken
@@ -293,13 +267,12 @@ Two things that are **not** one concern:
 - mechanical loads, and a staged visual of a different asset "so there is
   something to photograph"
 
-This has a scar. The self-test was asked to prove a **placed block**. The
-generated provider also instantiates the prefab in front of the camera, so
-a comma-listed `PLAYTEST_SUITE` showed a texture hanging in mid-air *and* a
-block on a voxel in the same session. That mix was not a look. It kept
-happening because load, prefab-look, and block-place lived in one suite —
-and it happened again when a camera-staged VFX lineup was folded into
-`_editorless` so it could ride with `_block_model`.
+This has a scar, twice over. The self-test was asked to prove a **placed
+block**; the generated provider also instantiates the prefab in front of the
+camera, so a comma-listed `PLAYTEST_SUITE` showed a texture hanging in
+mid-air *and* a block on a voxel in the same session, and a later fix folded a
+camera-staged VFX lineup into `_editorless` so it could ride with
+`_block_model`.
 
 They are named suites, and they stay named:
 
@@ -318,16 +291,14 @@ refuses the mixed suite too.
 (mechanical loads) — never `_look`. Visual sign-off of a floating prefab
 is `playtest-synthesized.sh --look`, its own invocation.
 
-The general rule is not limited to those suffixes. Do not smuggle a second
-picture into a suite whose name does not say so. Do not put
-`Object.Instantiate` into a block-model case "so there is something to
-photograph". Do not drag a `BlockEntityData.transform` into the camera.
-Point the camera at the voxel.
+The rule is not limited to those suffixes. Do not smuggle a second picture into
+a suite whose name does not say so. Do not put `Object.Instantiate` into a
+block-model case "so there is something to photograph". Do not drag a
+`BlockEntityData.transform` into the camera. Point the camera at the voxel.
 
-The first synthesized bundle to go all the way through makes the point: the
-suite reported `pass=3 fail=0`, and what the reviewer added on top was that the
-ring was *centred and circular* and the beeps were *clean*. Stretched art and a
-crackling clip pass every gate in this repository.
+A `pass=3 fail=0` suite reported a ring that was not centred and beeps that
+were not clean. Stretched art and a crackling clip pass every gate in this
+repository.
 
 Unity is **opt-in**; the gates are not. `bundle_source = "synthesized"` is the
 default: this tool writes the bundle, and every asset class a modlet references
@@ -401,14 +372,12 @@ design, its shader lane, and what is still unbuilt inside it.
 
 ## Using the pipeline in a mod
 
-Full walkthrough: [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md). The short form, with no editor anywhere:
-
-- `scripts/install-tools.sh` — host packages, including `vkd3d-compiler`
-- `scripts/bootstrap` — the CLI
+Full walkthrough: [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md).
+The short form, with no editor anywhere:
 
 ```bash
-scripts/install-tools.sh
-scripts/bootstrap
+scripts/install-tools.sh                      # host packages, including vkd3d-compiler
+scripts/bootstrap                              # the CLI
 shamway init /path/to/MyMod --game-dir "$SEVEN_DAYS_TO_DIE_DIR"
 shamway doctor && shamway build --probe
 ```
@@ -426,10 +395,10 @@ shamway init /path/to/MyMod --bundle-source unity --game-dir "$SEVEN_DAYS_TO_DIE
 scripts/install-unity-editor.sh --project /path/to/MyMod/tools/shamway/UnityProject
 ```
 
-Then, per asset change — the same two commands on every path:
-
-- `shamway build` — synthesize (or build), gate, stage bundle + tracked manifest
-- `shamway validate` — bundle and every recursive Config/**/*.xml reference
+Then, per asset change, the same two commands on every path: `shamway build`
+synthesizes (or builds), gates, and stages the bundle with its tracked
+manifest; `shamway validate` checks the bundle and every recursive
+`Config/**/*.xml` reference.
 
 ```bash
 shamway build
@@ -538,22 +507,16 @@ fast, read-only, and need neither Unity nor the network.
 
 ## Asset authoring
 
-[docs/authoring/agent-workflows.md](docs/authoring/agent-workflows.md) defines the reproducible
-asset-as-code patterns (mesh, texture, icon, audio, VFX lanes) and the evidence
-packet a release candidate must carry.
-[docs/authoring/authoring-tools.md](docs/authoring/authoring-tools.md) lists the researched
-open-source tools and which gate each one belongs to.
-[docs/authoring/art-direction.md](docs/authoring/art-direction.md) is the style contract for
-generated and drawn 2D assets — read it before writing any generation prompt.
-[docs/authoring/audio.md](docs/authoring/audio.md) and [docs/authoring/vfx.md](docs/authoring/vfx.md) own the sound and
-particle lanes, including the runtime behaviours that make a correctly built
-asset silent or invisible.
-[docs/authoring/video.md](docs/authoring/video.md) owns the recorded-clip lane:
-`client capture --clip` adopts a hash-addressed capture, `review-video` reads
-it back against the intent the author committed.
-[docs/authoring/environment-effects.md](docs/authoring/environment-effects.md) owns weather, fog and
-light — the effect no bundle can carry, where every offline gate proves
-nothing and a particle-only "environment" is the standard failure.
+Each lane is owned by one page; read the owner before working that lane.
+
+| Page | Owns |
+|---|---|
+| [agent-workflows](docs/authoring/agent-workflows.md) | the reproducible asset-as-code patterns per lane, and the evidence packet a release candidate carries |
+| [authoring-tools](docs/authoring/authoring-tools.md) | the researched open-source tools, and which gate each belongs to |
+| [art-direction](docs/authoring/art-direction.md) | the style contract for generated and drawn 2D assets; read it before writing any generation prompt |
+| [audio](docs/authoring/audio.md) and [vfx](docs/authoring/vfx.md) | the sound and particle lanes, including the runtime behaviours that make a correctly built asset silent or invisible |
+| [video](docs/authoring/video.md) | the recorded-clip lane: `client capture --clip` adopts a hash-addressed capture, `review-video` reads it back against the committed intent |
+| [environment-effects](docs/authoring/environment-effects.md) | weather, fog and light: the effect no bundle can carry, where every offline gate proves nothing and a particle-only "environment" is the standard failure |
 
 `shamway generate` ships working generators for the
 sound, audio, cutout, particle-card, icon, texture-maps, hide, mesh,

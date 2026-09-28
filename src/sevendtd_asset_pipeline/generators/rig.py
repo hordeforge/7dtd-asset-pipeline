@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         "--rig",
         default="humanoid",
         help="rig template name (humanoid, quadruped, quadruped-small, quadruped-large,"
-        " bird) or a path to a .json rig spec",
+        " bird, dinosaur, arachnid, crocodile) or a path to a .json rig spec",
     )
     parser.add_argument(
         "--scale",

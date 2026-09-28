@@ -52,6 +52,7 @@ MESH_SUFFIXES = {".glb", ".gltf", ".obj"}
 
 BLENDER_SCRIPT = r"""
 import math
+import os
 import sys
 
 import bpy
@@ -108,7 +109,7 @@ for path in sources:
     before = {o.name for o in bpy.context.scene.objects}
     import_one(path)
     new = [o for o in bpy.context.scene.objects if o.name not in before]
-    stem = path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    stem = os.path.splitext(os.path.basename(path))[0]
     got = []
     # Keep world size before dropping a scale-300 parent armature.
     for o in new:

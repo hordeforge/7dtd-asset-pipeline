@@ -149,6 +149,41 @@ class DeployTests(unittest.TestCase):
             self.assertTrue((mod / "ModInfo.xml").is_file(), "the authoring tree survived")
             self.assertTrue((mod / "Config/items.xml").is_file())
 
+    def test_refuses_a_mod_name_a_windows_host_cannot_write(self) -> None:
+        """A name the deploy target cannot create is refused here, not there.
+
+        Every POSIX host accepts `: * ? " < > |`, a trailing dot or a reserved
+        device name; Windows refuses all of them, so a deployment created on
+        Linux under one of those names raises a bare OSError inside the mkdir
+        on the host that has to read it back.
+        """
+        refused = [
+            "My:Mod",
+            "My*Mod",
+            "My?Mod",
+            'My"Mod',
+            "My<Mod",
+            "My>Mod",
+            "My|Mod",
+            "MyMod.",
+            "CON",
+            "nul.png",
+            "COM1",
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mod = root / "MyMod"
+            (mod / "Config").mkdir(parents=True)
+            (mod / "Config/items.xml").write_text("<configs/>")
+            (mod / "ModInfo.xml").write_text("<xml/>")
+            for name in refused:
+                with (
+                    self.subTest(name=name),
+                    self.assertRaisesRegex(PipelineError, "not a single folder name"),
+                ):
+                    client.deploy_mod(mod, root / "Mods", name)
+            self.assertEqual(client._deploy_name("MyMod"), "MyMod")
+
     def test_a_failed_copy_leaves_the_previous_deployment_intact(self) -> None:
         """The destination is replaced only after every entry has been staged.
 
@@ -597,6 +632,53 @@ class ProcessAndAudioTests(unittest.TestCase):
         for failure in (unavailable, OSError("no ps here")):
             with mock.patch("sevendtd_asset_pipeline.client.subprocess.run", side_effect=failure):
                 self.assertEqual(client._ps_process_table(), [])
+
+    def test_a_windows_host_answers_with_tasklist_when_ps_is_absent(self) -> None:
+        """A native Windows client has neither `/proc` nor `ps`.
+
+        Both queries absent read as "nothing running", which is what this
+        module exists to refuse: `client launch` would start over a live
+        client. `tasklist` is the platform's own spelling of the same question.
+        """
+
+        def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if argv[0] == "ps":
+                raise OSError("no ps here")
+            self.assertEqual(argv[0], "tasklist")
+            self.assertIn("/FO", argv)
+            self.assertIn("CSV", argv)
+            return subprocess.CompletedProcess(
+                argv,
+                0,
+                '"7DaysToDie.exe","100","Console","1","1,024 K"\n'
+                '"7DaysToDieServer.x86_64","102","Services","0","8 K"\n'
+                "garbage\n",
+                "",
+            )
+
+        with tempfile.TemporaryDirectory() as temp:
+            absent = Path(temp) / "no-proc-here"
+            with (
+                mock.patch("sevendtd_asset_pipeline.client.shutil.which", return_value=None),
+                mock.patch("sevendtd_asset_pipeline.client.subprocess.run", side_effect=fake_run),
+            ):
+                self.assertEqual(client.running_client_pids(absent), [100])
+                self.assertTrue(client._is_client_pid(100, absent))
+                self.assertFalse(client._is_client_pid(102, absent))
+
+    def test_the_tasklist_table_is_parsed_as_csv(self) -> None:
+        """Its memory column is localized and thousands-separated, so not by split."""
+
+        def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(
+                argv,
+                0,
+                '"7DaysToDie.exe","100","Console","1","1,024 K"\n',
+                "",
+            )
+
+        with mock.patch("sevendtd_asset_pipeline.client.subprocess.run", side_effect=fake_run):
+            self.assertEqual(client._tasklist_process_table(), [(100, "7DaysToDie.exe")])
 
     def test_sink_inputs_are_selected_by_application_name_or_binary(self) -> None:
         inputs = [

@@ -35,6 +35,7 @@ from .capabilities import require_capability
 from .config import PipelineConfig
 from .errors import PipelineError
 from .icon_check import DEFAULT_CELL, inspect_icon
+from .text import folded
 from .unity_process import run_unity
 
 SUPERSAMPLE = 4
@@ -82,7 +83,18 @@ def _resolve_prefab(config: PipelineConfig, prefab: str) -> str:
             raise PipelineError(f"no prefab at {candidate}")
         return prefab
     root = config.unity_project / config.source_root
-    matches = sorted(root.rglob(f"{prefab}.prefab")) if root.is_dir() else []
+    # Folded rather than globbed: `rglob` matches case-sensitively on Linux
+    # and case-insensitively on Windows and macOS, so one mod would resolve
+    # `chair` on two hosts and refuse it on the third. Every other stem
+    # comparison in the package goes through `text.folded` for the same reason.
+    wanted = folded(f"{prefab}.prefab")
+    matches = (
+        sorted(
+            candidate for candidate in root.rglob("*.prefab") if folded(candidate.name) == wanted
+        )
+        if root.is_dir()
+        else []
+    )
     if not matches:
         raise PipelineError(
             f"no prefab named {prefab!r} below {root}; pass a project-relative "

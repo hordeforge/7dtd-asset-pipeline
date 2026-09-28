@@ -158,6 +158,19 @@ class CaptureTests(unittest.TestCase):
                 self.assertNotIn("/", written.name)
                 self.assertTrue(written.is_file())
 
+    def test_a_reserved_device_label_becomes_a_writable_frame(self) -> None:
+        """`CON.png` is the console device on Windows, whatever the extension.
+
+        The label is the citation for the frame, so it is prefixed rather than
+        refused: a differently named frame is worth more than none.
+        """
+        self._tool("grim", 'printf "fake png data" > "$1"')
+        for label in ("CON", "nul", "LPT3"):
+            with self.subTest(label=label):
+                entry = capture(label, root=self.evidence, env={"XDG_SESSION_TYPE": "wayland"})
+                self.assertTrue((self.evidence / entry.file).is_file())
+                self.assertNotEqual(entry.file.split(".")[0].upper(), label)
+
     def test_a_failed_grab_keeps_the_previous_frame_and_no_temporary(self) -> None:
         """The grabber aims at a staged name, so a failed shot cannot take the
         previously recorded frame down with it or leave a partial one behind."""

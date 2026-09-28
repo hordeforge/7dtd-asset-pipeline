@@ -37,6 +37,19 @@ class BufferUriContainment(unittest.TestCase):
         self._document("body.bin")
         self.assertEqual(parse_gltf(self.source).source, self.source)
 
+    def test_a_document_saved_on_windows_with_a_bom_still_reads(self) -> None:
+        """A UTF-8 BOM is legal at the head of a file and `json.loads` rejects it.
+
+        Windows editors add one on save, so the failure depended on which host
+        re-saved the `.gltf`; the TextAsset lane already strips it.
+        """
+        (self.source.parent / "body.bin").write_bytes(b"\x00\x00\x00\x00")
+        document = json.dumps(
+            {"asset": {"version": "2.0"}, "buffers": [{"uri": "body.bin", "byteLength": 4}]}
+        )
+        self.source.write_bytes(b"\xef\xbb\xbf" + document.encode("utf-8"))
+        self.assertEqual(parse_gltf(self.source).source, self.source)
+
     def test_parent_traversal_is_refused(self) -> None:
         (self.root / "secret.bin").write_bytes(b"k\x00e\x00y\x00")
         self._document("../secret.bin")

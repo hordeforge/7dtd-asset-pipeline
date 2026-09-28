@@ -458,10 +458,11 @@ What each of those knows:
   (matching the executable, not the bare name, which also matches the
   dedicated server and `7DaysToDie_Data` paths), records the launch time, and
   then requires the newest `logs/output_log_client__*.txt` to post-date it.
-  The process table is read from `/proc` where the kernel provides one and
-  from `ps -o pid= -o args=` where it does not, so the refusal still holds on
-  a host without `/proc`; a `ps` that cannot answer reads as "nothing
-  running", the same as an unreadable `/proc`.
+  The process table is read from `/proc` where the kernel provides one, from
+  `ps -o pid= -o args=` where it does not, and from `tasklist /FO CSV /NH` on
+  a Windows host, which has neither of the other two, so the refusal still
+  holds there; a query that cannot answer reads as "nothing running", the
+  same as an unreadable `/proc`.
 - **Where the log is, and that it is rewritten.** The client writes a new
   `output_log_client__<date>__<time>.txt` under the user data's `logs/` on
   every start. Quote the report or copy the file; a line number from the live

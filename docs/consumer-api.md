@@ -355,7 +355,7 @@ type trees ship inside that command.
 
 Install everything at once:
 
-- `uv pip install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'` — lz4, Pillow, NumPy, trimesh
+- `uv pip install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'` — every capability extra: `writer`, `authoring`, `mesh`, `audio`, `patch`
 - `scripts/install-tools.sh --with-authoring` — Blender, OpenSCAD, glTF validator, …
 - `scripts/install-tools.sh --with-desktop-capture` — a screenshot tool for `client capture`
 

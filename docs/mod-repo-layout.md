@@ -13,8 +13,8 @@ Install the pipeline once, per machine:
 uv tool install '7dtd-asset-pipeline[all] @ git+https://github.com/hordeforge/7dtd-asset-pipeline'
 ```
 
-The `[all]` extra brings Pillow, NumPy, trimesh, and the writer's lz4, which
-the icon, texture, mesh, and synthesized-writer lanes need;
+The `[all]` extra is every capability extra at once, which is what the icon,
+texture, mesh, audio, patch, and synthesized-writer lanes need;
 without it the core still inspects and validates through the base unityz tool,
 and `shamway capabilities --missing` prints the exact command to add them.
 

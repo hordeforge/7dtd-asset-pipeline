@@ -16,22 +16,12 @@ from .vfx import (
     CURVE_CONSTANT,
     CURVE_CURVE,
     CURVE_TWO_CURVES,
+    RENDER_MODES,
     Curve,
     Gradient,
     Keyframe,
     VfxSystem,
 )
-
-# ParticleSystemShapeType / ParticleSystemRenderMode, as Unity 2022.3 serializes
-# them and as lab.bundle / AtomicDoomsday YAML prefabs carry them.
-SHAPE_SPHERE = 0
-SHAPE_HEMISPHERE = 2
-SHAPE_CONE = 4
-SHAPE_BOX = 5
-SHAPE_CIRCLE = 10
-RENDER_BILLBOARD = 0
-RENDER_STRETCH = 1
-RENDER_HORIZONTAL = 2
 
 # AnimationCurve wrap: 2 = Loop, harvested on every MinMaxCurve in lab.bundle
 # and in AtomicDoomsday YAML (`m_PreInfinity: 2`, `m_PostInfinity: 2`,
@@ -136,7 +126,8 @@ def particle_renderer_fields(system: VfxSystem, game_object: Any, material: Any)
     fields["m_SortingFudge"] = 0.0
     fields["m_NormalDirection"] = 1.0
     fields["m_ShadowBias"] = 0.0
-    fields["m_RenderAlignment"] = 3 if system.renderer.mode == RENDER_STRETCH else 0
+    stretched = RENDER_MODES["stretched_billboard"]
+    fields["m_RenderAlignment"] = 3 if system.renderer.mode == stretched else 0
     fields["m_Pivot"] = {"x": 0.0, "y": 0.0, "z": 0.0}
     fields["m_Flip"] = {"x": 0.0, "y": 0.0, "z": 0.0}
     fields["m_EnableGPUInstancing"] = True

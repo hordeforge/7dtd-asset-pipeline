@@ -40,6 +40,7 @@ from pathlib import Path
 
 from .capabilities import extra_install
 from .errors import PipelineError
+from .references import config_xml_texts
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # Colour types that carry an alpha channel. 3 (palette) can carry tRNS
@@ -186,18 +187,6 @@ def inspect_icon(path: Path, atlas: str, cell: int = DEFAULT_CELL) -> IconFile:
     )
 
 
-def _config_texts(config_dir: Path) -> list[tuple[Path, str]]:
-    texts: list[tuple[Path, str]] = []
-    if not config_dir.is_dir():
-        return texts
-    for xml_file in sorted(config_dir.rglob("*.xml")):
-        try:
-            texts.append((xml_file, xml_file.read_text(encoding="utf-8-sig")))
-        except (OSError, UnicodeDecodeError) as exc:
-            raise PipelineError(f"cannot read {xml_file}: {exc}") from exc
-    return texts
-
-
 def _scan_atlases(
     mod_root: Path, atlas_dir: Path, cell: int
 ) -> tuple[list[IconFile], list[str], list[str]]:
@@ -310,7 +299,7 @@ def discover_implicit_icon_names(
     Config/ serves every reconciliation below it.
     """
     names: dict[str, list[str]] = {}
-    for xml_file, text in texts if texts is not None else _config_texts(config_dir):
+    for xml_file, text in texts if texts is not None else config_xml_texts(config_dir):
         for match in DEFINITION.finditer(text):
             if CUSTOM_ICON_INSIDE.search(match.group(3)):
                 continue
@@ -328,7 +317,7 @@ def discover_icon_references(
     already read, so a caller running both discoveries reads each XML once.
     """
     references: dict[str, list[str]] = {}
-    for xml_file, text in texts if texts is not None else _config_texts(config_dir):
+    for xml_file, text in texts if texts is not None else config_xml_texts(config_dir):
         for match in DISPLAY_ENTRY_ICON.finditer(text):
             value = match.group(1).strip()
             if value:
@@ -366,7 +355,7 @@ def check_icons(
     config = config_dir if config_dir else mod_root / "Config"
 
     # Both reconciliations scan the same Config/ XML; read it once.
-    texts = _config_texts(config)
+    texts = config_xml_texts(config)
     resolved, external, explicit_problems = _reconcile_explicit_keys(
         discover_icon_references(config, texts), provided, provided_ci
     )

@@ -353,11 +353,8 @@ void main()
 # POSITION+COLOR+TEXCOORD0+TEXCOORD1 with mask 57 (bits 0,3,4,5). The two share
 # exactly POSITION and TEXCOORD0, and exactly bits 0 and 4.
 VERTEX_ATTRIBUTE_POSITION = 0
-VERTEX_ATTRIBUTE_NORMAL = 1
-VERTEX_ATTRIBUTE_TANGENT = 2
 VERTEX_ATTRIBUTE_COLOR = 3
 VERTEX_ATTRIBUTE_TEXCOORD0 = 4
-VERTEX_ATTRIBUTE_TEXCOORD1 = 5
 
 # What `UNLIT_GLSL` declares: `in vec3 in_POSITION0` and `in vec2 in_TEXCOORD0`.
 UNLIT_VERTEX_ATTRIBUTES = (1 << VERTEX_ATTRIBUTE_POSITION) | (1 << VERTEX_ATTRIBUTE_TEXCOORD0)
@@ -489,7 +486,6 @@ VULKAN_SECTION_HEADER = 176
 # Decoded from `Legacy Shaders/Transparent/Cutout/VertexLit`, whose Vulkan
 # records name `unity_ObjectToWorld`, `unity_MatrixVP` and the rest inside them.
 VULKAN_VERTEX_GLOBALS = "VGlobals"
-VULKAN_PIXEL_GLOBALS = "PGlobals"
 
 # One buffer, this writer's own layout, because Unity fills a per-shader globals
 # buffer at the offsets the parameter record declares - unlike `UnityPerFrame`,
@@ -705,7 +701,6 @@ def compress_smolv(spirv: bytes) -> bytes:
 
 
 # SPIR-V storage classes, and Unity's descriptor-set convention for them.
-STORAGE_CLASS_UNIFORM_CONSTANT = 0  # images and samplers
 STORAGE_CLASS_UNIFORM = 2  # constant buffers
 UNITY_SET_RESOURCES = 0
 UNITY_SET_CONSTANT_BUFFERS = 1

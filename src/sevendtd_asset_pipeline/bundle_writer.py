@@ -102,7 +102,6 @@ because that is the name 7DTD resolves, so the texture cannot also be called
 meaningful.
 """
 
-SERIALIZED_VERSION = 22
 # BuildTarget.StandaloneWindows64. The shipped client loads a Windows-target
 # bundle even under Proton, which is why the whole pipeline defaults to it.
 STANDALONE_WINDOWS64 = 19

@@ -75,8 +75,6 @@ EVIDENCE_SCHEMA_VERSION = 1
 DEFAULT_PROVIDER = "gemini"
 DEFAULT_TIMEOUT_SECONDS = 120.0
 
-CAMERA_PATHS = ("turntable", "walk-cycle", "fixed", "first-person")
-
 ADVISORY_NOTE = (
     "Advisory only: a model critique is evidence about the submitted clip "
     "under the recorded intent. It cannot satisfy the fresh-client human-look "

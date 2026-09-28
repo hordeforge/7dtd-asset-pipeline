@@ -110,15 +110,26 @@ def parse_reference(source: Path, uri: str) -> AssetReference:
     return AssetReference(source, uri, match is not None, mod_name, bundle_path, asset)
 
 
-def discover_references(config_dir: Path) -> list[AssetReference]:
+def config_xml_texts(config_dir: Path) -> list[tuple[Path, str]]:
+    """Every `Config/**/*.xml` with its text, in a stable order.
+
+    `utf-8-sig` because the engine reads these files with a byte-order mark
+    stripped, and a mod authored on Windows routinely has one.
+    """
     if not config_dir.is_dir():
         return []
-    references: list[AssetReference] = []
+    texts: list[tuple[Path, str]] = []
     for xml_file in sorted(config_dir.rglob("*.xml")):
         try:
-            text = xml_file.read_text(encoding="utf-8-sig")
+            texts.append((xml_file, xml_file.read_text(encoding="utf-8-sig")))
         except (OSError, UnicodeDecodeError) as exc:
             raise PipelineError(f"cannot read {xml_file}: {exc}") from exc
+    return texts
+
+
+def discover_references(config_dir: Path) -> list[AssetReference]:
+    references: list[AssetReference] = []
+    for xml_file, text in config_xml_texts(config_dir):
         references.extend(
             parse_reference(xml_file, match.group(0)) for match in BUNDLE_URI.finditer(text)
         )

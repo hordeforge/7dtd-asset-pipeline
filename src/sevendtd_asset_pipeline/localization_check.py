@@ -41,6 +41,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .errors import PipelineError
+from .references import config_xml_texts
 
 # A definition whose name is the display string: the engine looks the name up.
 DEFINITION = re.compile(r'<(item|block|entity_class)\s+name\s*=\s*"([^"]+)"', re.DOTALL)
@@ -140,7 +141,7 @@ def discover_localization_keys(
     name up) or an explicit localize-bearing property value that is a bare token.
     """
     keys: dict[str, list[str]] = {}
-    for xml_file, text in texts if texts is not None else _config_texts(config_dir):
+    for xml_file, text in texts if texts is not None else config_xml_texts(config_dir):
         for match in DEFINITION.finditer(text):
             # Group 2 is the name. Group 1 is the tag; entity_class resolves its
             # display name by the class name too.
@@ -155,18 +156,6 @@ def discover_localization_keys(
     return keys
 
 
-def _config_texts(config_dir: Path) -> list[tuple[Path, str]]:
-    texts: list[tuple[Path, str]] = []
-    if not config_dir.is_dir():
-        return texts
-    for xml_file in sorted(config_dir.rglob("*.xml")):
-        try:
-            texts.append((xml_file, xml_file.read_text(encoding="utf-8-sig")))
-        except (OSError, UnicodeDecodeError) as exc:
-            raise PipelineError(f"cannot read {xml_file}: {exc}") from exc
-    return texts
-
-
 def check_localization(
     mod_root: Path,
     config_dir: Path | None = None,
@@ -177,7 +166,7 @@ def check_localization(
     mod_root = Path(mod_root).resolve()
     config = Path(config_dir) if config_dir else mod_root / "Config"
     csv_path = config / LOCALIZATION_FILENAME
-    texts = _config_texts(config)
+    texts = config_xml_texts(config)
 
     referenced = discover_localization_keys(config, texts)
     provided = read_csv_keys(csv_path) if csv_path.is_file() else set()

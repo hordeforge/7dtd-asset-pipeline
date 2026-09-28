@@ -157,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with scratch_dir("mesh-") as directory:
         script = directory / "generate.py"
-        script.write_text(BLENDER_SCRIPT, encoding="utf-8")
+        script.write_text(BLENDER_SCRIPT, encoding="utf-8", newline="\n")
         staged = directory / "out.glb"
         try:
             result = subprocess.run(

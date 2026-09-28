@@ -197,6 +197,7 @@ def initialize(
             bundle_source=bundle_source,
         ),
         encoding="utf-8",
+        newline="\n",
     )
 
     template = files("sevendtd_asset_pipeline").joinpath("templates/UnityProject")
@@ -211,6 +212,7 @@ def initialize(
         (bundle_source_dir / ".gitkeep").write_text(
             "# Put source assets and their Unity .meta files below this directory.\n",
             encoding="utf-8",
+            newline="\n",
         )
         # Unity adds m_EditorVersionWithRevision itself on first open, but writing
         # it now pins the exact build in review and in git history, and tells
@@ -219,7 +221,7 @@ def initialize(
         lines = [f"m_EditorVersion: {unity_version}"]
         if changeset:
             lines.append(f"m_EditorVersionWithRevision: {unity_version} ({changeset})")
-        version_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        version_file.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
         created_scripts = []
 
     # newline="\n": GNU make rejects CRLF recipes, which is what Windows
@@ -244,12 +246,15 @@ def initialize(
                 "# named <stem>_albedo is bound to that prefab's material.\n"
                 "# See `shamway docs no-unity`.\n",
                 encoding="utf-8",
+                newline="\n",
             )
     # The mod is where an agent actually works, so the rules travel with the
     # scaffold rather than living only in this repository.
     guide = mod_root / "tools" / "shamway" / "AGENTS.md"
     guide.parent.mkdir(parents=True, exist_ok=True)
-    guide.write_text(render_agent_guide(mod_name, bundle_name, bundle_source), encoding="utf-8")
+    guide.write_text(
+        render_agent_guide(mod_name, bundle_name, bundle_source), encoding="utf-8", newline="\n"
+    )
     # Editable sources and their provenance need a home outside the Unity
     # bundle folder, or they end up either unrecorded or accidentally shipped.
     # Created without clobbering: a mod may already have art here.
@@ -304,6 +309,6 @@ def _install_editor_scripts(template: Traversable, project: Path) -> list[Path]:
     for name in PIPELINE_EDITOR_SCRIPTS:
         source = template.joinpath(EDITOR_FOLDER).joinpath(name)
         target = destination / name
-        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
         written.append(target)
     return written

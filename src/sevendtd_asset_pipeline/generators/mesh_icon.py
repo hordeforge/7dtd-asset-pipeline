@@ -205,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with scratch_dir("mesh-icon-") as directory:
         script = directory / "render.py"
-        script.write_text(BLENDER_SCRIPT, encoding="utf-8")
+        script.write_text(BLENDER_SCRIPT, encoding="utf-8", newline="\n")
         rendered = directory / "icon.png"
         try:
             result = subprocess.run(

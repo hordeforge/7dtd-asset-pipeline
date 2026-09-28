@@ -442,7 +442,7 @@ def compile_hlsl(source: str, profile: str) -> bytes:
     with scratch_dir("shader-dxbc-") as work:
         src = work / "shader.hlsl"
         out = work / "shader.dxbc"
-        src.write_text(source, encoding="utf-8")
+        src.write_text(source, encoding="utf-8", newline="\n")
         result = _compile(
             [
                 binary,
@@ -638,7 +638,7 @@ def compile_spirv_glslang(source: str, stage: str, language: str = "hlsl") -> by
     with scratch_dir("shader-glsl-") as work:
         src = work / f"shader.{stage}.{language}"
         out = work / "shader.spv"
-        src.write_text(source, encoding="utf-8")
+        src.write_text(source, encoding="utf-8", newline="\n")
         command = [
             binary,
             "-D",  # the source is HLSL

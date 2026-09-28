@@ -1044,7 +1044,26 @@ def run(args: argparse.Namespace) -> int:
     raise PipelineError(f"unknown command {args.command}")
 
 
+def _utf8_console() -> None:
+    """Make stdout and stderr carry the paths this tool prints.
+
+    A mod path or a name with a non-ASCII character raises
+    `UnicodeEncodeError` on a Windows console still on cp1252, and a stack
+    traceback out of `print` is not the diagnostic the command was written to
+    give. `reconfigure` exists on the text streams from 3.7; a redirected pipe
+    or a captured stream that has none is left alone.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, ValueError, OSError):  # pragma: no cover - detached stream
+                continue
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_console()
     arguments = list(sys.argv[1:] if argv is None else argv)
     # These are passthroughs with their own argument handling, so their
     # `--help` must reach them rather than be claimed (and rejected) by this

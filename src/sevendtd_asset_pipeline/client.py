@@ -322,7 +322,7 @@ def _write_lock(path: Path, fields: dict[str, str]) -> None:
     """
     body = "".join(f"{key}={value}\n" for key, value in fields.items())
     with atomic.staged_write(path) as staged:
-        staged.write_text(body, encoding="utf-8")
+        staged.write_text(body, encoding="utf-8", newline="\n")
 
 
 @contextmanager

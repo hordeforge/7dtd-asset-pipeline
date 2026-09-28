@@ -713,7 +713,7 @@ def write(plan_: ProviderPlan) -> list[Path]:
     written: list[Path] = []
     for name, text in render(plan_).items():
         target = plan_.directory / name
-        target.write_text(text, encoding="utf-8")
+        target.write_text(text, encoding="utf-8", newline="\n")
         written.append(target)
     return written
 

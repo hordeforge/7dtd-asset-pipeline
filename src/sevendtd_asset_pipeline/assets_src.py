@@ -193,8 +193,10 @@ def create(
         lane_dir.mkdir(exist_ok=True)
         keep = lane_dir / ".gitkeep"
         if not keep.exists():
-            keep.write_text(f"# {purpose}\n", encoding="utf-8")
+            keep.write_text(f"# {purpose}\n", encoding="utf-8", newline="\n")
     readme = root / "README.md"
     if not readme.exists():
-        readme.write_text(render_readme(mod_name, bundle_name, membership), encoding="utf-8")
+        readme.write_text(
+            render_readme(mod_name, bundle_name, membership), encoding="utf-8", newline="\n"
+        )
     return root

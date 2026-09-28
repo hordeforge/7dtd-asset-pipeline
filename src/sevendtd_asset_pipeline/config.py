@@ -8,7 +8,7 @@ import os
 import re
 import tomllib
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from .errors import ConfigNotFoundError, PipelineError
 
@@ -233,8 +233,27 @@ class PipelineConfig:
 def _path(base: Path, value: object, field: str) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise PipelineError(f"{field} must be a non-empty path string")
-    path = Path(os.path.expandvars(os.path.expanduser(value)))
-    return (base / path).resolve() if not path.is_absolute() else path.resolve()
+    return _resolved(base, Path(os.path.expandvars(os.path.expanduser(value))), field)
+
+
+def _resolved(base: Path, path: PurePath, field: str) -> Path:
+    """Resolve a configured path against the mod root, or refuse it.
+
+    A rooted path with no drive is neither relative nor absolute on Windows:
+    `/opt/7dtd` inherited from a teammate's committed `shamway.toml`, or a
+    `SEVEN_DAYS_TO_DIE_DIR` carried over from a Linux shell, would otherwise
+    join onto `base` and resolve to `<mod>/opt/7dtd`. Every gate would then
+    read a tree the author never named instead of reporting the game
+    directory as missing, so the value is refused with the reason.
+    """
+    if path.is_absolute():
+        return Path(str(path)).resolve()
+    if path.anchor:
+        raise PipelineError(
+            f"{field} is {str(path)!r}, a rooted path with no drive on this host. "
+            "Write it with a drive letter, or as a path relative to the mod."
+        )
+    return (base / str(path)).resolve()
 
 
 def _flag(value: object, field: str) -> bool:

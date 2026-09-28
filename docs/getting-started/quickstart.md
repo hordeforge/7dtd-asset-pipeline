@@ -15,7 +15,9 @@ step 4 nothing here downloads more than a few hundred megabytes.
 - Linux, macOS, or Windows. The scripted install path is Linux; the CLI itself
   is portable. CI gates on both Linux and macOS (the tests skip what a
   case-insensitive volume cannot express, such as two casings of one name);
-  Windows runs the same Python but no CI job exercises it yet.
+  Windows runs the same Python but no CI job exercises it yet. Generated text
+  is written LF on every host, so a modlet scaffolded on Windows is the same
+  tree byte for byte as one scaffolded on Linux.
 - An installed 7 Days to Die client. It is the authority for which engine
   revision your bundle must claim, and it is only ever read.
 

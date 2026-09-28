@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import ast
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
 
 from fixtures import unityfs_bundle
 
@@ -1117,6 +1118,84 @@ class UnityOptionalTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(PipelineError, "bundle_source must be one of"):
             load_config(config_file)
+
+
+class ConfiguredPathTests(unittest.TestCase):
+    """A configured path resolves against the mod, or is refused by name.
+
+    The driveless case is asserted through `PureWindowsPath` so it is the same
+    check on every host: on Windows `/opt/7dtd` from a teammate's committed
+    config is rooted but not absolute, and joining it onto the mod root would
+    read `<mod>/opt/7dtd` and report a healthy tree that does not exist.
+    """
+
+    def test_a_rooted_path_with_no_drive_is_refused(self) -> None:
+        from sevendtd_asset_pipeline.config import _resolved
+
+        with self.assertRaisesRegex(PipelineError, "no drive"):
+            _resolved(Path("/mod"), PureWindowsPath("/opt/7dtd"), "game.directory")
+
+    def test_a_relative_path_resolves_under_the_mod_root(self) -> None:
+        from sevendtd_asset_pipeline.config import _resolved
+
+        self.assertEqual(
+            Path("/mod/assets-src").resolve(),
+            _resolved(Path("/mod"), PurePath("assets-src"), "source_root"),
+        )
+
+    def test_an_absolute_path_is_used_where_it_points(self) -> None:
+        from sevendtd_asset_pipeline.config import _resolved
+
+        self.assertEqual(
+            Path("/games/7dtd").resolve(),
+            _resolved(Path("/mod"), PurePath("/games/7dtd"), "game.directory"),
+        )
+
+
+class ScaffoldLineEndingsTests(unittest.TestCase):
+    """A generated text file is the same file whichever host wrote it.
+
+    Every text file this package writes carries `newline="\\n"`, so a Windows
+    host does not produce a modlet, a provider, or a tracked manifest that
+    differs from the Linux and macOS ones by a byte per line. The bytes are
+    only checkable on a CRLF host, so the convention is pinned at the call
+    site as well: a `write_text` that forgets `newline` is the regression, and
+    it reads the same on every host.
+    """
+
+    PACKAGE = Path(__file__).resolve().parents[1] / "src" / "sevendtd_asset_pipeline"
+
+    def test_no_generated_text_write_omits_the_line_ending(self) -> None:
+        offenders: list[str] = []
+        for path in sorted(self.PACKAGE.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+                if name != "write_text":
+                    continue
+                if not any(keyword.arg == "newline" for keyword in node.keywords):
+                    offenders.append(f"{path.relative_to(self.PACKAGE)}:{node.lineno}")
+        self.assertEqual([], offenders, "text writers without newline=\\n write CRLF on Windows")
+
+    def test_no_scaffolded_text_file_carries_a_carriage_return(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "ExampleMod"
+            root.mkdir()
+            (root / "ModInfo.xml").write_text(
+                '<xml><Name value="ExampleMod" /></xml>', encoding="utf-8"
+            )
+            initialize(root, None, "example.unity3d", "2022.3.62f2")
+            generated = [
+                path
+                for path in root.rglob("*")
+                if path.is_file() and path.suffix in ("", ".toml", ".md", ".keep")
+            ]
+            self.assertGreater(len(generated), 4, "the scaffold wrote almost nothing to check")
+            for path in generated:
+                self.assertNotIn(b"\r", path.read_bytes(), f"{path.name} was written with CRLF")
 
 
 if __name__ == "__main__":

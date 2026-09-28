@@ -192,7 +192,7 @@ def _write_manifest(root: Path, entries: list[dict[str, object]]) -> Path:
     path = Path(root) / MANIFEST_NAME
     body = json.dumps(entries, indent=2, sort_keys=True) + "\n"
     with atomic.staged_write(path) as staged:
-        staged.write_text(body, encoding="utf-8")
+        staged.write_text(body, encoding="utf-8", newline="\n")
     return path
 
 

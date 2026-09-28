@@ -920,7 +920,7 @@ def main(argv: list[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with scratch_dir("bind-") as directory:
         script = directory / "bind.py"
-        script.write_text(BLENDER_SCRIPT, encoding="utf-8")
+        script.write_text(BLENDER_SCRIPT, encoding="utf-8", newline="\n")
         rig_glb = directory / "rig.glb"
         rig_glb.write_bytes(rig_to_glb(rig))
         staged = directory / "out.glb"

@@ -694,7 +694,7 @@ def _pack(params: dict[str, Any], game_dir: Path | None) -> dict[str, Any]:
         staged.write_bytes(bundle)
     manifest = Path(params["manifest"]) if params.get("manifest") else Path(f"{output}.manifest")
     with atomic.staged_write(manifest) as staged:
-        staged.write_text(manifest_text, encoding="utf-8")
+        staged.write_text(manifest_text, encoding="utf-8", newline="\n")
     return {
         "bundle": str(output),
         "manifest": str(manifest),

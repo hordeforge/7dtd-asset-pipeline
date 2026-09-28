@@ -212,6 +212,29 @@ class WriteArtifactTests(unittest.TestCase):
         self.assertEqual(successes[0], destination.read_text(encoding="utf-8"))
         self.assertEqual([], dotfiles(self.root))
 
+    def test_write_new_falls_back_where_hard_links_are_unavailable(self) -> None:
+        """exFAT, FAT32 and SMB shares cannot hard link; the publish still works.
+
+        Without the fallback `os.link` raises a bare OSError there, so a video
+        verdict on such a filesystem died with an unhandled error instead of
+        the PipelineError the module promises, and the no-overwrite guarantee
+        went with it.
+        """
+        from sevendtd_asset_pipeline.atomic import write_new
+
+        destination = self.root / "review.json"
+        with mock.patch("os.link", side_effect=OSError(1, "Operation not permitted")):
+            write_new(destination, "verdict")
+        self.assertEqual("verdict", destination.read_text(encoding="utf-8"))
+
+        with (
+            mock.patch("os.link", side_effect=OSError(1, "Operation not permitted")),
+            self.assertRaises(FileExistsError),
+        ):
+            write_new(destination, "second verdict")
+        self.assertEqual("verdict", destination.read_text(encoding="utf-8"))
+        self.assertEqual([], dotfiles(self.root))
+
     def test_replacing_an_existing_artifact_keeps_one_copy(self) -> None:
         from sevendtd_asset_pipeline.atomic import write
 

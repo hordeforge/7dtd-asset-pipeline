@@ -188,6 +188,11 @@ channel packing, montages, and quantitative comparison (`magick compare
 -metric RMSE`). Prefer a new output path over `mogrify`, which overwrites
 inputs.
 
+The writer accepts either binary: `magick` (ImageMagick 7) and `convert` (6).
+A `convert` is used only when `convert -version` says it is ImageMagick, because
+macOS ships its own `/usr/bin/convert` for file-mode conversion and it precedes
+any Homebrew ImageMagick on `PATH`.
+
 - Official CLI guide: <https://imagemagick.org/command-line-processing/>
 - Tool behavior: <https://imagemagick.org/command-line-tools/>
 

@@ -48,7 +48,6 @@ import json
 import math
 import struct
 import sys
-import tempfile
 import zlib
 from collections import Counter
 from dataclasses import dataclass, replace
@@ -61,6 +60,7 @@ from .capabilities import has_capability, require_capability
 from .errors import PipelineError
 from .gltf_scene import GltfNode, GltfPrimitive, GltfScene, parse_gltf
 from .vfx import parse_vfx
+from .workdir import scratch_dir
 
 ASSET_BUNDLE = 142
 TEXT_ASSET = 49
@@ -247,15 +247,14 @@ def _create(objects: list[BundleObject], unity_version: str, target: int, cab: s
             for path_id, obj in enumerate(objects, start=1)
         ],
     }
-    with tempfile.TemporaryDirectory(prefix="shamway-create-") as scratch:
-        workdir = Path(scratch)
+    with scratch_dir("shamway-create-") as workdir:
         if resource:
             (workdir / "resource.bin").write_bytes(resource)
             spec["resource"] = {"file": str(workdir / "resource.bin")}
         spec_path = workdir / "spec.json"
         output = workdir / "bundle.unity3d"
         try:
-            spec_path.write_text(json.dumps(spec, allow_nan=False))
+            spec_path.write_text(json.dumps(spec, allow_nan=False), encoding="utf-8", newline="\n")
         except ValueError as exc:
             raise PipelineError(f"a field holds a value JSON cannot carry: {exc}") from exc
         result = unityz.invoke("create", str(spec_path), "--out", str(output), subject=cab)

@@ -76,7 +76,7 @@ def _scratch_project(directory: Path, unity_version: str) -> Path:
     (project / "ProjectSettings").mkdir(parents=True, exist_ok=True)
     (project / "Packages").mkdir(parents=True, exist_ok=True)
     version_file = project / "ProjectSettings" / "ProjectVersion.txt"
-    version_file.write_text(f"m_EditorVersion: {unity_version}\n", encoding="utf-8")
+    version_file.write_text(f"m_EditorVersion: {unity_version}\n", encoding="utf-8", newline="\n")
     manifest = project / "Packages" / "manifest.json"
     # The AssetBundle module must be present here for the same reason it must
     # be present in a build: without it the runtime has no loader to call.
@@ -93,12 +93,13 @@ def _scratch_project(directory: Path, unity_version: str) -> Path:
         )
         + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     source = files("sevendtd_asset_pipeline").joinpath(
         f"templates/UnityProject/{EDITOR_FOLDER}/{VERIFIER_SCRIPT}"
     )
     (project / EDITOR_FOLDER / VERIFIER_SCRIPT).write_text(
-        source.read_text(encoding="utf-8"), encoding="utf-8"
+        source.read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
     )
     return project
 

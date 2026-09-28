@@ -18,6 +18,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from .errors import PipelineError
+
 
 @contextmanager
 def staged_write(destination: Path) -> Iterator[Path]:
@@ -55,12 +57,37 @@ def write_new(path: Path, payload: bytes | str) -> None:
     file is linked into its final name instead.  ``link`` is an atomic
     create-if-absent operation because both names are in the same directory;
     it raises :class:`FileExistsError` without changing the earlier file.
+
+    Hard links do not exist on every filesystem the evidence directory can sit
+    on (exFAT, FAT32, an SMB share, some container bind mounts), where the
+    call fails with a bare :class:`OSError`.  There the destination is
+    created with ``O_CREAT | O_EXCL``, which is the same exclusive create
+    without the link.
     """
     data = payload.encode("utf-8") if isinstance(payload, str) else payload
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
     try:
         temporary.write_bytes(data)
-        os.link(temporary, path)
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            raise
+        except OSError as exc:
+            _create_exclusive(path, data, exc)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _create_exclusive(path: Path, data: bytes, link_error: OSError) -> None:
+    """Publish `data` at `path` on a filesystem that cannot hard link."""
+    try:
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        raise PipelineError(
+            f"cannot create {path} exclusively: {exc} (hard links failed first: {link_error})"
+        ) from exc
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(data)

@@ -16,13 +16,14 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from sevendtd_asset_pipeline import transcode
 from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.errors import PipelineError
 
 has_ffmpeg = shutil.which("ffmpeg") is not None
-has_magick = shutil.which("magick") or shutil.which("convert")
+has_magick = transcode.imagemagick()
 # Two of the image tests read the result back with Pillow, which is an
 # optional capability of its own: ImageMagick rasterizes, Pillow inspects.
 # Gating the class on the rasterizer alone made those two fail on a host that
@@ -164,6 +165,46 @@ class ImageTests(unittest.TestCase):
                 Image.open(rendered) as image,
             ):
                 self.assertEqual(0, image.convert("RGBA").getpixel((1, 1))[3])
+
+
+class ImagemagickProbeTests(unittest.TestCase):
+    """`convert` is a BSD file-mode tool on macOS as well as ImageMagick 6.
+
+    `/usr/bin/convert` ships with macOS and precedes any Homebrew ImageMagick
+    on PATH, so a `convert` found by name is not an ImageMagick. Accepting it
+    made every SVG lane on macOS fail on another program's usage text instead
+    of reporting the missing dependency.
+    """
+
+    def _probe(self, banner: bytes, names: list[str | None]) -> str | None:
+        def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[bytes]:
+            return subprocess.CompletedProcess(command, 0, stdout=banner)
+
+        with (
+            mock.patch.object(shutil, "which", side_effect=names),
+            mock.patch.object(subprocess, "run", side_effect=fake_run),
+        ):
+            return transcode.imagemagick()
+
+    def test_magick_is_accepted_without_consulting_convert(self) -> None:
+        self.assertEqual(
+            "/opt/bin/magick",
+            self._probe(b"Version: ImageMagick 7.1", ["/opt/bin/magick", "/usr/bin/convert"]),
+        )
+
+    def test_a_convert_that_identifies_as_imagemagick_is_accepted(self) -> None:
+        self.assertEqual(
+            "/usr/local/bin/convert",
+            self._probe(b"Version: ImageMagick 6.9", [None, "/usr/local/bin/convert"]),
+        )
+
+    def test_a_convert_that_does_not_identify_as_imagemagick_is_refused(self) -> None:
+        self.assertIsNone(
+            self._probe(b"convert: illegal option -- -\n", [None, "/usr/bin/convert"])
+        )
+
+    def test_no_converter_at_all_reports_the_missing_dependency(self) -> None:
+        self.assertIsNone(self._probe(b"", [None, None]))
 
 
 if __name__ == "__main__":

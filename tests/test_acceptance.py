@@ -213,6 +213,21 @@ class RenderTests(unittest.TestCase):
             self.assertIn(f"{planned.assembly}.cs", names)
             self.assertIn(f"{planned.assembly}.csproj", names)
 
+    def test_generated_files_are_written_with_unix_line_endings(self) -> None:
+        """A file written on Windows must be the same file, byte for byte.
+
+        The provider is generated source the playtest orchestrator compiles and
+        a reviewer reads; a CRLF checkout of it would not match the artifact
+        the Linux and macOS gates produced, and `write` is the only place its
+        bytes are decided.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _mod(Path(tmp), ["panel.png"])
+            written = acceptance.write(acceptance.plan(config))
+            self.assertTrue(written, "write produced no files")
+            for path in written:
+                self.assertNotIn(b"\r\n", path.read_bytes(), f"{path.name} was written with CRLF")
+
 
 class InjectionTests(unittest.TestCase):
     """Manifest stems and mod names are untrusted: they can arrive from an

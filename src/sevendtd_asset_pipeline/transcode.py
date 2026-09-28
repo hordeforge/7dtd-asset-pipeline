@@ -44,6 +44,8 @@ IMAGE_SUFFIXES = (".svg", ".psd", ".exr", ".webp", ".avif")
 
 FFMPEG_TIMEOUT = 120
 MAGICK_TIMEOUT = 120
+VERSION_PROBE_TIMEOUT = 15
+IMAGEMAGICK_BANNER = "imagemagick"
 
 
 def _run(command: list[str], timeout: int, what: str) -> None:
@@ -117,6 +119,35 @@ def as_vorbis(source: Path, quality: int) -> Iterator[Path]:
         yield encoded
 
 
+def imagemagick() -> str | None:
+    """The ImageMagick binary on this host, or None when there is none.
+
+    `magick` is the ImageMagick 7 name; `convert` is the ImageMagick 6 one,
+    and on macOS it is also a BSD file-mode conversion tool that happens to
+    share the name and ships in `/usr/bin` ahead of any Homebrew ImageMagick
+    on PATH. A `convert` is accepted only when it identifies itself as
+    ImageMagick, so an SVG lane on macOS reports a missing dependency instead
+    of failing on a stranger's usage text.
+    """
+    for candidate in (shutil.which("magick"), shutil.which("convert")):
+        if candidate is None:
+            continue
+        try:
+            result = subprocess.run(
+                [candidate, "-version"],
+                check=False,
+                timeout=VERSION_PROBE_TIMEOUT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        banner = result.stdout.decode("utf-8", errors="replace").lower()
+        if IMAGEMAGICK_BANNER in banner:
+            return candidate
+    return None
+
+
 @contextmanager
 def as_png(source: Path, density: int = 384) -> Iterator[Path]:
     """Yield `source` as a PNG, rasterizing through ImageMagick if needed.
@@ -129,7 +160,7 @@ def as_png(source: Path, density: int = 384) -> Iterator[Path]:
     if source.suffix.lower() not in IMAGE_SUFFIXES:
         yield source
         return
-    magick = shutil.which("magick") or shutil.which("convert")
+    magick = imagemagick()
     if not magick:
         raise PipelineError(
             f"{source.name} needs ImageMagick to rasterize, and it is not installed. "

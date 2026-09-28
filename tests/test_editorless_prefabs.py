@@ -937,6 +937,7 @@ class SynthesizedMembersTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    @needs_numpy
     def test_a_named_hierarchy_predicts_the_writers_own_names(self) -> None:
         from unittest.mock import patch
 

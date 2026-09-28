@@ -134,3 +134,11 @@ class NormalizeFileTests(unittest.TestCase):
         path.write_bytes(b"PK\x03\x04not really a wheel")
         self.assertFalse(normalize_dist.normalize(path, EPOCH))
         self.assertEqual(path.read_bytes(), b"PK\x03\x04not really a wheel")
+
+    def test_main_fails_loudly_on_a_path_that_is_not_there(self) -> None:
+        # `make dist` passes the shell glob dist/*.tar.gz, and a glob that
+        # matched nothing arrives as its own literal name. A build that
+        # produced no sdist has to stop here, not normalize a path that does
+        # not exist.
+        missing = str(self.root / "no-such-dist" / "*.tar.gz")
+        self.assertEqual(normalize_dist.main(["--epoch", str(EPOCH), missing]), 1)

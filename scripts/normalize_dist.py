@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import io
+import sys
 import tarfile
 from pathlib import Path
 
@@ -104,6 +105,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("artifacts", nargs="+", type=Path, help="the built files to normalize")
     args = parser.parse_args(argv)
     for path in args.artifacts:
+        if not path.is_file():
+            # A shell glob that matched nothing arrives as its own literal
+            # name, which is how a build that produced no sdist reaches here.
+            # A traceback from read_bytes would say less than this.
+            print(f"ERROR: no such artifact: {path}", file=sys.stderr)
+            return 1
         if normalize(path, args.epoch):
             print(f"normalized {path}")
         elif path.name.endswith(SDIST_SUFFIXES):

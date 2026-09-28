@@ -112,14 +112,17 @@ locked:
 # edit-test loop is a make target rather than a line of PYTHONPATH a
 # contributor has to reconstruct: `make test TESTS=tests.test_fuzz`, or a
 # single dotted name to run one case. Left empty, this is the same discover
-# run CI makes.
+# run CI makes. The narrowed form puts tests/ on the path as well, because
+# discovery does that by putting the start directory there and a test module
+# that imports a sibling helper (unityz_readback, fixtures) fails to import
+# without it.
 TESTS ?=
 
 test:
 ifeq ($(strip $(TESTS)),)
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -v
 else
-	PYTHONPATH=src $(PYTHON) -m unittest -v $(TESTS)
+	PYTHONPATH=src:tests $(PYTHON) -m unittest -v $(TESTS)
 endif
 
 # Line coverage of src/ under the unit suite. Writes .coverage in the repo
@@ -166,22 +169,41 @@ dist:
 # Two builds of this tree, compared byte for byte. The reproducibility claim is
 # otherwise untested, and the ways it breaks (a timestamp, a uid, an unsorted
 # file list) are invisible until something diffs the two.
+#
+# The second build runs from a copy of the tree at a *different absolute
+# path*. Two builds side by side in one checkout cannot see a build that
+# records the directory it was built in, and that is the leak the archive
+# metadata normalization exists beside: one commit, two machines, two
+# checkout paths, the same bytes. The copy holds no .git, so the epoch is
+# exported here rather than left to `dist`'s commit-date fallback.
 reproducible:
-	@first="$$(mktemp -d)"; second="$$(mktemp -d)"; \
-	trap 'rm -rf "$$first" "$$second"' EXIT; \
+	@first="$$(mktemp -d)"; workspace="$$(mktemp -d)"; \
+	trap 'rm -rf "$$first" "$$workspace"' EXIT; \
+	epoch="$${SOURCE_DATE_EPOCH:-$$(git log -1 --format=%ct 2>/dev/null)}"; \
+	if [ -z "$$epoch" ]; then \
+		echo "ERROR: no SOURCE_DATE_EPOCH in the environment and no git commit date;" >&2; \
+		echo "       build from a checkout, or set SOURCE_DATE_EPOCH yourself" >&2; \
+		exit 1; \
+	fi; \
+	export SOURCE_DATE_EPOCH="$$epoch"; \
+	mkdir -p "$$workspace/elsewhere/src" "$$workspace/out"; \
+	tar -cf - --exclude=./.git --exclude=./.venv --exclude=./build \
+		--exclude=./dist --exclude='*.egg-info' . | \
+		tar -xf - -C "$$workspace/elsewhere/src"; \
 	$(MAKE) --no-print-directory dist DIST_DIR="$$first" >/dev/null; \
-	$(MAKE) --no-print-directory dist DIST_DIR="$$second" >/dev/null; \
+	$(MAKE) --no-print-directory -C "$$workspace/elsewhere/src" dist \
+		DIST_DIR="$$workspace/out" >/dev/null; \
 	compared=0; \
 	for artifact in "$$first"/*; do \
 		name="$$(basename "$$artifact")"; \
-		cmp "$$artifact" "$$second/$$name" >/dev/null || { \
+		cmp "$$artifact" "$$workspace/out/$$name" >/dev/null || { \
 			echo "ERROR: two builds of this tree disagree on $$name" >&2; \
 			exit 1; \
 		}; \
 		compared=$$((compared + 1)); \
 	done; \
 	test "$$compared" -gt 0 || { echo "ERROR: no distribution was built" >&2; exit 1; }; \
-	echo "OK: $$compared artifacts are byte-identical across two builds"
+	echo "OK: $$compared artifacts are byte-identical across two builds, one from a different path"
 
 # The build leaves `build/`, setuptools' `src/*.egg-info`, and the staged copies
 # of docs/ and scripts/ that setup.py writes into the package. All four are

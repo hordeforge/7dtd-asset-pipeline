@@ -81,13 +81,15 @@ metadata, which is otherwise the build machine's clock and user. `make clean-dis
 removes what the build leaves behind (`build/`, `dist/`, and the staged copies
 of `docs/` and `scripts/`).
 
-`make reproducible` builds twice and compares the artifacts byte for byte. CI
-runs it on every pull request and the release workflow runs it before
-publishing, so a timestamp or a uid reaching a shipped artifact fails a build
-rather than being discovered later. Pass `SOURCE_DATE_EPOCH` to build from
-something other than a commit (an unpacked sdist, a shallow copy with no git
-history); without it and without a commit, `make dist` fails rather than
-guessing.
+`make reproducible` builds twice and compares the artifacts byte for byte, and
+the second build runs from a copy of the tree at a different absolute path, so
+a build that records the directory it was built in fails instead of passing
+because both builds shared one. CI runs it on every pull request and the
+release workflow runs it before publishing, so a timestamp or a uid reaching a
+shipped artifact fails a build rather than being discovered later. Pass
+`SOURCE_DATE_EPOCH` to build from something other than a commit (an unpacked
+sdist, a shallow copy with no git history); without it and without a commit,
+`make dist` fails rather than guessing.
 
 ## The editorless path is a CI gate, not a claim
 

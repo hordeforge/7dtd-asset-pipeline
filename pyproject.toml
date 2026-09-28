@@ -1,5 +1,11 @@
 [build-system]
-requires = ["setuptools>=65"]
+# The build backend is pinned to the same setuptools the dev group pins and
+# mypy type-checks setup.py against. `uv build` builds in an isolated
+# environment, so an open range here resolves against PyPI on every build: a
+# setuptools release landing between two builds of one commit changes what
+# serializes the wheel, and `make reproducible` cannot see a version that was
+# never recorded. One version, one home (uv.lock), one build.
+requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]

@@ -31,6 +31,36 @@ the editor), probed
 (`shamway build --probe` ran it), or executed for real (`render-icon`, a
 generator, a fresh client). Never describe the first as the third.
 
+## Fuzzing the untrusted-input parsers
+
+`tests/test_fuzz.py` holds the property-based harnesses (Hypothesis, a
+`dependency-groups` dev entry) for the two parsers that cross a trust
+boundary:
+
+| Harness | Input it generates |
+|---|---|
+| `UnityzReportMappingTests` | `unityz info --json` reports, a separately versioned reader's stdout feeding the class-142 gate |
+| `ModReferenceParsingTests` | bundle URIs, tracked manifests, and `ModInfo.xml`, all read out of a modlet this repository did not write |
+
+Each harness asserts the parser is **total**: any input ends as a
+`PipelineError` naming what was wrong or a result whose invariants hold, and
+anything else is a failure. A fuzzer only proves a bug exists; these assertions
+are what turn a lost invariant into a failing test.
+
+The report strategy is structure-aware. Random JSON almost never builds a node
+list the reader accepts, which fuzzes the rejection path and never the one the
+gate runs on, so `unityz_reports` builds real report shapes and breaks one
+field at a time, and the seeds are reports a real bundle produces. Keep it that
+way: a strategy biased toward malformed input is a harness that cannot see a
+regression in the accepting path.
+
+Every crash artifact becomes a pinned `@example` in the same change, and a
+parser that gains a new rejection rule gets the assertion that states it.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m unittest tests.test_fuzz
+```
+
 ## The editorless path is a CI gate, not a claim
 
 "Unity is opt-in" is the kind of statement that rots quietly, because the

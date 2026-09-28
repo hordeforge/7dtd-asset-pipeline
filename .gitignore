@@ -42,3 +42,6 @@ src/sevendtd_asset_pipeline/scripts/
 
 # per-run playtest log
 .selftest-acceptance.log
+
+# Hypothesis's example database, rebuilt from the seeds in tests/test_fuzz.py
+.hypothesis/

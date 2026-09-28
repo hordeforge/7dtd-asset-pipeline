@@ -65,6 +65,18 @@ def inspect_bundle(path: Path) -> BundleInfo:
             raise
         message = f"{path} is not a UnityFS asset bundle readable by unityz: {exc}"
         raise PipelineError(message) from exc
+    return bundle_info(report, path)
+
+
+def bundle_info(report: dict[str, object], path: Path) -> BundleInfo:
+    """Map a unityz `info --json` report onto `BundleInfo`.
+
+    Split out of `inspect_bundle` because the report is untrusted input at a
+    process boundary: unityz is a separately versioned reader, and anything
+    printed there reaches a gate that rejects bundles. A malformed report has
+    to end as a `PipelineError` naming what was wrong, never as a traceback
+    from the mapping layer.
+    """
     if report.get("type") != "UnityFS":
         raise PipelineError(f"{path} is not a UnityFS asset bundle")
 

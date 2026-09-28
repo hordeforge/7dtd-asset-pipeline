@@ -14,6 +14,11 @@ tag has no changelog section.
 
 ### Added
 
+- `tests/test_fuzz.py`, Hypothesis harnesses over the two untrusted-input
+  parsers: the `unityz info --json` report mapping in `unityfs.bundle_info`,
+  and the mod-supplied bundle URI, manifest and `ModInfo.xml` parsing in
+  `references`. Each asserts the parser is total and its accepted result
+  well-formed, over structure-aware seeds built from real report shapes.
 - A public-API snapshot gate in `tests/test_release_contract.py`.
   `sevendtd_asset_pipeline.__all__` is the supported surface, and a name
   dropping out of it broke a consumer with an `ImportError` and nothing in

@@ -42,8 +42,7 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
-      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/setup-unityz
       - run: uv python install ${{ matrix.python-version }}
       # Install the Python core alone: unityz is a base host tool above, while
       # the suite must pass without optional Python capabilities because that
@@ -75,6 +74,11 @@ jobs:
           # merge ref still resolves; `make dist` falls back to it anyway.
           fetch-depth: 0
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          # Every other uv job caches; this one builds twice from the lockfile,
+          # so the cache is the difference between a two-minute job and a slow
+          # one that discourages the push that would have caught the leak.
+          enable-cache: true
       - run: make reproducible
 
   macos:
@@ -97,16 +101,18 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
-      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/setup-unityz
       - run: uv python install 3.13
       - run: uv sync --locked --python 3.13
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: shamway --help
       - run: shamway schema
-      - run: uv run --no-project python -m unittest discover -s tests
-        env:
-          PYTHONPATH: src
+      # `make test`, not `uv run --no-project`: that form resolves an ambient
+      # interpreter and ignores the `.venv` this job just synced, so the suite
+      # ran on macOS without the dependency set uv.lock pins. A platform
+      # breakage that only exists against a locked version, an sdist, or a
+      # wheel install was invisible here. The venv is the tree under test.
+      - run: make test
 
   capabilities:
     # The optional capabilities must also work, and must not be required.
@@ -117,8 +123,7 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
-      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/setup-unityz
       - run: ./scripts/bootstrap
       - run: .venv/bin/shamway capabilities --json
       - run: .venv/bin/shamway capabilities --missing
@@ -150,8 +155,7 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
-      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/setup-unityz
       # The optional extras carry trimesh (reads the mesh) and Pillow (writes
       # the texture). Still no editor, no game install, and no network at run
       # time.
@@ -219,7 +223,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /opt/vkd3d
-          key: vkd3d-${{ env.VKD3D_VERSION }}-${{ runner.os }}
+          # The installer is part of the key, not just the version: a change to
+          # how `scripts/install-tools.sh --with-vkd3d-source` builds it is a
+          # change to the artifact, and a version-only key would keep handing
+          # back the build the old recipe produced, silently, forever.
+          key: vkd3d-${{ env.VKD3D_VERSION }}-${{ runner.os }}-${{ hashFiles('scripts/install-tools.sh') }}
       # Deliberately the documented route, not a copy of it: this is the exact
       # command Debian and Ubuntu users are told to run, so CI gates the recipe
       # rather than something that merely resembles it.
@@ -267,8 +275,7 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
-      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/setup-unityz
       # The dev group carries the pinned coverage this job measures with, so
       # the badge's denominator comes from uv.lock rather than from whatever
       # PyPI served on the day it ran.

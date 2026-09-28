@@ -27,7 +27,11 @@ creates `.venv` from `uv.lock`; then `uv run --project . shamway` or
 clone's `.venv`, and do not run `python3 -m sevendtd_asset_pipeline` from the
 system interpreter. `make` uses `uv run` when uv is on PATH and falls back to
 the plain interpreter otherwise, because the core has no dependencies and the
-suite must pass without the optional capabilities — CI runs it both ways.
+suite must pass without the optional capabilities. CI proves that half: the
+`test` job syncs the lock with no extras and runs the whole suite, so a test
+that reaches for `lz4`, Pillow, trimesh or fsb5 fails there. Every job runs the
+suite through the venv that lock built, macOS included, so a platform break
+against a pinned version is visible.
 
 `make check` compiles the package, syntax-checks every shell script, runs
 `shellcheck` when it is installed, and — when Mono's `mcs` and a Unity 2022.3

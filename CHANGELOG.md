@@ -72,6 +72,12 @@ tag has no changelog section.
 
 ### Changed
 
+- The pinned unityz install and its `GITHUB_PATH` line were six copies of two
+  steps across `ci.yml` and `release.yml`; they are one composite action,
+  `.github/actions/setup-unityz`, called by every job that reads a bundle.
+  `release.yml`'s test job also runs `shamway --help` and `shamway schema`
+  before the suite, the entry-point check `ci.yml` runs and the release job
+  was the last publish path without.
 - `texture2ddecoder` is pinned to `1.0.6` in the dev group, beside ruff, mypy,
   setuptools, coverage and hypothesis. It is the suite's independent
   block-compression decoder, so a new major that changes its BCn output moves
@@ -173,6 +179,15 @@ tag has no changelog section.
 
 ### Fixed
 
+- The `macos` job ran the suite through `uv run --no-project`, which resolves
+  an ambient interpreter and ignores the `.venv` the same job just synced from
+  `uv.lock`. macOS evidence therefore covered no locked dependency at all, so a
+  platform break that exists only against a pinned version went unseen. It runs
+  `make test` now, on the tree the job installed.
+- The vkd3d cache key named the version and the runner but not the recipe, so
+  a change to `scripts/install-tools.sh --with-vkd3d-source` kept restoring the
+  binary the previous recipe built. `hashFiles` of the installer is part of the
+  key now.
 - `tests/test_bundle_verify.py` indexed a `dict[str, object]` directly, so
   `make typecheck` failed on a correct checkout with `Value of type "object" is
   not indexable`. The assertion now compares the whole asset list, which also

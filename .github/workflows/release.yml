@@ -31,13 +31,18 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - run: UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
-      - run: echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/setup-unityz
       # uv sync provisions the interpreter itself when missing, resolves from
       # the committed uv.lock (hashes verified), and installs the dev group
       # `make check` needs.
       - run: uv sync --locked --python 3.13
       - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      # The installed console script, as ci.yml's test job runs it. This is the
+      # job whose failure keeps a release from being published, and a tag cut
+      # from a tree whose entry point or packaged schema is broken would
+      # otherwise ship. Two lines, and they need no Unity and no game install.
+      - run: shamway --help
+      - run: shamway schema
       - run: make check test
 
   publish:

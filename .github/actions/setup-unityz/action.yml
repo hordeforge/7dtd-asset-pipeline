@@ -1,0 +1,21 @@
+name: setup-unityz
+description: >-
+  Install the pinned unityz reader and put it on PATH for the rest of the job.
+
+# Every job that reads a bundle, and the release job, needs the same reader at
+# the same pin. It was six copies of two steps across two workflows, and a copy
+# that forgot the PINNED prefix or the PATH line would fail in a way that read
+# like a product bug. One definition, called by every job that needs it.
+#
+# The install is a host tool, not a Python capability, so it stays outside
+# `uv sync` and beside the checkout rather than in the project venv.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        # RUNNER_TEMP rather than /tmp: disk-backed, per job, and the directory
+        # this repository's own scripts point TMPDIR at.
+        UNITYZ_INSTALL_PREFIX="$RUNNER_TEMP/unityz" scripts/install-unityz.sh
+        echo "$RUNNER_TEMP/unityz/bin" >> "$GITHUB_PATH"

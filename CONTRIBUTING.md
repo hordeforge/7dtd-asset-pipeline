@@ -96,6 +96,15 @@ This project is 0.x: per SemVer, minor bumps may break, and the changelog's
 surface beyond `__all__` in `sevendtd_asset_pipeline/__init__.py` is internal
 and may change without notice.
 
+`__all__` is snapshotted in `tests/test_release_contract.py`
+(`PublicApiTests.PUBLIC_API`), so a name added or dropped there is a deliberate
+act. Dropping one is a break: declare it in `[Unreleased]` under `Removed`, in
+backticks, then update the snapshot. The suite fails both ways, because an
+accidental export or an undeclared removal is what the snapshot exists to catch.
+The published operation surface (`shamway schema`) is guarded separately: adding
+an operation means adding it to `operations.OPERATIONS` and `api._DISPATCH`, and
+the suite fails if the two disagree.
+
 Agent-facing rules live in [AGENTS.md](AGENTS.md) and apply to human
 contributors too.
 

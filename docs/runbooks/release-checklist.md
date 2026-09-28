@@ -3,6 +3,29 @@
 Rows marked *(unity)* apply only to `bundle_source = "unity"` or a staged
 `"external"` bundle. The default source starts no editor and owes none of them.
 
+## Releasing the pipeline itself
+
+The asset checklist below is about a mod's contents. Publishing
+`7dtd-asset-pipeline` to PyPI is a separate, shorter pass, and everything the
+release workflow enforces it enforces on the tag.
+
+- [ ] `make check test` green on `main`; `make locked` proves `uv.lock` matches
+      `pyproject.toml`, which every CI job and every consumer install depends on.
+- [ ] `__version__` in `src/sevendtd_asset_pipeline/_version.py` is the version
+      being released, and `pyproject.toml` still reads it dynamically rather than
+      holding a second copy (`tests/test_release_contract.py` fails either way).
+- [ ] Every `[Unreleased]` entry is either moved under `## [X.Y.Z] - <date>` or
+      still true; a section for the new version exists, or the release workflow
+      refuses to publish and writes generic notes instead.
+- [ ] A dropped or renamed `__all__` export is named in backticks under
+      `Removed`. The public-surface snapshot fails until both the entry and the
+      snapshot in `tests/test_release_contract.py` are updated.
+- [ ] Anything a consumer must act on (a new required dependency, a dropped
+      extra, a renamed config key) reads as what to do, not only what changed.
+- [ ] `vX.Y.Z` tag pushed from the commit that carries both the version bump and
+      the changelog section. Pushing a tag re-runs the suite, compares it to
+      `__version__`, and attaches the sdist, wheel and SBOM to the release.
+
 ## Source and project
 
 - [ ] Every selected source asset is committed — and, *(unity)*, its `.meta`.

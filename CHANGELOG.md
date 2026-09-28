@@ -12,6 +12,18 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Added
+
+- A public-API snapshot gate in `tests/test_release_contract.py`.
+  `sevendtd_asset_pipeline.__all__` is the supported surface, and a name
+  dropping out of it broke a consumer with an `ImportError` and nothing in
+  the release notes. A name that leaves the surface now fails the suite until
+  the `[Unreleased]` section declares it under `Removed` and the snapshot is
+  updated; a name added fails until it is snapshotted, so the next removal
+  cannot read as an addition nobody reviewed. This project is 0.x, so the
+  minor bump carries the break; the changelog is where the consumer learns
+  of it.
+
 ### Changed
 
 - `texture2ddecoder` moved from the `writer`, `inspect` and `all` extras to

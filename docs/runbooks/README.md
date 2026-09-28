@@ -32,6 +32,7 @@ reference description of a gate ([validation.md](../validation.md)).
 <!-- inventory:runbook:start -->
 - [troubleshooting.md](troubleshooting.md) — failure messages and their root
   causes, from build refusals to a silent clip in a live client
-- [release-checklist.md](release-checklist.md) — the artifact, offline-gate,
-  and live-acceptance boxes a release has to tick
+- [release-checklist.md](release-checklist.md) — releasing the pipeline itself,
+  then the artifact, offline-gate, and live-acceptance boxes a mod release has
+  to tick
 <!-- inventory:runbook:end -->

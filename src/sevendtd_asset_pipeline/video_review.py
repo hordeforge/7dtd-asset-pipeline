@@ -36,6 +36,7 @@ import os
 import shutil
 import signal
 import subprocess
+import time
 import uuid
 from collections.abc import Callable
 from contextlib import suppress
@@ -500,6 +501,7 @@ def run_review(
         raise PipelineError(
             "review-video takes exactly one of --intent PATH or --intent-text JSON, never both"
         )
+    timeout_seconds = evidence.check_timeout_seconds(timeout_seconds, "--timeout")
     if intent_path is not None:
         intent, intent_raw = load_intent_file(Path(intent_path), parse_intent)
     elif intent_text is not None:
@@ -549,7 +551,9 @@ def run_review(
         argv += ["--keep-raw-response"]
 
     execute = runner or _default_runner
+    started = time.monotonic()
     result = execute(argv, timeout_seconds)
+    duration_seconds = round(time.monotonic() - started, 3)
     if result.returncode != 0:
         message = (result.stderr or result.stdout or "").strip().splitlines()
         raise PipelineError(
@@ -595,6 +599,7 @@ def run_review(
         model_requested=resolved_model,
         params=params,
         keep_raw_response=keep_raw_response,
+        duration_seconds=duration_seconds,
     )
 
     document["evidence"] = {"path": None, "sha256": None}
@@ -612,6 +617,7 @@ def run_review(
         else {}
     )
     usage.setdefault("reported_by_provider", envelope.get("usage") is not None)
+    usage["duration_seconds"] = duration_seconds
     return {
         "advisory_only": True,
         "note": ADVISORY_NOTE,
@@ -642,6 +648,7 @@ def _evidence(
     model_requested: str,
     params: dict[str, Any],
     keep_raw_response: bool,
+    duration_seconds: float,
 ) -> dict[str, Any]:
     """The hash-addressed record that makes one review citable later."""
     media = envelope.get("media") or []
@@ -680,6 +687,10 @@ def _evidence(
             "model_reported": envelope["provider"].get("model_reported"),
         },
         "sampling": envelope.get("sampling", {}),
+        # Wall clock at the gateway boundary; the gateway's own envelope
+        # reports what the provider charged for, this reports what the
+        # submission took, and only one of the two was on record before.
+        "duration_seconds": duration_seconds,
         "rubric_version": envelope.get("rubric_version"),
         "prompt_version": envelope.get("prompt_version"),
         "prompt": envelope.get("prompt"),

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 from collections.abc import Callable, Mapping
@@ -240,13 +241,63 @@ def load_intent_file(path: Path, parse: Callable[[Any, str], Any]) -> tuple[Any,
         raw = path.read_bytes()
     except OSError as exc:
         raise PipelineError(f"cannot read intent file {path}: {exc}") from exc
+    check_intent_size(raw, f"intent file {path}")
     return parse(decode_json(raw, f"intent file {path}"), f"intent file {path}"), raw
 
 
 def parse_intent_text(text: str, parse: Callable[[Any, str], Any]) -> tuple[Any, bytes]:
     """Validate an inline intent document with the lane's `parse`; return both."""
     raw = text.encode("utf-8")
+    check_intent_size(raw, "--intent-text")
     return parse(decode_json(raw, "--intent-text"), "--intent-text"), raw
+
+
+# -- submission budget --------------------------------------------------------
+
+# What one submission may carry before it is refused locally. The provider
+# adapters cap the answer (`MAX_OUTPUT_TOKENS`) and the media
+# (`ProviderLimits.max_bytes`); nothing capped what the caller put into the
+# prompt, so a large intent document was submitted, tokenized, and billed
+# without a limit on either side. An intent is a short record of purpose and
+# constraints, so a document past these figures is a mistake rather than a
+# use, and the refusal costs nothing while the submission would.
+MAX_INTENT_BYTES = 64 * 1024
+MAX_PROMPT_CHARACTERS = 32_000
+# A wait past this is a wedged provider or a caller who walked away, and either
+# way a review that takes a quarter of an hour is not one anybody is waiting
+# on. A non-positive or non-finite timeout is not a long wait at all: it
+# reaches `socket.settimeout` and fails there, which is a traceback rather
+# than the single ERROR line the command surface promises.
+MAX_TIMEOUT_SECONDS = 900.0
+
+
+def check_intent_size(raw: bytes, origin: str) -> None:
+    """Refuse an intent document too large to be a recorded intent."""
+    if len(raw) > MAX_INTENT_BYTES:
+        raise PipelineError(
+            f"{origin} is {len(raw)} bytes; an intent document may be at most "
+            f"{MAX_INTENT_BYTES}. Record the purpose and the constraints, not "
+            "an essay, and point at the source for the rest"
+        )
+
+
+def check_prompt_size(prompt: str, origin: str) -> None:
+    """Refuse a prompt whose assembled text is past the submission budget."""
+    if len(prompt) > MAX_PROMPT_CHARACTERS:
+        raise PipelineError(
+            f"the assembled {origin} prompt is {len(prompt)} characters; at most "
+            f"{MAX_PROMPT_CHARACTERS} are submitted. Shorten the intent's free "
+            "text fields or drop reference clips"
+        )
+
+
+def check_timeout_seconds(value: float, origin: str) -> float:
+    """Return a usable timeout, or refuse the one that would fail downstream."""
+    if not math.isfinite(value) or value <= 0:
+        raise PipelineError(f"{origin} must be a positive number of seconds, got {value!r}")
+    if value > MAX_TIMEOUT_SECONDS:
+        raise PipelineError(f"{origin} may be at most {MAX_TIMEOUT_SECONDS:g}s, got {value:g}")
+    return float(value)
 
 
 @dataclass(frozen=True)

@@ -24,6 +24,7 @@ from sevendtd_asset_pipeline import PipelineError, video_review
 from sevendtd_asset_pipeline.capture import record_existing, record_existing_clip
 from sevendtd_asset_pipeline.cli import main
 from sevendtd_asset_pipeline.config import load_config, render_config
+from sevendtd_asset_pipeline.evidence import MAX_INTENT_BYTES, MAX_TIMEOUT_SECONDS
 from sevendtd_asset_pipeline.video_review import (
     INTENT_SCHEMA_VERSION,
     parse_intent,
@@ -300,6 +301,24 @@ class RunReviewTests(_ReviewHarness):
         with self.assertRaisesRegex(PipelineError, "exactly one of --intent"):
             self._run(intent_path=None, intent_text=None)
 
+    def test_an_oversized_intent_is_refused_before_the_gateway_is_run(self) -> None:
+        data = {**VALID_INTENT, "purpose": "x" * (MAX_INTENT_BYTES + 1)}
+        self.intent_file.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaisesRegex(PipelineError, "at most"):
+            self._run()
+        self.assertEqual([], self.gateway.calls)
+
+    def test_a_timeout_the_process_would_reject_is_refused_here(self) -> None:
+        for bad in (0.0, -1.0, float("nan"), float("inf"), MAX_TIMEOUT_SECONDS * 2):
+            with (
+                self.subTest(timeout=bad),
+                self.assertRaisesRegex(
+                    PipelineError, "--timeout must be a positive number|--timeout may be at most"
+                ),
+            ):
+                self._run(timeout_seconds=bad)
+        self.assertEqual([], self.gateway.calls)
+
     def test_an_absolute_clip_resolves_against_the_relative_default_root(self) -> None:
         """`--clip` is an absolute path in practice; the default root is relative."""
         with contextlib.chdir(self.root):
@@ -467,6 +486,7 @@ class RunReviewTests(_ReviewHarness):
         self.assertEqual(document["result"], report["review"])
         self.assertTrue(document["disclosure"]["network_consent"])
         self.assertNotIn("GEMINI_API_KEY", output.read_text(encoding="utf-8"))
+        self.assertEqual(report["usage"]["duration_seconds"], document["duration_seconds"])
 
     def test_the_evidence_names_both_the_adopted_hashes_and_what_was_submitted(self) -> None:
         """The clip as captured and the frames the gateway sent are different lists."""

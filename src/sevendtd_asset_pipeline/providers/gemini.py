@@ -19,6 +19,7 @@ import contextlib
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -30,6 +31,13 @@ API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
 CREDENTIAL_ENV_VARS = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
 # Interpolated into the request URL, so it must be a single path segment.
 _MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+# A filename is author-supplied data, and it is interpolated into a text part
+# of the prompt. A name carrying a line break therefore opens a line that
+# reads as the pipeline's own instruction rather than as a label, which is
+# the same injection channel `fold_author_text` closes for every other author
+# string. A newline in a filename is not a real case, so it is refused here
+# rather than rewritten.
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 # Gemini's audio documentation lists these containers; the 20 MB figure is the
 # published per-request budget for inline data.
 SUPPORTED_SUFFIXES = (".wav", ".mp3", ".aiff", ".aac", ".ogg", ".flac")
@@ -41,6 +49,17 @@ MAX_REQUEST_BYTES = 20 * 1024 * 1024
 # as it keeps emitting, and nothing in this tool would notice until the
 # invoice.
 MAX_OUTPUT_TOKENS = 8192
+# A 429 or a 5xx is the provider saying it did not take the request, so
+# resubmitting it is not a second billable call. Nothing else is retried: a
+# refused credential, a malformed model id, or a 4xx is this caller's problem
+# and repeating it only multiplies the cost. The budget is three attempts
+# total, and the wait between them is bounded whatever `Retry-After` asks
+# for, because a provider that answers 429 with an hour is not one to sit in
+# front of.
+MAX_ATTEMPTS = 3
+RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+MAX_RETRY_DELAY_SECONDS = 8.0
+BASE_RETRY_DELAY_SECONDS = 1.0
 
 
 class GeminiProvider:
@@ -92,6 +111,11 @@ class GeminiProvider:
             )
         parts: list[dict[str, object]] = [{"text": request.prompt}]
         for payload in request.audios:
+            if _CONTROL_CHARACTERS.search(payload.name):
+                raise PipelineError(
+                    f"attachment name {payload.name!r} carries a control character; "
+                    "an attachment label is a filename and must stay on one line"
+                )
             parts.append({"text": f"audio attachment: {payload.name}"})
             parts.append(
                 {
@@ -121,46 +145,59 @@ class GeminiProvider:
             },
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(  # noqa: S310
-                http_request, timeout=request.timeout_seconds
-            ) as response:
-                envelope = json.load(response)
-        except urllib.error.HTTPError as exc:
-            # A body that cannot be read must degrade to the status line, not
-            # to an unbound name when the message below formats it. The error
-            # is a response object with an open socket: leaving it to the
-            # collector emits a ResourceWarning from wherever the collection
-            # happens to land, which in this suite is another test's captured
-            # stderr.
-            detail = ""
-            with contextlib.suppress(OSError):
-                detail = exc.read().decode("utf-8", errors="replace")[:300]
-            exc.close()
-            if exc.code in (401, 403):
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                with urllib.request.urlopen(  # noqa: S310
+                    http_request, timeout=request.timeout_seconds
+                ) as response:
+                    envelope = json.load(response)
+                break
+            except urllib.error.HTTPError as exc:
+                # A body that cannot be read must degrade to the status line, not
+                # to an unbound name when the message below formats it. The error
+                # is a response object with an open socket: leaving it to the
+                # collector emits a ResourceWarning from wherever the collection
+                # happens to land, which in this suite is another test's captured
+                # stderr.
+                detail = ""
+                with contextlib.suppress(OSError):
+                    detail = exc.read().decode("utf-8", errors="replace")[:300]
+                exc.close()
+                if exc.code in RETRYABLE_STATUS and attempt < MAX_ATTEMPTS:
+                    time.sleep(_retry_delay(exc, attempt))
+                    continue
+                attempts = f" after {attempt} attempt(s)" if attempt > 1 else ""
+                if exc.code in (401, 403):
+                    raise PipelineError(
+                        f"provider 'gemini' rejected the credential (HTTP {exc.code}); "
+                        "check the key in GEMINI_API_KEY / GOOGLE_API_KEY"
+                    ) from exc
+                if exc.code == 429:
+                    raise PipelineError(
+                        f"provider 'gemini' rate-limited or quota-exhausted the request "
+                        f"(HTTP 429){attempts}: {detail}"
+                    ) from exc
                 raise PipelineError(
-                    f"provider 'gemini' rejected the credential (HTTP {exc.code}); "
-                    "check the key in GEMINI_API_KEY / GOOGLE_API_KEY"
+                    f"provider 'gemini' refused the review (HTTP {exc.code}){attempts}: {detail}"
                 ) from exc
-            if exc.code == 429:
+            except TimeoutError as exc:
                 raise PipelineError(
-                    f"provider 'gemini' rate-limited or quota-exhausted the request "
-                    f"(HTTP 429): {detail}"
+                    f"provider 'gemini' did not answer within {request.timeout_seconds:g}s; "
+                    "no verdict was produced"
                 ) from exc
+            except urllib.error.URLError as exc:
+                raise PipelineError(
+                    f"provider 'gemini' could not be reached: {exc.reason}; no verdict was produced"
+                ) from exc
+            except json.JSONDecodeError as exc:
+                raise PipelineError(
+                    f"provider 'gemini' returned a non-JSON envelope: {exc}"
+                ) from exc
+        if not isinstance(envelope, dict):
             raise PipelineError(
-                f"provider 'gemini' refused the review (HTTP {exc.code}): {detail}"
-            ) from exc
-        except TimeoutError as exc:
-            raise PipelineError(
-                f"provider 'gemini' did not answer within {request.timeout_seconds:g}s; "
-                "no verdict was produced"
-            ) from exc
-        except urllib.error.URLError as exc:
-            raise PipelineError(
-                f"provider 'gemini' could not be reached: {exc.reason}; no verdict was produced"
-            ) from exc
-        except json.JSONDecodeError as exc:
-            raise PipelineError(f"provider 'gemini' returned a non-JSON envelope: {exc}") from exc
+                "provider 'gemini' returned a "
+                f"{type(envelope).__name__} envelope, not an object; no verdict was produced"
+            )
 
         candidates = envelope.get("candidates") or []
         if not candidates:
@@ -197,3 +234,23 @@ class GeminiProvider:
             usage=usage if isinstance(usage, dict) else None,
             model_reported=envelope.get("modelVersion"),
         )
+
+
+def _retry_delay(exc: urllib.error.HTTPError, attempt: int) -> float:
+    """Seconds to wait before resubmitting, honouring `Retry-After` within its cap.
+
+    The header is the provider naming its own backoff, so it is preferred
+    when it parses; anything else, including a missing or malformed header,
+    falls back to exponential backoff from the base delay. Both are clamped
+    to `MAX_RETRY_DELAY_SECONDS`.
+    """
+    # Only the delta-seconds form of `Retry-After` is a delay; an HTTP-date
+    # is not a number, and a missing header is not a wait at all.
+    asked = str(exc.headers.get("Retry-After", "")).strip()
+    if asked:
+        try:
+            return max(0.0, min(float(asked), MAX_RETRY_DELAY_SECONDS))
+        except ValueError:
+            pass
+    backoff: float = BASE_RETRY_DELAY_SECONDS * 2.0 ** (attempt - 1)
+    return min(backoff, MAX_RETRY_DELAY_SECONDS)

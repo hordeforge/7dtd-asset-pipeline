@@ -439,6 +439,12 @@ The rules that make it trustworthy, from
 - **Billable output is capped.** The hosted adapter sends
   `maxOutputTokens`, and an answer cut off at the cap is refused as no
   verdict, not returned as a partial one.
+- **Billable input is capped too.** An intent document over 64 KB, or an
+  assembled prompt over 32,000 characters, is refused locally before
+  anything is submitted, and `--timeout` must be a positive finite number
+  of seconds no greater than 900. A review that took a quarter of an hour
+  is one nobody waited on, and a non-positive timeout is not a short wait:
+  it reaches the socket and fails there instead of naming the problem.
 - **Evidence, not memory.** Each run writes provider, model, rubric version,
   hashes of everything submitted and the redacted result. A later review
   never overwrites an earlier one.

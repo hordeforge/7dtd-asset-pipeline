@@ -67,6 +67,26 @@ tag has no changelog section.
 
 ### Changed
 
+- `review-audio` and `review-video` bound what a submission may carry before
+  it costs anything: an intent document over 64 KB or an assembled prompt over
+  32,000 characters is refused locally, and `--timeout` must be a positive
+  finite number of seconds no greater than 900. The prompt was billable input
+  with no limit on it, and a non-positive timeout reached `socket.settimeout`
+  and failed there as a traceback rather than as the single `ERROR:` line the
+  command surface promises.
+- The hosted Gemini adapter resubmits a request the provider says it did not
+  take (HTTP 429, 500, 502, 503, 504) up to three attempts, waiting for
+  `Retry-After` within an 8-second cap and falling back to exponential backoff.
+  A refused credential or any other 4xx is not retried: that is the caller's
+  problem, and repeating it only multiplies the cost.
+- Both review lanes record `duration_seconds` in the evidence document and the
+  report's `usage` block. Token counts arrived from the provider and the model
+  version from both sides; the elapsed time was on record nowhere.
+- Both review lanes refuse an attachment whose filename carries a control
+  character. The name is author-supplied data interpolated into a prompt text
+  part, and a line break in it opened a line that read as the pipeline's own
+  instruction, which is the channel `fold_author_text` already closes for
+  every other author string.
 - The three lanes that shell out to a headless Blender (`generate mesh`,
   `generate mesh-icon`, `generate bind`) share one `generators/blender.py`,
   which owns the PATH probe, the `--background --factory-startup` invocation,

@@ -162,6 +162,13 @@ formats/size limits, submission of audio plus text, structured-response
 handling, usage metadata, and redaction. The first implementation may support
 one provider, but the operation and result schema remain provider-neutral.
 
+An adapter caps what one submission may cost on both sides: the answer is
+bounded by an output-token cap (an answer cut off at it is refused, never
+returned as partial), the request is bounded locally before submission, and a
+response the provider says it did not take may be resubmitted within a fixed
+attempt budget. Retrying anything else multiplies the cost rather than
+removing it.
+
 The capability registry reports whether credentials and the optional client
 dependency are present. It must distinguish `unavailable`, `configured`, and
 `not probed`; it must not test credentials or contact a provider during

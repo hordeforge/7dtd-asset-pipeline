@@ -132,6 +132,10 @@ review kinds reads one shape.
 - `--allow-network` is required. The submission is networked, billable, and
   sends an authored asset to a third party; nothing here contacts a provider
   implicitly, and no refusal reads credentials before the consent gate.
+- An intent document over 64 KB is refused locally, and `--timeout` must be
+  a positive finite number of seconds no greater than 900, both before the
+  gateway is run. A non-positive timeout is not a short wait: it reaches
+  the socket and fails there instead of naming the problem.
 - Credentials come from the provider's environment variables
   (`GEMINI_API_KEY` / `GOOGLE_API_KEY` for gemini, `NVIDIA_API_KEY` for
   nvidia) or from the gateway's gitignored `config.local.toml`

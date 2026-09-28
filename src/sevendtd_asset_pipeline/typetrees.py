@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import functools
 import json
+import os
+import shutil
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -42,9 +44,43 @@ class TreeNode:
     children: list[TreeNode] = field(default_factory=list)
 
 
+UNITYZ_EXECUTABLE = "unityz"
+
+
+def backend_identity() -> str:
+    """Which `unityz` answers, closely enough to notice it was replaced.
+
+    The trees table belongs to the reader, not to the revision: unityz ships a
+    release-indexed database beside that executable, so a reinstalled or
+    upgraded one can answer a different table for the same revision string. A
+    `shamway serve` session outlives the install its own error message calls
+    for (the same argument `capabilities.smolv_library` is written on), and a
+    table cached across that upgrade is a stale type tree embedded in a bundle,
+    which is the silent load failure this module exists to prevent. Path, size
+    and mtime are what a replacement changes; the cost is one `which` and one
+    `stat` against the subprocess and JSON parse they guard.
+    """
+    found = shutil.which(UNITYZ_EXECUTABLE)
+    if found is None:
+        return f"{UNITYZ_EXECUTABLE}:absent"
+    try:
+        stat = os.stat(found)
+    except OSError:
+        # Present on PATH, unreadable to stat. The identity stays what it can be,
+        # and a failing run reports the real reason from `unityz.invoke`.
+        return f"{UNITYZ_EXECUTABLE}:{found}"
+    return f"{UNITYZ_EXECUTABLE}:{found}:{stat.st_size}:{stat.st_mtime_ns}"
+
+
 @functools.lru_cache(maxsize=4)
-def release_table(unity_version: str) -> TreesTable:
-    """The whole built-in trees export for one revision, in the `--trees` shape."""
+def _release_table(unity_version: str, backend: str) -> TreesTable:
+    """The whole built-in trees export for one revision, in the `--trees` shape.
+
+    Keyed by the reader as well as the revision (`backend_identity`): the two
+    together identify the database, and a cache holding a table from a reader
+    this host no longer has is worse than no cache at all.
+    """
+    del backend  # The identity is the key; unityz.invoke resolves the reader itself.
     result = unityz.invoke("trees", "--builtin", unity_version, subject=unity_version)
     if result.returncode != 0:
         raise PipelineError(
@@ -62,6 +98,16 @@ def release_table(unity_version: str) -> TreesTable:
     if not isinstance(table, dict) or not isinstance(table.get("__class_ids__"), dict):
         raise PipelineError(f"unityz trees returned no __class_ids__ table for {unity_version}")
     return table
+
+
+def release_table(unity_version: str) -> TreesTable:
+    """The trees table for one revision, from whatever unityz is on PATH now.
+
+    The backend is part of the key rather than an assumption: the table is the
+    reader's own database, and a session that outlives an upgrade of that
+    reader must not keep serving the previous one.
+    """
+    return _release_table(unity_version, backend_identity())
 
 
 def class_name(class_id: int, unity_version: str) -> str:

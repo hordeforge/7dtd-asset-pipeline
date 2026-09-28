@@ -464,6 +464,14 @@ was read out of a real artifact rather than guessed:
   default; `compress_audio` writes Vorbis (mode 15) instead, which is a
   different bank in one respect worth knowing — see below.
 
+The trees table is fetched once per process and cached, keyed by the revision
+**and** by the reader that answered (`typetrees.backend_identity`): the
+database ships with the pinned unityz, so a session that outlives
+`shamway script install-unityz` re-fetches instead of embedding the previous
+reader's layout, for the same reason the encoder probe below re-probes. A
+fetch that fails is not cached, so a revision unityz does not carry is asked
+again rather than remembered as absent.
+
 Because unityz both writes the file and re-reads it, a second reader that
 shares no code with either is available: `shamway script cross-read
 <bundle>` opens the bundle with [AssetsTools.NET](https://github.com/nesrak1/AssetsTools.NET)

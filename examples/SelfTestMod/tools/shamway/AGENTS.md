@@ -72,9 +72,9 @@ Exit code 0 means valid. Start here rather than reading files.
 | `shamway client capture LABEL` | instant | record the frame a visual sign-off was made on |
 | `shamway prompt KIND --subject "..."` | instant | a house-style image prompt, and the lane that consumes it |
 
-Diagnose with the fast read-only commands. `build` and `render-icon` are the
-only two that write into this mod (`schema` marks them, `init`, and the two
-`client` writers with `writes: true`); `client deploy` writes into the client's
+Diagnose with the fast read-only commands. `build`, `stage` and `render-icon`
+are the only three that write into this mod (`schema` marks them, `init`, and
+the two `client` writers with `writes: true`); `client deploy` writes into the client's
 per-user `Mods/` folder and `client capture` into `.local/acceptance/`, both
 outside the game install.
 Reach for them only when an asset actually changed. `render-icon` needs a graphics device — run it under `xvfb-run -a` on
@@ -118,7 +118,7 @@ Never copy a script out of the pipeline into this repository, and never write a
 relative path into a checkout of it. Everything generalized is reachable from
 the command this mod already depends on:
 
-- `shamway generate --list` — sound, audio, cutout, particle-card, icon, texture-maps, mesh
+- `shamway generate --list` — every packaged asset generator, callable from any mod
 - `shamway docs vfx` — `.vfx` graphs, `shape.position`, `--look`
 - `shamway generate sound --help` — each one explains itself
 - `shamway docs` — every rule the pipeline knows
@@ -409,7 +409,6 @@ Read the error; each one names its own fix. Then:
 shamway status --json
 shamway inspect Resources/shamwayselftest.unity3d
 shamway inspect --deep Resources/shamwayselftest.unity3d
-shamway check-log .shamway/build/bundle/unity-build.log
 ```
 
 Silent failures worth knowing before you chase one: a missing icon draws

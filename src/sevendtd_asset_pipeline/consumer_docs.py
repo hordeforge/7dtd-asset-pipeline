@@ -60,9 +60,9 @@ Exit code 0 means valid. Start here rather than reading files.
 | `shamway client capture LABEL` | instant | record the frame a visual sign-off was made on |
 | `shamway prompt KIND --subject "..."` | instant | a house-style image prompt, and the lane that consumes it |
 
-Diagnose with the fast read-only commands. `build` and `render-icon` are the
-only two that write into this mod (`schema` marks them, `init`, and the two
-`client` writers with `writes: true`); `client deploy` writes into the client's
+Diagnose with the fast read-only commands. `build`, `stage` and `render-icon`
+are the only three that write into this mod (`schema` marks them, `init`, and
+the two `client` writers with `writes: true`); `client deploy` writes into the client's
 per-user `Mods/` folder and `client capture` into `.local/acceptance/`, both
 outside the game install.
 Reach for them only when an asset actually changed. `render-icon` needs a
@@ -106,7 +106,7 @@ Never copy a script out of the pipeline into this repository, and never write a
 relative path into a checkout of it. Everything generalized is reachable from
 the command this mod already depends on:
 
-- `shamway generate --list` — sound, audio, cutout, icon, texture-maps, mesh
+- `shamway generate --list` — every packaged asset generator, callable from any mod
 - `shamway generate sound --help` — each one explains itself
 - `shamway docs` — every rule the pipeline knows
 - `shamway docs art-direction` — the style contract, in full
@@ -479,6 +479,11 @@ _PROJECT_FACTS = (
     "- Bundle membership: `tools/shamway/UnityProject/Assets/ModAssets/Bundle/`\n"
 )
 _OPENING_LINE = "This mod builds its Unity asset bundle with **shamway**"
+# Only a mod with a local editor has a build log to scan, and the banner above
+# the facts says so for every source without one; leaving the command in the
+# failure checklist contradicted it and sent an agent after a file that is
+# never written.
+_CHECK_LOG_LINE = "shamway check-log .shamway/build/bundle/unity-build.log\n"
 
 
 def render_agent_guide(
@@ -514,4 +519,6 @@ def render_agent_guide(
             '- Bundle: none (`bundle_source = "none"`); no Unity project, no editor\n',
         )
         bundle_name = "(none)"
+    if bundle_source != "unity":
+        guide = guide.replace(_CHECK_LOG_LINE, "")
     return guide.replace("{mod_name}", mod_name).replace("{bundle_name}", bundle_name)

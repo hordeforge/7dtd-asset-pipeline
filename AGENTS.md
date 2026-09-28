@@ -133,7 +133,7 @@ So, concretely, before any such sentence — **both** of these, not either:
    Name the sources you found, and say what you searched if you found nothing.
 
 A local `which` that comes back empty and no search is **not** a check; that
-combination is how the shader claim below got written. Off-the-shelf pieces
+combination is how the shader claim above got written. Off-the-shelf pieces
 for this repository's own problems have turned up in Wine, in Khronos, in
 HearthSim's game-modding tools and in a decade of Unity reverse-engineering
 projects — none of which were installed here, and all of which were one search
@@ -178,6 +178,8 @@ in `docs.TOPICS` and in its directory's `README.md`; a new host script goes in
 [docs/research/research-provenance.md](docs/research/research-provenance.md)
 with the tool that produced it. An undocumented capability is one the next session
 will rebuild from scratch, and an undocumented gate is one it will delete.
+
+### Commands, and what each change must prove
 
 ```bash
 scripts/bootstrap          # uv sync from the committed lockfile, with extras
@@ -461,7 +463,7 @@ Machine-readable output for agents and CI:
 | `shamway render-icon STEM` | render a bundle prefab into its atlas cell, materials and all (needs an editor and a display) |
 | `shamway generate mesh-icon MESH PNG` | the same cell from a mesh file through headless Blender: no editor, no display, and a clay render rather than the in-game look |
 | `shamway generate rig OUT.glb` | a bone-structure template as a glTF armature to skin against in Blender, or as the rig for `generate entity`; `--rig` names one of the eight shipped rigs (humanoid, quadruped, quadruped-small/large, bird, dinosaur, arachnid, crocodile) or a spec file, `--scale` sizes it |
-| `shamway generate entity OUT.glb` | a skinned entity procedurally: primitives bound to a rig (its own default part set, or `--parts`), plus its `entityclasses.xml` patch (`--mod`/`--bundle`/`--xml`); `--anim [KINDS]` (idle, head, walk) writes the `{stem}.anim.json` legacy clips — an Idle1 bob + head turn, a Walk whose legs follow the body plan (biped / four-leg / eight-leg / perched bird — wings are never walk legs) — and sets `AvatarController=GameObjectAnimalAnimation` so the entity moves in game; `--atlas` remaps each part into its own UV cell and writes a manifest (with per-part roles) that a role-aware hide reads; the writer emits the `Physics` child node (feet-aligned `CapsuleCollider`) the engine grounds the entity by |
+| `shamway generate entity OUT.glb` | a skinned entity procedurally: primitives bound to a rig (its own default part set, or `--parts`), plus its `entityclasses.xml` patch (`--mod`/`--bundle`/`--xml`); `--anim [KINDS]` (idle, head, walk, attack, death, jump) writes the `{stem}.anim.json` legacy clips — an Idle1 bob + head turn, a Walk whose legs follow the body plan (biped / four-leg / eight-leg / perched bird — wings are never walk legs), an attack, a death roll and a hop — and sets `AvatarController=GameObjectAnimalAnimation` so the entity moves in game; `--atlas` remaps each part into its own UV cell and writes a manifest (with per-part roles) that a role-aware hide reads; the writer emits the `Physics` child node (feet-aligned `CapsuleCollider`) the engine grounds the entity by |
 | `shamway generate hide OUT.png` | draw a seeded fur/hide albedo for a generated entity — mottled patches, fur clumps, hair grain, no image model (`--seed` reproduces it byte-for-byte); `--atlas` reads `generate entity --atlas`' manifest and paints each part its role colour (`--paw`/`--limb`/`--outline`) so paws/legs/body read apart, with gutters outlined; `--coat NAME` is a named palette (moss, brown, cream, slate, olive, rust, charcoal, tan) |
 | `shamway generate creature OUT.glb` | one-shot reusable creature from a shipped rig: calls `generate entity` (`--atlas`, `--anim idle,head,walk`) then `generate hide`; `--scale` and `--coat` are the size and coat morphs, `--parts` still overrides primitives |
 | `shamway generate bind MESH OUT.glb` | skin an authored mesh (glTF/OBJ) onto a shipped rig so Idle1/Walk bone names still match; `--solidify` for open shells, `--head-lift` for a head-local OBJ (lowest vertex onto the body's max Z), `--neck [M]` fills that gap with a cylinder, `--voxel M` remeshes overlapping extras into one surface, `--anim` writes the sibling clips. After AUTO, the pelvis pins to Hips and thigh/shin/foot shafts keep those bones so Idle1 walk cannot crumple the butt or freeze the shins. Same flags, same bytes |

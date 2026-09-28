@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import codecs
+import functools
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -38,7 +39,7 @@ class AssetReference:
     bundle_path: str
     asset_name: str
 
-    @property
+    @functools.cached_property
     def asset_stem(self) -> str:
         return Path(self.asset_name.replace("\\", "/")).stem
 
@@ -78,15 +79,18 @@ def read_mod_info(mod_info: Path) -> ModInfo:
     )
 
 
-def check_mod_info_schema(mod_info: Path) -> list[str]:
+def check_mod_info_schema(mod_info: Path, info: ModInfo | None = None) -> list[str]:
     """`ModInfo.xml` schema problems: Version and Description must be present.
 
     `validate` already compares `<Name>` with the configuration; this is the
     rest of the schema. A missing or malformed `Version` ships a stale mod
     version that the client logs and the mod manager shows; a missing
     `Description` shows a blank row in the server list. Neither errors anywhere.
+
+    `info` is that same parsed `ModInfo.xml`, for a caller that read it already.
     """
-    info = read_mod_info(mod_info)
+    if info is None:
+        info = read_mod_info(mod_info)
     problems: list[str] = []
     if not info.version:
         problems.append(
@@ -179,9 +183,16 @@ def _read_config_xml(path: Path) -> str:
         raise PipelineError(f"cannot read {path}: {exc}") from exc
 
 
-def discover_references(config_dir: Path) -> list[AssetReference]:
+def discover_references(
+    config_dir: Path, texts: list[tuple[Path, str]] | None = None
+) -> list[AssetReference]:
+    """Every bundle URI `Config/**/*.xml` asks for.
+
+    `texts` is the hand-off several gates share: a caller that already read
+    `Config/` passes it in rather than walking and decoding the tree again.
+    """
     references: list[AssetReference] = []
-    for xml_file, text in config_xml_texts(config_dir):
+    for xml_file, text in config_xml_texts(config_dir) if texts is None else texts:
         references.extend(
             parse_reference(xml_file, match.group(0)) for match in BUNDLE_URI.finditer(text)
         )

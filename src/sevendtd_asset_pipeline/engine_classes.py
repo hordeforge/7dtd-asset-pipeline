@@ -127,15 +127,33 @@ BLOCK_BODY = re.compile(r"<block\b[^>]*\bname=\"([^\"]+)\"[^>]*>(.*?)</block>", 
 CLASS_PROPERTY = re.compile(r'name="Class"\s+value="([^"]+)"')
 
 
-def declared_block_classes(config_dir: Path) -> list[tuple[str, str, Path]]:
-    """Every `(block, class, file)` a mod's `Config/**/*.xml` declares."""
+def declared_block_classes(
+    config_dir: Path, texts: list[tuple[Path, str]] | None = None
+) -> list[tuple[str, str, Path]]:
+    """Every `(block, class, file)` a mod's `Config/**/*.xml` declares.
+
+    `texts` is the same hand-off `discover_references` takes: a caller that
+    already read `Config/` passes what it read rather than paying for a second
+    walk and a second decode of every file. The declared blocks come out in the
+    same stable order either way, so the report a caller prints is unchanged.
+    """
     declared: list[tuple[str, str, Path]] = []
-    for path in sorted(Path(config_dir).rglob("*.xml")):
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            raise PipelineError(f"cannot read {path}: {exc}") from exc
-        for block, body in BLOCK_BODY.findall(text):
-            for value in CLASS_PROPERTY.findall(body):
-                declared.append((block, value, path))
+    if texts is None:
+        for path in sorted(Path(config_dir).rglob("*.xml")):
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                raise PipelineError(f"cannot read {path}: {exc}") from exc
+            declared.extend(_declared_in(path, text))
+        return declared
+    for path, text in texts:
+        declared.extend(_declared_in(path, text))
     return declared
+
+
+def _declared_in(path: Path, text: str) -> list[tuple[str, str, Path]]:
+    return [
+        (block, value, path)
+        for block, body in BLOCK_BODY.findall(text)
+        for value in CLASS_PROPERTY.findall(body)
+    ]

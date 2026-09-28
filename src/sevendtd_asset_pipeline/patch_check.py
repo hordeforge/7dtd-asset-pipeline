@@ -157,13 +157,19 @@ def check_patches(
     if not config.is_dir():
         return PatchReport(tuple(checked), tuple(resolved), problems, notes)
 
+    # A stock config is parsed once and answered for every patch file that
+    # targets it: `items.xml` is several megabytes, and a mod with three patch
+    # files named after it used to parse that three times per gate run.
+    targets: dict[str, Any] = {}
     for patch_file in sorted(config.rglob("*.xml")):
         stem = patch_file.stem
         target = stock_dir / f"{stem}.xml"
         if not target.is_file():
             notes.append(f"{patch_file.name}: no stock {stem}.xml to patch it against; not checked")
             continue
-        target_root = _parse_xml(target, target)
+        target_root = targets.get(stem)
+        if target_root is None:
+            target_root = targets[stem] = _parse_xml(target, target)
         patch_root = _parse_xml(patch_file, patch_file)
         # The patch file's children ARE the operations. The root tag of a mod
         # patch is usually '<configs>'; the engine applies each child element.

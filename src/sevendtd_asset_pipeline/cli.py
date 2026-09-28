@@ -954,9 +954,11 @@ def run(args: argparse.Namespace) -> int:
         print("Offline gates passed. A fresh-client load is still required for acceptance.")
         return 0
     if args.command == "validate":
-        expected = expected_revision(config)
         if args.bundle:
-            info = validate_bundle(args.bundle, expected)
+            # Only the --bundle branch needs the expected revision, and
+            # answering it parses a real game bundle through unityz. Computing
+            # it for the default route threw that subprocess away.
+            info = validate_bundle(args.bundle, expected_revision(config))
             print(f"OK: {info.path} Unity {info.unity_version}; class-142 present")
         else:
             validation = validate_mod(config)

@@ -110,18 +110,30 @@ def release_table(unity_version: str) -> TreesTable:
     return _release_table(unity_version, backend_identity())
 
 
-def class_name(class_id: int, unity_version: str) -> str:
+@functools.lru_cache(maxsize=4)
+def _class_ids(unity_version: str) -> dict[int, str]:
+    """`__class_ids__` inverted, so `class_name` is a lookup and not a table scan.
+
+    Unity's table holds an entry per class, and `class_trees` and `release_tree`
+    both ask for one name per class id, so scanning it per id was quadratic in
+    the number of classes a bundle carries. Where two names share an id the
+    first in the export wins, which is what the old scan returned.
+    """
     ids = release_table(unity_version)["__class_ids__"]
     if not isinstance(ids, dict):
         raise PipelineError(f"unityz trees returned a malformed __class_ids__ for {unity_version}")
-    for name, found in ids.items():
-        if found == class_id:
-            return str(name)
-    raise PipelineError(
-        f"no type tree for class {class_id} at Unity {unity_version}: the built-in "
-        "database has no such class. The type tree is the engine's own field "
-        "layout; without it this backend will not guess one."
-    )
+    return {found: str(name) for name, found in ids.items()}
+
+
+def class_name(class_id: int, unity_version: str) -> str:
+    try:
+        return _class_ids(unity_version)[class_id]
+    except KeyError as exc:
+        raise PipelineError(
+            f"no type tree for class {class_id} at Unity {unity_version}: the built-in "
+            "database has no such class. The type tree is the engine's own field "
+            "layout; without it this backend will not guess one."
+        ) from exc
 
 
 def class_trees(class_ids: set[int], unity_version: str) -> TreesTable:
@@ -134,8 +146,14 @@ def class_trees(class_ids: set[int], unity_version: str) -> TreesTable:
     return subset
 
 
+@functools.lru_cache(maxsize=32)
 def release_tree(class_id: int, unity_version: str) -> TreeNode:
-    """The tree for one class, nested for the default walkers."""
+    """The tree for one class, nested for the default walkers.
+
+    Cached and shared, because rebuilding the whole `TreeNode` forest from the
+    flat node list cost the same on every call and `typetree_default` only ever
+    reads it. A caller that needs to change a node must copy it first.
+    """
     name = class_name(class_id, unity_version)
     flat = release_table(unity_version)[name]
     if not isinstance(flat, list):

@@ -220,6 +220,12 @@ def _verification_failures(
     if not isinstance(raw_failures, list):
         raise PipelineError("unityz verify omitted its failure list")
     failed: set[tuple[str | None, int]] = set()
+    # A typeless failure names only its node, so every object under it is
+    # failed. One pass groups them by node rather than a full scan of `objects`
+    # per failure record.
+    by_node: dict[str | None, list[tuple[str | None, int]]] = {}
+    for item in objects:
+        by_node.setdefault(item.node, []).append((item.node, item.path_id))
     for raw in raw_failures:
         if not isinstance(raw, dict):
             raise PipelineError("unityz verify returned a malformed failure")
@@ -228,7 +234,7 @@ def _verification_failures(
             raise PipelineError("unityz verify returned a malformed failure node")
         path_id = _integer(raw.get("path_id"), "verification path_id")
         if path_id == -1:
-            failed.update((item.node, item.path_id) for item in objects if item.node == node)
+            failed.update(by_node.get(node, ()))
         else:
             failed.add((node, path_id))
     if _integer(report.get("skipped"), "verification skipped count"):

@@ -1324,15 +1324,9 @@ def _append_view(
     return len(accessors) - 1
 
 
-def _bone_path(rig: Any, bone_name: str) -> str:
+def _bone_path(rig: Rig, bone_name: str) -> str:
     """The slash-separated transform path of a bone, from the rig root."""
-    parent = {bone.name: bone.parent for bone in rig.bones}
-    chain: list[str] = []
-    cursor: str | None = bone_name
-    while cursor is not None:
-        chain.append(cursor)
-        cursor = parent[cursor]
-    return "/".join(reversed(chain))
+    return rig.bone_path(bone_name)
 
 
 def main(argv: list[str] | None = None) -> int:

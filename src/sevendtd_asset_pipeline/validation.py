@@ -14,9 +14,10 @@ from .patch_check import check_patches
 from .references import (
     AssetReference,
     check_mod_info_schema,
+    config_xml_texts,
     discover_references,
     manifest_assets,
-    read_mod_name,
+    read_mod_info,
     resolve_case_insensitive,
 )
 from .text import NORMALIZATION, folded, spelling_differences
@@ -167,15 +168,22 @@ def _check_code_reference(config: PipelineConfig, stem: str, stems: dict[str, li
     return f"OK {where}: {stem}"
 
 
-def _validate_bundle_free(config: PipelineConfig) -> ValidationReport:
+def _validate_bundle_free(
+    config: PipelineConfig, references: list[AssetReference] | None = None
+) -> ValidationReport:
     """Gate a mod that declares no bundle.
 
     There is no artifact to parse, so the whole gate is the one mistake this
     configuration makes possible: XML that asks the engine to load an asset out
     of a bundle the mod does not ship. In the client that is a silent load
     failure, not an error the player can act on.
+
+    `references` is the same hand-off `validate_mod` takes: a caller that
+    already walked `Config/` passes what it found rather than paying for a
+    second walk.
     """
-    references = discover_references(config.config_dir)
+    if references is None:
+        references = discover_references(config.config_dir)
     if references:
         detail = "; ".join(
             f"{reference.source.relative_to(config.mod_root)}: {reference.uri}"
@@ -210,15 +218,22 @@ def validate_mod(
     read; None means "compute it here", including when a caller's earlier read
     failed and the gate should fail on the same read.
     """
-    actual_mod_name = read_mod_name(config.mod_root / "ModInfo.xml")
+    mod_info = read_mod_info(config.mod_root / "ModInfo.xml")
+    actual_mod_name = mod_info.name
     if actual_mod_name != config.mod_name:
         raise PipelineError(
             f"ModInfo.xml Name is {actual_mod_name!r}, configuration says {config.mod_name!r}"
         )
     # Schema problems are reported, not raised on: a missing Description shows
     # a blank row in the mod list, which is not a reason to refuse a bundle.
-    mod_schema = check_mod_info_schema(config.mod_root / "ModInfo.xml")
-    class_messages = check_block_classes(config)
+    # It reads the same `ModInfo.xml` the name check above just parsed, so it
+    # takes the read rather than parsing the file a second time.
+    mod_schema = check_mod_info_schema(config.mod_root / "ModInfo.xml", mod_info)
+    # Every gate below that needs a mod XML file needs the same one: the
+    # bundle-URI scan, the block-Class scan and the patch scan each walked
+    # `Config/` and decoded every file in it. One walk feeds all three.
+    texts = config_xml_texts(config.config_dir)
+    class_messages = check_block_classes(config, texts)
     # A Config/ patch XPath that selects zero nodes is a silent no-op in the
     # engine (see research-provenance); the patch gate is part of validate so
     # the default gate catches it, not only `shamway check-patches`. Needs the
@@ -230,7 +245,7 @@ def validate_mod(
         raise PipelineError("; ".join(patch_report.problems))
     notes = [f"not run: {note}" for note in patch_report.notes]
     if not config.has_bundle:
-        report = _validate_bundle_free(config)
+        report = _validate_bundle_free(config, references)
         messages = [
             *report.messages,
             *mod_schema,
@@ -284,7 +299,7 @@ def validate_mod(
     reject_ambiguous_stems(assets)
     stems = _stem_index(assets)
     if references is None:
-        references = discover_references(config.config_dir)
+        references = discover_references(config.config_dir, texts)
     owned = config.bundle_output.resolve()
     resolved: dict[str, Path | None] = {}
     messages = [_check_reference(config, ref, stems, resolved, owned) for ref in references]
@@ -309,7 +324,9 @@ def _report(messages: list[str], reference_count: int) -> ValidationReport:
     return ValidationReport((*skipped, *ran), reference_count, tuple(skipped))
 
 
-def check_block_classes(config: PipelineConfig) -> list[str]:
+def check_block_classes(
+    config: PipelineConfig, texts: list[tuple[Path, str]] | None = None
+) -> list[str]:
     """Refuse a block whose `Class` names no engine type.
 
     `Class` is not mod data: the engine resolves it to a C# type named
@@ -323,7 +340,7 @@ def check_block_classes(config: PipelineConfig) -> list[str]:
     Returns one line per block checked. A mod that names no `Class` at all is
     the common case and costs nothing.
     """
-    declared = declared_block_classes(config.config_dir)
+    declared = declared_block_classes(config.config_dir, texts)
     if not declared:
         return []
     try:

@@ -1557,16 +1557,20 @@ def hierarchy_prefab_objects(
             in_container=False,
         )
     )
+    parents = _parent_index(scene)
+    root_nodes = frozenset(scene.roots)
     for index in order:
         node = scene.nodes[index]
         go_key = f"{stem}:node:{index}:go"
         transform_key = f"{stem}:node:{index}:transform"
         child_keys = [f"{stem}:node:{child}:transform" for child in node.children]
-        father = (
-            Ref(root_tr)
-            if index in scene.roots
-            else Ref(f"{stem}:node:{_parent_of(scene, index)}:transform")
-        )
+        if index in root_nodes:
+            father = Ref(root_tr)
+        else:
+            parent_index = parents.get(index)
+            if parent_index is None:
+                raise PipelineError(f"{scene.source.name} node {index} has a dangling parent")
+            father = Ref(f"{stem}:node:{parent_index}:transform")
         components = [transform_key]
         node_objects: list[BundleObject] = []
         if node.mesh is not None:
@@ -1631,11 +1635,19 @@ def hierarchy_prefab_objects(
     return objects
 
 
-def _parent_of(scene: GltfScene, index: int) -> int:
+def _parent_index(scene: GltfScene) -> dict[int, int]:
+    """Every node's parent index, keyed by child.
+
+    Answering one node's parent by scanning every node's children was quadratic
+    in the node count, which an eight-legged rig pays for on every hierarchy
+    prefab. A child with two parents keeps the first, which is the same node
+    the old scan returned.
+    """
+    parents: dict[int, int] = {}
     for node in scene.nodes:
-        if index in node.children:
-            return node.index
-    raise PipelineError(f"{scene.source.name} node {index} has a dangling parent")
+        for child in node.children:
+            parents.setdefault(child, node.index)
+    return parents
 
 
 def skinned_prefab_objects(
@@ -1726,6 +1738,7 @@ def skinned_prefab_objects(
             ]
             components.append(renderer_key)
             obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
+            break
     # The game's physics body only grounds an entity whose referenced bone has
     # an actual collider component: PhysicsBodyInstance.bindCollider does
     # modelRoot.Find(path) then GetComponent<Box/Capsule/SphereCollider>() and,
@@ -1736,6 +1749,7 @@ def skinned_prefab_objects(
     # a small BoxCollider to every bone so the physics body builds real
     # colliders and gravity settles the creature on the ground.
     collider_size = {"x": 0.08, "y": 0.08, "z": 0.08}
+    game_objects = {obj.key: obj for obj in objects}
     for joint in skin.joints:
         bone_go = f"{stem}:node:{joint}:go"
         collider_key = f"{stem}:node:{joint}:collider"
@@ -1759,12 +1773,11 @@ def skinned_prefab_objects(
                 in_container=False,
             )
         )
-        for obj in objects:
-            if obj.key == bone_go:
-                components = [item["component"].key for item in obj.fields["m_Component"]]
-                components.append(collider_key)
-                obj.fields["m_Component"] = [{"component": Ref(key)} for key in components]
-                break
+        bone = game_objects.get(bone_go)
+        if bone is not None:
+            components = [item["component"].key for item in bone.fields["m_Component"]]
+            components.append(collider_key)
+            bone.fields["m_Component"] = [{"component": Ref(key)} for key in components]
     add_grounding_physics(stem, objects, f"{stem}:transform", geometry.fields["m_LocalAABB"])
     return objects
 
@@ -1988,11 +2001,11 @@ def attach_anim_objects(
     figure_children_keys = [
         child.key for child in original_root_children if child.key != physics_tr
     ]
+    by_key = {obj.key: obj for obj in objects}
     for child_key in figure_children_keys:
-        for obj in objects:
-            if obj.key == child_key:
-                obj.fields["m_Father"] = Ref(figure_tr)
-                break
+        child = by_key.get(child_key)
+        if child is not None:
+            child.fields["m_Father"] = Ref(figure_tr)
     objects.append(
         BundleObject(
             GAME_OBJECT,

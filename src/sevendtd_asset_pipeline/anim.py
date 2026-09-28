@@ -23,6 +23,8 @@ Curve shape mirrors `_Take 001` from that bundle: one entry per bone path
 
 from __future__ import annotations
 
+import copy
+import functools
 import json
 import math
 import re
@@ -74,11 +76,23 @@ def _curve(keyframes: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _clip_defaults() -> dict[str, Any]:
-    default = typetrees.typetree_default(
+@functools.lru_cache(maxsize=1)
+def _clip_defaults_template() -> dict[str, Any]:
+    """The `AnimationClip` type-tree defaults, walked once.
+
+    The tree is the largest class in the database and `--anim idle,head,walk,
+    attack,death,jump` builds a clip per entry, so rebuilding and re-walking it
+    per clip was the dominant cost of writing an entity's animations. Callers
+    get a deep copy, because a clip merges its curves into this dict.
+    """
+    defaults: dict[str, Any] = typetrees.typetree_default(
         typetrees.release_tree(ANIMATION_CLIP, typetrees.DEFAULT_TREE_UNITY_VERSION)
     )
-    return dict(default)
+    return defaults
+
+
+def _clip_defaults() -> dict[str, Any]:
+    return copy.deepcopy(_clip_defaults_template())
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

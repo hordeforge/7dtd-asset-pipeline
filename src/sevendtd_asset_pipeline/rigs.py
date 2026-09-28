@@ -45,6 +45,7 @@ parses that GLB directly.
 
 from __future__ import annotations
 
+import functools
 import json
 import math
 import struct
@@ -118,6 +119,28 @@ class Rig:
             if bone.name == name:
                 return index
         raise KeyError(name)
+
+    def bone_path(self, name: str) -> str:
+        """The slash-separated transform path of a bone, from the rig root.
+
+        Every ancestor chain in one walk, rather than a parent dict rebuilt per
+        bone: the generators ask for a path per wing, per leg and per tail
+        segment, and each of those calls was a full pass over the rig.
+        """
+        return self._bone_paths[name]
+
+    @functools.cached_property
+    def _bone_paths(self) -> dict[str, str]:
+        parent = {bone.name: bone.parent for bone in self.bones}
+        paths: dict[str, str] = {}
+        for bone in self.bones:
+            chain = [bone.name]
+            cursor = bone.parent
+            while cursor is not None:
+                chain.append(cursor)
+                cursor = parent[cursor]
+            paths[bone.name] = "/".join(reversed(chain))
+        return paths
 
 
 def load_rig(spec: str | Path, _seen: frozenset[Path] = frozenset()) -> Rig:
@@ -297,12 +320,16 @@ def rig_to_glb(rig: Rig) -> bytes:
     output is the armature a Blender author skins against, or that
     `shamway generate entity` skins primitives to.
     """
-    joint_indices = [rig.index(bone.name) for bone in rig.bones]
+    index_by_name = {bone.name: index for index, bone in enumerate(rig.bones)}
+    joint_indices = [index_by_name[bone.name] for bone in rig.bones]
     world = world_matrices(rig)
     ibm = [mat_inverse(matrix) for matrix in world]
     blob = _mat4_buffer(ibm)
     nodes: list[dict[str, Any]] = []
-    index_by_name = {bone.name: index for index, bone in enumerate(rig.bones)}
+    children_by_parent: dict[str, list[int]] = {}
+    for index, bone in enumerate(rig.bones):
+        if bone.parent is not None:
+            children_by_parent.setdefault(bone.parent, []).append(index)
     for bone in rig.bones:
         node: dict[str, Any] = {"name": bone.name}
         if bone.pos != (0.0, 0.0, 0.0):
@@ -311,11 +338,7 @@ def rig_to_glb(rig: Rig) -> bytes:
             node["rotation"] = list(bone.rot)
         if bone.scale != 1.0:
             node["scale"] = [bone.scale, bone.scale, bone.scale]
-        children = [
-            index_by_name[candidate.name]
-            for candidate in rig.bones
-            if candidate.parent == bone.name
-        ]
+        children = children_by_parent.get(bone.name, [])
         if children:
             node["children"] = children
         nodes.append(node)

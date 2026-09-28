@@ -494,6 +494,12 @@ def run_review(
         raise PipelineError(
             "review-video takes exactly one of --intent PATH or --intent-text JSON, never both"
         )
+    if output is not None:
+        # Ahead of the gateway call, not after it: `publish_review` refuses the
+        # same run by exclusive create, but only once deadeye has been invoked
+        # and the clip has left the machine. The evidence path names the
+        # logical operation, so an occupied one is a spent gateway run.
+        evidence.refuse_existing_review(output, force=force)
     timeout_seconds = evidence.check_timeout_seconds(timeout_seconds, "--timeout")
     if intent_path is not None:
         intent, intent_raw = load_intent_file(Path(intent_path), parse_intent)

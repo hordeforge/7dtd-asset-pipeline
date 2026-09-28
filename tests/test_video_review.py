@@ -515,6 +515,26 @@ class RunReviewTests(_ReviewHarness):
             self._run(output=output)
         self.assertEqual(first, output.read_bytes())
 
+    def test_a_retry_is_refused_before_the_gateway_is_invoked_again(self) -> None:
+        """A second run is a second gateway call and a second upload of the clip.
+
+        The exclusive create protecting the document runs after deadeye
+        answers, so without the pre-check this retry would be charged for a
+        verdict the publish then discards.
+        """
+        output = self.root / "review.json"
+        self._run(output=output)
+        self.assertEqual(1, len(self.gateway.calls))
+        with self.assertRaisesRegex(PipelineError, "never overwrites"):
+            self._run(output=output)
+        self.assertEqual(1, len(self.gateway.calls))
+
+    def test_force_still_reaches_the_gateway(self) -> None:
+        output = self.root / "review.json"
+        self._run(output=output)
+        self._run(output=output, force=True)
+        self.assertEqual(2, len(self.gateway.calls))
+
     def test_two_reviews_of_one_candidate_are_both_preserved(self) -> None:
         first = self.root / "a.json"
         second = self.root / "b.json"

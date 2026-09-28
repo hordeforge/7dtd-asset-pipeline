@@ -502,6 +502,13 @@ def run_review(
         raise PipelineError(
             "review-audio takes exactly one of --intent PATH or --intent-text JSON, never both"
         )
+    if output is not None:
+        # Ahead of the call, not after it: the exclusive create in
+        # `publish_review` refuses the same run, but by then the provider has
+        # been charged and the clip uploaded. The evidence path names the
+        # logical operation, so an occupied one is a spent call whose result
+        # would be thrown away.
+        evidence.refuse_existing_review(output, force=force)
     timeout_seconds = evidence.check_timeout_seconds(timeout_seconds, "--timeout")
     if intent_path is not None:
         intent, intent_raw = load_intent_file(Path(intent_path), parse_intent)

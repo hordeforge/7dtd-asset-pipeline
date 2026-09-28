@@ -438,6 +438,26 @@ class RunReviewTests(unittest.TestCase):
             self._run(output=output)
         self.assertEqual(first, output.read_bytes())
 
+    def test_a_retry_is_refused_before_the_provider_is_called_again(self) -> None:
+        """A second run is a second billable call and a second upload of the clip.
+
+        The exclusive create that protects the document runs after the
+        provider answers, so without the pre-check this run would be charged
+        for a verdict the publish then throws away.
+        """
+        output = self.root / "review.json"
+        self._run(output=output)
+        self.assertEqual(1, len(self.provider.requests))
+        with self.assertRaisesRegex(PipelineError, "already holds an earlier review"):
+            self._run(output=output)
+        self.assertEqual(1, len(self.provider.requests))
+
+    def test_force_still_reaches_the_provider(self) -> None:
+        output = self.root / "review.json"
+        self._run(output=output)
+        self._run(output=output, force=True)
+        self.assertEqual(2, len(self.provider.requests))
+
     def test_two_reviews_of_one_candidate_are_both_preserved(self) -> None:
         first = self.root / "a.json"
         second = self.root / "b.json"

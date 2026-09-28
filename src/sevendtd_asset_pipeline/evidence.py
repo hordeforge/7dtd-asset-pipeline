@@ -196,6 +196,29 @@ def publish_review(path: Path, payload: str, *, force: bool) -> Path:
     return path
 
 
+def refuse_existing_review(path: Path, *, force: bool) -> None:
+    """Refuse a re-run whose evidence path is already taken, before anything is spent.
+
+    The exclusive create in :func:`publish_review` is the race-safe half of
+    this rule, and it runs after the provider has answered. A review is a
+    billable call that also uploads the author's asset to a third party, so
+    the same command a retry issues reaches the provider, is charged, and
+    only then discovers the path is occupied and raises. This is that same
+    check ahead of the call: the evidence path names the logical operation,
+    and a run that would be refused at the end is refused before the money
+    moves and the bytes leave the machine.
+
+    It is a pre-check, not a substitute. Two runs that pass it together are
+    still separated by the exclusive create, which is why both exist.
+    """
+    if force or not Path(path).exists():
+        return
+    raise PipelineError(
+        f"{path} already holds an earlier review and a later review never "
+        "overwrites one by default; compare the documents, or pass --force"
+    )
+
+
 def sha256_file(path: Path) -> tuple[str, int]:
     digest = hashlib.sha256()
     total = 0

@@ -447,7 +447,12 @@ The rules that make it trustworthy, from
   it reaches the socket and fails there instead of naming the problem.
 - **Evidence, not memory.** Each run writes provider, model, rubric version,
   hashes of everything submitted and the redacted result. A later review
-  never overwrites an earlier one.
+  never overwrites an earlier one, and it is refused **before** the provider
+  is called: an occupied `--output` path means the run would be billed for a
+  verdict the publish then discards, so the retry fails without uploading
+  the clip again. The atomic create still guards two runs that pass that
+  check together. `--force` is the only way a second review reaches the
+  provider for the same path.
 
 ## Which XML properties name a sound group
 

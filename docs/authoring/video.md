@@ -153,9 +153,13 @@ review kinds reads one shape.
   are not yet recorded by this pipeline, so the source hash is the comparable
   address between revisions — never a guess), the sampling record, provider
   and model, rubric and prompt versions, and the full gateway envelope. A
-  later review never overwrites an earlier document. Concurrent reviews use an
+  later review never overwrites an earlier document, and the refusal comes
+  before the gateway is invoked: an occupied `--output` path would otherwise
+  be a second paid review whose document is then discarded, so the retry
+  fails without uploading the clip again. Concurrent reviews use an
   atomic create at that output path: one publishes, and the other refuses
-  without replacing the first document.
+  without replacing the first document. `--force` is the only way a second
+  review reaches the gateway for the same path.
 - Two file lists sit under `clip`, because they answer different questions.
   `clip.adopted.files` is the clip directory as `client capture --clip`
   hashed it at adoption, and `clip.files` is what the gateway actually sent

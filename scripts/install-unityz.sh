@@ -62,9 +62,11 @@ unityz_contract_at() {
 version_ge() {
 	local IFS=.
 	local -a a b
-	# shellcheck disable=SC2206
+	# SC2206 off on both: splitting "1.2.3" on IFS=. into an array is the
+	# comparison this function exists to make, and quoting it is the bug.
+	# shellcheck disable=SC2206  # the unquoted split is the point
 	a=($1)
-	# shellcheck disable=SC2206
+	# shellcheck disable=SC2206  # the unquoted split is the point
 	b=($2)
 	((10#${a[0]:-0} > 10#${b[0]:-0})) && return 0
 	((10#${a[0]:-0} < 10#${b[0]:-0})) && return 1

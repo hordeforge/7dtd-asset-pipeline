@@ -14,6 +14,13 @@ tag has no changelog section.
 
 ### Added
 
+- `tests/test_analysis_posture.py`, which fails when the analysis itself stops:
+  a defect category dropped from ruff's `select`, a mypy strictness flag
+  switched off, an analyzer unpinned in the dev group, a `make check` recipe
+  that no longer runs an analyzer or no longer fails CI when one is missing, or
+  an inline `# noqa`, `# type: ignore` or `# shellcheck disable` that names no
+  rule or says nothing about why. The assertions are floors, so adding a
+  category or a strictness flag stays allowed.
 - `shamway --version`, which printed a usage error instead.
 - `--config` on every subcommand, not only before the command name.
   `shamway status --config mod/.shamway.toml` was an unrecognized-argument
@@ -78,6 +85,10 @@ tag has no changelog section.
   `release.yml`'s test job also runs `shamway --help` and `shamway schema`
   before the suite, the entry-point check `ci.yml` runs and the release job
   was the last publish path without.
+- `make check` prints `not run: workflow linting` instead of a skipping note
+  when it runs under `CI`. No GitHub runner image carries `actionlint`, so on a
+  pull request that gate does not run, and a green `note:` line read exactly
+  like a gate that passed.
 - `texture2ddecoder` is pinned to `1.0.6` in the dev group, beside ruff, mypy,
   setuptools, coverage and hypothesis. It is the suite's independent
   block-compression decoder, so a new major that changes its BCn output moves

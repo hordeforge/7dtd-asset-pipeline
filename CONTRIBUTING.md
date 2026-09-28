@@ -34,11 +34,22 @@ suite through the venv that lock built, macOS included, so a platform break
 against a pinned version is visible.
 
 `make check` compiles the package, syntax-checks every shell script, runs
-`shellcheck` when it is installed, and — when Mono's `mcs` and a Unity 2022.3
+`shellcheck` when it is installed, lints the workflows with `actionlint` when
+*that* is installed, and — when Mono's `mcs` and a Unity 2022.3
 editor are on the host — compiles the five vendored editor scripts against
 that editor's assemblies (`scripts/compile-editor-scripts.sh`). `make check
 test` needs no network, no Unity *running*, and no game install; the editor
 compile is opportunistic and skips with a note when it cannot run.
+
+`ruff`, `mypy` and `shellcheck` fail `make check` outright under `CI` when they
+are not installed, so a runner cannot pass a gate it never ran. `actionlint` is
+the one analyzer no GitHub runner image carries, so workflow linting does not
+run on a pull request: `make check` prints `not run:` for it there rather than
+the `note:` a developer host prints, because an unrun gate must never read as a
+green one. `tests/test_analysis_posture.py` is the gate on all of that: it fails
+when a defect category leaves ruff's `select`, a strictness flag leaves mypy, an
+analyzer loses its pin, `make check` stops running one of them, or an inline
+ignore stops naming its rule.
 
 The editor scripts are the opt-in half of this repository — a mod that takes
 the default `bundle_source = "synthesized"` never loads one — but they are

@@ -46,7 +46,11 @@ help:
 # `${{ runner.temp }}` in a job-level `env:`, where that context does not
 # resolve, which GitHub reports only as "a workflow file issue" after a push.
 # Not a CI hard-fail like ruff and mypy, because CI proves its own workflows by
-# running them; this is here so a person does not learn it from a red push.
+# running them; this is here so a person does not learn it from a red push. No
+# GitHub runner image carries actionlint and installing it here is a new CI
+# dependency, so on a pull request this gate does not run at all: the `elif`
+# below names it in CI's output, because an unrun gate printed as a green
+# `note:` line reads exactly like a gate that passed.
 #
 # Every shell script the repo tracks, not a hand-kept list: playtest-capture.sh
 # and playtest-synthesized.sh shipped unlinted for three commits because this
@@ -67,6 +71,8 @@ check: lint typecheck locked
 	scripts/compile-editor-scripts.sh --quiet-missing
 	@if command -v actionlint >/dev/null 2>&1; then \
 		actionlint .github/workflows/*.yml; \
+	elif [ -n "$${CI:-}" ]; then \
+		echo "not run: workflow linting (actionlint is not on this runner)" >&2; \
 	else \
 		echo "note: actionlint not installed; skipped workflow linting"; \
 	fi

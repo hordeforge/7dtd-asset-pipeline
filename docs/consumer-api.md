@@ -485,7 +485,7 @@ pipeline.call("inspect_deep")  # same dispatch as `call` and `serve`
 | Method | Returns |
 |---|---|
 | `Pipeline.discover(start=None)` | a pipeline bound to the nearest config |
-| `Pipeline.scaffold(root, *, game_dir=…, unity_version=…, bundle_source=None)` | `(pipeline, created_paths)`; `None` means `"synthesized"`, or `"unity"` with `adopt_project` |
+| `Pipeline.scaffold(mod_root, *, game_dir=…, unity_version=…, bundle_source=None)` | `(pipeline, created_paths)`; `None` means `"synthesized"`, or `"unity"` with `adopt_project` |
 | `.status()` | `Status` |
 | `.doctor()` | `list[Check]` |
 | `.capabilities(probe_versions=False)` | `list[Capability]` |
@@ -494,9 +494,9 @@ pipeline.call("inspect_deep")  # same dispatch as `call` and `serve`
 | `.inspect_deep(bundle=None)` | `DeepReport` (read by unityz) |
 | `.validate(bundle=None)` | `ValidationReport` |
 | `.expected_unity_version()` | the revision the installed game requires, or `None` without a game dir |
-| `.check_mesh(path, max_extent, strict)` | `MeshReport` (needs trimesh) |
-| `.check_texture(path, matches=None, tolerance=…, tileable=False, max_tile_ratio=…)` | `TextureReport` (needs numpy and Pillow) |
-| `.check_sound(path, max_seconds, require_mono)` | `SoundReport` |
+| `.check_mesh(mesh, max_extent=…, strict=False)` | `MeshReport` (needs trimesh) |
+| `.check_texture(texture, matches=None, tolerance=…, tileable=False, max_tile_ratio=…)` | `TextureReport` (needs numpy and Pillow) |
+| `.check_sound(clip, max_seconds=…, require_mono=True)` | `SoundReport` |
 | `.review_audio(clip, …)` | the review dict; refuses without `allow_network=True` |
 | `.review_video(stem, clip, …)` | the review dict; refuses without `allow_network=True` |
 | `.acceptance_provider(harness_dll=None, install=False, mods_dir=None)` | the generated provider description (installs under the client lock when `install`) |
@@ -504,18 +504,18 @@ pipeline.call("inspect_deep")  # same dispatch as `call` and `serve`
 | `.check_localization(allow_vanilla_keys=True)` | `LocalizationReport` |
 | `.check_patches()` | `PatchReport` (replays Config/ patch XPaths against the game) |
 | `.render_icon(prefab, output=None, size=160, …)` | `RenderResult` (needs Unity + Pillow) |
-| `.check_log(path)` | raises if the log shows stripped modules |
-| `.unity_release(version=None)` | `Release` (uses the network) |
+| `.check_log(log)` | raises if the log shows stripped modules |
+| `.unity_release(version=None, platform=…)` | `Release` (uses the network) |
 | `.build(probe=False)` | staged bundle `Path`; no Unity unless `bundle_source = "unity"` |
 | `.stage(bundle, manifest=None, log=None)` | `(staged Path, skipped gates)`; no Unity needed |
-| `.pack(source, output, unity_version=None, game_dir=None)` | `{bundle, manifest, bytes, assets, caveats}`; no Unity needed |
-| `.verify_bundle(bundle=None)` | `VerifyReport`; needs an editor |
+| `.pack(source, output, unity_version=None, game_dir=None, manifest=None, compress_textures=False, compress_audio=False)` | `{bundle, manifest, bytes, assets, caveats}`; no Unity needed |
+| `.verify_bundle(bundle=None, draw=False)` | `VerifyReport`; needs an editor |
 | `.client_where(game_dir=None)` | the client's per-user paths, as a dict |
 | `.client_deploy(mods_dir=None, mod_name=None, replace=True)` | `{destination, copied}` (writes outside the modlet) |
 | `.client_launch(run_seconds=None, mute=False, mod_name=None, …)` | `AcceptanceRun` (starts a real client) |
 | `.client_log(path=None, log_dir=None, mod_name=None)` | `LogReport` |
-| `.prompt(kind, subject, role="", palette="", key="", avoid=(), stem=…)` | the rendered prompt and its lane, as a dict |
-| `.call(name, params)` | the registry operation, JSON-shaped |
+| `.prompt(kind, subject, role="", palette="", key="", avoid=(), stem=…)` | `PromptResult`: the rendered prompt and its lane |
+| `.call(name, params=None)` | the registry operation, JSON-shaped |
 
 ### The underlying functions
 
@@ -562,16 +562,16 @@ if has_capability("unityz"):
 | `validate_bundle(path, expected_version=None)` | one bundle's gates |
 | `inspect_bundle(path)` | `BundleInfo` without any gate |
 | `discover_references(config_dir)` | `list[AssetReference]` |
-| `manifest_assets(path)` | membership from a tracked manifest |
+| `manifest_assets(manifest)` | membership from a tracked manifest |
 | `game_unity_version(game_dir)` | `(revision, evidence_path)` |
 | `fetch_release(version)` | official editor download for a revision |
-| `initialize(root, mod_name, bundle_name, version)` | scaffold |
+| `initialize(mod_root, mod_name, bundle_name, unity_version, …)` | scaffold |
 | `capabilities(probe_versions=False)` | `list[Capability]`: availability, purpose, install |
 | `has_capability(name)` / `require_capability(name)` | branch on, or demand, a capability |
 | `deep_inspect(path)` | `DeepReport`: objects and per-prefab components |
-| `check_mesh(path, max_extent, strict)` | `MeshReport` for an authored mesh |
+| `check_mesh(path, max_extent=…, strict=False)` | `MeshReport` for an authored mesh |
 | `check_texture(path, matches, tolerance, tileable, max_tile_ratio)` | `TextureReport` for a generated texture |
-| `check_sound(path, max_seconds, require_mono)` | `SoundReport` for a clip |
+| `check_sound(clip, max_seconds, require_mono)` | `SoundReport` for a clip |
 | `check_icons(mod_root, config_dir, atlas_root, cell)` | `IconReport` for the atlas |
 | `check_localization(mod_root, config_dir, game_dir, allow_vanilla_keys)` | `LocalizationReport` for the mod's keys |
 | `check_patches(mod_root, config_dir, game_dir)` | `PatchReport` for the Config/ patch XPaths |

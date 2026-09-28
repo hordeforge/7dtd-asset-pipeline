@@ -834,7 +834,14 @@ _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "capabilities": lambda p: capabilities(p.get("probe_versions", False)),
     # A prompt is rendered before the modlet exists as often as after it.
     "prompt": lambda p: render_prompt(**p),
-    "check_mesh": lambda p: check_mesh(**p),
+    # The published parameter is `mesh`; check_mesh names it `path`. Passing
+    # the schema keys straight through raised TypeError for every
+    # out-of-process caller of this operation.
+    "check_mesh": lambda p: check_mesh(
+        p["mesh"],
+        max_extent=p["max_extent"],
+        strict=p["strict"],
+    ),
     "check_log": lambda p: _check_log_result(Path(p["log"])),
     "check_sound": lambda p: check_sound(**p),
     # run_audio_review takes the schema's `intent` as `intent_path`, so the

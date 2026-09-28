@@ -12,7 +12,7 @@ from typing import cast
 
 from fixtures import unityfs_bundle
 
-from sevendtd_asset_pipeline import OPERATIONS, Pipeline, PipelineError, manifest
+from sevendtd_asset_pipeline import OPERATIONS, Pipeline, PipelineError, has_capability, manifest
 from sevendtd_asset_pipeline.api import call_json
 from sevendtd_asset_pipeline.serve import handle, serve
 
@@ -259,6 +259,21 @@ class DispatchTests(unittest.TestCase):
     def test_missing_required_parameter_is_named(self) -> None:
         with self.assertRaisesRegex(PipelineError, "requires parameter 'mesh'"):
             call_json(None, "check_mesh", {})
+
+    @unittest.skipUnless(
+        has_capability("trimesh"), "the mesh gate reads interchange files through trimesh"
+    )
+    def test_a_stateless_operation_is_called_by_its_published_parameter_names(self) -> None:
+        """The bound methods name their parameters to match the schema.
+
+        The stateless entries dispatch straight to the module functions, whose
+        own first parameter is `path` where the published one is `mesh`. A
+        mismatch there is a `TypeError` from inside the package, so every
+        out-of-process caller of the operation got a traceback where a result
+        or a `PipelineError` belongs.
+        """
+        with self.assertRaisesRegex(PipelineError, "no such mesh"):
+            call_json(None, "check_mesh", {"mesh": str(self.root / "absent.glb")})
 
     def test_a_published_enum_is_enforced_before_any_work_starts(self) -> None:
         """`shamway schema` publishes enums, so `call` holds params to them.
@@ -588,6 +603,48 @@ class ImportHygieneTests(unittest.TestCase):
         for name in sorted(set(dir(Pipeline)) - set(documented) - {"scaffold", "discover"}):
             if not name.startswith("_") and callable(getattr(Pipeline, name)):
                 self.fail(f"Pipeline.{name} is not listed in docs/consumer-api.md")
+
+    def test_every_documented_signature_names_a_real_parameter(self) -> None:
+        """A documented call is copied verbatim, so its names must bind.
+
+        The page listed `.check_mesh(path, …)`, `.check_sound(path, …)` and
+        `initialize(root, …)` for callables that name those parameters `mesh`,
+        `clip`, `mod_root` and `unity_version`. Every one of them works
+        positionally and fails as a keyword call, which is how every example
+        in the file spells it.
+        """
+        import inspect
+
+        import sevendtd_asset_pipeline as package
+
+        root = Path(__file__).resolve().parent.parent
+        page_file = root / "docs" / "consumer-api.md"
+        if not page_file.is_file():
+            self.skipTest("running from a packaged install without the repository")
+        for line in page_file.read_text(encoding="utf-8").splitlines():
+            if not line.startswith("| `"):
+                continue
+            for dotted, arguments in re.findall(r"`(\.?[A-Za-z_][A-Za-z_0-9.]*)\(([^`]*)\)`", line):
+                if dotted.startswith("."):
+                    owner: object = Pipeline
+                    name = dotted.lstrip(".")
+                elif dotted.startswith("Pipeline."):
+                    owner, name = Pipeline, dotted.removeprefix("Pipeline.")
+                elif dotted in set(package.__all__):
+                    owner, name = package, dotted
+                else:
+                    continue
+                target = getattr(owner, name, None)
+                if not callable(target):
+                    continue
+                parameters = inspect.signature(target).parameters
+                for written in arguments.split(","):
+                    argument = written.strip().lstrip("*")
+                    if not argument or argument in ("…", "..."):
+                        continue
+                    keyword = argument.split("=")[0].split(":")[0].strip()
+                    with self.subTest(documented=f"{name}({keyword})"):
+                        self.assertIn(keyword, parameters)
 
     def test_registry_reads_the_version_without_importing_upward(self) -> None:
         from sevendtd_asset_pipeline import operations

@@ -242,15 +242,25 @@ def validate_mod(
         # was checked against an installed game, and holding the bundle's
         # revision against the mod's own configuration is not holding it
         # against the installed game, which is what this gate is for and what
-        # nothing else here does. It is not evidence the installed game
-        # accepts it, and the repository's own rule is that an unrun gate must
-        # never read like a passed one, so the line below is emitted whether
-        # or not the config recorded a version.
+        # nothing else here does.
+        # The gate that matters is the one that holds the bundle against the
+        # installed game, and a recorded revision is not that: it is the mod
+        # agreeing with itself. `stage` already carries this line in its own
+        # `skipped` list; reporting it only when no version was recorded at
+        # all left every mod without a game directory looking fully gated.
+        # The repository's own rule: an unrun gate must never read like a
+        # passed one, so the line below is emitted whether or not the config
+        # recorded a version.
         expected_version = expected_revision(config)
+        against = (
+            f"The mod records {expected_version}, and the bundle was checked against that."
+            if expected_version is not None
+            else "The mod records no revision either."
+        )
         not_run.append(
             NOT_RUN_PREFIX + "the game-revision gate: no game directory is configured, so the "
-            "bundle's Unity revision was not held against the installed game's. Set "
-            "SEVEN_DAYS_TO_DIE_DIR."
+            "bundle's Unity revision was not held against the installed game's. "
+            f"{against} Set SEVEN_DAYS_TO_DIE_DIR."
         )
     validate_bundle(config.bundle_output, expected_version, bundle_info)
     if assets is None:

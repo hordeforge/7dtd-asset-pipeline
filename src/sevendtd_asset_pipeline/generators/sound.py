@@ -98,16 +98,34 @@ def envelope(times: list[float], attack: float, decay: float, power: float = 1.0
     ]
 
 
+def _fade(samples: list[float], count: int, from_head: bool) -> list[float]:
+    """Scale the first `count` samples between silence and full gain."""
+    span = count - 1
+    if span <= 0:
+        # A one-sample fade is that sample at silence, which is the end a fade
+        # is reaching for; anything else leaves a step where there is no room
+        # to put one.
+        return [0.0, *samples[1:]] if from_head else [*samples[:-1], 0.0]
+
+    def gain(index: int) -> float:
+        return index / span if from_head else (len(samples) - 1 - index) / span
+
+    ramped = [value * gain(index) for index, value in enumerate(samples[:count])]
+    if from_head:
+        return ramped + list(samples[count:])
+    return list(samples[: len(samples) - count]) + ramped
+
+
 def fade_tail(samples: list[float], length: float, rate: int = RATE) -> list[float]:
     """Fade the last `length` seconds to zero so the clip cannot end on a step."""
     count = min(int(length * rate), len(samples))
-    if count <= 0:
-        return samples
-    start = len(samples) - count
-    return [
-        value if index < start else value * (len(samples) - index) / count
-        for index, value in enumerate(samples)
-    ]
+    return samples if count <= 0 else _fade(samples, count, from_head=False)
+
+
+def fade_head(samples: list[float], length: float, rate: int = RATE) -> list[float]:
+    """Fade the first `length` seconds up to full gain, so the clip cannot start on a step."""
+    count = min(int(length * rate), len(samples))
+    return samples if count <= 0 else _fade(samples, count, from_head=True)
 
 
 def remove_dc(samples: list[float], cutoff_hz: float = 12.0, rate: int = RATE) -> list[float]:
@@ -488,10 +506,8 @@ def bomb_whistle(
         flutter = 0.88 + 0.08 * math.sin(2.0 * math.pi * 3.2 * time)
         tone = math.sin(phase) + 0.24 * math.sin(2.0 * phase + 0.35)
         output.append(tone * flutter + 0.16 * air[index])
-    attack = min(int(0.04 * RATE), len(output))
-    for index in range(attack):
-        output[index] *= index / max(attack, 1)
-    return normalize(remove_dc(fade_tail(output, min(0.18, duration * 0.12))), -4.0)
+    attack = fade_head(output, 0.04)
+    return normalize(remove_dc(fade_tail(attack, min(0.18, duration * 0.12))), -4.0)
 
 
 def hum(duration: float, generator: random.Random, base_hz: float, loop: bool) -> list[float]:
@@ -517,10 +533,7 @@ def hum(duration: float, generator: random.Random, base_hz: float, loop: bool) -
     if loop:
         output = loopable(output)
         return normalize(output, -6.0)
-    ramp = int(0.02 * RATE)
-    for index in range(min(ramp, len(output))):
-        output[index] *= index / ramp
-    return normalize(fade_tail(output, 0.05), -6.0)
+    return normalize(fade_tail(fade_head(output, 0.02), 0.05), -6.0)
 
 
 def beep(hz: float, count: int) -> list[float]:

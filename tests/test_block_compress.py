@@ -77,6 +77,23 @@ class QualityTests(unittest.TestCase):
         self.assertGreater(block_compress.psnr(image[..., :3], back[..., :3]), 35.0)
         self.assertFalse(numpy.array_equal(image[..., :3], back[..., :3]))
 
+    def test_a_contrasting_outline_survives_the_int16_squared_distance(self) -> None:
+        """The distance metric must not overflow.
+
+        A squared channel difference of 182 already exceeds int16's 32767.
+        Squared in int16 the sum wraps negative, and a wrapped negative always
+        wins argmin, so a block whose two colours are far apart gets the wrong
+        endpoint: a black outline on a light panel came back as the panel
+        colour. Two colours BC1 represents exactly must round-trip.
+        """
+        image = solid(16, 16, (238, 238, 238, 255))
+        image[4:12, 4:12, :3] = 16
+        image[6:10, 6:10, :3] = 238
+        blocks, texture_format = block_compress.compress(image, alpha=False)
+        back = block_compress.decode(blocks, 16, 16, texture_format)
+        self.assertGreater(block_compress.psnr(image[..., :3], back[..., :3]), 35.0)
+        self.assertLess(int(abs(int(back[4, 4, 0]) - 16)), 8)
+
     def test_visible_psnr_ignores_pixels_nobody_can_see(self) -> None:
         """The metric trap that made a good encoder look broken.
 

@@ -559,6 +559,23 @@ class CylinderWindingTests(unittest.TestCase):
         frac = self._outward_fraction()
         self.assertGreaterEqual(frac, 0.99, f"cylinder side faces outward fraction {frac:.3f}")
 
+    def test_the_closing_quad_samples_the_end_of_the_cell_not_the_start(self) -> None:
+        """A cylinder ring that wraps to its first vertex reverses the last slice.
+
+        With `u` running 0..0.95 over the ring and the final quad closing back
+        onto `u = 0.0`, that one face sampled the whole atlas cell in reverse.
+        Under `--atlas` it is a mirrored smear down every cylinder, and the seam
+        gets the density of a single 1/20th slice instead of one.
+        """
+        from sevendtd_asset_pipeline.generators.entity import _SEGMENTS, _cylinder
+
+        _positions, _normals, uvs, indices = _cylinder(0.5, 1.0)
+        faces = indices[: 2 * _SEGMENTS][::2]  # the first face of each quad
+        widths = [abs(uvs[b][0] - uvs[a][0]) for a, b, _c in faces]
+        for width in widths:
+            self.assertAlmostEqual(1.0 / _SEGMENTS, width, places=6)
+        self.assertEqual(1.0, uvs[faces[-1][1]][0])
+
 
 class RemainingRigConstructionTests(unittest.TestCase):
     """Each remaining shipped rig meets the quadruped construction bar.

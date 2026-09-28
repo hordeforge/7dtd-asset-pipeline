@@ -1071,7 +1071,10 @@ def _cylinder(
     bottom = -top
     side_top = []
     side_bottom = []
-    for i in range(_SEGMENTS):
+    # The ring closes at i == _SEGMENTS, not by wrapping back to i == 0, so the
+    # last quad's `u` runs the last slice of the cell rather than jumping from
+    # 0.95 back to 0.0: wrapping sampled the whole cell width in reverse.
+    for i in range(_SEGMENTS + 1):
         angle = 2.0 * math.pi * i / _SEGMENTS
         x, z = radius * math.cos(angle), radius * math.sin(angle)
         side_top.append(len(positions))
@@ -1084,7 +1087,7 @@ def _cylinder(
         uvs.append((i / _SEGMENTS, 0.0))
     indices: list[tuple[int, int, int]] = []
     for i in range(_SEGMENTS):
-        nxt = (i + 1) % _SEGMENTS
+        nxt = i + 1
         # Wound CCW from outside (outward radial normal). The previous order
         # (top_i, bottom_i, top_nxt) wound the curved surface CW, so with the
         # shader's default back-face culling a cylinder's body was culled and

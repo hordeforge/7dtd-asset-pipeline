@@ -89,7 +89,10 @@ def _colour_blocks(blocks: Any, numpy: Any) -> tuple[Any, Any, Any]:
     p1 = _from_565(c1, numpy)
     palette = numpy.stack([p0, p1, (2 * p0 + p1) // 3, (p0 + 2 * p1) // 3], axis=1)  # (N, 4, 3)
 
-    distance = ((rgb[:, :, None, :] - palette[:, None, :, :]) ** 2).sum(axis=-1)
+    # int32, not int16: a channel difference of 182 already squares past
+    # 32767, and the wrapped negative then wins argmin, so a strongly wrong
+    # palette entry looks like the nearest one.
+    distance = ((rgb[:, :, None, :].astype("int32") - palette[:, None, :, :]) ** 2).sum(axis=-1)
     indices = distance.argmin(axis=-1).astype("uint32")
     indices[flat] = 0
     return c0, c1, indices

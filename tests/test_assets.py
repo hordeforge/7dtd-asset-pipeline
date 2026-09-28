@@ -377,6 +377,30 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(44_100, len(first))
 
+    def test_a_fade_reaches_silence_instead_of_stopping_at_1_over_count(self) -> None:
+        """A fade that divides by its own sample count never reaches its end.
+
+        The tail of a clip is the one place a listener is guaranteed to hear a
+        discontinuity, so the last sample has to be silence and the ramp has
+        to span the whole window rather than stopping one step short.
+        """
+        from sevendtd_asset_pipeline.generators.sound import fade_head, fade_tail
+
+        flat = [1.0] * 1000
+        tail = fade_tail(list(flat), 1.0, rate=1000)
+        self.assertEqual(0.0, tail[-1])
+        self.assertAlmostEqual(1 / 999, tail[-2])
+        self.assertEqual(1.0, tail[0])
+        head = fade_head(list(flat), 0.02, rate=1000)
+        self.assertEqual(0.0, head[0])
+        self.assertEqual(1.0, head[19])
+        self.assertEqual(1.0, head[20])
+        self.assertEqual(1000, len(head))
+        self.assertEqual(1000, len(tail))
+        # A window the whole clip fits in still reaches both ends.
+        self.assertEqual([1.0, 0.5, 0.0], fade_tail([1.0, 1.0, 1.0], 10.0, rate=1000))
+        self.assertEqual([0.0, 0.5, 1.0], fade_head([1.0, 1.0, 1.0], 10.0, rate=1000))
+
     def test_every_registered_generator_imports(self) -> None:
         from sevendtd_asset_pipeline.generators import GENERATORS, load
 

@@ -227,6 +227,50 @@ class HideAtlasTests(unittest.TestCase):
         self.assertNotEqual(tuple(paw.round()), tuple(limb.round()))
         self.assertNotEqual(tuple(limb.round()), tuple(body.round()))
 
+    def test_a_cell_wider_than_its_field_tiles_it_rather_than_rewrapping(self) -> None:
+        """A cell rect is the least-remainder split, so its width is not the field's.
+
+        256 across a 5-grid gives cell widths 51,51,52,51,51 against a 51-pixel
+        field. Resizing the field to fit instead of tiling it ravels it and
+        refills row-major, which wraps the field's top row back inside the cell
+        and puts a seam exactly where the primitive's own UVs wrap.
+        """
+        from sevendtd_asset_pipeline.generators.hide import _cell_field, hide_atlas_rgb
+
+        size, grid, seed = 256, 5, 11
+        cell_px = max(16, size // grid)
+        cells = {f"p{i}": (i / grid, 0.0, (i + 1) / grid, 1.0) for i in range(grid)}
+        roles = dict.fromkeys(cells, "body")
+        out = hide_atlas_rgb(
+            size,
+            seed,
+            grid,
+            cells,
+            roles,
+            base=(160, 140, 110),
+            fur=(90, 70, 55),
+            paw=(40, 35, 30),
+            limb=(120, 105, 85),
+            outline=(0, 0, 0),
+            strength=0.8,
+            fur_strength=0.4,
+            patch_strength=0.0,
+            grain=0.3,
+        )
+        field = _cell_field(np.random.default_rng(seed), cell_px, 0.8, 0.4, 0.3)
+        expected = np.clip(
+            np.asarray((160, 140, 110), dtype=np.float64)[None, None, :] * field[..., None],
+            0.0,
+            255.0,
+        ).astype(np.uint8)
+        for index, (u0, _v0, u1, _v1) in enumerate(cells.values()):
+            x0, x1 = round(u0 * size), round(u1 * size)
+            width = x1 - x0
+            self.assertEqual(x0, round(index * size / grid))
+            rows = np.arange(size)[:, None] % field.shape[0]
+            columns = np.arange(width)[None, :] % field.shape[1]
+            np.testing.assert_array_equal(out[:, x0:x1], expected[rows, columns])
+
     def test_coat_palette_morph_differs_in_colour(self) -> None:
         """`--coat` is the coat morph of a shipped rig; same atlas, different palette."""
         out = self.root / "bird.glb"

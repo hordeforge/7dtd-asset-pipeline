@@ -2188,6 +2188,14 @@ def _ogg_packets(stream: bytes) -> list[bytes]:
         count = stream[offset + 26]
         table = stream[offset + 27 : offset + 27 + count]
         body = offset + 27 + count
+        if len(table) != count or body + sum(table) > len(stream):
+            # A segment table that runs past the end of the stream would
+            # otherwise be sliced short and the truncated packet written into
+            # the bank under its own correct length prefix: noise at playback,
+            # with nothing in the build saying so.
+            raise PipelineError(
+                "the Vorbis stream is truncated; its last page declares more data than it carries"
+            )
         for length in table:
             current += stream[body : body + length]
             body += length
@@ -2364,6 +2372,11 @@ def audio_clip(name: str, wav: Path, compress: bool = False) -> BundleObject:
             f"{wav.name} is {width * 8}-bit; write 16-bit PCM with no extra tool:\n"
             f"  shamway generate audio convert {wav.name} out.wav"
         )
+    # A zero channel count is a header this writer cannot divide a frame
+    # count by, and it reaches the division before the stereo/mono refusal
+    # below, so it is caught here rather than as a ZeroDivisionError.
+    if channels < 1:
+        raise PipelineError(f"{wav.name} declares {channels} audio channels; write mono or stereo")
     samples = len(frames) // (2 * channels)
     if compress:
         _vorbis_target(channels, rate)

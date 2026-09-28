@@ -378,6 +378,9 @@ vanilla content, samples at full scale, and DC offset. It notes leading silence
 (a one-shot triggered by a game event sounds late by exactly that much) and a
 missing trailing fade.
 
+Every generated clip fades in and out across the whole ramp, to true silence at
+the last and first sample, so a trigger never lands on a discontinuity.
+
 Mono is the default because 7DTD positions sounds in 3D itself, so a stereo
 clip on a 3D AudioSource is downmixed anyway; pass `--allow-stereo` for a
 deliberate 2D UI or music cue.

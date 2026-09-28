@@ -62,6 +62,10 @@ def build_icon(
     with less in it. 0.7 fill and 0.45 saturation is a proven pairing; pass
     them instead of generating a second source, and record them.
     """
+    # A zero or negative cell writes an empty PNG and then divides by its area
+    # to report coverage, so the size is refused before anything is rastered.
+    if size < 1:
+        raise SystemExit(f"ERROR: --size must be at least 1 pixel, got {size}")
     with Image.open(source) as opened:
         image = opened.convert("RGBA")
     if trim:

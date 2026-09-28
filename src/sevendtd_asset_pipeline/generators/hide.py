@@ -299,7 +299,17 @@ def hide_atlas_rgb(
         fw = x1 - x0
         if fh <= 0 or fw <= 0:
             continue
-        cell_field = np.resize(fill, (fh, fw, 3)) if (fh, fw) != (cell_px, cell_px) else fill
+        # Tile the cell's own field rather than resizing it: the rect widths
+        # are the least-remainder split of `size` across `grid`, so all but one
+        # column can be a pixel wider than the field, and `np.resize` would
+        # ravel those extra pixels and refill them from the top-left, wrapping a
+        # whole row of the field back inside the cell.
+        if (fh, fw) == fill.shape[:2]:
+            cell_field = fill
+        else:
+            rows = np.arange(fh)[:, None] % fill.shape[0]
+            columns = np.arange(fw)[None, :] % fill.shape[1]
+            cell_field = fill[rows, columns]
         out[y0:y1, x0:x1] = cell_field
     return out
 

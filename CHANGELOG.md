@@ -79,6 +79,27 @@ tag has no changelog section.
 - The Gemini provider closes the `HTTPError` it reports on, so a failed request
   no longer leaks its socket into a `ResourceWarning` from wherever the
   collector happens to run.
+- The BC1/BC3 encoder chose its palette index from a squared colour distance
+  computed in int16. A channel difference of 182 already exceeds 32767, so the
+  wrapped negative won the comparison and a block whose two colours are far
+  apart came back as the wrong one: a black outline on a light panel decoded as
+  the panel colour. The distance is int32 now.
+- `generate hide --atlas` resized a cell's periodic field to the cell rect
+  instead of tiling it. The rects are the least-remainder split of the texture
+  across the grid, so a cell a pixel wider than the field had its field raveled
+  and refilled from the top-left, wrapping a row of it back inside the cell.
+- A generated cylinder's closing quad wrapped onto its first vertex, sampling
+  the whole atlas cell in reverse on that one face. The ring now closes at
+  `u = 1.0` with a duplicated seam column.
+- Generated clips faded to `1/count` rather than to zero at the end, and up to
+  `(count - 1)/count` at the start, leaving the step the fade exists to remove.
+  `fade_head` is the matching ramp and both reach their end.
+- `shamway generate icon --size 0` wrote an empty PNG and then divided by its
+  area; the size is refused up front.
+- A WAV declaring zero channels reached `len(frames) // (2 * channels)` before
+  the mono/stereo refusal, raising a ZeroDivisionError.
+- `_ogg_packets` accepted a segment table running past the end of the stream and
+  wrote the truncated packets into the FSB5 bank under correct length prefixes.
 
 ## [0.7.0] - 2026-09-21
 

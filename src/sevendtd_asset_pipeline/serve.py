@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import sys
+import traceback
 from collections.abc import Callable
 from typing import Any, TextIO
 
@@ -34,10 +35,24 @@ PROTOCOL = 1
 
 
 def _error(identifier: Any, exc: BaseException) -> dict[str, Any]:
+    """One error response.
+
+    A `PipelineError` message is written for the person who asked, so it
+    travels whole. Anything else is a bug or an environment failure whose text
+    is not: a `TypeError` from a dispatch signature, an `OSError` carrying a
+    home directory, a `CalledProcessError` carrying a gateway's stderr. Those
+    reach a consumer that never sees this tool's other output, where nothing
+    else in the package sanitizes for it, so the response names the type and
+    stops there.
+    """
+    if isinstance(exc, PipelineError):
+        message = str(exc)
+    else:
+        message = f"{type(exc).__name__} was raised running this operation; see stderr"
     return {
         "id": identifier,
         "ok": False,
-        "error": {"type": type(exc).__name__, "message": str(exc)},
+        "error": {"type": type(exc).__name__, "message": message},
     }
 
 
@@ -77,6 +92,11 @@ def handle(
         pipeline = resolve() if operation.needs_config else None
         return {"id": identifier, "ok": True, "result": call_json(pipeline, operation_name, params)}
     except Exception as exc:  # noqa: BLE001 - a handler bug must not kill the session
+        if not isinstance(exc, PipelineError):
+            # The response says what happened; this is where the operator reads
+            # why. stderr is the channel a consumer of this protocol is not
+            # reading, which is exactly the point.
+            traceback.print_exc(file=sys.stderr)
         return _error(identifier, exc)
 
 

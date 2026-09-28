@@ -7,8 +7,10 @@ import re
 import tempfile
 import typing
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from typing import cast
+from unittest.mock import patch
 
 from fixtures import unityfs_bundle
 
@@ -314,6 +316,28 @@ class DispatchTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "expected integer"):
             self.pipeline.call("client_launch", {"run_seconds": True, "mute": False})
 
+    def test_an_array_parameter_holds_its_elements_to_the_published_item_type(self) -> None:
+        """A list of the wrong shape passed `_typed` and failed deep inside.
+
+        `matches: [1, 2, "3"]` is an array, so the array gate passed it, and
+        `avoid: [1]` likewise; both then died in numpy or the prompt renderer
+        with a `TypeError` naming something the caller never wrote. ADR 0004
+        tells a consumer to generate a client from the published document, and
+        that client reads `items` — so `call` has to hold the same contract.
+        """
+        with self.assertRaisesRegex(PipelineError, "inside an array; expected number"):
+            call_json(
+                None,
+                "check_texture",
+                {"texture": "t.png", "matches": [0.5, 0.4, "0.3"]},
+            )
+        with self.assertRaisesRegex(PipelineError, "avoid=1 inside an array; expected string"):
+            call_json(
+                None,
+                "prompt",
+                {"kind": "icon", "subject": "a lamp", "avoid": [1]},
+            )
+
     def test_a_path_parameter_accepts_what_the_facade_documents(self) -> None:
         from sevendtd_asset_pipeline.api import _validated
         from sevendtd_asset_pipeline.operations import get as get_operation
@@ -456,6 +480,28 @@ class ServeTests(unittest.TestCase):
         (response,) = self._run({"id": 1, "op": "build", "params": {"probe": True}})
         self.assertFalse(response["ok"])
         self.assertIn("read-only", cast(str, _nested(response, "error")["message"]))
+
+    def test_an_unexpected_error_response_carries_no_internal_text(self) -> None:
+        """The response names the type; the traceback goes to stderr.
+
+        Every other surface in this package answers a failure with one curated
+        `PipelineError` line, and this channel is where a generated consumer
+        reads its errors. `str(exc)` on anything else published a home
+        directory, a gateway's stderr, or a signature the caller never wrote.
+        """
+        with (
+            patch(
+                "sevendtd_asset_pipeline.serve.call_json",
+                side_effect=OSError("/home/someone/mod.unity3d"),
+            ),
+            redirect_stderr(io.StringIO()) as stderr,
+        ):
+            (response,) = self._run({"id": 1, "op": "refs"})
+        self.assertFalse(response["ok"])
+        message = cast(str, _nested(response, "error")["message"])
+        self.assertNotIn("/home/someone", message)
+        self.assertIn("OSError", message)
+        self.assertIn("OSError", stderr.getvalue())
 
     def test_a_bad_line_does_not_desynchronize_the_session(self) -> None:
         output = io.StringIO()

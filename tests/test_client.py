@@ -16,6 +16,7 @@ import sys
 import tempfile
 import time
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from unittest import mock
 
@@ -1292,7 +1293,11 @@ class FreshClientRunTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def _run(
-        self, *, sleep_side_effect: BaseException | None = None, stop: bool = False
+        self,
+        *,
+        sleep_side_effect: BaseException | None = None,
+        stop: bool = False,
+        pids: Callable[[], list[int]] | None = None,
     ) -> client.AcceptanceRun:
         self.calls: list[str] = []
         # The run window is recorded, never slept: two seconds of real idle per
@@ -1323,9 +1328,12 @@ class FreshClientRunTests(unittest.TestCase):
             if sleep_side_effect is not None:
                 raise sleep_side_effect
 
+        def no_client() -> list[int]:
+            return []
+
         patches = [
             mock.patch.object(client, "set_client_mute", side_effect=fake_mute),
-            mock.patch.object(client, "running_client_pids", return_value=[]),
+            mock.patch.object(client, "running_client_pids", side_effect=pids or no_client),
             mock.patch.object(client, "stop_client", side_effect=fake_stop),
             mock.patch.object(
                 client, "latest_client_log", return_value=self.root / "client-log.txt"
@@ -1344,6 +1352,36 @@ class FreshClientRunTests(unittest.TestCase):
                 steam_bin=str(self.steam),
                 log_dir=self.logs,
             )
+
+    def test_the_freshness_check_runs_inside_the_lock_it_guards(self) -> None:
+        """A check taken before the lock belongs to a client we never contended for.
+
+        Another session can take the lock and start the game in the gap between
+        the refusal and the hold, and then this run launches over that client
+        and reports a rebuild proved by a process that was already warm. So
+        the process list is read while this run holds the lock.
+        """
+        holders: list[str | None] = []
+
+        def record_holder() -> list[int]:
+            holders.append(client.lock_holder(self.lock))
+            return []
+
+        self._run(pids=record_holder)
+        self.assertTrue(holders, "the client process list must be read at all")
+        self.assertIsNotNone(holders[0], "the check ran before the lock was held")
+
+    def test_a_running_client_is_refused_under_the_held_lock(self) -> None:
+        holders: list[str | None] = []
+
+        def running_under_holder() -> list[int]:
+            holders.append(client.lock_holder(self.lock))
+            return [4242]
+
+        with self.assertRaisesRegex(PipelineError, "already running"):
+            self._run(pids=running_under_holder)
+        self.assertIsNotNone(holders[0])
+        self.assertIsNone(client.lock_holder(self.lock), "a refusal must not leave it held")
 
     def test_a_bounded_muted_run_unmutes_before_stopping_the_client(self) -> None:
         # The unmute must precede the stop: once the client exits there is no

@@ -1308,11 +1308,6 @@ def fresh_client_run(
     so in its report.
     """
     refuse_while_held("launch a client")
-    if running_client_pids():
-        raise PipelineError(
-            "a 7 Days to Die client is already running; close it first. A reused client "
-            "keeps the old bundle cached and proves nothing about a rebuild."
-        )
     if shutil.which(steam_bin) is None:
         raise PipelineError(f"{steam_bin!r} is not on PATH; set --steam-bin to the Steam launcher")
     logs = log_dir or client_log_dir(game_dir)
@@ -1325,6 +1320,18 @@ def fresh_client_run(
         mods = user_mods_dir(game_dir)
     session = os.environ.get(LOCK_SESSION_ENV) or new_session_id()
     with held_lock(session):
+        # Inside the hold, not before it. The process check is what makes this
+        # run a fresh client, and a check taken before the lock belongs to a
+        # client this run never contended for: another session could take the
+        # lock and start the game in the gap, and this run would then launch
+        # over it, hold the lock it shares, and report a rebuild proved by a
+        # client that was already warm. `held_lock` above is the check that
+        # counts; this one is the client it guards.
+        if running_client_pids():
+            raise PipelineError(
+                "a 7 Days to Die client is already running; close it first. A reused client "
+                "keeps the old bundle cached and proves nothing about a rebuild."
+            )
         started_at = time.time()
         command = launch_command(steam_bin, extra_args)
         try:

@@ -539,6 +539,10 @@ def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str,
             raise PipelineError(f"operation {operation.name!r} requires parameter {required!r}")
     for name, value in arguments.items():
         _typed(operation, name, properties[name], value)
+        # `default: None` is a legal published default for an array, so a null
+        # that reached here is the schema's own and not a list to check.
+        if properties[name].get("type") == "array" and value is not None:
+            _check_items(operation, name, properties[name], value)
     for name, value in arguments.items():
         allowed = properties[name].get("enum")
         if allowed and value not in allowed:
@@ -598,6 +602,39 @@ def _typed(operation: Operation, name: str, prop: dict[str, Any], value: Any) ->
             f"operation {operation.name!r} got {name}={value!r}; expected {kind}, "
             f"not {type(value).__name__}"
         )
+
+
+def _check_items(operation: Operation, name: str, prop: dict[str, Any], value: Any) -> None:
+    """Hold every element of an array parameter to the item type its schema declares.
+
+    `type` and `minItems` are enforced, so the one shape that reached the facade
+    unchecked was a list whose *elements* were the wrong type: `matches: [1, 2,
+    "3"]` and `avoid: [1]` both passed `_typed` (a list is an array) and then
+    failed deep inside numpy or the prompt renderer with a `TypeError` naming
+    something the caller never wrote. ADR 0004 tells consumers to generate a
+    wrapper from this document, and such a wrapper reads `items` — so `call` and
+    a generated client have to agree on what a valid parameter is, or the
+    contract is only published, not held.
+    """
+    item = prop.get("items")
+    if not isinstance(item, dict):
+        return
+    kind = item.get("type")
+    if kind is None:
+        return
+    expected = _JSON_TYPES.get(kind)
+    if expected is None:
+        return
+    for element in value:
+        if isinstance(element, bool) and kind in ("integer", "number"):
+            raise PipelineError(
+                f"operation {operation.name!r} got {name}=true inside an array; expected {kind}"
+            )
+        if not isinstance(element, expected):
+            raise PipelineError(
+                f"operation {operation.name!r} got {name}={element!r} inside an array; "
+                f"expected {kind}, not {type(element).__name__}"
+            )
 
 
 def _check_arity(operation: Operation, name: str, prop: dict[str, Any], value: Any) -> None:

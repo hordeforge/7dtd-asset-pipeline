@@ -179,12 +179,9 @@ in `docs.TOPICS` and in its directory's `README.md`; a new host script goes in
 with the tool that produced it. An undocumented capability is one the next session
 will rebuild from scratch, and an undocumented gate is one it will delete.
 
-- `scripts/bootstrap` — uv sync from the committed lockfile, with extras
-- `make check test` — compile, shellcheck, and the unit suite
-
 ```bash
-scripts/bootstrap
-make check test
+scripts/bootstrap          # uv sync from the committed lockfile, with extras
+make check test            # compile, shellcheck, lint, types, and the unit suite
 ```
 
 `make check test` must pass before you hand work back. It needs no network,
@@ -304,9 +301,8 @@ They are named suites, and they stay named:
 
 Look-versus-block is the form the harness can gate by name.
 **Never comma-list `*_look` with `*_block_*` in one `PLAYTEST_SUITE`.**
-`playtest-acceptance.sh` dies if you do; the generated provider throws if
-that script is bypassed; the generated provider refuses it too, as does
-`7dtd-playtest`'s orchestrator.
+`playtest-acceptance.sh` dies if you do, and `7dtd-playtest`'s orchestrator
+refuses the mixed suite too.
 `playtest-synthesized` runs `_bundle`, `_block_model`, and `_editorless`
 (mechanical loads) — never `_look`. Visual sign-off of a floating prefab
 is `playtest-synthesized.sh --look`, its own invocation.
@@ -446,8 +442,11 @@ Machine-readable output for agents and CI:
 | `shamway capabilities --json` | optional capabilities, what they unlock, install commands |
 | `shamway inspect --deep --json` | every serialized object and per-prefab components through unityz; embedded type trees required |
 | `shamway check-mesh --json` | authored-mesh extents and glTF conformance |
+| `shamway check-texture --json` | a generated texture's mean colour against the `material.color` it replaces, and whether it still tiles |
 | `shamway check-sound --json` | clip format, level, clipping, DC offset |
+| `shamway check-log PATH` | fail on a build log that reports success while stripping engine modules |
 | `shamway review-audio` | advisory semantic review of a clip by a configured audio model; uploads the asset, so it refuses without `--allow-network`, and never replaces the human listen |
+| `shamway review-video STEM --clip DIR` | the same for a clip `shamway client capture --clip` adopted, reviewed by a vision model; also needs `--allow-network`, and `--intent` supplies the recorded purpose (docs/authoring/video.md) |
 | `shamway check-icons --json` | atlas cells and every `CustomIcon` key |
 | `shamway check-localization --json` | every Config/ localization key against the mod's `Localization.csv` (+ vanilla, `--no-vanilla-keys` to fail those) |
 | `shamway check-patches --json` | replay Config/ patch XPaths against the game's stock configs and fail the zero-node ones (the engine silently no-ops those) |
@@ -461,7 +460,8 @@ Machine-readable output for agents and CI:
 | `shamway generate --list` | the packaged asset generators, callable from any mod |
 | `shamway prompt --list` | the house-style image prompts, rendered with the lane that consumes them |
 | `shamway docs [TOPIC]` | this repository's documentation, served from the package |
-| `shamway script NAME` | the host scripts (install-tools, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized, playtest-capture, cross-read), served from the package |
+| `shamway script NAME` | the host scripts (install-tools, install-unityz, install-unity-editor, compile-editor-scripts, playtest-acceptance, playtest-synthesized, playtest-capture, cross-read), served from the package |
+| `shamway script install-unityz` | the pinned, checksum-verified `unityz` reader `inspect --deep` needs; without it that command cannot run |
 | `shamway script cross-read BUNDLE` | read a synthesized bundle with AssetsTools.NET, a reader sharing no code with the writer or with unityz; prints objects and the container table as JSON for comparison with `unityz info --json --objects` (needs the .NET SDK) |
 | `shamway script playtest-synthesized` | the editorless writer's live-client regression: load every member, then `SetBlockRpc` the self-test block onto a voxel and look at it. `--look [STEM]` instead runs that asset's look suite (`<mod>_<stem>_look`) alone; a walk-entity stem is engine-spawned, while `--prefab-look STEM` is its separate raw-prefab diagnostic control. `--trace-entity` adds per-second pose/render/grounding/collision evidence. `STEM` names a generated rig (`shamwaySelfTestBird`, `_Arachnid`, `_Dino`, `_Crocodile`, `_Humanoid`, `_Creature`) or is omitted for the looping VFX |
 | `shamway client where --json` | the client's per-user `Mods/` and `logs/` paths |
@@ -512,13 +512,15 @@ and never in a loop:
 
 - `scripts/install-unity-editor.sh` downloads several gigabytes and needs an
   interactive desktop for license activation.
-- `shamway build` starts a real Unity editor; a cold project import takes
-  minutes.
+- `shamway build` starts a real Unity editor only when the mod opted into
+  `bundle_source = "unity"`; a cold project import takes minutes there, while
+  the synthesized default is seconds.
 - `shamway build` (without `--probe`), `stage`, and `render-icon` are the only
   commands that write into the modlet, and the first two only after every
-  offline gate passes; `client deploy`/`launch` write outside it, and `schema`
-  marks all six writers. Use `--probe` for any
-  environment question — it never stages anything.
+  offline gate passes; `client deploy`/`launch` write outside it, `init` and
+  `acceptance-provider` write a mod, and `schema` marks all ten operations
+  that write. Use `--probe` for any environment question — it never stages
+  anything.
 
 Prefer `doctor`, `inspect`, `refs`, and `validate` when diagnosing. They are
 fast, read-only, and need neither Unity nor the network.
@@ -535,13 +537,16 @@ generated and drawn 2D assets — read it before writing any generation prompt.
 [docs/authoring/audio.md](docs/authoring/audio.md) and [docs/authoring/vfx.md](docs/authoring/vfx.md) own the sound and
 particle lanes, including the runtime behaviours that make a correctly built
 asset silent or invisible.
+[docs/authoring/video.md](docs/authoring/video.md) owns the recorded-clip lane:
+`client capture --clip` adopts a hash-addressed capture, `review-video` reads
+it back against the intent the author committed.
 [docs/authoring/environment-effects.md](docs/authoring/environment-effects.md) owns weather, fog and
 light — the effect no bundle can carry, where every offline gate proves
 nothing and a particle-only "environment" is the standard failure.
 
 `shamway generate` ships working generators for the
-sound, audio-conversion, cutout, particle-card, icon, texture, mesh,
-mesh-icon, mesh-optimize, and bind lanes, and the
+sound, audio, cutout, particle-card, icon, texture-maps, hide, mesh,
+mesh-optimize, mesh-icon, rig, entity, creature, and bind lanes, and the
 scaffolded Unity project ships `GeneratedAsset.cs` for asset-as-code prefabs,
 materials, imports, particles, and audio, plus `IconRenderer.cs`. Extend those
 rather than starting a new pattern. A consuming mod's particles are a

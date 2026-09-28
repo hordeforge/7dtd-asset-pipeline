@@ -194,6 +194,7 @@ _DEFINITIONS: tuple[Operation, ...] = (
         cost=FAST,
         writes=False,
         needs_config=False,
+        capabilities=("numpy", "pillow"),
     ),
     Operation(
         name="check_sound",

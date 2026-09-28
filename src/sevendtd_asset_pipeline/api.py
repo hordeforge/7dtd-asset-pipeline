@@ -589,6 +589,15 @@ def _typed(operation: Operation, name: str, prop: dict[str, Any], value: Any) ->
     kind = prop.get("type")
     if kind is None or (kind == "string" and isinstance(value, Path)):
         return
+    # A property published with `"default": None` declares None as a value it
+    # accepts, so the default `_validated` fills in for an absent parameter is
+    # not a violation of its own type. `check_texture`'s `matches` is the case:
+    # `{"texture": "..."}` is a complete request that the CLI answers happily,
+    # and this raised "got matches=None; expected array, not NoneType" before
+    # the colour check ever ran. `_coerced` already documents that `default:
+    # None` is a legal published default and passes it through.
+    if value is None and prop.get("default", False) is None:
+        return
     expected = _JSON_TYPES.get(kind)
     if expected is None:
         return
@@ -616,6 +625,8 @@ def _check_items(operation: Operation, name: str, prop: dict[str, Any], value: A
     """
     item = prop.get("items")
     if not isinstance(item, dict):
+        return
+    if value is None:
         return
     kind = item.get("type")
     if kind is None:

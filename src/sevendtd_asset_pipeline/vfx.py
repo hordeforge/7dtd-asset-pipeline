@@ -266,7 +266,7 @@ def _parse_material(item: Any, source: Path, index: int) -> VfxMaterial:
         raise PipelineError(f"{source.name} material {name!r} has unsupported keys {extra}")
     if not isinstance(name, str) or not name:
         raise PipelineError(f"{source.name} material {index} needs a name")
-    if blend not in BLEND_MODES:
+    if not isinstance(blend, str) or blend not in BLEND_MODES:
         raise PipelineError(
             f"{source.name} material {name!r} blend {blend!r} is not one of {sorted(BLEND_MODES)}"
         )
@@ -383,7 +383,7 @@ def _parse_shape(item: Any, where: str) -> Shape:
     if extra:
         raise PipelineError(f"{where} shape has unsupported keys {extra}")
     type_name = item["type"]
-    if type_name not in SHAPE_TYPES:
+    if not isinstance(type_name, str) or type_name not in SHAPE_TYPES:
         raise PipelineError(f"{where} shape type {type_name!r} is not one of {sorted(SHAPE_TYPES)}")
     return Shape(
         type=SHAPE_TYPES[type_name],
@@ -447,7 +447,7 @@ def _parse_renderer(item: Any, where: str, materials: set[str]) -> Renderer:
     if extra:
         raise PipelineError(f"{where} renderer has unsupported keys {extra}")
     mode_name = item.get("mode", "billboard")
-    if mode_name not in RENDER_MODES:
+    if not isinstance(mode_name, str) or mode_name not in RENDER_MODES:
         raise PipelineError(
             f"{where} renderer mode {mode_name!r} is not one of {sorted(RENDER_MODES)}"
         )
@@ -587,7 +587,11 @@ def _color(value: Any, where: str, field: str) -> tuple[float, float, float, flo
 
 
 def _enum(value: Any, table: dict[str, int], where: str, field: str) -> int:
-    if value not in table:
+    # A JSON document can put a list or an object where a name belongs, and
+    # `value in table` on one of those raises `TypeError: unhashable type`
+    # from inside a gate. The other rejections here are `PipelineError`s naming
+    # the field, so an unhashable name is one of those too.
+    if not isinstance(value, str) or value not in table:
         raise PipelineError(f"{where} {field} {value!r} is not one of {sorted(table)}")
     return table[value]
 

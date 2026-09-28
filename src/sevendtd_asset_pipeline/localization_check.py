@@ -250,7 +250,7 @@ def check_localization(
             # The mod localizes; a referenced key it provides nowhere is a bug.
             problems.append(
                 f"{len(missing)} localization key(s) referenced by Config/ are provided by "
-                f"neither this mod's {LOCALIZATION_FILENAME} nor the game's the vanilla "
+                f"neither this mod's {LOCALIZATION_FILENAME} nor the game's vanilla "
                 f"table: {', '.join(missing)}. Localization.Get returns the key itself on a "
                 "miss, so each shows as a raw name/string in the UI. Add a row (or extend a "
                 "vanilla entry) or set the property to literal text."
@@ -277,7 +277,8 @@ def check_localization(
         notes.append(
             "the game's Localization.csv was never looked for, because no game directory "
             "is configured; every vanilla key is reported as missing. Set "
-            "SEVEN_DAYS_TO_DIE_DIR, or pass --no-vanilla-keys, to know the difference"
+            "SEVEN_DAYS_TO_DIE_DIR (or point check-localization at a game directory) to "
+            "know the difference"
         )
     elif not (Path(game_dir) / "Data" / "Config" / LOCALIZATION_FILENAME).is_file():
         notes.append("the game's Localization.csv was not found; vanilla keys were not checked")

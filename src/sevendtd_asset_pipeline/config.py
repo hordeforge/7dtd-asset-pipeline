@@ -376,7 +376,11 @@ def load_config(path: Path | None = None) -> PipelineConfig:
 
     # `bool` is an `int` subclass, so `schema_version = true` would otherwise
     # pass the equality below and configure a boolean as a version number.
-    if not isinstance(data.get("schema_version"), int) or data["schema_version"] != 1:
+    if (
+        not isinstance(data.get("schema_version"), int)
+        or isinstance(data["schema_version"], bool)
+        or data["schema_version"] != 1
+    ):
         raise PipelineError(f"{config_file}: schema_version must be 1")
     _reject_unknown(data, TOP_LEVEL_KEYS, "")
     base = config_file.parent

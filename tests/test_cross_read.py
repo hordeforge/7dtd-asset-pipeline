@@ -29,6 +29,25 @@ BUNDLE = (
 )
 
 
+def _has_dotnet_sdk() -> bool:
+    """Whether cross-read.sh can actually build its reader on this host.
+
+    `dotnet` on PATH is not enough: a runtime-only install answers every other
+    command with "No .NET SDKs were found", so the test would fail for a
+    missing tool rather than for a product defect.
+    """
+    dotnet = shutil.which("dotnet")
+    if dotnet is None:
+        return False
+    listed = subprocess.run(
+        [dotnet, "--list-sdks"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return listed.returncode == 0 and bool(listed.stdout.strip())
+
+
 class CrossReadTests(unittest.TestCase):
     def test_a_missing_bundle_is_one_error_line(self) -> None:
         result = subprocess.run(
@@ -41,7 +60,7 @@ class CrossReadTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertTrue(result.stderr.startswith("ERROR: no bundle at "), result.stderr)
 
-    @unittest.skipUnless(shutil.which("dotnet"), "needs the .NET SDK")
+    @unittest.skipUnless(_has_dotnet_sdk(), "needs the .NET SDK")
     @unittest.skipUnless(has_capability("unityz"), "needs unityz")
     def test_assetstools_and_unityz_see_the_same_objects(self) -> None:
         result = subprocess.run(

@@ -137,6 +137,13 @@ select = [
   "INT",  # flake8-gettext
   "INP",  # flake8-no-pep420: implicit namespace packages
   "ASYNC", # flake8-async
+  # tryceratops' correctness pair, taken as rules rather than as the group:
+  # TRY300 (a `return` inside `try` that swallows an exception the `except`
+  # then pretends to handle) and TRY400 (`logging.error` where the traceback is
+  # the point, which this repo's audit and capture paths rely on). The rest of
+  # TRY is message style, and the tree has 600+ of those.
+  "TRY300",
+  "TRY400",
 ]
 ignore = [
   # Function-scope imports are deliberate architecture: optional capabilities
@@ -186,6 +193,26 @@ explicit_package_bases = true
 # --strict does not include these; the tree already passes them.
 strict_bytes = true
 strict_equality_for_none = true
+# Three more --strict leaves, each verified against the whole tree with
+# `mypy . <flag>` before it was written here:
+#   strict_concatenate        `[str] + [Path]` is a runtime TypeError, not a
+#                             quietly mangled list
+#   disallow_untyped_globals  a module constant with no annotation infers a
+#                             type from its first assignment and stops being
+#                             checked when that value changes shape
+#   extra_checks              return and argument types through a union-typed
+#                             callee, which the plain signature check skips
+strict_concatenate = true
+disallow_untyped_globals = true
+extra_checks = true
+#
+# warn_unreachable is deliberately absent. It reports two sites that are not
+# defects: `sys.platform.startswith("linux")` narrows to the host running the
+# check, so the non-Linux branch is "unreachable" on Linux and the Linux branch
+# is "unreachable" on macOS, and the `isinstance(tag, str)` guard in
+# patch_check.py is unreachable only because the ElementTree stub types `tag` as
+# str while lxml puts a callable there for a comment. A flag whose verdict
+# depends on the host is a flag CI cannot enforce, so it stays off.
 # Off by default even under --strict. ignore-without-code is the type-ignore
 # equivalent of RUF100: a bare `# type: ignore` cannot land. truthy-bool and
 # truthy-iterable catch `if maybe_none` and `if some_list` that hide bugs.

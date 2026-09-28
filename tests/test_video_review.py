@@ -272,6 +272,10 @@ class ResultTests(unittest.TestCase):
 
 
 class RunReviewTests(_ReviewHarness):
+    # Long enough for the reaping test's program to launch its worker and write
+    # the worker's pid, and short enough that the test still runs in seconds.
+    worker_startup_seconds = 2.0
+
     def test_consent_is_demanded_before_the_gateway_is_even_consulted(self) -> None:
         with self.assertRaisesRegex(PipelineError, "allow.network"):
             self._run(allow_network=False)
@@ -345,14 +349,21 @@ class RunReviewTests(_ReviewHarness):
                 "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
                 "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(60)"
             )
+            # The bound has to outlast the program's own start-up: it writes
+            # the worker pid only after a second interpreter has launched. At
+            # 0.1s the group is killed before that, the pid file never appears,
+            # and the wait below cannot tell "nothing leaked" from "nothing
+            # was ever running" - it reported a surviving worker on a run
+            # where the reaping was correct.
             with self.assertRaisesRegex(PipelineError, "did not answer within"):
                 video_review._default_runner(
                     [sys.executable, "-c", program, str(pid_file)], SPAWN_BOUND_SECONDS
                 )
-            self.assertTrue(
-                pid_file.is_file(),
-                f"the fixture never started a worker within {SPAWN_BOUND_SECONDS:g}s",
-            )
+            deadline = time.monotonic() + self.worker_startup_seconds
+            while not pid_file.is_file():
+                if time.monotonic() > deadline:
+                    self.fail("the gateway never recorded a worker pid; the test proved nothing")
+                time.sleep(0.05)
             pid = int(pid_file.read_text())
             deadline = time.monotonic() + REAP_POLL_SECONDS
             while time.monotonic() < deadline:

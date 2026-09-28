@@ -140,16 +140,29 @@ def run(name: str, argv: list[str]) -> int:
     `sys.argv[0]` is swapped while the generator builds its parser, because
     argparse derives the program name from it — otherwise `--help` advertises
     the module path rather than the command the user actually typed.
+
+    Since 3.14 `argparse._prog_name` prefers `__main__.__spec__` and only falls
+    back to `sys.argv[0]` when there is no spec, so the swap is silently
+    ignored for every `python -m ...` caller (the test suite, `python -m
+    sevendtd_asset_pipeline`, a packager's shim) and `--help` prints
+    `usage: python3 -m unittest`. Clearing the spec for the same window is what
+    puts the swapped name back in front of the parser.
     """
     import sys
 
     module = load(name)
     original = sys.argv[0]
+    host = sys.modules.get("__main__")
+    original_spec = getattr(host, "__spec__", None)
     sys.argv[0] = f"shamway generate {name}"
+    if host is not None:
+        host.__spec__ = None
     try:
         return int(module.main(argv) or 0)
     finally:
         sys.argv[0] = original
+        if host is not None:
+            host.__spec__ = original_spec
 
 
 def describe() -> list[GeneratorInfo]:

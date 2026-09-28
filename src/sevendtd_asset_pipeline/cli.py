@@ -355,13 +355,20 @@ def _parser() -> argparse.ArgumentParser:
         help="reconcile every Config/ localization key with the mod's Localization.csv "
         "(and the game's, so vanilla keys are allowed)",
     )
-    loc.add_argument(
+    vanilla_keys = loc.add_mutually_exclusive_group()
+    vanilla_keys.add_argument(
         "--allow-vanilla-keys",
+        dest="allow_vanilla_keys",
         action="store_true",
         default=True,
         help="allow keys resolved by the game's own Localization.csv (default)",
     )
-    loc.add_argument("--no-vanilla-keys", action="store_true", help="fail vanilla keys too")
+    vanilla_keys.add_argument(
+        "--no-vanilla-keys",
+        dest="allow_vanilla_keys",
+        action="store_false",
+        help="fail vanilla keys too",
+    )
     loc.add_argument("--json", action="store_true")
 
     patches = commands.add_parser(
@@ -993,7 +1000,7 @@ def run(args: argparse.Namespace) -> int:
             config.mod_root,
             config.config_dir,
             config.game_dir,
-            not args.no_vanilla_keys,
+            args.allow_vanilla_keys,
         )
         if args.json:
             print(json.dumps(loc_report.as_dict(), indent=2, sort_keys=True))

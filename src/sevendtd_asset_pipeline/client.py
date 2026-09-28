@@ -853,7 +853,11 @@ def client_sink_inputs(inputs: list[dict[str, object]] | None = None) -> list[in
     return indexes
 
 
-def set_client_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
+def set_client_mute(
+    muted: bool,
+    wait_seconds: int = 60,
+    applied: list[int] | None = None,
+) -> list[int]:
     """Mute or unmute the running client's audio stream at the OS layer.
 
     The stream only exists once the game has initialised audio, so this polls.
@@ -861,6 +865,12 @@ def set_client_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
     registry audio prefs. WirePlumber persists per-application stream mute,
     which is why an unmute is needed after a muted run, not only a mute
     before it. Returns the sink-input indexes changed.
+
+    `applied`, when given, collects each index as it is changed rather than at
+    the end, so a failure on the second stream still leaves the caller holding
+    the first. A raise otherwise returns nothing at all, and the caller's
+    `finally` is blind to a mute it did apply — WirePlumber would keep that
+    stream silent for every later session of the game.
     """
     deadline = time.monotonic() + max(1, wait_seconds)
     while True:
@@ -881,6 +891,8 @@ def set_client_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
                         f"pactl could not {'mute' if muted else 'unmute'} sink input "
                         f"{index}: {changed.stderr.strip() or changed.returncode}"
                     )
+                if applied is not None:
+                    applied.append(index)
             return indexes
         if time.monotonic() >= deadline:
             return []
@@ -1299,7 +1311,9 @@ def fresh_client_run(
         unmuted = False
         try:
             if mute:
-                muted_indexes = set_client_mute(True)
+                # Collected as it goes: a pactl failure on the second stream
+                # raises, and the `finally` below still has to undo the first.
+                set_client_mute(True, applied=muted_indexes)
             if run_seconds:
                 time.sleep(run_seconds)
                 if mute and muted_indexes:
@@ -1316,14 +1330,17 @@ def fresh_client_run(
                 wait_seconds=0.0 if run_seconds else LOG_APPEARS_WITHIN_SEC,
             )
         finally:
+            # A mute this run applied and never undid is not this run's to
+            # leave: WirePlumber persists the stream's state, so it silences
+            # every later session of the game, not just this one. An untimed run
+            # hands a live, muted client to a person on purpose, so that is the
+            # one case where the mute stays — unless the run is unwinding
+            # through an exception, which nobody handed the client to.
+            unwinding = sys.exc_info()[0] is not None
+            if mute and muted_indexes and not unmuted and (run_seconds or unwinding):
+                with contextlib.suppress(PipelineError):
+                    set_client_mute(False, wait_seconds=5)
             if run_seconds:
-                # Anything raised between muting and here — a stop that failed,
-                # a log that never appeared, a Ctrl+C mid-run — must still undo
-                # the mute: it persists in WirePlumber's saved state, and would
-                # silence every later session of this game, not just this run.
-                if mute and muted_indexes and not unmuted:
-                    with contextlib.suppress(PipelineError):
-                        set_client_mute(False, wait_seconds=5)
                 # And a timed run owns its client's lifetime: whatever way the
                 # window ended, the client must not survive to hold the
                 # exclusivity check against every later run. The stop comes

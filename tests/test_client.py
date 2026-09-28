@@ -481,6 +481,30 @@ class LatestLogTests(unittest.TestCase):
 
 
 class ProcessAndAudioTests(unittest.TestCase):
+    def test_a_mute_that_fails_halfway_still_reports_what_it_changed(self) -> None:
+        """WirePlumber persists a stream mute, so a partial one outlives the run.
+
+        The caller's cleanup is driven by the list this call fills. A raise on
+        the second stream used to leave that list empty, and the first stream
+        stayed muted for every later session of the game.
+        """
+        calls: list[tuple[str, str]] = []
+
+        def pactl(*args: str, subject: str = "") -> subprocess.CompletedProcess[bytes]:
+            calls.append((args[0], args[1]))
+            code = 1 if args[1] == "2" else 0
+            return subprocess.CompletedProcess(list(args), code, b"", b"boom")
+
+        applied: list[int] = []
+        with (
+            mock.patch.object(client, "client_sink_inputs", return_value=[1, 2]),
+            mock.patch.object(client, "_run_pactl", side_effect=pactl),
+            self.assertRaises(PipelineError),
+        ):
+            client.set_client_mute(True, applied=applied)
+        self.assertEqual(applied, [1])
+        self.assertIn(("set-sink-input-mute", "1"), calls)
+
     def test_matches_client_executables_not_substrings(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             proc = Path(temp)
@@ -1260,8 +1284,12 @@ class FreshClientRunTests(unittest.TestCase):
         self.slept: list[float] = []
         report = client.LogReport(log="log", mod_name=None)
 
-        def fake_mute(muted: bool, wait_seconds: int = 60) -> list[int]:
+        def fake_mute(
+            muted: bool, wait_seconds: int = 60, applied: list[int] | None = None
+        ) -> list[int]:
             self.calls.append("mute" if muted else "unmute")
+            if muted and applied is not None:
+                applied.append(7)
             return [7] if muted else []
 
         def fake_stop(pids: list[int]) -> None:

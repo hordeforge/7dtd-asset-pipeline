@@ -36,9 +36,12 @@ docs/sibling-repos.md for the boundary and the exclusivity lock both respect.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from contextlib import nullcontext
@@ -718,6 +721,60 @@ def write(plan_: ProviderPlan) -> list[Path]:
     return written
 
 
+DOTNET_BUILD_TIMEOUT = 600
+
+
+def _kill_dotnet_group(process: subprocess.Popen[str]) -> None:
+    """SIGKILL the build's whole process group, then reap the direct child.
+
+    `dotnet build` is a driver, not a leaf: it starts MSBuild worker nodes and
+    a Roslyn compiler server under itself. Killing only the pid `subprocess`
+    forked leaves those children running against the same `output/` the next
+    build wants, which reads as a locked directory rather than a killed build.
+    A fresh session gives this invocation one group to terminate; where there
+    are no process groups (Windows) the direct-child kill is all the platform
+    offers, and the `-nodeReuse:false` argument still keeps the workers from
+    outliving a *successful* build.
+    """
+    if os.name == "posix":
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+    else:  # pragma: no cover - exercised on Windows
+        process.kill()
+    # The reaping read can fail on a process that just died; the kill above is
+    # what this function exists to deliver, and must not replace the error the
+    # caller is already raising.
+    with contextlib.suppress(OSError, ValueError):
+        process.communicate()
+
+
+def _run_dotnet_build(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """One bounded `dotnet build` whose descendants die with it."""
+    environment = {**os.environ, "MSBUILDDISABLENODEREUSE": "1", "DOTNET_CLI_TELEMETRY_OPTOUT": "1"}
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=os.name == "posix",
+            env=environment,
+        )
+    except OSError as exc:
+        raise PipelineError(f"could not run {command[0]}: {exc}") from exc
+    try:
+        stdout, stderr = process.communicate(timeout=DOTNET_BUILD_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        _kill_dotnet_group(process)
+        raise
+    except BaseException:
+        # Ctrl-C included: a build interrupted here unwinds into the caller's
+        # error, and its workers would otherwise still be compiling.
+        _kill_dotnet_group(process)
+        raise
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+
+
 def build(plan_: ProviderPlan, game_dir: Path, harness_dll: Path, output: Path) -> Path:
     """Compile the provider against the game's assemblies and the harness."""
     dotnet = shutil.which("dotnet")
@@ -737,7 +794,7 @@ def build(plan_: ProviderPlan, game_dir: Path, harness_dll: Path, output: Path) 
         )
     project = plan_.directory / f"{plan_.assembly}.csproj"
     try:
-        result = subprocess.run(
+        result = _run_dotnet_build(
             [
                 dotnet,
                 "build",
@@ -748,13 +805,16 @@ def build(plan_: ProviderPlan, game_dir: Path, harness_dll: Path, output: Path) 
                 str(output),
                 "-v",
                 "q",
+                # Node reuse is MSBuild's own lifetime model: the worker nodes it
+                # starts are designed to outlive the build that started them.
+                # For a one-shot provider compile that is a leak, not a feature —
+                # a compiler server per invocation, holding the previous build's
+                # output directory. Turn it off so the build owns nothing past
+                # its own exit.
+                "-nodeReuse:false",
                 f"-p:GameManagedDir={managed}",
                 f"-p:PlaytestHarnessPath={Path(harness_dll)}",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=600,
+            ]
         )
     except subprocess.TimeoutExpired as exc:
         raise PipelineError(

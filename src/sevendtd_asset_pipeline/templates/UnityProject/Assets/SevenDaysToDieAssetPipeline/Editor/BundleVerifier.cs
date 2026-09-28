@@ -47,11 +47,20 @@ namespace SevenDaysToDie.AssetPipeline
         private static double Coverage(Camera camera, RenderTexture target, Texture2D readback)
         {
             RenderTexture previous = RenderTexture.active;
-            camera.Render();
-            RenderTexture.active = target;
-            readback.ReadPixels(new Rect(0f, 0f, DrawProbePixels, DrawProbePixels), 0, 0);
-            readback.Apply();
-            RenderTexture.active = previous;
+            try
+            {
+                camera.Render();
+                RenderTexture.active = target;
+                readback.ReadPixels(new Rect(0f, 0f, DrawProbePixels, DrawProbePixels), 0, 0);
+                readback.Apply();
+            }
+            finally
+            {
+                // A ReadPixels that throws must not leave `active` pointing at
+                // a target the caller is about to destroy: every later GL call
+                // in the session then renders into freed memory.
+                RenderTexture.active = previous;
+            }
             int drawn = 0;
             Color32[] pixels = readback.GetPixels32();
             foreach (Color32 pixel in pixels)
@@ -166,21 +175,37 @@ namespace SevenDaysToDie.AssetPipeline
                     {
                         Mesh cubeMesh = control.GetComponent<MeshFilter>().sharedMesh;
                         RenderTexture prev2 = RenderTexture.active;
-                        RenderTexture.active = target;
-                        GL.Clear(true, true, new Color(0f, 0f, 0f, 0f));
-                        GL.PushMatrix();
-                        GL.LoadIdentity();
-                        GL.LoadProjectionMatrix(Matrix4x4.Ortho(-1f, 1f, -1f, 1f, -10f, 10f));
-                        worn.SetPass(0);
-                        Graphics.DrawMeshNow(cubeMesh, Matrix4x4.identity);
-                        GL.PopMatrix();
-                        readback.ReadPixels(new Rect(0f, 0f, DrawProbePixels, DrawProbePixels), 0, 0);
-                        readback.Apply();
-                        RenderTexture.active = prev2;
-                        int lit = 0;
-                        foreach (Color32 px in readback.GetPixels32()) { if (px.a > 8) { lit++; } }
-                        Debug.Log("VERIFY-DRAWNOW: direct SetPass+DrawMeshNow covered=" +
-                                  (100.0 * lit / (DrawProbePixels * DrawProbePixels)).ToString("0.0") + "%");
+                        bool pushed = false;
+                        try
+                        {
+                            RenderTexture.active = target;
+                            GL.Clear(true, true, new Color(0f, 0f, 0f, 0f));
+                            GL.PushMatrix();
+                            pushed = true;
+                            GL.LoadIdentity();
+                            GL.LoadProjectionMatrix(Matrix4x4.Ortho(-1f, 1f, -1f, 1f, -10f, 10f));
+                            worn.SetPass(0);
+                            Graphics.DrawMeshNow(cubeMesh, Matrix4x4.identity);
+                            GL.PopMatrix();
+                            pushed = false;
+                            readback.ReadPixels(new Rect(0f, 0f, DrawProbePixels, DrawProbePixels), 0, 0);
+                            readback.Apply();
+                            int lit = 0;
+                            foreach (Color32 px in readback.GetPixels32()) { if (px.a > 8) { lit++; } }
+                            Debug.Log("VERIFY-DRAWNOW: direct SetPass+DrawMeshNow covered=" +
+                                      (100.0 * lit / (DrawProbePixels * DrawProbePixels)).ToString("0.0") + "%");
+                        }
+                        finally
+                        {
+                            // The matrix stack and the active target are
+                            // session-wide, not per-call: an unbalanced
+                            // PushMatrix, or an `active` left on a target the
+                            // outer finally destroys, corrupts every later
+                            // measurement — including the built-in-material
+                            // control that follows this one.
+                            if (pushed) { GL.PopMatrix(); }
+                            RenderTexture.active = prev2;
+                        }
                     }
                     catch (Exception drawNowFailed)
                     {
@@ -191,11 +216,22 @@ namespace SevenDaysToDie.AssetPipeline
                     // measured the same way. If this reads zero, the probe is
                     // broken and the bundle's material is not accused.
                     Material builtIn = new Material(Shader.Find("Unlit/Texture"));
-                    control.GetComponent<Renderer>().sharedMaterial = builtIn;
-                    camera.orthographicSize = framed * 1.4f;
-                    Debug.Log("VERIFY-DRAWN-BUILTIN-MAT: built-in cube wearing a fresh " +
-                              "Unlit/Texture material covered=" +
-                              Coverage(camera, target, readback).ToString("0.0") + "%");
+                    try
+                    {
+                        control.GetComponent<Renderer>().sharedMaterial = builtIn;
+                        camera.orthographicSize = framed * 1.4f;
+                        Debug.Log("VERIFY-DRAWN-BUILTIN-MAT: built-in cube wearing a fresh " +
+                                  "Unlit/Texture material covered=" +
+                                  Coverage(camera, target, readback).ToString("0.0") + "%");
+                    }
+                    finally
+                    {
+                        // `new Material` allocates a native object. This runs
+                        // once per bundle prefab, so leaving it for the session
+                        // to collect is one leak per prefab per
+                        // `verify-bundle --draw` run.
+                        UnityEngine.Object.DestroyImmediate(builtIn);
+                    }
 
                     control.GetComponent<Renderer>().sharedMaterial = worn;
                     camera.orthographicSize = framed * 1.4f;

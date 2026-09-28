@@ -42,9 +42,13 @@ namespace SevenDaysToDie.AssetPipeline
         {
             if (!EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Standalone, target))
                 throw new Exception("Could not switch active build target to " + target + ".");
-            if (probe) CreateProbe();
+            // Inside the try, so a `CreateProbe` that throws part-way through
+            // still runs the matching delete: called before it, the probe
+            // folder is stranded in the project on exactly the failed-import
+            // path the probe exists to report.
             try
             {
+                if (probe) CreateProbe();
                 // A probe deliberately skips this: it proves the environment
                 // with a throwaway cube and must not run the mod's generators.
                 if (!probe)

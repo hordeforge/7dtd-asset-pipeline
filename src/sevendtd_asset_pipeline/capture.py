@@ -435,6 +435,13 @@ def record_existing_clip(
         except (OSError, shutil.Error) as exc:
             shutil.rmtree(staged, ignore_errors=True)
             raise PipelineError(f"cannot copy clip {source} into evidence: {exc}") from exc
+        except BaseException:
+            # A Ctrl+C between two copied frames is the one this module's other
+            # staged writes all survive, and an `except (OSError, ...)` alone
+            # lets it strand a half-copied `.clip.tmp` directory under the
+            # evidence root, which deploys with the modlet.
+            shutil.rmtree(staged, ignore_errors=True)
+            raise
 
     captured_at = _utc_mtime(
         max(source.stat().st_mtime, destination.stat().st_mtime if in_place else 0)

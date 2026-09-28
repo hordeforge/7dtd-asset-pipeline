@@ -286,5 +286,18 @@ follow_imports = "skip"
 module = ["setuptools", "setuptools.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# The generator behind tests/test_fuzz.py. It ships no type information, so
+# every name it exports is `Any`.
+module = ["hypothesis", "hypothesis.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+# A harness method is decorated with the generator's own decorators, so its
+# signature is the generator's to decide, not an omission in the test.
+module = ["test_fuzz"]
+disallow_untyped_decorators = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

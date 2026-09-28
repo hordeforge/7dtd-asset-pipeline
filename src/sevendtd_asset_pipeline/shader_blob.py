@@ -880,12 +880,52 @@ def vulkan_code_blob(fragment_smolv: bytes, vertex_smolv: bytes) -> bytes:
     return bytes(writer.out)
 
 
+# A DXBC container, as D3D's `D3D10_SB_CHUNK`/`D3D12_SHADER_BYTECODE` header
+# lays it out: the fourcc at 0x00, a 16-byte digest, the version word, the
+# total size, the chunk count at 0x1C, then one dword per chunk offset from
+# 0x20. The offsets are the ones the previous reader used, unchanged. Every one
+# of those fields is data, not a promise, so each is read through a bound check
+# below: a truncated or mis-declared container has to end as a `PipelineError`
+# naming the field, not as a `struct.error` from inside this module.
+DXBC_MAGIC = b"DXBC"
+DXBC_CHUNK_COUNT_AT = 0x1C
+DXBC_CHUNK_TABLE = 0x20
+
+
+def _u32(data: bytes, offset: int, what: str) -> int:
+    """One dword of a container, refused when the field is not inside it."""
+    if offset < 0 or offset + 4 > len(data):
+        raise PipelineError(
+            f"DXBC {what} is at byte {offset}, outside a {len(data)}-byte container"
+        )
+    return int(struct.unpack_from("<I", data, offset)[0])
+
+
+def _u32s(data: bytes, offset: int, count: int, what: str) -> tuple[int, ...]:
+    """`count` dwords, refused when the table they claim is not inside it."""
+    end = offset + count * 4
+    if offset < 0 or end > len(data):
+        raise PipelineError(
+            f"DXBC {what} claims {count} dwords at byte {offset}, past the end of a "
+            f"{len(data)}-byte container"
+        )
+    return tuple(int(word) for word in struct.unpack_from(f"<{count}I", data, offset))
+
+
 def dxbc_chunks(data: bytes) -> dict[str, bytes]:
     """`{fourcc: payload}` for a DXBC container."""
-    count = struct.unpack_from("<I", data, 0x1C)[0]
+    if data[: len(DXBC_MAGIC)] != DXBC_MAGIC:
+        raise PipelineError(f"not a DXBC container: it starts {bytes(data[:4])!r}")
+    count = _u32(data, DXBC_CHUNK_COUNT_AT, "chunk count")
+    offsets = _u32s(data, DXBC_CHUNK_TABLE, count, "chunk table")
     chunks: dict[str, bytes] = {}
-    for offset in struct.unpack_from(f"<{count}I", data, 0x20):
-        size = struct.unpack_from("<I", data, offset + 4)[0]
+    for index, offset in enumerate(offsets):
+        size = _u32(data, offset + 4, f"chunk {index} size")
+        if offset + 8 + size > len(data):
+            raise PipelineError(
+                f"DXBC chunk {index} at byte {offset} declares {size} bytes, past the end "
+                f"of a {len(data)}-byte container"
+            )
         chunks[data[offset : offset + 4].decode("ascii", "replace")] = data[
             offset + 8 : offset + 8 + size
         ]
@@ -898,8 +938,8 @@ def _walk_tokens(data: bytes) -> Iterator[tuple[int, int]]:
     code = chunks.get("SHDR") or chunks.get("SHEX")
     if code is None:
         raise PipelineError("DXBC container has no SHDR/SHEX chunk to walk")
-    declared = struct.unpack_from("<I", code, 4)[0]
-    words = struct.unpack_from(f"<{min(declared, len(code) // 4)}I", code, 0)
+    declared = _u32(code, 4, "SHDR/SHEX dword count")
+    words = _u32s(code, 0, min(declared, len(code) // 4), "SHDR/SHEX token stream")
     index = 2
     while index < len(words):
         token = words[index]
@@ -961,18 +1001,24 @@ def compiled_cbuffer_layout(dxbc: bytes) -> dict[str, dict[str, int]]:
         return {}
 
     def cstr(offset: int) -> str:
-        return rdef[offset : rdef.index(b"\x00", offset)].decode("ascii", "replace")
+        end = rdef.find(b"\x00", offset)
+        if offset < 0 or offset >= len(rdef) or end < 0:
+            raise PipelineError(
+                f"DXBC RDEF names a string at byte {offset}, which its "
+                f"{len(rdef)}-byte chunk does not contain"
+            )
+        return rdef[offset:end].decode("ascii", "replace")
 
     buffers: dict[str, dict[str, int]] = {}
-    count, table = struct.unpack_from("<2I", rdef, 0)
+    count, table = _u32s(rdef, 0, 2, "RDEF header")
     for i in range(count):
-        name_at, members, member_table, _size, _flags, _kind = struct.unpack_from(
-            "<6I", rdef, table + i * 24
+        name_at, members, member_table, _size, _flags, _kind = _u32s(
+            rdef, table + i * 24, 6, f"RDEF buffer {i}"
         )
         fields: dict[str, int] = {}
         for m in range(members):
-            member_at, offset, _size2, _f, _t, _d = struct.unpack_from(
-                "<6I", rdef, member_table + m * 24
+            member_at, offset, _size2, _f, _t, _d = _u32s(
+                rdef, member_table + m * 24, 6, f"RDEF member {m} of buffer {i}"
             )
             fields[cstr(member_at)] = offset
         buffers[cstr(name_at)] = fields
@@ -1053,12 +1099,17 @@ def input_semantics(data: bytes) -> list[tuple[str, int]]:
     isgn = dxbc_chunks(data).get("ISGN")
     if isgn is None:
         return []
-    count = struct.unpack_from("<I", isgn, 0)[0]
+    count = _u32(isgn, 0, "ISGN element count")
     out = []
     for i in range(count):
-        name_offset, index = struct.unpack_from("<II", isgn, 8 + i * 24)
-        end = isgn.index(b"\x00", name_offset)
-        out.append((isgn[name_offset:end].decode("ascii"), index))
+        name_offset, index = _u32s(isgn, 8 + i * 24, 2, f"ISGN element {i}")
+        end = isgn.find(b"\x00", name_offset)
+        if name_offset >= len(isgn) or end < 0:
+            raise PipelineError(
+                f"DXBC ISGN element {i} names a semantic at byte {name_offset}, which its "
+                f"{len(isgn)}-byte chunk does not contain"
+            )
+        out.append((isgn[name_offset:end].decode("ascii", "replace"), index))
     return out
 
 

@@ -175,7 +175,28 @@ def decode(blocks: bytes, width: int, height: int, texture_format: int) -> Any:
     require_capability("numpy")
     import numpy
 
+    if texture_format not in (TEXTURE_DXT1, TEXTURE_DXT5):
+        raise PipelineError(
+            f"texture format {texture_format} is not a BC1/BC3 block format, so there are "
+            "no blocks to decode"
+        )
     stride = 8 if texture_format == TEXTURE_DXT1 else 16
+    if width <= 0 or height <= 0 or width % BLOCK or height % BLOCK:
+        raise PipelineError(
+            f"{width}x{height} cannot be a block-compressed image: both sides must be a "
+            "positive multiple of 4"
+        )
+    if len(blocks) % stride:
+        raise PipelineError(
+            f"a BC{'1' if stride == 8 else '3'} block is {stride} bytes and this stream is "
+            f"{len(blocks)}: it is truncated or not a block stream at all"
+        )
+    expected = (width // BLOCK) * (height // BLOCK) * stride
+    if len(blocks) != expected:
+        raise PipelineError(
+            f"a {width}x{height} {texture_format} image is {expected} bytes of blocks, not "
+            f"{len(blocks)}"
+        )
     raw = numpy.frombuffer(blocks, dtype="uint8").reshape(-1, stride)
     offset = 0 if texture_format == TEXTURE_DXT1 else 8
     c0 = raw[:, offset].astype("uint16") | (raw[:, offset + 1].astype("uint16") << 8)

@@ -14,11 +14,13 @@ tag has no changelog section.
 
 ### Added
 
-- `tests/test_fuzz.py`, Hypothesis harnesses over the two untrusted-input
+- `tests/test_fuzz.py`, Hypothesis harnesses over the untrusted-input
   parsers: the `unityz info --json` report mapping in `unityfs.bundle_info`,
-  and the mod-supplied bundle URI, manifest and `ModInfo.xml` parsing in
-  `references`. Each asserts the parser is total and its accepted result
-  well-formed, over structure-aware seeds built from real report shapes.
+  the mod-supplied bundle URI, manifest and `ModInfo.xml` parsing in
+  `references`, the DXBC container, token, RDEF and ISGN readers in
+  `shader_blob`, and the BC1/BC3 block stream `block_compress.decode` reads.
+  Each asserts the parser is total and its accepted result well-formed, over
+  structure-aware seeds built from real report and container shapes.
 - `make dist` and `make reproducible`, and the release workflow builds through
   the first. Two builds of one tree used to differ in the sdist's tar metadata
   (the build machine's clock, uid, and user name), which made a shipped
@@ -90,13 +92,37 @@ tag has no changelog section.
   `mypy` pins. `setup.py` subclasses `build_py` and mypy type-checks it, so a
   silent setuptools major is as much a gate change as an analyzer release.
 
-### Removed
-
-- `hypothesis` from the `dev` dependency group. Nothing in the tree imports
-  it; the suite is `unittest`. Its transitive `sortedcontainers` goes with it.
-
 ### Fixed
 
+- The DXBC readers in `shader_blob` bound-check every field they address
+  before using it as an offset or a length: the chunk count, the chunk table,
+  a chunk offset, a chunk size, the SHDR dword count, and the RDEF and ISGN
+  string offsets. A truncated or mis-declared container raised a
+  `struct.error` from the middle of the module, and a count field could send
+  `struct.unpack_from` looking 16 GB past a 40-byte buffer. The same
+  `PipelineError`-shaped rejection is what an input-semantic name in
+  non-ASCII bytes used to break, and it now decodes with replacement as the
+  rest of the module does.
+- `block_compress.decode` refuses a texture format that is neither BC1 nor
+  BC3, dimensions that are not a positive multiple of four, a stream whose
+  length is not a whole number of blocks, and a block count that disagrees
+  with the dimensions. All four reached NumPy as a bare `ValueError` from a
+  `reshape` rather than as an actionable gate failure.
+- `validate` and `status` publish the `game-revision` `not run:` line whenever
+  no game directory is configured, not only when the mod records no revision
+  of its own. Checking the bundle's revision against the mod's own
+  configuration is not holding it against the installed game, which is what
+  the gate is for, and a mod with a configured `unity.version` reported a
+  gate that had not run as one that had.
+- `hypothesis` is declared to mypy as an untyped third-party module, and
+  `tests/test_fuzz.py` as a module whose test methods are decorated by that
+  generator. Both were unhandled, so `make check` failed on every decorated
+  harness: the module could not be resolved, and a decorated method counted
+  as untyped by construction.
+- `generators/hide.py` imports `tileable_noise` from the module that defines
+  it, and no longer imports `texture_maps` at all. The re-export it called it
+  through was neither used nor exported under `--strict`, so ruff and mypy
+  both refused the tree.
 - `make check test` runs the bootstrapped checkout's own `.venv` when there is
   one. It preferred `uv run --no-project`, which ignores that `.venv` by
   design, so the suite ran without the `dev` group and the Hypothesis

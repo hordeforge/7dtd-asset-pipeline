@@ -31,7 +31,7 @@ install. Nothing in this module can prove an asset *looks* or *sounds* right;
 it proves the client is fresh, the mod loaded, and the log is clean, records
 what was on screen, and then hands the verdict to a person.
 
-The facts it encodes come from the source project's playtest harness and
+The facts it encodes come from hordeforge/7dtd-playtest's harness and its
 `docs/environment.md`, confirmed on a Proton client of V 3.1.0 b14; see
 docs/validation.md and docs/research/research-provenance.md.
 """

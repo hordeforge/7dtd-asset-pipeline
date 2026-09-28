@@ -35,12 +35,13 @@ Everything below is detail.
 
 ## The motion-kind declaration
 
-`[acceptance] motion_kinds` maps an asset stem to one of three kinds:
+`[acceptance] motion_kinds` maps an asset stem to one of four kinds:
 
 | Kind | Generated case | What the case does |
 |---|---|---|
 | `turntable` | `CaseDef.StagedClip` | stages the prefab in front of the camera and rotates it one full turn, so the captured frames prove the silhouette from every side |
 | `walk-cycle` | `CaseDef.Live` + on-demand recording | equips the item on the player (`Helpers.TryEquipItem`) and records the player actually walking with stock autorun (`Helpers.StartWalk`), then stops walk and clip; a walk-cycle declared on a non-wearable asset fails the case rather than holding silently |
+| `walk-entity` | `CaseDef.WalkEntity` | spawns the stem's entity class beside the player (`EntityFactory.CreateEntity` + `SpawnEntityInWorld`) and drives it forward, so the avatar controller plays the walk gait and the game's own physics grounds the feet. It also emits a second `<mod>_<stem>_prefab_look` suite that stages the same prefab without the engine wrapper, the control that separates a draw failure from an entity-setup failure |
 | `fixed` | today's `Staged` look case, unchanged | a world-fixed thing has no motion worth capturing; declaring `fixed` opts out |
 
 A stem with no declaration generates exactly what it generated before this

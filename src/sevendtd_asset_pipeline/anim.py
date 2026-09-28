@@ -579,11 +579,14 @@ class AnimClip:
 
     `kind` selects the curve builder: `bob` (a position bob on `bone`),
     `head` (a yaw turn on `bone`), `walk` (a trot gait across `bones`),
-    `flap` (a wing fold across `bones`), `attack` (a lunge on `bone` with
-    a body pitch on `body_bone`), `death` (a one-shot roll on `bone`), or
-    `jump` (a hop on `bone`). `amplitude`/`seconds` scale the motion; a
-    `walk`/`flap` entry uses `bones` instead of `bone`, and `loop=False`
-    makes the clip play once rather than wrap (a `Death` should not loop).
+    `flap` (a wing fold across `bones`), `sway` (a travelling yaw down a
+    tail chain), `spin` (a full yaw of the root over the clip), `pose`
+    (a held local-Z rotation), `attack` (a lunge on `bone` with a body
+    pitch on `body_bone`), `death` (a one-shot roll on `bone`), or `jump`
+    (a hop on `bone`). `amplitude`/`seconds` scale the motion; a
+    `walk`/`flap`/`sway` entry uses `bones` instead of `bone`, and
+    `loop=False` makes the clip play once rather than wrap (a `Death`
+    should not loop).
     """
 
     name: str

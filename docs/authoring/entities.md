@@ -387,7 +387,12 @@ shamway generate entity myCreature.glb --rig quadruped --anim idle,head,walk \
    as its state changes.
 
 The kinds select the curve builders (all rig-aware — the bone paths come
-from the rig's own names):
+from the rig's own names). `--anim` accepts `idle`, `head`, `walk`,
+`attack`, `death` and `jump`, and rejects anything else; the `sway`,
+`spin` and `pose` rows below are the `.anim.json` declaration vocabulary
+(the full set is `bob`, `head`, `walk`, `flap`, `sway`, `spin`, `pose`,
+`attack`, `death`, `jump`), contributed by the generator rather than
+asked for by name:
 
 | Kind | Clip | What moves |
 |---|---|---|

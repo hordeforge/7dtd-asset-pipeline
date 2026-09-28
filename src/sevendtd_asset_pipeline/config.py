@@ -175,13 +175,15 @@ class PipelineConfig:
     exact case.
     """
     acceptance_motion_kinds: dict[str, str] = field(default_factory=dict)
-    """Per-asset motion kind (`turntable` | `walk-cycle` | `fixed`).
+    """Per-asset motion kind (`turntable` | `walk-cycle` | `walk-entity` | `fixed`).
 
     Declared under `[acceptance] motion_kinds = {"thing": "turntable"}` and
     read by `shamway acceptance-provider`: a declared kind turns that asset's
     generated look case into a `CaseDef.StagedClip` (a motion clip the
     playtest runner captures), except `fixed`, which keeps today's unchanged
-    generation. Absent means today's behavior, byte for byte.
+    generation. `walk-entity` spawns the stem as a real entity class and
+    drives it walking, so the ground contact is the game's own. Absent means
+    today's behavior, byte for byte.
     """
 
     @property

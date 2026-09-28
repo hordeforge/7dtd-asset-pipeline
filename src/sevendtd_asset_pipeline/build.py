@@ -138,6 +138,18 @@ expiry; the unbounded one cannot.
 def run_build(
     config: PipelineConfig, probe: bool = False, timeout: float = BUILD_TIMEOUT_SECONDS
 ) -> Path:
+    """Produce, gate and stage the mod's bundle; return the staged path.
+
+    Which producer runs is `config.bundle_source`, never a probe of the host:
+    `"synthesized"` writes it with this repository's own writer, `"unity"`
+    starts a local editor after refusing an editor that disagrees with the
+    game's revision, and any other source is refused here with the `stage`
+    command that host should use instead.
+
+    `probe` asks for a throwaway bundle built to prove the environment works;
+    it runs the same gates and stages nothing. `timeout` bounds the editor
+    only, since the synthesized writer has nothing to wait for.
+    """
     config.require_bundle()
     if not config.builds_locally:
         raise PipelineError(

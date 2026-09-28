@@ -270,7 +270,7 @@ def _cab_name(bundle_name: str) -> str:
     builds of unchanged inputs byte-identical, which is what makes a rebuild
     reviewable in git.
     """
-    return "CAB-" + hashlib.md5(bundle_name.encode("utf-8")).hexdigest()  # noqa: S324
+    return "CAB-" + hashlib.md5(bundle_name.encode("utf-8")).hexdigest()  # noqa: S324 - identity, not a security hash
 
 
 def build_bundle(
@@ -1525,7 +1525,7 @@ def hierarchy_prefab_objects(
         node = scene.nodes[index]
         if not node.name:
             raise PipelineError(
-                f"{scene.source.name} node {index} has no name; named hierarchy requires authored names"  # noqa: E501
+                f"{scene.source.name} node {index} has no name; named hierarchy requires authored names"  # noqa: E501 - one message
             )
         names[index] = node.name
     if stem in names.values():
@@ -1586,7 +1586,7 @@ def hierarchy_prefab_objects(
             geometry = _mesh_from_primitive(mesh_key, mesh_obj.primitive)
             if albedo in texture_stems and not _has_uv(geometry):
                 raise PipelineError(
-                    f"{scene.source.name} node {names[index]!r} has no UV channel, but {albedo} is here "  # noqa: E501
+                    f"{scene.source.name} node {names[index]!r} has no UV channel, but {albedo} is here "  # noqa: E501 - one message
                     "to be its texture."
                 )
             node_objects.append(geometry)

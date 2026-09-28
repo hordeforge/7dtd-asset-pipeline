@@ -619,7 +619,7 @@ class GLSLCompilesTests(unittest.TestCase):
                 path = Path(directory) / f"unlit.{suffix}"
                 path.write_text(body, encoding="utf-8")
                 finished = subprocess.run(
-                    ["glslangValidator", str(path)],  # noqa: S607
+                    ["glslangValidator", str(path)],  # noqa: S607 - the host tool this gate exists for
                     capture_output=True,
                     text=True,
                     check=False,

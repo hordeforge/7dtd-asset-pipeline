@@ -173,13 +173,27 @@ select = [
   "INT",  # flake8-gettext
   "INP",  # flake8-no-pep420: implicit namespace packages
   "ASYNC", # flake8-async
-  # tryceratops' correctness pair, taken as rules rather than as the group:
-  # TRY300 (a `return` inside `try` that swallows an exception the `except`
-  # then pretends to handle) and TRY400 (`logging.error` where the traceback is
-  # the point, which this repo's audit and capture paths rely on). The rest of
-  # TRY is message style, and the tree has 600+ of those.
+  # tryceratops, taken as rules rather than as the group: the correctness rules
+  # the tree passes are armed, the message-style ones are not. TRY200 is absent
+  # because ruff remapped it to B904, which the B group above already selects.
+  #   TRY201  `raise` in an `except` with no `from`, so the exception that
+  #           caused it is not the one the traceback names
+  #   TRY203  a `try/finally` whose `finally` only returns, so the `try` cannot
+  #           be the one thing that failed
+  #   TRY300  a `return` inside `try` that swallows an exception the `except`
+  #           then pretends to handle
+  #   TRY400  `logging.error` where the traceback is the point, which this
+  #           repo's audit and capture paths rely on
+  #   TRY401  `logging.exception` whose message also interpolates the
+  #           exception, printing it twice
+  # Still off, and the counts are what keeps them off: TRY003 is exception
+  # message style (667 sites), TRY004 wants isinstance replaced by a
+  # TypeError (7), TRY301 forbids a `raise` inside `try` (1).
+  "TRY201",
+  "TRY203",
   "TRY300",
   "TRY400",
+  "TRY401",
 ]
 ignore = [
   # Function-scope imports are deliberate architecture: optional capabilities

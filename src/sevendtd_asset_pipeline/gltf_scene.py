@@ -338,7 +338,7 @@ def _parse_skin(
     matrices = _read_mat4_list(document, buffers, ibm_index, source, "inverseBindMatrices")
     if len(matrices) != len(joints):
         raise PipelineError(
-            f"{source.name} skin {index} has {len(joints)} joints and {len(matrices)} inverse bind matrices"  # noqa: E501
+            f"{source.name} skin {index} has {len(joints)} joints and {len(matrices)} inverse bind matrices"  # noqa: E501 - one message
         )
     skeleton = item.get("skeleton")
     name = item.get("name") or ""

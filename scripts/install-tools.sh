@@ -101,6 +101,13 @@ BASE TOOLS
   uv                 The Python toolchain: environments, installs, and runs
   git, make          Version control and the consumer Makefile targets
   shellcheck         Lints this repository's scripts in 'make check'
+  actionlint         Lints this repository's GitHub workflows in 'make check'.
+                     Reported by --check and not installed here: this script
+                     names a distribution package for everything it installs,
+                     and no actionlint package name is verified in this
+                     repository. Both 'make check' and every CI run print the
+                     note that skipped it, so an unlinted workflow never reads
+                     as a lint-clean one
   pactl              Mutes and unmutes a test client (shamway client mute)
   unityz (>=0.1.2)   Reads, verifies, and extracts Unity bundles, assets,
                      and FSB5 banks. Installs a pinned, checksum-verified
@@ -296,6 +303,7 @@ run_check() {
 	report git "version control" have git
 	report make "consumer Makefile targets" have make
 	report shellcheck "script linting in make check" have shellcheck
+	report actionlint "workflow linting in make check (not installed here)" have actionlint
 	report pactl "client mute/unmute (shamway client)" have pactl
 	report unityz "Unity asset and FSB5 inspection; needs unityz >= 0.1.2" \
 		has_unityz_contract

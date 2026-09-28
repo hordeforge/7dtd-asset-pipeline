@@ -407,19 +407,15 @@ def text_asset(name: str, text: str) -> BundleObject:
     return BundleObject(TEXT_ASSET, name, {"m_Name": name, "m_Script": text})
 
 
-def texture_2d(
-    name: str, png: Path, readable: bool = False, compress: bool = False
-) -> BundleObject:
+def texture_2d(name: str, png: Path, compress: bool = False) -> BundleObject:
     """A Texture2D from a PNG, with its pixels inline.
 
     Unity streams texture pixels into a side file and generates mip maps; both
     are optimisations, and neither is required for the runtime to accept the
     texture. Inline `image data` with `m_StreamData` empty is the shape every
-    Unity reader (including the engine's own) treats as complete.
-
-    `readable` keeps a CPU copy of the pixels, which is Unity's own default of
-    off: it doubles the texture's memory and only a mod that reads pixels from
-    script needs it.
+    Unity reader (including the engine's own) treats as complete. No CPU copy
+    of the pixels is kept, which is Unity's own default of off: it doubles the
+    texture's memory and no mod this pipeline packs reads pixels from script.
 
     `compress` block-compresses to `DXT1` when the image is fully opaque and
     `DXT5` when it is not — 8x and 4x smaller than RGBA32, and what Unity's
@@ -479,7 +475,7 @@ def texture_2d(
             "m_MipsStripped": 0,
             "m_TextureFormat": texture_format,
             "m_MipCount": 1,
-            "m_IsReadable": readable,
+            "m_IsReadable": False,
             "m_IsPreProcessed": False,
             "m_IgnoreMipmapLimit": False,
             "m_MipmapLimitGroupName": "",

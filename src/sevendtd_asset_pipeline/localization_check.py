@@ -49,7 +49,7 @@ from pathlib import Path
 
 from .errors import PipelineError
 from .references import config_xml_texts
-from .text import nfc
+from .text import attribute_values, nfc
 
 # A definition whose name is the display string: the engine looks the name up.
 DEFINITION = re.compile(r'<(item|block|entity_class)\s+name\s*=\s*"([^"]+)"', re.DOTALL)
@@ -62,13 +62,6 @@ LOCALIZE_PROPERTIES = (
     "tooltip",
     "LongDescription",
 )
-_PROPERTY_PATTERNS = {
-    name: re.compile(
-        rf'name\s*=\s*"{name}"\s+value\s*=\s*"([^"]+)"|'
-        rf'value\s*=\s*"([^"]+)"\s+name\s*=\s*"{name}"'
-    )
-    for name in LOCALIZE_PROPERTIES
-}
 # A value that could be a key: a single token, no whitespace or comma. Anything
 # else is literal text (an English sentence, a number list) and is not a key.
 _BARE_KEY = re.compile(r"^[^\s,;]+$")
@@ -180,12 +173,10 @@ def _scan_localization(
             name = match.group(2).strip()
             if name:
                 keys.setdefault(name, []).append(str(xml_file))
-        for pattern in _PROPERTY_PATTERNS.values():
-            for match in pattern.finditer(text):
-                value = (match.group(1) or match.group(2)).strip()
-                if not value or not _BARE_KEY.match(value):
-                    continue
-                undecided.setdefault(value, []).append(str(xml_file))
+        for value in attribute_values(text, LOCALIZE_PROPERTIES):
+            if not value or not _BARE_KEY.match(value):
+                continue
+            undecided.setdefault(value, []).append(str(xml_file))
     for value, files in undecided.items():
         if _ASCII_KEY_CHARS.search(value):
             keys.setdefault(value, files)

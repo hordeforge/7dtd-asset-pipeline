@@ -46,7 +46,10 @@ generator writes on Linux is the same name one written on Windows.
 from __future__ import annotations
 
 import codecs
+import re
 import unicodedata
+from collections.abc import Iterator, Sequence
+from functools import cache
 
 # What every child's stdout and stderr is decoded as. UTF-8 is the encoding
 # these tools emit on every platform this pipeline is used on, and the one
@@ -110,6 +113,31 @@ def folded(text: str) -> str:
 
 CASES = "case"
 NORMALIZATION = "Unicode normalization form, one composed and one decomposed"
+
+
+@cache
+def _value_pattern(name: str) -> re.Pattern[str]:
+    """`name`/`value` in either order, cached: the discovery functions below
+    run this against every Config/ XML, and compiling inside that loop paid a
+    cache miss per file for nothing."""
+    return re.compile(
+        rf'name\s*=\s*"{name}"\s+value\s*=\s*"([^"]+)"|'
+        rf'value\s*=\s*"([^"]+)"\s+name\s*=\s*"{name}"'
+    )
+
+
+def attribute_values(text: str, names: Sequence[str]) -> Iterator[str]:
+    """Every value of a `<property name=... value=.../>` in `text`.
+
+    A regex rather than a parse, and the reason is the input: a mod's Config/
+    files are XPath patch fragments, and a fragment with several roots is not a
+    document. Duplicates are kept, because the caller maps each value to the
+    file that asked for it and a name referenced twice in one file is one fact
+    about that file.
+    """
+    for name in names:
+        for match in _value_pattern(name).finditer(text):
+            yield (match.group(1) or match.group(2)).strip()
 
 
 def spelling_differences(left: str, right: str) -> tuple[str, ...]:

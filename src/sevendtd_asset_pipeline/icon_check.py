@@ -41,7 +41,7 @@ from pathlib import Path
 from .capabilities import extra_install
 from .errors import PipelineError
 from .references import config_xml_texts
-from .text import CASES, NORMALIZATION, folded, spelling_differences
+from .text import CASES, NORMALIZATION, attribute_values, folded, spelling_differences
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # Colour types that carry an alpha channel. 3 (palette) can carry tRNS
@@ -61,16 +61,6 @@ DISPLAY_ENTRY_ICON = re.compile(r'<display_entry\b[^>]*\bicon\s*=\s*"([^"]+)"')
 # the text is the honest parser here.
 DEFINITION = re.compile(r'<(item|block)\s+name\s*=\s*"([^"]+)"[^>]*>(.*?)</\1>', re.DOTALL)
 CUSTOM_ICON_INSIDE = re.compile(r'name\s*=\s*"CustomIcon"')
-# One compiled pattern per icon property, hoisted out of the per-file scan:
-# `discover_icon_references` runs these against every Config/ XML, and
-# recompiling inside that loop paid a cache miss per file for nothing.
-_PROPERTY_PATTERNS = {
-    name: re.compile(
-        rf'name\s*=\s*"{name}"\s+value\s*=\s*"([^"]+)"|'
-        rf'value\s*=\s*"([^"]+)"\s+name\s*=\s*"{name}"'
-    )
-    for name in ICON_PROPERTIES
-}
 
 
 @dataclass(frozen=True)
@@ -357,13 +347,9 @@ def discover_icon_references(
             value = match.group(1).strip()
             if value:
                 references.setdefault(value, []).append(str(xml_file))
-        # A regex rather than a parse: mod Config files are XPath patch
-        # fragments, and a fragment with several roots is not a document.
-        for pattern in _PROPERTY_PATTERNS.values():
-            for match in pattern.finditer(text):
-                value = (match.group(1) or match.group(2)).strip()
-                if value:
-                    references.setdefault(value, []).append(str(xml_file))
+        for value in attribute_values(text, ICON_PROPERTIES):
+            if value:
+                references.setdefault(value, []).append(str(xml_file))
     return references
 
 

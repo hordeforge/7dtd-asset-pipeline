@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 import tomllib
 import unittest
+from fnmatch import fnmatch
 from pathlib import Path
 
 import sevendtd_asset_pipeline
@@ -207,6 +208,56 @@ class ChangelogTests(ReleaseContractCase):
     def unreleased_section(self) -> str:
         """The text a consumer reads for the release being prepared."""
         return unreleased_section(self.text)
+
+
+class SdistContentsTests(ReleaseContractCase):
+    """What the sdist carries, read from MANIFEST.in rather than a built tarball.
+
+    Building a distribution takes long enough that the suite should not do it
+    on every run, and the file list is decided entirely by MANIFEST.in plus
+    setuptools' own defaults. A file the manifest never reaches never reaches
+    the sdist, and the person who finds out is the one who unpacked it: the
+    suite shipped, but half of it raised ImportError on the first module that
+    imported a helper by bare name.
+    """
+
+    def _directives(self) -> list[tuple[str, str]]:
+        """The manifest's commands in order, comments and blank lines dropped."""
+        lines = (REPO_ROOT / "MANIFEST.in").read_text(encoding="utf-8").splitlines()
+        commands = [line.split("#", 1)[0].strip() for line in lines]
+        return [tuple(c.split(None, 1)) for c in commands if c]  # type: ignore[misc]
+
+    def _sdist_files(self) -> set[str]:
+        """The repository-relative paths MANIFEST.in reaches, grafts first."""
+        included: set[str] = set()
+        for command, argument in self._directives():
+            if command == "graft":
+                included |= {
+                    str(path.relative_to(REPO_ROOT))
+                    for path in (REPO_ROOT / argument).rglob("*")
+                    if path.is_file()
+                }
+            elif command in {"prune", "recursive-exclude", "exclude"}:
+                included -= {f for f in included if f.startswith(f"{argument}/")}
+            elif command == "global-exclude":
+                included -= {f for f in included if fnmatch(f, argument)}
+        return included
+
+    def test_the_suite_ships_whole(self) -> None:
+        """Every module under tests/ must be in the sdist, not just the `test_*.py`.
+
+        Setuptools' default sdist file list matches `tests/test*.py` by name, so
+        `fixtures.py`, `unityz_readback.py` and `tests/__init__.py` stayed behind
+        while the modules importing them shipped.
+        """
+        expected = {str(path.relative_to(REPO_ROOT)) for path in (REPO_ROOT / "tests").glob("*.py")}
+        self.assertTrue(expected, "tests/ is missing; the guard below would pass vacuously")
+        self.assertEqual(
+            sorted(expected - self._sdist_files()),
+            [],
+            "these test modules are absent from the sdist, so unpacking it gives a "
+            "suite that cannot import; graft the directory in MANIFEST.in",
+        )
 
 
 class PublicApiTests(ReleaseContractCase):

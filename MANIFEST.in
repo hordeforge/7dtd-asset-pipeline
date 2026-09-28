@@ -16,4 +16,11 @@ graft scripts
 prune src/sevendtd_asset_pipeline/docs
 prune src/sevendtd_asset_pipeline/scripts
 
+# tests/ ships whole, and setuptools' own sdist defaults only ever picked up
+# `tests/test*.py`. The three support modules the suite imports by bare name
+# (`fixtures`, `unityz_readback`, and the `tests` package marker) do not match
+# that pattern, so the sdist carried a suite that failed at import on the first
+# module that used a helper: half a distribution nobody can run.
+graft tests
+
 global-exclude *.py[cod] __pycache__/*

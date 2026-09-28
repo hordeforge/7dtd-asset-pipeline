@@ -14,6 +14,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -99,6 +100,38 @@ class ScriptRegistryTests(unittest.TestCase):
         self.assertIn("already meets the pinned", text)
         self.assertIn("upgrading unityz", text)
         self.assertIn("UNITYZ_PINNED_VERSION", text)
+
+    def test_docs_quote_the_pinned_unityz_release_and_commit(self) -> None:
+        """A setup page naming an old pin sends a host to the wrong release.
+
+        The pin moves in `install-unityz.sh` alone, so the pages drift: setup.md
+        still named 0.1.3 and a commit from three pins ago, and nobody learns
+        until they install a reader older than the writer's. Only claims that
+        say "pinned" are checked, so a historical or measured citation in the
+        research pages stays a citation.
+        """
+        root = Path(__file__).resolve().parents[1]
+        installer = (root / "scripts" / "install-unityz.sh").read_text(encoding="utf-8")
+        pinned = re.search(r'^UNITYZ_PINNED_VERSION="([^"]+)"', installer, re.M)
+        commit = re.search(r'^UNITYZ_PINNED_COMMIT="([^"]+)"', installer, re.M)
+        assert pinned and commit, "install-unityz.sh declares no pinned version and commit"
+        pages = (*sorted((root / "docs").rglob("*.md")), root / "README.md")
+        for page in pages:
+            text = page.read_text(encoding="utf-8")
+            with self.subTest(page=page.name):
+                for match in re.finditer(r"pinned unityz (\d+\.\d+\.\d+)", text):
+                    self.assertEqual(
+                        match.group(1),
+                        pinned.group(1),
+                        f"{page.name} names pinned unityz {match.group(1)}; "
+                        f"install-unityz.sh pins {pinned.group(1)}",
+                    )
+                for match in re.finditer(r"pinned commit \(`([0-9a-f]{40})`\)", text):
+                    self.assertEqual(
+                        match.group(1),
+                        commit.group(1),
+                        f"{page.name} names a pinned commit the installer no longer pins",
+                    )
 
     def test_playtest_acceptance_refuses_mixed_visual_suites(self) -> None:
         """Load, prefab-look, and block-place must not share one PLAYTEST_SUITE."""

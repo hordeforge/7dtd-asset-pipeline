@@ -4,7 +4,10 @@
 # environment, so an open range here resolves against PyPI on every build: a
 # setuptools release landing between two builds of one commit changes what
 # serializes the wheel, and `make reproducible` cannot see a version that was
-# never recorded. One version, one home (uv.lock), one build.
+# never recorded. One version, one home (uv.lock), one build. The pin is also
+# above the 77 floor the PEP 639 `license`/`license-files` metadata below needs,
+# so a consumer building this sdist with build isolation never meets a backend
+# that rejects it.
 requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 

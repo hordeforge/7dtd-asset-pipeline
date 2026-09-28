@@ -262,7 +262,7 @@ channel count:
 shamway generate audio from-bank vanilla.resource reference/
 ```
 
-The command delegates parsing and extraction to the pinned unityz 0.1.3
+The command delegates parsing and extraction to the pinned unityz 0.1.10
 release; 0.1.2 is the minimum compatible CLI contract. It accepts PCM/ADPCM
 and Vorbis banks; output names use `audio_*.wav` or `audio_*.ogg`, and any
 sample that cannot be reconstructed makes the command fail rather than

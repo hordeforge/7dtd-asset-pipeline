@@ -103,9 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     # destination and publish with one rename once every gate below has passed,
     # which is what `mesh` and `bind` already do through their scratch dir.
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    staged = args.output.with_name(
-        f".{args.output.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}"
-    )
+    staged = args.output.with_name(f".{args.output.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
     command = [gltfpack, "-i", str(args.source), "-o", str(staged)]
     if args.simplify:
         command += ["-si", str(args.simplify)]

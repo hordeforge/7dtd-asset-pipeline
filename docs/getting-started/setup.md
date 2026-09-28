@@ -12,9 +12,9 @@ scripts/install-tools.sh --check --with-authoring
 `--check` reports `OK`/`MISS` per tool and installs nothing. Drop `--check` to
 install through `pacman`, `apt-get`, `dnf`, or `zypper`. Python runs the CLI;
 `unityz` reads, verifies and extracts its Unity artifacts and FSB5 banks. The
-installer downloads the checksum-verified unityz 0.1.3 release binary on Linux
-x86_64 and macOS arm64. Other hosts, or `UNITYZ_FROM_SOURCE=1`, build the same
-pinned commit (`b7ee8db3da36166c45903eea6a2d215a3ff9ef8f`) with Zig 0.16.0.
+installer downloads the checksum-verified unityz 0.1.10 release binary on
+Linux x86_64 and macOS arm64. Other hosts, or `UNITYZ_FROM_SOURCE=1`, build the
+same pinned commit (`4f2126382b08370c9b2b016f73dc80bf48df30be`) with Zig 0.16.0.
 The pipeline accepts unityz 0.1.2 or newer: that minimum contract includes both
 the embedded SerializedFile metadata consumed by the bundle gates and the
 FSB5 extraction/status behavior used by the audio lane. If the installer prints an

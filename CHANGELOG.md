@@ -91,6 +91,12 @@ tag has no changelog section.
 - `setuptools` pinned to `84.0.0` in the `dev` group, beside the `ruff` and
   `mypy` pins. `setup.py` subclasses `build_py` and mypy type-checks it, so a
   silent setuptools major is as much a gate change as an analyzer release.
+- `build-system.requires` floors setuptools at 77 rather than 65. The SPDX
+  `license` string and `license-files` above are PEP 639 metadata setuptools
+  implemented in 77.0.0, so an isolated build resolving an older backend
+  rejected this sdist's own `pyproject.toml`. A consumer installing from the
+  sdist with build isolation is who meets that backend; the dev-group pin keeps
+  CI green and does not reach their environment.
 
 ### Fixed
 
@@ -145,6 +151,21 @@ tag has no changelog section.
 - Two mod names written in a script with no ASCII in them derive distinct
   bundle stems. They all folded to the same `mod-assets.unity3d`, and a
   file-stem collision is what makes a mod's assets unreachable.
+- `docs/getting-started/setup.md` and `docs/authoring/authoring-tools.md` named
+  the pinned `unityz` 0.1.3 and, on the setup page, a commit three pins old,
+  while `scripts/install-unityz.sh` has pinned 0.1.10
+  (`4f2126382b08370c9b2b016f73dc80bf48df30be`) since 0.6.0. A host followed
+  the page and installed a reader older than the writer's. A test in
+  `tests/test_scripts.py` now fails when a page names a pinned release or
+  commit the installer no longer pins; the historical citations in the
+  research pages are left alone, because they are measurements, not
+  instructions.
+- `hypothesis` is a declared `dev` dependency again. The manifest prune
+  dropped it as unused, but `tests/test_fuzz.py` imports it, and a checkout
+  without it reports that module as `unittest.loader._FailedTest`, so
+  `make check test` failed on a clean clone while reading as a broken suite
+  rather than a missing dev dependency. It is pinned at `6.168.2` beside the
+  other dev tools.
 - `make check test` runs the bootstrapped checkout's own `.venv` when there is
   one. It preferred `uv run --no-project`, which ignores that `.venv` by
   design, so the suite ran without the `dev` group and the Hypothesis

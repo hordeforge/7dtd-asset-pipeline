@@ -24,6 +24,11 @@ import sevendtd_asset_pipeline
 
 REPO_ROOT = Path(sevendtd_asset_pipeline.__file__).resolve().parents[2]
 
+# The setuptools release that implemented PEP 639: `project.license` as an SPDX
+# expression and `project.license-files`. Below it, this sdist's pyproject.toml
+# is rejected by the build backend the resolver picks.
+PEP_639_SETUPTOOLS_FLOOR = 77
+
 
 def unreleased_section(changelog: str) -> str:
     """The `[Unreleased]` body: what a consumer reads for the release in flight."""
@@ -78,6 +83,27 @@ class PackagingMetadataTests(ReleaseContractCase):
         self.project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
             "project"
         ]
+
+    def test_the_build_floor_admits_the_license_metadata_we_ship(self) -> None:
+        """An isolated build that resolves an older setuptools cannot read this
+        sdist: `project.license` is an SPDX string and `project.license-files`
+        names the LICENSE, both PEP 639 metadata that landed in setuptools
+        77.0.0. The build failed on the host, with the sdist's own
+        pyproject.toml as the error, and the dev-group pin that keeps CI green
+        does not reach a consumer's isolated build environment."""
+        build = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+            "build-system"
+        ]
+        floors = {}
+        for requirement in build["requires"]:
+            match = re.fullmatch(r"setuptools>=(\d+)", requirement)
+            if match:
+                floors["setuptools"] = int(match.group(1))
+        self.assertEqual(
+            floors.get("setuptools"),
+            PEP_639_SETUPTOOLS_FLOOR,
+            "build-system.requires must floor setuptools at the PEP 639 release",
+        )
 
     def test_license_is_an_spdx_expression_not_a_table(self) -> None:
         self.assertEqual(

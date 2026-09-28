@@ -230,6 +230,52 @@ class DeployTests(unittest.TestCase):
                 client.deploy_mod(mod, mods_dir, "MyMod")
             self.assertFalse((mods_dir / "MyMod").exists())
 
+    def test_a_failed_swap_restores_the_previous_deployment(self) -> None:
+        """The old modlet survives a failure between the two renames.
+
+        Deleting the destination and then renaming the staged copy in left a
+        window where the folder the client loads from did not exist, and a
+        failure inside it destroyed the previous deployment outright.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            mod = root / "MyMod"
+            (mod / "Config").mkdir(parents=True)
+            (mod / "ModInfo.xml").write_text("<xml/>")
+            (mod / "Config/items.xml").write_text("<configs><new/></configs>")
+            mods_dir = root / "Mods"
+            previous = mods_dir / "MyMod/Config"
+            previous.mkdir(parents=True)
+            (previous / "items.xml").write_text("<configs><old/></configs>")
+
+            real_replace = os.replace
+            calls: list[str] = []
+
+            def failing_replace(
+                source: str | os.PathLike[str], target: str | os.PathLike[str]
+            ) -> None:
+                if Path(str(target)).name == "MyMod" and ".tmp." in Path(str(source)).name:
+                    calls.append(str(source))
+                    raise OSError("no space left on device")
+                real_replace(source, target)
+
+            with (
+                mock.patch.object(os, "replace", failing_replace),
+                self.assertRaises(PipelineError),
+            ):
+                client.deploy_mod(mod, mods_dir, "MyMod")
+            self.assertEqual(len(calls), 1, "the swap-in never happened")
+            self.assertEqual(
+                (previous / "items.xml").read_text(encoding="utf-8"),
+                "<configs><old/></configs>",
+                "the previous deployment was lost",
+            )
+            self.assertEqual(
+                sorted(entry.name for entry in mods_dir.iterdir()),
+                ["MyMod"],
+                "a moved-aside deployment was left behind",
+            )
+
     def test_deploy_resolves_the_mod_name_from_modinfo(self) -> None:
         """`deploy` without --name reads ModInfo.xml through read_mod_name.
 
@@ -804,8 +850,11 @@ class LockTests(unittest.TestCase):
     def test_the_holding_session_can_write_through_hold_for_write(self) -> None:
         """PLAYTEST_SESSION_ID names this run's holder, so the write proceeds.
 
-        Taking over under our own id must hold, run the body, and leave a
-        released record behind — not refuse against ourselves.
+        Writing under a run's own id must hold and run the body rather than
+        refuse against ourselves, and it must leave that run's claim standing:
+        the orchestrator exports the id for the whole run, so releasing the
+        borrow would publish `running=no` over a hold the orchestrator is
+        still heartbeating while its client runs.
         """
         with tempfile.TemporaryDirectory() as tmp:
             path = self._lock(Path(tmp), running="yes", session="mine-1", heartbeat=self._stamp(5))
@@ -814,7 +863,45 @@ class LockTests(unittest.TestCase):
             with client.hold_for_write("deploy into the shared Mods folder", env=env):
                 inside.append(client.lock_holder(path))
             self.assertEqual(inside, ["mine-1"], "the body ran while nobody held the lock")
-            self.assertIsNone(client.lock_holder(path), "the hold leaked past the write")
+            self.assertEqual(client.lock_holder(path), "mine-1", "the borrow released the run")
+
+    def test_a_borrow_keeps_the_run_acquired_stamp(self) -> None:
+        """A borrowed hold refreshes the heartbeat and dates nothing else."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp),
+                running="yes",
+                session="mine-1",
+                acquired=self._stamp(300),
+                heartbeat=self._stamp(5),
+            )
+            with client.held_lock("mine-1", path):
+                fields = client.read_lock(path)
+            self.assertEqual(fields.get("acquired"), self._stamp(300))
+            self.assertEqual(fields.get("running"), "yes")
+
+    def test_nested_holds_in_one_process_release_once(self) -> None:
+        """The inner hold borrows; the outer one is what releases the record."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "playtest_running"
+            with client.held_lock("mine-1", path):
+                with client.held_lock("mine-1", path):
+                    self.assertEqual(client.lock_holder(path), "mine-1")
+                self.assertEqual(
+                    client.lock_holder(path), "mine-1", "the inner hold released the outer's claim"
+                )
+            self.assertIsNone(client.lock_holder(path))
+            self.assertIn("running=no", path.read_text(encoding="utf-8"))
+
+    def test_a_stale_record_of_our_own_id_is_taken_over_and_released(self) -> None:
+        """Abandoned is not live: an aged-out record is ours to reclaim and clear."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp), running="yes", session="mine-1", heartbeat=self._stamp(600)
+            )
+            with client.held_lock("mine-1", path):
+                self.assertEqual(client.lock_holder(path), "mine-1")
+            self.assertIsNone(client.lock_holder(path))
 
     def test_holding_refuses_over_another_fresh_holder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

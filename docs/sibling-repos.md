@@ -102,6 +102,15 @@ What `shamway` does with it:
   legally lost its hold to whoever reclaimed it, and blindly writing its own
   id back would hand two sessions one client. Release likewise clears only a
   record that still names the releasing session.
+- A record the session already holds is borrowed, not acquired. An
+  orchestrator exports `PLAYTEST_SESSION_ID` for the whole run, so every
+  command it runs inherits it and takes a borrow: the run's `acquired` stamp
+  is kept, its heartbeat is refreshed, and the record is left held on the way
+  out. Releasing a borrow published `running=no` over a claim the run was
+  still heartbeating, which let a second session acquire the client and write
+  into `Mods/` while the first was still playing. Only a record this hold
+  actually acquired is cleared. A record that aged out is not live, so the
+  same id reclaims it and releases it normally.
 - Both still refuse when a client process is up, whatever the file says. The
   lock covers the gap between runs; the process check covers a lock nobody
   wrote.
@@ -111,7 +120,8 @@ What `shamway` does with it:
 
 Set `PLAYTEST_SESSION_ID` to the holder's session when a `shamway` command is
 deliberately part of a run someone else already holds; that is the only case in
-which these commands proceed against a held lock.
+which these commands proceed against a held lock, and that run keeps the lock
+when they finish.
 
 ## Working across repositories
 

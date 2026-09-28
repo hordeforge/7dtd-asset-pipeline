@@ -359,6 +359,17 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
     the file; exclusivity is lost, never faked. The thread is a daemon that
     retries transient `OSError`s — dying silently would stale the record
     while the client it guards is still running.
+
+    A record this session already holds is *borrowed*, not acquired: the run
+    that took it is still live, so this hold keeps its `acquired` stamp and
+    leaves the record held on the way out. The release in the opposite case
+    is the incident the lock exists to prevent. An orchestrator exports
+    `PLAYTEST_SESSION_ID` for the whole run, and every command it runs
+    inherits it, so `shamway client deploy` in the middle of a live run takes
+    the same id, and releasing that borrow published `running=no` over a claim
+    the orchestrator was still heartbeating: a second session could acquire the
+    client and write into `Mods/` under a run already in progress. The same
+    holds for two nested holds in one process.
     """
     # Availability probe, not an import: the module itself is imported where
     # it is used, and function scope keeps Unix-only fcntl out of every other
@@ -373,11 +384,20 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     with _flocked(target):
         holder = lock_holder(target)
-        if holder is not None and holder != session:
+        borrowed = holder == session
+        if holder is not None and not borrowed:
             raise PipelineError(f"another session holds the shared client lock ({holder})")
+        # A borrow refreshes the heartbeat and nothing else: restamping
+        # `acquired` would date the run from the command inside it.
+        acquired = (read_lock(target).get("acquired") or stamp) if borrowed else stamp
         _write_lock(
             target,
-            {"running": "yes", "session": session, "acquired": stamp, "heartbeat": stamp},
+            {
+                "running": "yes",
+                "session": session,
+                "acquired": acquired,
+                "heartbeat": stamp,
+            },
         )
     stop = threading.Event()
 
@@ -391,7 +411,7 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
                             {
                                 "running": "yes",
                                 "session": session,
-                                "acquired": stamp,
+                                "acquired": acquired,
                                 "heartbeat": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                             },
                         )
@@ -410,10 +430,11 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
             # across processes, a scheduling pause between the check and the
             # write lets a reclaim land in the gap and gets wiped by the
             # stale exit. And like 7dtd-playtest's own release, only a record
-            # that names us is ours to clear — publishing running=no over a
-            # free, foreign, or unreadable record erases someone's live claim.
+            # this hold acquired is ours to clear — publishing running=no over
+            # a free, foreign, unreadable, or borrowed record erases a live
+            # claim.
             with _flocked(target):
-                if lock_holder(target) == session:
+                if not borrowed and lock_holder(target) == session:
                     _write_lock(target, {"running": "no"})
         except OSError:
             pass
@@ -526,6 +547,9 @@ def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = Tr
     into place only after every entry has been copied, so a failure midway (a
     full disk, a permission error) leaves the previous deployment intact
     instead of a half modlet the client would load as silently broken state.
+    An existing deployment is moved aside for that rename and deleted only
+    once the new one is in place, so a failure or a kill between the two
+    renames restores rather than discards it.
     """
     name = _deploy_name(mod_name)
     mod_root = Path(mod_root).resolve()
@@ -561,12 +585,25 @@ def deploy_mod(mod_root: Path, mods_dir: Path, mod_name: str, replace: bool = Tr
             else:
                 shutil.copy2(source, target)
             copied.append(source.name)
+        # The old deployment is moved aside, not deleted, and the swap back is
+        # two renames: `rmtree` then `replace` left a window in which the
+        # folder the client loads from did not exist at all, and a failure or
+        # a kill inside it cost the previous deployment with no way back.
+        replaced: Path | None = None
         if destination.exists():
-            if destination.is_symlink():
-                destination.unlink()
+            replaced = destination.with_name(f".{name}.old.{os.getpid()}.{secrets.token_hex(4)}")
+            destination.replace(replaced)
+        try:
+            staged.replace(destination)
+        except OSError:
+            if replaced is not None and not destination.exists():
+                replaced.replace(destination)
+            raise
+        if replaced is not None:
+            if replaced.is_symlink():
+                replaced.unlink(missing_ok=True)
             else:
-                shutil.rmtree(destination)
-        staged.replace(destination)
+                shutil.rmtree(replaced, ignore_errors=True)
     except OSError as exc:
         raise PipelineError(f"could not finish deploying {name} to {mods_dir}: {exc}") from exc
     finally:

@@ -61,6 +61,18 @@ tag has no changelog section.
 
 ### Fixed
 
+- A hold that borrowed a lock the same session already held no longer clears
+  it on the way out. An orchestrator exports `PLAYTEST_SESSION_ID` for the
+  whole run, so every command it ran inherited the id, took a borrow, and
+  released it: `running=no` went out over a claim the run was still
+  heartbeating, and a second session could acquire the client and write into
+  `Mods/` under a run in progress. A borrow keeps the run's `acquired` stamp
+  and leaves the record held; an aged-out record of the same id is not live
+  and is still reclaimed and released normally.
+- `client deploy` moves an existing deployment aside for the rename instead of
+  deleting it first, and restores it if the swap fails. The delete-then-rename
+  left a window in which the folder the client loads from did not exist, and a
+  failure or a kill inside it destroyed the previous deployment outright.
 - A `.gltf` external buffer `uri` is confined to the document's own directory.
   `../../.ssh/id_rsa` or a bare `/etc/passwd` was joined onto the source
   directory and read as vertex data, so an untrusted glTF read any file the

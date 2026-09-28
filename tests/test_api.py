@@ -3,7 +3,9 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 import tempfile
+import typing
 import unittest
 from pathlib import Path
 from typing import cast
@@ -230,6 +232,19 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual("ExampleMod", self.pipeline.config.mod_name)
         self.assertTrue(any(path.name == "AGENTS.md" for path in self.created))
 
+    def test_unity_release_resolves_a_revision_without_a_unity_project(self) -> None:
+        """The default editorless mod has no `ProjectVersion.txt` to read.
+
+        `unity_release()` with no argument resolved the project's file and
+        nothing else, so on the default `bundle_source = "synthesized"` it
+        failed with a missing-file error for a mod that had recorded its
+        revision at scaffold time.
+        """
+        from sevendtd_asset_pipeline.build import release_unity_version
+
+        self.assertFalse(self.pipeline.config.unity_project.exists())
+        self.assertEqual("2022.3.62f2", release_unity_version(self.pipeline.config))
+
     def test_call_matches_the_direct_method(self) -> None:
         self.assertEqual(self.pipeline.status().as_dict(), call_json(self.pipeline, "status"))
 
@@ -419,6 +434,17 @@ class ServeTests(unittest.TestCase):
         self.assertTrue(_nested(response, "error")["message"])
 
 
+def _annotation_types(annotation: object, builtin: tuple[type, ...]) -> list[type]:
+    """The concrete classes named by a return annotation, containers included."""
+    found: list[type] = []
+    if typing.get_origin(annotation) is not None:
+        for argument in typing.get_args(annotation):
+            found.extend(_annotation_types(argument, builtin))
+    elif isinstance(annotation, type) and not issubclass(annotation, builtin):
+        found.append(annotation)
+    return found
+
+
 class ImportHygieneTests(unittest.TestCase):
     """The package is a layered graph: leaf modules must not import upward.
 
@@ -469,6 +495,48 @@ class ImportHygieneTests(unittest.TestCase):
                             f"{path.relative_to(root)}:{line}: "
                             f"intra-package import inside {node.name}()"
                         )
+
+    def test_every_pipeline_result_type_is_importable_from_the_package_root(self) -> None:
+        """Every type a `Pipeline` method hands back is a supported import.
+
+        `check_texture` returned a `TextureReport` the root package never
+        re-exported, so the documented type was unimportable and a consumer
+        had to reach into `sevendtd_asset_pipeline.colour` for it, past the
+        line the package draws around what is supported.
+        """
+        import pathlib
+
+        import sevendtd_asset_pipeline as package
+
+        supported = set(package.__all__)
+        builtin = (pathlib.PurePath, str, int, float, bool, object, type(None), typing.Any)
+        for name in sorted(dir(Pipeline)):
+            if name.startswith("_"):
+                continue
+            method = getattr(Pipeline, name)
+            if not callable(method):
+                continue
+            returns = typing.get_type_hints(method).get("return")
+            for named in _annotation_types(returns, builtin):
+                with self.subTest(method=name, type=named.__name__):
+                    self.assertIn(named.__name__, supported)
+
+    def test_every_documented_pipeline_method_exists(self) -> None:
+        """The Python table in docs/consumer-api.md is the hand-off surface.
+
+        A method that exists but is unlisted is one a consumer does not know
+        it has, which is the same defect as one that does not exist.
+        """
+        root = Path(__file__).resolve().parent.parent
+        page_file = root / "docs" / "consumer-api.md"
+        if not page_file.is_file():
+            self.skipTest("running from a packaged install without the repository")
+        table = page_file.read_text(encoding="utf-8")
+        documented = set(re.findall(r"^\| `\.([a-z_]+)\(", table, re.MULTILINE))
+        self.assertTrue(documented, "the Pipeline method table is empty")
+        for name in sorted(set(dir(Pipeline)) - set(documented) - {"scaffold", "discover"}):
+            if not name.startswith("_") and callable(getattr(Pipeline, name)):
+                self.fail(f"Pipeline.{name} is not listed in docs/consumer-api.md")
 
     def test_registry_reads_the_version_without_importing_upward(self) -> None:
         from sevendtd_asset_pipeline import operations

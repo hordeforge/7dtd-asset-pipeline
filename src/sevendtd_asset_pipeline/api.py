@@ -1,8 +1,9 @@
 """`Pipeline`: the single entry point for programmatic consumers.
 
-The package exports ~30 functions, which is a fine library surface and a poor
-API: a caller has to know which to call, in what order, and how to thread the
-configuration through each one. `Pipeline` is that knowledge, expressed once.
+The package re-exports a few dozen functions, which is a fine library surface
+and a poor API: a caller has to know which to call, in what order, and how to
+thread the configuration through each one. `Pipeline` is that knowledge,
+expressed once.
 
     from sevendtd_asset_pipeline import Pipeline
 
@@ -36,6 +37,7 @@ from .audio_review import (
 from .build import (
     expected_unity_version,
     reject_disabled_modules,
+    release_unity_version,
     run_build,
     stage_bundle,
     synthesized_caveats,
@@ -54,7 +56,7 @@ from .config import PipelineConfig, load_config
 from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, run_doctor
 from .errors import PipelineError
-from .game import game_unity_version, project_unity_version
+from .game import game_unity_version
 from .icon_check import DEFAULT_ATLAS_ROOT, DEFAULT_CELL, IconReport, check_icons
 from .icon_render import (
     DEFAULT_ATLAS,
@@ -365,8 +367,13 @@ class Pipeline:
     def unity_release(
         self, version: str | None = None, platform: str = DEFAULT_PLATFORM
     ) -> Release:
-        """Resolve the official editor download for a revision. Uses the network."""
-        return fetch_release(version or project_unity_version(self.config.unity_project), platform)
+        """Resolve the official editor download for a revision. Uses the network.
+
+        Without a `version`, the mod's own Unity project answers; a mod on the
+        default editorless source has no project, so the installed game or the
+        recorded `[unity] version` answers instead.
+        """
+        return fetch_release(version or release_unity_version(self.config), platform)
 
     # -- writes ------------------------------------------------------------
 

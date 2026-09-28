@@ -15,6 +15,7 @@ from .api import Pipeline, call_json
 from .build import (
     expected_unity_version,
     reject_disabled_modules,
+    release_unity_version,
     run_build,
     stage_bundle,
     synthesized_caveats,
@@ -30,7 +31,7 @@ from .docs import read as read_doc
 from .docs import topics as doc_topics
 from .doctor import failed, run_doctor
 from .errors import ConfigNotFoundError, PipelineError
-from .game import game_unity_version, project_unity_version
+from .game import game_unity_version
 from .generators import describe as describe_generators
 from .generators import run as run_generator
 from .icon_check import DEFAULT_ATLAS_ROOT, DEFAULT_CELL, check_icons
@@ -824,8 +825,10 @@ def run(args: argparse.Namespace) -> int:
     if args.command == "unity-release":
         # An explicit --version answers without a modlet; resolving from the
         # project needs load_config, so it happens here, before the shared
-        # load below would demand one.
-        version = args.version or project_unity_version(load_config(args.config).unity_project)
+        # load below would demand one. A mod on the editorless source has no
+        # project, so release_unity_version falls back to the game or the
+        # recorded revision rather than reporting a missing file.
+        version = args.version or release_unity_version(load_config(args.config))
         data = fetch_release(version, args.platform).as_dict()
         if args.json:
             print(json.dumps(data, indent=2, sort_keys=True))

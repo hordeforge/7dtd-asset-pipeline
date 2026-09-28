@@ -30,6 +30,18 @@ tag has no changelog section.
   build against. A range resolved on a host with a newer Python installed gave
   a `.venv` outside the matrix CI tests and outside the version a release is
   built with.
+- The result types a `Pipeline` method returns are now re-exported from the
+  package root: `AcceptanceRun`, `LocalizationReport`, `LogReport`,
+  `PatchReport`, `PromptResult`, `TextureReport`, `VerifyReport`, alongside
+  `check_texture`, `check_localization` and `check_patches`. A consumer
+  annotating the documented `TextureReport` of `check_texture` had to import
+  `sevendtd_asset_pipeline.colour` for it, past the line the package draws
+  around what is supported. The suite fails when a `Pipeline` method hands
+  back a type the root package does not export.
+- `docs/consumer-api.md` lists every `Pipeline` method, and the suite fails
+  when one exists without an entry: `check_localization`, `check_patches`,
+  `review_video` and `expected_unity_version` were callable and unlisted,
+  which is the same defect as a method that does not exist.
 - A public-API snapshot gate in `tests/test_release_contract.py`.
   `sevendtd_asset_pipeline.__all__` is the supported surface, and a name
   dropping out of it broke a consumer with an `ImportError` and nothing in
@@ -97,6 +109,12 @@ tag has no changelog section.
   deleting it first, and restores it if the swap fails. The delete-then-rename
   left a window in which the folder the client loads from did not exist, and a
   failure or a kill inside it destroyed the previous deployment outright.
+- `Pipeline.unity_release()` and `shamway unity-release` resolve the
+  revision from the mod's Unity project alone, so on the default
+  `bundle_source = "synthesized"` — which creates no project — they failed
+  with a missing-file error for a mod that had recorded its revision at
+  scaffold time. They now fall back to the installed game, then to
+  `[unity] version`, which is what `build` already used.
 - A `.gltf` external buffer `uri` is confined to the document's own directory.
   `../../.ssh/id_rsa` or a bare `/etc/passwd` was joined onto the source
   directory and read as vertex data, so an untrusted glTF read any file the

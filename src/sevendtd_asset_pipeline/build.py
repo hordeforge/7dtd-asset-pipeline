@@ -106,6 +106,23 @@ def expected_unity_version(config: PipelineConfig) -> str:
     )
 
 
+def release_unity_version(config: PipelineConfig) -> str:
+    """The revision to resolve an official editor download for.
+
+    A mod that opted into an editor records the revision in its Unity
+    project's `ProjectVersion.txt`, and that file is the answer whenever it
+    exists. A mod on the default editorless source has no project at all, so
+    reading the project alone answered a synthesized mod's `unity_release`
+    with a missing-file error for a mod that had in fact recorded its
+    revision at scaffold time: the game install and the configuration are
+    what answer there.
+    """
+    try:
+        return project_unity_version(config.unity_project)
+    except PipelineError:
+        return expected_unity_version(config)
+
+
 def run_build(config: PipelineConfig, probe: bool = False) -> Path:
     config.require_bundle()
     if not config.builds_locally:

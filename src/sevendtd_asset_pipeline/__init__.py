@@ -23,7 +23,10 @@ when a gate fails.
 from ._version import __version__
 from .api import Pipeline, call_json
 from .build import reject_disabled_modules, run_build
+from .bundle_verify import VerifyReport
 from .capabilities import Capability, capabilities, has_capability, require_capability
+from .client import AcceptanceRun, LogReport
+from .colour import TextureReport, check_texture
 from .config import PipelineConfig, load_config
 from .deep_inspect import DeepReport, deep_inspect
 from .doctor import Check, failed, run_doctor
@@ -31,8 +34,11 @@ from .errors import ConfigNotFoundError, PipelineError
 from .game import game_unity_version, project_unity_version
 from .icon_check import IconReport, check_icons
 from .icon_render import RenderResult, render_icon
+from .localization_check import LocalizationReport, check_localization
 from .mesh_check import MeshReport, check_mesh
 from .operations import OPERATIONS, Operation, manifest
+from .patch_check import PatchReport, check_patches
+from .prompts import PromptResult
 from .references import AssetReference, discover_references, manifest_assets
 from .scaffold import initialize
 from .sound_check import SoundReport, check_sound
@@ -43,6 +49,7 @@ from .validation import ValidationReport, validate_bundle, validate_mod
 
 __all__ = [
     "OPERATIONS",
+    "AcceptanceRun",
     "AssetReference",
     "BundleInfo",
     "Capability",
@@ -50,22 +57,31 @@ __all__ = [
     "ConfigNotFoundError",
     "DeepReport",
     "IconReport",
+    "LocalizationReport",
+    "LogReport",
     "MeshReport",
     "Operation",
+    "PatchReport",
     "Pipeline",
     "PipelineConfig",
     "PipelineError",
+    "PromptResult",
     "Release",
     "RenderResult",
     "SoundReport",
     "Status",
+    "TextureReport",
     "ValidationReport",
+    "VerifyReport",
     "__version__",
     "call_json",
     "capabilities",
     "check_icons",
+    "check_localization",
     "check_mesh",
+    "check_patches",
     "check_sound",
+    "check_texture",
     "collect_status",
     "deep_inspect",
     "discover_references",

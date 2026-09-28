@@ -465,12 +465,16 @@ pipeline.call("inspect_deep")  # same dispatch as `call` and `serve`
 | `.inspect(bundle=None)` | `BundleInfo` |
 | `.inspect_deep(bundle=None)` | `DeepReport` (read by unityz) |
 | `.validate(bundle=None)` | `ValidationReport` |
+| `.expected_unity_version()` | the revision the installed game requires, or `None` without a game dir |
 | `.check_mesh(path, max_extent, strict)` | `MeshReport` (needs trimesh) |
 | `.check_texture(path, matches=None, tolerance=…, tileable=False, max_tile_ratio=…)` | `TextureReport` (needs numpy and Pillow) |
 | `.check_sound(path, max_seconds, require_mono)` | `SoundReport` |
 | `.review_audio(clip, …)` | the review dict; refuses without `allow_network=True` |
+| `.review_video(stem, clip, …)` | the review dict; refuses without `allow_network=True` |
 | `.acceptance_provider(harness_dll=None, install=False, mods_dir=None)` | the generated provider description (installs under the client lock when `install`) |
 | `.check_icons(atlas_root, cell)` | `IconReport` |
+| `.check_localization(allow_vanilla_keys=True)` | `LocalizationReport` |
+| `.check_patches()` | `PatchReport` (replays Config/ patch XPaths against the game) |
 | `.render_icon(prefab, output=None, size=160, …)` | `RenderResult` (needs Unity + Pillow) |
 | `.check_log(path)` | raises if the log shows stripped modules |
 | `.unity_release(version=None)` | `Release` (uses the network) |
@@ -536,8 +540,24 @@ if has_capability("unityz"):
 | `has_capability(name)` / `require_capability(name)` | branch on, or demand, a capability |
 | `deep_inspect(path)` | `DeepReport`: objects and per-prefab components |
 | `check_mesh(path, max_extent, strict)` | `MeshReport` for an authored mesh |
+| `check_texture(path, matches, tolerance, tileable, max_tile_ratio)` | `TextureReport` for a generated texture |
 | `check_sound(path, max_seconds, require_mono)` | `SoundReport` for a clip |
 | `check_icons(mod_root, config_dir, atlas_root, cell)` | `IconReport` for the atlas |
+| `check_localization(mod_root, config_dir, game_dir, allow_vanilla_keys)` | `LocalizationReport` for the mod's keys |
+| `check_patches(mod_root, config_dir, game_dir)` | `PatchReport` for the Config/ patch XPaths |
+
+Every report type a `Pipeline` method returns is importable from the package
+root, so a consumer can annotate a result without reaching into a module the
+package calls an implementation detail:
+
+```python
+from sevendtd_asset_pipeline import Pipeline, TextureReport
+
+pipeline = Pipeline.discover()
+texture: TextureReport = pipeline.check_texture("assets-src/textures/albedo.png")
+if not texture.ok:
+    print(texture.problems)
+```
 
 ## Continuous integration
 

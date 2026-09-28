@@ -555,6 +555,16 @@ def _print_review(report: dict[str, Any], *, usage: dict[str, Any] | None = None
     print(f"note: {report['note']}")
 
 
+def _emit_review(
+    report: dict[str, Any], *, as_json: bool, usage: dict[str, Any] | None = None
+) -> None:
+    """Print a review as JSON or in the human form both lanes share."""
+    if as_json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        _print_review(report, usage=usage)
+
+
 def _resolve_version(args: argparse.Namespace, demand: str) -> str:
     """The revision a bundle must carry: named, or detected from the game.
 
@@ -746,10 +756,7 @@ def run(args: argparse.Namespace) -> int:
             force=args.force,
             notify=print,
         )
-        if args.json:
-            print(json.dumps(report, indent=2, sort_keys=True))
-        else:
-            _print_review(report, usage=report["usage"])
+        _emit_review(report, as_json=args.json, usage=report["usage"])
         return 0
     if args.command == "pack":
         version = _resolve_version(
@@ -892,10 +899,7 @@ def run(args: argparse.Namespace) -> int:
             force=args.force,
             notify=print,
         )
-        if args.json:
-            print(json.dumps(report, indent=2, sort_keys=True))
-        else:
-            _print_review(report)
+        _emit_review(report, as_json=args.json)
         return 0
     if args.command == "doctor":
         checks = run_doctor(config)

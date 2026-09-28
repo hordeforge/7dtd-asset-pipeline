@@ -29,6 +29,43 @@ from . import entity as entity_gen
 from . import hide as hide_gen
 from .hide import COATS
 
+# The flags this command hands straight through, as (attribute, flag): the
+# argument names match the sub-generator's, so one table per lane replaces a
+# hand-written forward per flag. `--anim`, `--minimal-entity`, `--seed` and
+# `--size` stay out of it: they are not pass-throughs.
+ENTITY_FLAGS = (
+    ("parts", "--parts"),
+    ("scale", "--scale"),
+    ("name", "--name"),
+    ("mod", "--mod"),
+    ("bundle", "--bundle"),
+    ("xml", "--xml"),
+    ("entity_name", "--entity-name"),
+    ("entity_class", "--entity-class"),
+)
+HIDE_FLAGS = (
+    ("coat", "--coat"),
+    ("base", "--base"),
+    ("fur", "--fur"),
+    ("paw", "--paw"),
+    ("limb", "--limb"),
+    ("outline", "--outline"),
+)
+
+
+def _forwarded(
+    argv: list[str], args: argparse.Namespace, flags: tuple[tuple[str, str], ...]
+) -> None:
+    """Append the `--flag VALUE` pairs the caller actually supplied.
+
+    Every flag in the tables defaults to None, so an unsupplied one drops out
+    and the sub-generator keeps its own default.
+    """
+    for attribute, flag in flags:
+        value = getattr(args, attribute)
+        if value is not None:
+            argv += [flag, str(value)]
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = command_parser(
@@ -116,22 +153,7 @@ def main(argv: list[str] | None = None) -> int:
 
     atlas = Path(args.atlas) if args.atlas else args.output.with_suffix(".atlas.json")
     entity_argv: list[str] = [str(args.output), "--rig", args.rig, "--atlas", str(atlas)]
-    if args.parts:
-        entity_argv += ["--parts", args.parts]
-    if args.scale is not None:
-        entity_argv += ["--scale", str(args.scale)]
-    if args.name:
-        entity_argv += ["--name", args.name]
-    if args.mod:
-        entity_argv += ["--mod", args.mod]
-    if args.bundle:
-        entity_argv += ["--bundle", args.bundle]
-    if args.xml:
-        entity_argv += ["--xml", args.xml]
-    if args.entity_name:
-        entity_argv += ["--entity-name", args.entity_name]
-    if args.entity_class:
-        entity_argv += ["--entity-class", args.entity_class]
+    _forwarded(entity_argv, args, ENTITY_FLAGS)
     if args.minimal_entity:
         entity_argv.append("--minimal-entity")
     if not args.no_anim:
@@ -155,18 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         "--size",
         str(args.size),
     ]
-    if args.coat:
-        hide_argv += ["--coat", args.coat]
-    if args.base:
-        hide_argv += ["--base", args.base]
-    if args.fur:
-        hide_argv += ["--fur", args.fur]
-    if args.paw:
-        hide_argv += ["--paw", args.paw]
-    if args.limb:
-        hide_argv += ["--limb", args.limb]
-    if args.outline:
-        hide_argv += ["--outline", args.outline]
+    _forwarded(hide_argv, args, HIDE_FLAGS)
     return int(hide_gen.main(hide_argv) or 0)
 
 

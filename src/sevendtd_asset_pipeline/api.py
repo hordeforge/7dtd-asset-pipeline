@@ -539,9 +539,7 @@ def _validated(operation: Operation, params: dict[str, Any] | None) -> dict[str,
             raise PipelineError(f"operation {operation.name!r} requires parameter {required!r}")
     for name, value in arguments.items():
         _typed(operation, name, properties[name], value)
-        # `default: None` is a legal published default for an array, so a null
-        # that reached here is the schema's own and not a list to check.
-        if properties[name].get("type") == "array" and value is not None:
+        if properties[name].get("type") == "array":
             _check_items(operation, name, properties[name], value)
     for name, value in arguments.items():
         allowed = properties[name].get("enum")
@@ -645,8 +643,7 @@ def _check_arity(operation: Operation, name: str, prop: dict[str, Any], value: A
     Left unchecked, a short `matches` reaches numpy and dies in a broadcast
     `ValueError` instead.
     """
-    bounds = (prop.get("minItems"), prop.get("maxItems"))
-    low, high = bounds
+    low, high = prop.get("minItems"), prop.get("maxItems")
     if (low is not None and len(value) < low) or (high is not None and len(value) > high):
         wanted = (
             str(low) if low == high else f"{low}..{high}" if high is not None else f"at least {low}"

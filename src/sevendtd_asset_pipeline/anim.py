@@ -75,7 +75,9 @@ def _curve(keyframes: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _clip_defaults() -> dict[str, Any]:
-    default = typetrees.typetree_default(typetrees.release_tree(ANIMATION_CLIP, "2022.3.62f2"))
+    default = typetrees.typetree_default(
+        typetrees.release_tree(ANIMATION_CLIP, typetrees.DEFAULT_TREE_UNITY_VERSION)
+    )
     return dict(default)
 
 

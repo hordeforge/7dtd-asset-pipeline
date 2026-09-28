@@ -254,6 +254,73 @@ class WriteArtifactTests(unittest.TestCase):
         self.assertFalse(self.destination.exists())
         self.assertEqual([], dotfiles(self.root))
 
+    def test_the_body_is_flushed_before_the_rename(self) -> None:
+        """A rename is not a barrier against a power loss.
+
+        The temporary name is what keeps a concurrent reader from seeing a
+        half-written body; the flush is what keeps a *crash* from publishing a
+        name whose bytes never reached the disk, which is the same truncated
+        artifact arriving by another route.
+        """
+        from sevendtd_asset_pipeline.atomic import staged_write
+
+        with staged_write(self.destination) as staged:
+            staged.write_bytes(b"UnityFS")
+        self.assertEqual(b"UnityFS", self.destination.read_bytes())
+
+        flushed: list[str] = []
+        with (
+            mock.patch("os.fsync", side_effect=lambda descriptor: flushed.append(str(descriptor))),
+            staged_write(self.destination) as staged,
+        ):
+            staged.write_bytes(b"second")
+        # One for the body, one for the directory the rename landed in.
+        self.assertEqual(2, len(flushed), "both the body and the rename must be flushed")
+
+
+class ExclusiveCreateFallbackTests(unittest.TestCase):
+    """`write_new` without hard links, which is where a name is reserved first."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.destination = self.root / "review.json"
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_a_failed_body_gives_the_name_back(self) -> None:
+        """A truncated verdict at the final path is not recoverable by a retry.
+
+        `O_EXCL` reserved the name, so the next publisher would be refused a
+        document it cannot read. The reservation has to be released with the
+        body that never landed.
+        """
+        from sevendtd_asset_pipeline.atomic import write_new
+
+        class FullDisk:
+            def __enter__(self) -> FullDisk:
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def write(self, payload: bytes) -> int:
+                raise OSError(28, "No space left on device")
+
+        with (
+            mock.patch("os.link", side_effect=OSError(1, "Operation not permitted")),
+            mock.patch("os.fdopen", return_value=FullDisk()),
+            self.assertRaises(OSError),
+        ):
+            write_new(self.destination, "verdict")
+        self.assertFalse(self.destination.exists(), "a failed publish must not hold the name")
+        self.assertEqual([], dotfiles(self.root))
+
+        with mock.patch("os.link", side_effect=OSError(1, "Operation not permitted")):
+            write_new(self.destination, "the real verdict")
+        self.assertEqual("the real verdict", self.destination.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@ import json
 import stat
 import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from typing import cast
@@ -23,6 +24,7 @@ from unittest import mock
 from sevendtd_asset_pipeline.bundle_verify import (
     EDITOR_FOLDER,
     VERIFIER_SCRIPT,
+    VerifyReport,
     _classify,
     _scratch_project,
     verify_with_editor,
@@ -171,6 +173,65 @@ class StubEditorRunTests(BundleCase):
         report = verify_with_editor(bundle, self.root / "stub-editor", REVISION, self.root / "work")
         self.assertTrue(report.ok, report.problems)
         self.assertEqual([("mymodnote", "TextAsset")], [(a.key, a.type) for a in report.assets])
+
+    def test_two_concurrent_runs_never_classify_each_others_log(self) -> None:
+        """Two sessions on one host reach this command on the same mod.
+
+        They share the work directory, so they share a project, and the editor
+        of one is importing the files the other rewrites. What they must never
+        share is the log: a run that reads another run's `-logFile` reports
+        that bundle's verdict for this one, with nothing in the output to say
+        so. The stub records the log path it was handed per bundle and stamps
+        its own asset line, so the assertion is on what each run actually
+        classified rather than on timing.
+        """
+        self._editor(
+            'bundle=""; log=""; prev=""; '
+            'for pair in "$@"; do '
+            'case "$prev" in -bundle) bundle="$pair";; -logFile) log="$pair";; esac; prev=$pair; '
+            "done; "
+            'printf "%s\\n" "$log" > "${bundle%.unity3d}.logpath"; '
+            'name="$(basename "$bundle" .unity3d)"; '
+            "sleep 0.2; "
+            'printf "VERIFY-ASSET: %s -> TextAsset named \'%s\'\\n" "$name" "$name" > "$log"; '
+            "exit 0"
+        )
+        work = self.root / "work"
+        bundles = {}
+        for name in ("alpha", "beta"):
+            bundle = self.root / f"{name}.unity3d"
+            bundle.write_bytes(b"UnityFS")
+            bundles[name] = bundle
+
+        reports: dict[str, object] = {}
+
+        def run(name: str) -> None:
+            reports[name] = verify_with_editor(
+                bundles[name], self.root / "stub-editor", REVISION, work
+            )
+
+        threads = [threading.Thread(target=run, args=(name,)) for name in ("alpha", "beta")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(60)
+        self.assertEqual([], [thread.name for thread in threads if thread.is_alive()])
+
+        paths = {
+            name: (self.root / f"{name}.logpath").read_text(encoding="utf-8").strip()
+            for name in ("alpha", "beta")
+        }
+        self.assertNotEqual(
+            paths["alpha"], paths["beta"], "two runs must not share one verifier log"
+        )
+        for name in ("alpha", "beta"):
+            report = cast(VerifyReport, reports[name])
+            self.assertEqual(
+                [(name, "TextAsset")],
+                [(asset.key, asset.type) for asset in report.assets],
+                f"{name} classified another run's log",
+            )
+            self.assertEqual(paths[name], report.log)
 
     def test_a_timeout_is_a_pipeline_error_naming_the_partial_log(self) -> None:
         # run_unity owns how a bounded editor is killed; this pins only that

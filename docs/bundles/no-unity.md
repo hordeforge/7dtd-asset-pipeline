@@ -614,7 +614,10 @@ It creates a throwaway project under `.shamway/build/verify/`, calls
 asset with the engine's own class definitions, reporting type, name, texture
 format, and a clip's decoded channel count, frequency and sample count. It also
 checks that each asset answers to its own name and not only to the lowercased
-container key, because that is how 7DTD asks for it.
+container key, because that is how 7DTD asks for it. Several sessions can run
+it on one mod at once: the project they share is published by rename, and each
+run's editor writes and reads its own `verify-<pid>-<hex>.log` beside it, so no
+run can report one bundle's verdict from another bundle's editor.
 
 It needs no Unity project of its own and nothing needs it to build or ship. It
 proves the container and the object graph survive a runtime of that revision.

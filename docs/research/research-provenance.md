@@ -2532,7 +2532,9 @@ written from the same two misreadings, corrected here.
 `2022.3.62f2`, `xvfb-run -a shamway verify-bundle --draw
 Resources/shamwayselftest.unity3d`, from `examples/SelfTestMod`, on a freshly
 re-synthesized `shamwayselftest.unity3d` at `7b12af4`) gives this per-prefab
-verdict — read from `.shamway/build/verify/verify.log`:
+verdict — read from that run's log under `.shamway/build/verify/`, which is
+named `verify-<pid>-<hex>.log` so a concurrent run on the same mod cannot be
+read instead of it:
 
 | Prefab | Renderer | `SetPass(0)` | prefab coverage |
 |---|---|---|---|

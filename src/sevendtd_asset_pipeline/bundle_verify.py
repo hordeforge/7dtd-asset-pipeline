@@ -15,17 +15,25 @@ It is still not acceptance. It proves the container and the objects survive a
 runtime of the same revision; it says nothing about whether the asset is
 right, and nothing about 7 Days to Die's own loading path. That remains a
 fresh client and a person, as everywhere else in this pipeline.
+
+A host runs several agent sessions at once, and two of them can reach this
+command on the same mod. The throwaway project they share is written atomically
+for that reason, and each run's editor writes and reads its own log (see
+:func:`run_log_name`), so no run classifies another run's evidence.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
+import secrets
 import subprocess
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
 
+from . import atomic
 from .errors import PipelineError
 from .unity_process import run_unity
 
@@ -35,6 +43,23 @@ EDITOR_FOLDER = "Assets/SevenDaysToDieAssetPipeline/Editor"
 # from a batch-mode editor starting up.
 ASSET_LINE = re.compile(r"^VERIFY-ASSET: (?P<key>\S+) -> (?P<type>\w+) named '(?P<name>[^']*)'")
 DETAIL_LINE = re.compile(r"^VERIFY-(?:TEX|CLIP|TEXT|MESH|PREFAB): (?P<detail>.*)$")
+
+
+def run_log_name() -> str:
+    """A log file name no other invocation of this command is writing.
+
+    Every run of ``verify-bundle`` shares one work directory, because the
+    throwaway project under it is expensive to re-import and holds no assets
+    worth keeping. The log cannot be shared with it: the editor truncates the
+    ``-logFile`` it was given, so two runs pointing at the same name interleave
+    one file, and each run then classifies whatever lines happen to be in it.
+    That is the worst failure this command has, because it does not look like
+    one — a session can read a PASS, or a FAIL, that belongs to another
+    session's bundle and has no way to tell. The name carries this process's
+    pid plus a random suffix, so two runs of the same pid over its lifetime
+    still cannot collide.
+    """
+    return f"verify-{os.getpid()}-{secrets.token_hex(4)}.log"
 
 
 @dataclass
@@ -70,17 +95,27 @@ def _scratch_project(directory: Path, unity_version: str) -> Path:
     A synthesized-bundle mod has no Unity project — that is the point of it —
     so the check brings its own. It lives under the ignored build directory and
     holds no assets, so re-creating it costs one import of a single script.
+
+    Its files are published, not written in place. The directory is shared by
+    every run of this command on this mod, and the editor of a run already in
+    progress is reading these three files: a plain ``write_text`` truncates
+    first, so a concurrent run's import can read a half-written
+    ``BundleVerifier.cs`` or a truncated ``ProjectVersion.txt`` and fail on the
+    other run's evidence. A rename is atomic, so the editor sees the previous
+    complete file or the new one.
     """
     project = directory / "verify-project"
     (project / EDITOR_FOLDER).mkdir(parents=True, exist_ok=True)
     (project / "ProjectSettings").mkdir(parents=True, exist_ok=True)
     (project / "Packages").mkdir(parents=True, exist_ok=True)
-    version_file = project / "ProjectSettings" / "ProjectVersion.txt"
-    version_file.write_text(f"m_EditorVersion: {unity_version}\n", encoding="utf-8", newline="\n")
-    manifest = project / "Packages" / "manifest.json"
+    atomic.write(
+        project / "ProjectSettings" / "ProjectVersion.txt",
+        f"m_EditorVersion: {unity_version}\n",
+    )
     # The AssetBundle module must be present here for the same reason it must
     # be present in a build: without it the runtime has no loader to call.
-    manifest.write_text(
+    atomic.write(
+        project / "Packages" / "manifest.json",
         json.dumps(
             {
                 "dependencies": {
@@ -92,15 +127,11 @@ def _scratch_project(directory: Path, unity_version: str) -> Path:
             indent=2,
         )
         + "\n",
-        encoding="utf-8",
-        newline="\n",
     )
     source = files("sevendtd_asset_pipeline").joinpath(
         f"templates/UnityProject/{EDITOR_FOLDER}/{VERIFIER_SCRIPT}"
     )
-    (project / EDITOR_FOLDER / VERIFIER_SCRIPT).write_text(
-        source.read_text(encoding="utf-8"), encoding="utf-8", newline="\n"
-    )
+    atomic.write(project / EDITOR_FOLDER / VERIFIER_SCRIPT, source.read_text(encoding="utf-8"))
     return project
 
 
@@ -120,6 +151,12 @@ def verify_with_editor(
     perfectly and draws somewhere the camera is not. It needs a real graphics
     device (so no `-nographics`, and `xvfb-run -a` on a headless host), which
     is why it is opt-in rather than the default.
+
+    `work_dir` is shared by every run of this command on this mod, because the
+    throwaway project under it is expensive to re-import and holds no assets.
+    The log does not follow it: each run names its own (see
+    :func:`run_log_name`) and classifies only that one, so a concurrent run
+    cannot report this bundle's verdict from the other bundle's editor.
     """
     if editor is None:
         raise PipelineError(
@@ -134,7 +171,7 @@ def verify_with_editor(
         raise PipelineError(f"no bundle to verify at {bundle}")
     work_dir.mkdir(parents=True, exist_ok=True)
     project = _scratch_project(work_dir, unity_version)
-    log = work_dir / "verify.log"
+    log = work_dir / run_log_name()
     # `-nographics` makes Camera.Render() draw nothing rather than fail, so a
     # run that wants to know whether the prefab *rasterizes* must not pass it.
     # Everything else this verifier does is a load, which needs no device, so

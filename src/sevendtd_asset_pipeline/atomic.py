@@ -7,7 +7,9 @@ at the final path, indistinguishable from a complete one until something
 fails to load it. The temporary name carries this process's pid plus a random
 suffix — a fixed `<name>.tmp` is shared by two concurrent writers truncating
 one file — and is unlinked on every exit path, so an interrupted run strands
-no dotfile.
+no dotfile. The body and then the directory are flushed, because a rename
+that is not on the disk yet buys atomicity against a concurrent reader and
+nothing against a crash.
 """
 
 from __future__ import annotations
@@ -29,6 +31,13 @@ def staged_write(destination: Path) -> Iterator[Path]:
     a copy) and the rename happens only when the body completed. A failure at
     any point removes the temporary; after a successful publish the unlink is
     a no-op, because the rename already moved the file.
+
+    The body is flushed before the rename and the directory after it. A rename
+    is atomic against *concurrent* readers, which is what the unique temporary
+    name buys; it is not a barrier against a power loss, and a name whose
+    contents never reached the disk is a truncated artifact at the final path
+    with nothing to roll back to — the exact failure the temporary exists to
+    prevent, arriving by another route.
     """
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(
@@ -36,9 +45,39 @@ def staged_write(destination: Path) -> Iterator[Path]:
     )
     try:
         yield temporary
+        _fsync_path(temporary)
         temporary.replace(destination)
+        _fsync_directory(destination.parent)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _fsync_path(path: Path) -> None:
+    """Flush a completed body to the disk, or refuse to publish an unflushed one.
+
+    Read-only is enough for the flush, and is the only mode available when the
+    caller wrote the body itself and closed its own handle.
+    """
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Make a rename durable. Directory syncing is a POSIX contract, not a portable one."""
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        # Windows cannot fsync a directory handle, and macOS returns EINVAL for
+        # some filesystem drivers. The rename is still atomic there; only its
+        # durability across a power loss is unpromised, and a filesystem that
+        # refuses the call is not a reason to fail a build.
+        pass
+    finally:
+        os.close(descriptor)
 
 
 def write(path: Path, payload: bytes | str) -> None:
@@ -62,15 +101,19 @@ def write_new(path: Path, payload: bytes | str) -> None:
     on (exFAT, FAT32, an SMB share, some container bind mounts), where the
     call fails with a bare :class:`OSError`.  There the destination is
     created with ``O_CREAT | O_EXCL``, which is the same exclusive create
-    without the link.
+    without the link — and a weaker one, because the body is then written
+    into the name it just reserved, so a failure part-way gives the name back
+    rather than leaving a truncated document there.
     """
     data = payload.encode("utf-8") if isinstance(payload, str) else payload
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}")
     try:
         temporary.write_bytes(data)
+        _fsync_path(temporary)
         try:
             os.link(temporary, path)
+            _fsync_directory(path.parent)
         except FileExistsError:
             raise
         except OSError as exc:
@@ -80,7 +123,15 @@ def write_new(path: Path, payload: bytes | str) -> None:
 
 
 def _create_exclusive(path: Path, data: bytes, link_error: OSError) -> None:
-    """Publish `data` at `path` on a filesystem that cannot hard link."""
+    """Publish `data` at `path` on a filesystem that cannot hard link.
+
+    The create is exclusive but the body is not: `O_EXCL` reserves the name
+    and then this writes into it, so an error between the two leaves a
+    truncated document at `path` that reads as a published verdict. The
+    exclusive create also *permanently* refuses the next publisher, so the
+    damage is not self-healing: a retry hits `FileExistsError` and gives up
+    over evidence nobody can read. The name is given back on any failure.
+    """
     try:
         descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
     except FileExistsError:
@@ -89,5 +140,12 @@ def _create_exclusive(path: Path, data: bytes, link_error: OSError) -> None:
         raise PipelineError(
             f"cannot create {path} exclusively: {exc} (hard links failed first: {link_error})"
         ) from exc
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(data)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    _fsync_directory(path.parent)

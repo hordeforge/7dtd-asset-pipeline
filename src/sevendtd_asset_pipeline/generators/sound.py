@@ -42,6 +42,7 @@ import wave
 from pathlib import Path
 
 from .. import atomic
+from . import command_parser
 
 RATE = 44100
 
@@ -661,7 +662,8 @@ def sounds_xml(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
+        "sound",
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Every voice takes --seed; record it, and the clip is reproducible.",

@@ -38,17 +38,17 @@ mesh you export after skinning, or the output of `shamway generate entity`.
 
 from __future__ import annotations
 
-import argparse
 import sys
 from pathlib import Path
 
 from ..atomic import write
 from ..errors import PipelineError
 from ..rigs import Rig, load_rig, rig_to_glb, scaled
+from . import command_parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = command_parser("rig", description=__doc__.splitlines()[0])
     parser.add_argument("output", type=Path, help="destination armature .glb")
     parser.add_argument(
         "--rig",

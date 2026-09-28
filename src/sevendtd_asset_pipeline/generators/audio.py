@@ -17,7 +17,6 @@ downmixed anyway; mono is the default for that reason.
 
 from __future__ import annotations
 
-import argparse
 import array
 import math
 import random
@@ -28,6 +27,7 @@ from pathlib import Path
 from .. import atomic
 from ..sound_check import read_wav
 from ..unityz import Unityz
+from . import command_parser
 
 # The largest magnitude a 16-bit sample can hold, so clamped writes never
 # overflow 'h'. Not the dBFS full-scale reference `check-sound` divides by
@@ -118,7 +118,7 @@ def decode_bank(bank: Path, out_dir: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = command_parser("audio", description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
 
     report = commands.add_parser("report", help="print duration, format, peak, and RMS")

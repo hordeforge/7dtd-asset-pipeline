@@ -441,11 +441,15 @@ def _adopted_clip_record(clip: Path, capture_root: Path) -> dict[str, Any] | Non
     `review-video` only ever reviews a recorded, hash-addressed capture: the
     same boundary `client capture` already draws between taking a screenshot
     and recording one somebody else took. An arbitrary directory is refused,
-    not silently treated as evidence.
+    not silently treated as evidence. Both paths are resolved first: the
+    default capture root is relative while the clip a caller names is usually
+    absolute, and comparing those lexically would refuse a clip this tool
+    itself adopted.
     """
-    if not clip.is_relative_to(capture_root):
+    root = capture_root.resolve()
+    if not clip.resolve().is_relative_to(root):
         return None
-    for entry in read_manifest(capture_root):
+    for entry in read_manifest(root):
         if entry.get("directory") == clip.name:
             return entry
     return None
@@ -676,7 +680,7 @@ def run_review(
         "disclosure": envelope.get("disclosure", {}),
         "sampling": envelope.get("sampling", {}),
         "asset": asset,
-        "evidence": evidence,
+        "evidence": document["evidence"],
         "gateway": envelope,
         "_document": document,
     }

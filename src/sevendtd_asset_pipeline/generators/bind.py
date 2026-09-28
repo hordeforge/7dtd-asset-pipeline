@@ -43,6 +43,7 @@ from pathlib import Path
 from ..errors import PipelineError
 from ..rigs import load_rig, rig_to_glb, scaled
 from ..workdir import scratch_dir
+from . import command_parser
 from . import entity as entity_gen
 
 BLENDER_TIMEOUT = 300
@@ -759,7 +760,8 @@ def promote_root(path: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
+        "bind",
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(

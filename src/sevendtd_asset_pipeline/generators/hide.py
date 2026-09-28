@@ -61,6 +61,7 @@ from pathlib import Path
 
 from .. import atomic
 from ..capabilities import extra_install
+from . import command_parser
 
 MISSING = None
 try:
@@ -330,7 +331,8 @@ def parse_colour(text: str) -> tuple[int, int, int]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
+        "hide",
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(

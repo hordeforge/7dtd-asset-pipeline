@@ -24,13 +24,15 @@ import argparse
 import sys
 from pathlib import Path
 
+from . import command_parser
 from . import entity as entity_gen
 from . import hide as hide_gen
 from .hide import COATS
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
+        "creature",
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(

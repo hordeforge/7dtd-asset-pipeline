@@ -62,7 +62,6 @@ generated GLB is a normal skinned mesh a mod can re-skin or replace.
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import struct
@@ -74,6 +73,7 @@ from ..anim import is_arm_upper, is_locomotor_upper, is_wing_upper
 from ..atomic import write
 from ..errors import PipelineError
 from ..rigs import Rig, glb_bytes, load_rig, mat_inverse, scaled, world_matrices
+from . import command_parser
 
 # Per-rig walk stride (rad) and cycle length (s). Size variants inherit the
 # base name (`quadruped-small` → `quadruped`). A bird's wings are not legs;
@@ -1329,7 +1329,7 @@ def _bone_path(rig: Any, bone_name: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = command_parser("entity", description=__doc__.splitlines()[0])
     parser.add_argument("output", type=Path, help="destination skinned entity .glb")
     parser.add_argument(
         "--rig", default="humanoid", help="rig template name (humanoid) or a .json rig spec"

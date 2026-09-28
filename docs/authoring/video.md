@@ -83,7 +83,13 @@ shamway review-video thing --clip .local/acceptance/thing \
 `review-video` only ever runs against a recorded, hash-addressed capture: the
 clip must have been adopted by `client capture --clip`, or the command refuses
 — the same boundary `client capture --file` already draws between taking a
-screenshot and recording one somebody else took.
+screenshot and recording one somebody else took. `--clip` may be absolute; it
+is resolved against the capture root (`.local/acceptance` beside the mod), not
+compared to it as a string.
+
+The text form of a verdict names where each issue sits, in seconds and in
+frames when the model gave both: `issue: clips at the shoulder [2-3 s, frame
+8-12]`. `--json` carries the same moments as `at_seconds` / `at_frame`.
 
 The intent file, committed beside the source, states what the clip is
 supposed to demonstrate:

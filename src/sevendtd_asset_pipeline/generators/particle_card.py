@@ -37,6 +37,7 @@ from pathlib import Path
 
 from .. import atomic
 from ..capabilities import extra_install
+from . import command_parser
 
 MISSING = None
 try:
@@ -111,7 +112,8 @@ def save(image: Image.Image, destination: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
+        "particle-card",
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(

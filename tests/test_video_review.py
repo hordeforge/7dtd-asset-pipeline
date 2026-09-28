@@ -7,6 +7,8 @@ credential, so the offline suite never spends money and never sends bytes.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -20,6 +22,7 @@ from unittest import mock
 
 from sevendtd_asset_pipeline import PipelineError, video_review
 from sevendtd_asset_pipeline.capture import record_existing_clip
+from sevendtd_asset_pipeline.cli import main
 from sevendtd_asset_pipeline.config import load_config, render_config
 from sevendtd_asset_pipeline.video_review import (
     INTENT_SCHEMA_VERSION,
@@ -285,6 +288,15 @@ class RunReviewTests(_ReviewHarness):
         with self.assertRaisesRegex(PipelineError, "exactly one of --intent"):
             self._run(intent_path=None, intent_text=None)
 
+    def test_an_absolute_clip_resolves_against_the_relative_default_root(self) -> None:
+        """`--clip` is an absolute path in practice; the default root is relative."""
+        with contextlib.chdir(self.root):
+            record = video_review._adopted_clip_record(
+                self.capture_root / "thing", Path(".local/acceptance")
+            )
+        self.assertIsNotNone(record)
+        self.assertEqual("thing", cast("dict[str, Any]", record)["directory"])
+
     def test_an_unadopted_directory_is_refused(self) -> None:
         stray = self.root / "somewhere-else"
         stray.mkdir()
@@ -436,6 +448,15 @@ class RunReviewTests(_ReviewHarness):
         self.assertTrue(document["disclosure"]["network_consent"])
         self.assertNotIn("GEMINI_API_KEY", output.read_text(encoding="utf-8"))
 
+    def test_the_report_names_the_written_evidence_document(self) -> None:
+        """`evidence` in the report is the record the CLI prints and JSON-serializes."""
+        output = self.root / "evidence" / "review.json"
+        report = self._run(output=output)
+        self.assertEqual(str(output), report["evidence"]["path"])
+        self.assertEqual(64, len(report["evidence"]["sha256"]))
+        self.assertIsNone(self._run()["evidence"]["path"])
+        json.dumps(report, sort_keys=True)
+
     def test_an_earlier_evidence_document_is_never_overwritten_by_default(self) -> None:
         output = self.root / "review.json"
         self._run(output=output)
@@ -463,6 +484,51 @@ class RunReviewTests(_ReviewHarness):
         envelope["usage"] = None
         report = self._run(runner=_FakeGateway(envelope))
         self.assertFalse(report["usage"]["reported_by_provider"])
+
+
+class CliOutputTests(_ReviewHarness):
+    """What `shamway review-video` actually prints, stubbed at the gateway."""
+
+    def _run_cli(self, *extra: str) -> tuple[int, str]:
+        stdout = io.StringIO()
+        with (
+            mock.patch.object(video_review, "_default_runner", self.gateway),
+            contextlib.redirect_stdout(stdout),
+            # The capture root and the mod config are both resolved from the
+            # working directory, exactly as they are for a real invocation.
+            contextlib.chdir(self.root),
+        ):
+            code = main(
+                [
+                    "review-video",
+                    "thing",
+                    "--clip",
+                    str(self.capture_root / "thing"),
+                    "--intent",
+                    str(self.intent_file),
+                    "--provider",
+                    "fake",
+                    "--allow-network",
+                    *extra,
+                ]
+            )
+        return code, stdout.getvalue()
+
+    def test_a_json_review_is_serializable_and_names_its_evidence(self) -> None:
+        output = self.root / "review.json"
+        code, text = self._run_cli("--json", "--output", str(output))
+        self.assertEqual(0, code)
+        report = json.loads(text[text.index("{") :])
+        self.assertEqual(str(output), report["evidence"]["path"])
+        self.assertTrue(report["advisory_only"])
+
+    def test_the_text_output_names_the_moment_each_issue_sits_at(self) -> None:
+        code, text = self._run_cli()
+        self.assertEqual(0, code)
+        lines = text.splitlines()
+        self.assertIn("issue: clips at the shoulder [2-3 s, frame 8-12]", lines)
+        self.assertIn("score: clipping_risk = 2", lines)
+        self.assertTrue(any(line.startswith("note: Advisory only") for line in lines))
 
 
 class GatewayEnvelopeTests(_ReviewHarness):

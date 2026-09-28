@@ -20,11 +20,24 @@ belongs in the mod's repository, not here.
 
 from __future__ import annotations
 
+import argparse
 import importlib
 from types import ModuleType
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from ..errors import PipelineError
+
+
+def command_parser(command: str, **kwargs: Any) -> argparse.ArgumentParser:
+    """An `ArgumentParser` whose usage line names `shamway generate COMMAND`.
+
+    argparse takes its program name from `sys.argv[0]`, which a dispatcher
+    never holds (`shamway generate mesh` runs inside a process called
+    `shamway`), and Python 3.14 stops consulting `sys.argv[0]` altogether
+    whenever the host itself was started with `-m`. Stating the command is the
+    version-proof way to put the command the user typed in the help output.
+    """
+    return argparse.ArgumentParser(prog=f"shamway generate {command}", **kwargs)
 
 
 class GeneratorInfo(TypedDict):

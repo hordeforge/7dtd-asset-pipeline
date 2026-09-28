@@ -17,11 +17,11 @@ ImageMagick's ecosystem, or `uv pip install pillow`).
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 from .. import atomic
 from ..capabilities import extra_install
+from . import command_parser
 
 MISSING = None
 try:
@@ -112,7 +112,7 @@ def contact_sheet(icon: Image.Image, path: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = command_parser("icon", description=__doc__.splitlines()[0])
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--size", type=int, default=160, help="atlas cell size (default 160)")

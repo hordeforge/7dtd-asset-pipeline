@@ -8,6 +8,7 @@ import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from . import atomic, audio_review
 from . import video_review as video_review_mod
@@ -511,6 +512,46 @@ def _print_pairs(data: dict[str, object]) -> None:
         print(f"{key}: {value}")
 
 
+def _issue_moment(issue: dict[str, Any]) -> str:
+    """Where in the clip an issue sits: seconds, frames, or both."""
+    parts: list[str] = []
+    seconds = issue.get("at_seconds")
+    if seconds:
+        span = f"{seconds[0]:g}" if seconds[0] == seconds[1] else f"{seconds[0]:g}-{seconds[1]:g}"
+        parts.append(f"{span} s")
+    frames = issue.get("at_frame")
+    if frames:
+        span = f"{frames[0]:g}" if frames[0] == frames[1] else f"{frames[0]:g}-{frames[1]:g}"
+        parts.append(f"frame {span}")
+    return f" [{', '.join(parts)}]" if parts else ""
+
+
+def _print_review(report: dict[str, Any]) -> None:
+    """The human-readable form of a model review, the same for sound and for motion.
+
+    Both lanes normalize into one result shape, so a reader compares a clip
+    critique and an audio critique line for line.
+    """
+    verdict = report["review"]
+    print(f"summary: {verdict['summary']}")
+    for strength in verdict["strengths"]:
+        print(f"strength: {strength}")
+    for issue in verdict["issues"]:
+        print(f"issue: {issue['description']}{_issue_moment(issue)}")
+    for change in verdict["recommended_changes"]:
+        print(f"change: {change}")
+    for key, value in sorted(verdict["rubric_scores"].items()):
+        print(f"score: {key} = {'unjudgeable' if value is None else f'{value:g}'}")
+    print(f"confidence: {verdict['confidence']:g}")
+    for limitation in verdict["limitations"]:
+        print(f"limitation: {limitation}")
+    if not report["usage"].get("reported_by_provider", False):
+        print("usage: unavailable (the provider reported none; nothing estimated)")
+    if report["evidence"]["path"]:
+        print(f"evidence: {report['evidence']['path']}")
+    print(f"note: {report['note']}")
+
+
 def _resolve_version(args: argparse.Namespace, demand: str) -> str:
     """The revision a bundle must carry: detected from the game, or named."""
     if args.game_dir:
@@ -700,28 +741,7 @@ def run(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(report, indent=2, sort_keys=True))
         else:
-            verdict = report["review"]
-            print(f"summary: {verdict['summary']}")
-            for strength in verdict["strengths"]:
-                print(f"strength: {strength}")
-            for issue in verdict["issues"]:
-                moment = issue.get("at_seconds")
-                at = f" [{moment[0]:g}-{moment[1]:g} s]" if moment else ""
-                print(f"issue: {issue['description']}{at}")
-            for change in verdict["recommended_changes"]:
-                print(f"change: {change}")
-            for key, value in sorted(verdict["rubric_scores"].items()):
-                score = "unjudgeable" if value is None else f"{value:g}"
-                print(f"score: {key} = {score}")
-            print(f"confidence: {verdict['confidence']:g}")
-            for limitation in verdict["limitations"]:
-                print(f"limitation: {limitation}")
-            usage = report["usage"]
-            if not usage.get("reported_by_provider", False):
-                print("usage: unavailable (the provider reported none; nothing estimated)")
-            if report["evidence"]["path"]:
-                print(f"evidence: {report['evidence']['path']}")
-            print(f"note: {report['note']}")
+            _print_review(report)
         return 0
     if args.command == "pack":
         version = _resolve_version(
@@ -867,25 +887,7 @@ def run(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(report, indent=2, sort_keys=True))
         else:
-            verdict = report["review"]
-            print(f"summary: {verdict['summary']}")
-            for strength in verdict["strengths"]:
-                print(f"strength: {strength}")
-            for issue in verdict["issues"]:
-                moment = issue.get("at_seconds")
-                at = f" [{moment[0]:g}-{moment[1]:g} s]" if moment else ""
-                print(f"issue: {issue['description']}{at}")
-            for change in verdict["recommended_changes"]:
-                print(f"change: {change}")
-            for key, value in sorted(verdict["rubric_scores"].items()):
-                score = "unjudgeable" if value is None else f"{value:g}"
-                print(f"score: {key} = {score}")
-            print(f"confidence: {verdict['confidence']:g}")
-            for limitation in verdict["limitations"]:
-                print(f"limitation: {limitation}")
-            if report["evidence"]["path"]:
-                print(f"evidence: {report['evidence']['path']}")
-            print(f"note: {report['note']}")
+            _print_review(report)
         return 0
     if args.command == "doctor":
         checks = run_doctor(config)

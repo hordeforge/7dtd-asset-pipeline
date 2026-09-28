@@ -65,6 +65,7 @@ from pathlib import Path
 
 from .. import atomic
 from ..capabilities import extra_install
+from . import command_parser
 
 MISSING = None
 try:
@@ -248,7 +249,7 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = command_parser("texture-maps", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="mode", required=True)
 
     albedo = sub.add_parser("albedo", help="derive a normal and a mask from an albedo")

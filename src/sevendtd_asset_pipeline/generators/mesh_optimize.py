@@ -30,12 +30,13 @@ meshoptimizer. Validate the result with `shamway check-mesh` as usual.
 
 from __future__ import annotations
 
-import argparse
 import logging
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from . import command_parser
 
 GLTFPACK_TIMEOUT = 300
 
@@ -55,7 +56,7 @@ def measure(path: Path) -> tuple[int, int, list[float]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = command_parser("mesh-optimize", description=__doc__.splitlines()[0])
     parser.add_argument("source", type=Path, help="the .glb/.gltf to optimize")
     parser.add_argument("output", type=Path, help="destination .glb")
     parser.add_argument(

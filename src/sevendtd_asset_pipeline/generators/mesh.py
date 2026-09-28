@@ -39,13 +39,13 @@ Requires Blender on PATH (scripts/install-tools.sh --with-authoring).
 
 from __future__ import annotations
 
-import argparse
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 from ..workdir import scratch_dir
+from . import command_parser
 
 # A headless Blender that wedges (a broken userpref, a stuck GPU probe) must
 # fail this generator, not hang it: the same lane bounds gltfpack at 300s in
@@ -128,7 +128,7 @@ print("BLENDER_VERTS %d" % len(obj.data.vertices))
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = command_parser("mesh", description=__doc__.splitlines()[0])
     parser.add_argument("output", type=Path, help="destination .glb")
     parser.add_argument("--shape", choices=("box", "cylinder", "sphere"), default="box")
     parser.add_argument(

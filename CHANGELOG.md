@@ -110,6 +110,25 @@ tag has no changelog section.
   sorted behind one captured an hour ago, and `client capture --list` printed
   a timeline that contradicted the stamp beside each entry. A record whose
   stamp cannot be read keeps its position rather than being sorted on a guess.
+- `review-video` puts the evidence document it wrote in its result instead of
+  the redaction module. The report's `evidence` key carried a module object,
+  so `--json` died on serialization and the text form raised a
+  `TypeError` subscripting it: a paid submission completed and then the
+  command crashed printing the receipt.
+- `review-video --clip` accepts an absolute path. The clip was compared to the
+  capture root lexically, and the root defaults to a relative
+  `.local/acceptance`, so an absolute path was refused as "never adopted"
+  even when this tool had adopted that clip.
+- The generator `--help` output names `shamway generate NAME` again. The
+  program name was taken by swapping `sys.argv[0]`, which Python 3.14 stops
+  reading when the host itself was started with `-m`; each generator now
+  states its own `prog` through the shared `generators.command_parser`.
+- The text form of a model review names the frame an issue sits at, not only
+  its timestamp, and both review commands print through one shared function
+  (`review-audio` and `review-video` had two copies that had drifted: the
+  video one never reported unavailable usage).
+- `scripts/coverage_badge.py` writes its SVG with `newline="\n"`, so a
+  Windows host no longer gets CRLF line ends in the badge.
 - A hold that borrowed a lock the same session already held no longer clears
   it on the way out. An orchestrator exports `PLAYTEST_SESSION_ID` for the
   whole run, so every command it ran inherited the id, took a borrow, and

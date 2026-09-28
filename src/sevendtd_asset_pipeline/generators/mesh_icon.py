@@ -33,7 +33,6 @@ Pillow. Gate the result with `shamway check-icons`.
 
 from __future__ import annotations
 
-import argparse
 import shutil
 import subprocess
 import sys
@@ -41,6 +40,7 @@ from pathlib import Path
 
 from .. import atomic
 from ..workdir import scratch_dir
+from . import command_parser
 
 MINIMUM_COVERAGE = 0.02
 
@@ -173,7 +173,7 @@ def _downscale(rendered: Path, target: Path, size: int) -> float:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = command_parser("mesh-icon", description=__doc__.splitlines()[0])
     parser.add_argument("mesh", type=Path, help="the .glb/.gltf/.obj/.stl/.ply to photograph")
     parser.add_argument("output", type=Path, help="destination atlas cell .png")
     parser.add_argument("--size", type=int, default=160, help="atlas cell pixels (default 160)")

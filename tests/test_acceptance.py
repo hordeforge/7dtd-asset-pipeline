@@ -509,6 +509,34 @@ class MotionKindTests(unittest.TestCase):
             with self.assertRaisesRegex(PipelineError, "not a bundle member"):
                 acceptance.plan(config)
 
+    def test_a_walk_entity_failure_names_the_stem(self) -> None:
+        """The `fail` line is what a person reads in a playtest log.
+
+        A brace left in it by the f-string that writes the case is the whole
+        message, and it is only visible on a host that has the prefab lane, so
+        it is pinned here without that capability.
+        """
+        body = acceptance._walk_entity_case("prop")
+        self.assertIn('fail: "could not spawn and walk the prop entity class"', body)
+        self.assertNotIn("{name}", body)
+
+    def test_a_kind_on_a_bare_mesh_member_names_the_prefab_lane(self) -> None:
+        """A mesh source is a prefab only on the vkd3d prefab lane.
+
+        Without it `synthesized_members` predicts a bare `Mesh`, and a correct
+        declaration reads as a wrong one on a host that is merely missing an
+        optional tool.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mod_with_motions(root, ["prop.glb"], {"prop": "turntable"})
+            with self.assertRaises(PipelineError) as caught:
+                acceptance.plan(config)
+            if has_capability("vkd3d-compiler"):
+                self.assertNotIn("vkd3d-compiler", str(caught.exception))
+            else:
+                self.assertIn("vkd3d-compiler", str(caught.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -601,11 +601,16 @@ def run_review(
         duration_seconds=duration_seconds,
     )
 
-    document["evidence"] = {"path": None, "sha256": None}
+    # The address of the document belongs to the report, not to the document:
+    # a self-reference written into the file is either its own hash (which it
+    # cannot carry) or a permanently null block, and a caller hashing the
+    # report's `_document` would get bytes that differ from the file. The
+    # audio lane already keeps it in the report alone.
+    evidence_address: dict[str, str | None] = {"path": None, "sha256": None}
     if output is not None:
         payload = json.dumps(evidence.redact(document), indent=2, sort_keys=True)
         evidence.publish_review(output, payload, force=force)
-        document["evidence"] = {
+        evidence_address = {
             "path": str(output),
             "sha256": evidence.sha256_bytes(payload.encode("utf-8")),
         }
@@ -628,7 +633,7 @@ def run_review(
         "disclosure": envelope.get("disclosure", {}),
         "sampling": envelope.get("sampling", {}),
         "asset": asset,
-        "evidence": document["evidence"],
+        "evidence": evidence_address,
         "gateway": envelope,
         "_document": document,
     }

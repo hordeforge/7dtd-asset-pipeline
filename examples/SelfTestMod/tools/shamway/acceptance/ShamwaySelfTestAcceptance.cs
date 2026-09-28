@@ -682,7 +682,7 @@ if (suite == "shamwayselftest_shamwayselftestcreature_look")
         queue.Add(CaseDef.WalkEntity(
             label, "motion_shamwaySelfTestCreature", "shamwaySelfTestCreature", new Vector3(1.5f, 3f, 1.5f),
             holdSeconds: 12f, clipFps: 4f, speed: 0.8f,
-            fail: "could not spawn and walk the {name} entity class"));
+            fail: "could not spawn and walk the shamwaySelfTestCreature entity class"));
             return;
         }
 if (suite == "shamwayselftest_shamwayselftestcreature_prefab_look")

@@ -62,7 +62,7 @@ version = "2022.3.62f2"
 | `unity.editor` | Optional machine path; `UNITY_EDITOR` overrides it. Unused unless the mod opted into an editor, or `verify-bundle`/`render-icon` is run. |
 | `unity.version` | The revision recorded at scaffold time. With a Unity project it is a human-readable record only — `ProjectSettings/ProjectVersion.txt` and the installed game's bundles are authoritative. With `bundle_source = "synthesized"` there is no project file, so the editorless writer falls back to this value when no game directory is configured, and `doctor` warns that it did. |
 | `game.directory` | Optional machine path; `SEVEN_DAYS_TO_DIE_DIR` overrides it. |
-| `acceptance.motion_kinds` | Per-asset-stem motion kind (`turntable`, `walk-cycle`, `walk-entity`, `fixed`) read by `shamway acceptance-provider`. Declared here rather than in the tracked manifest because the manifest is rewritten on every `shamway build`. See [authoring/video.md](authoring/video.md). |
+| `acceptance.motion_kinds` | Per-asset-stem motion kind (`turntable`, `walk-cycle`, `walk-entity`, `fixed`) read by `shamway acceptance-provider`. Declared here rather than in the tracked manifest because the manifest is rewritten on every `shamway build`. Only a prefab member takes one, and a mesh source is a prefab only on the `vkd3d-compiler` lane, so a host without that compiler reports a declared mesh as a bare `Mesh`. See [authoring/video.md](authoring/video.md). |
 
 Commit the TOML file, everything under `source_root`, the tracked manifest, and
 the staged bundle. A mod that opted into an editor also commits the Unity

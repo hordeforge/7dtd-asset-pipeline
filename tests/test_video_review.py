@@ -8,6 +8,7 @@ credential, so the offline suite never spends money and never sends bytes.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -506,6 +507,21 @@ class RunReviewTests(_ReviewHarness):
         self.assertEqual(64, len(report["evidence"]["sha256"]))
         self.assertIsNone(self._run()["evidence"]["path"])
         json.dumps(report, sort_keys=True)
+
+    def test_the_named_hash_is_the_hashes_file(self) -> None:
+        """The address is the report's alone, and it addresses real bytes.
+
+        A document that named its own address would either carry a hash of
+        bytes that do not exist or a permanently null block, and the report's
+        `_document` would then not be the file the report cites.
+        """
+        output = self.root / "review.json"
+        report = self._run(output=output)
+        self.assertEqual(
+            hashlib.sha256(output.read_bytes()).hexdigest(), report["evidence"]["sha256"]
+        )
+        self.assertNotIn("evidence", report["_document"])
+        self.assertNotIn("evidence", json.loads(output.read_text(encoding="utf-8")))
 
     def test_an_earlier_evidence_document_is_never_overwritten_by_default(self) -> None:
         output = self.root / "review.json"

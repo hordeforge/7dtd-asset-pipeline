@@ -51,7 +51,8 @@ from importlib.resources import files
 from pathlib import Path
 
 from . import transcode
-from .bundle_writer import synthesized_members
+from .bundle_writer import ASSET_KINDS, synthesized_members
+from .capabilities import has_capability
 from .client import hold_for_write, user_mods_dir
 from .config import PipelineConfig, load_config
 from .errors import PipelineError
@@ -289,10 +290,35 @@ def _motions(config: PipelineConfig, stems: list[tuple[str, str]]) -> tuple[tupl
             raise PipelineError(
                 f"acceptance.motion_kinds names {stem!r}, which loads as {member_kind}, not "
                 "a prefab; a motion clip stages a mesh/prefab, so the kind belongs on the "
-                "GameObject member"
+                f"GameObject member.{_mesh_lane_hint(config, stem)}"
             )
         declared.append((stem, motion))
     return tuple(declared)
+
+
+def _mesh_lane_hint(config: PipelineConfig, stem: str) -> str:
+    """Name the reason a mesh source is not a prefab, when that is the reason.
+
+    `synthesized_members` predicts what this host's writer emits, and the
+    prefab lane needs `vkd3d-compiler`. Without it a mesh source is packed as
+    a bare `Mesh`, so a correct declaration reads as a wrong one on a host
+    that is merely missing an optional tool, and the message would send the
+    author to edit a `.shamway.toml` that was right all along.
+    """
+    if config.bundle_source != "synthesized" or has_capability("vkd3d-compiler"):
+        return ""
+    source_dir = Path(config.bundle_source_dir)
+    if not source_dir.is_dir() or not any(
+        path.stem == stem and ASSET_KINDS.get(path.suffix.lower()) == "Mesh"
+        for path in source_dir.iterdir()
+        if path.is_file()
+    ):
+        return ""
+    return (
+        " A mesh source becomes a prefab only on the vkd3d-compiler prefab lane; "
+        "`shamway capabilities` says whether this host has it, and the bundle it "
+        "would write here has no prefab to stage."
+    )
 
 
 def _rendered_plan(
@@ -635,7 +661,7 @@ def _walk_entity_case(prefab_stem: str) -> str:
         queue.Add(CaseDef.WalkEntity(
             label, "motion_{name}", "{name}", new Vector3(1.5f, 3f, 1.5f),
             holdSeconds: 12f, clipFps: 4f, speed: 0.8f,
-            fail: "could not spawn and walk the {{name}} entity class"));
+            fail: "could not spawn and walk the {name} entity class"));
 """
 
 

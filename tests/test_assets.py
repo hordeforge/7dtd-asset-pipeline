@@ -1440,6 +1440,10 @@ class SelfTestFixtureTests(unittest.TestCase):
         ):
             with self.subTest(stem=stem):
                 self.assertIn(f'yield return "shamwayselftest_{stem}_look"', source)
+        # Every generated case message names the stem it is about. A brace
+        # surviving the f-string that wrote the case is the whole message.
+        self.assertNotIn("{name}", source)
+        self.assertIn("could not spawn and walk the shamwaySelfTestCreature entity class", source)
         # One Instantiate per look branch: split on look-suite guards.
         branches = re.split(r'if \(suite == "shamwayselftest_[^"]+_look"\)', source)
         look_bodies = branches[1:]

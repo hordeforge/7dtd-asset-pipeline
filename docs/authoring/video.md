@@ -47,7 +47,10 @@ Everything below is detail.
 A stem with no declaration generates exactly what it generated before this
 feature existed — byte for byte. A motion kind declared on a member that is
 not a mesh/prefab (`GameObject`) is refused, not silently ignored, so a typo
-in the stem cannot read as a working motion case.
+in the stem cannot read as a working motion case. A mesh source is a prefab
+only on the `vkd3d-compiler` lane: on a host without it the same declaration
+is refused with that named as the reason, because the bundle this host would
+write has no prefab to stage.
 
 The declaration lives in the mod's configuration rather than the tracked
 manifest on purpose: the manifest is regenerated on every `shamway build`, so
@@ -152,7 +155,9 @@ review kinds reads one shape.
   file, the asset's source file and its hash (per-asset generation arguments
   are not yet recorded by this pipeline, so the source hash is the comparable
   address between revisions — never a guess), the sampling record, provider
-  and model, rubric and prompt versions, and the full gateway envelope. A
+  and model, rubric and prompt versions, and the full gateway envelope. The
+  document's own path and hash are reported beside it rather than written into
+  it, so the bytes on disk are the bytes the report cites. A
   later review never overwrites an earlier document. Concurrent reviews use an
   atomic create at that output path: one publishes, and the other refuses
   without replacing the first document.

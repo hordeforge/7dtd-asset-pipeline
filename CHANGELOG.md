@@ -29,6 +29,13 @@ tag has no changelog section.
 - `hypothesis` from the `dev` dependency group. Nothing in the tree imports
   it; the suite is `unittest`. Its transitive `sortedcontainers` goes with it.
 
+### Fixed
+
+- A `.gltf` external buffer `uri` is confined to the document's own directory.
+  `../../.ssh/id_rsa` or a bare `/etc/passwd` was joined onto the source
+  directory and read as vertex data, so an untrusted glTF read any file the
+  build process could read.
+
 ## [0.7.0] - 2026-09-21
 
 ### Removed

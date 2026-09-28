@@ -177,6 +177,30 @@ def _parse_glb(data: bytes, source: Path) -> tuple[dict[str, Any], bytes]:
     return document, blob
 
 
+def _buffer_path(uri: str, source: Path) -> Path:
+    """Where a buffer `uri` resolves to, confined to the glTF's own directory.
+
+    A glTF document is untrusted input: a `uri` of `../../.ssh/id_rsa` or a
+    bare `/etc/passwd` names any file the build process can read, and this
+    writer would read it as a vertex buffer. A buffer beside its document is
+    the whole legitimate layout, so a URI that leaves that directory is
+    refused rather than followed. Percent-escapes are rejected too, because
+    they would survive a containment check and still decode to a parent path.
+    """
+    if "%" in uri or "\x00" in uri:
+        raise PipelineError(f"{source.name} buffer URI {uri!r} is not a plain relative path")
+    candidate = Path(uri)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise PipelineError(
+            f"{source.name} buffer URI {uri!r} leaves {source.parent}; a buffer must sit "
+            "beside its glTF"
+        )
+    path = (source.parent / candidate).resolve()
+    if not path.is_relative_to(source.parent.resolve()):
+        raise PipelineError(f"{source.name} buffer URI {uri!r} leaves {source.parent}")
+    return path
+
+
 def _load_buffers(document: dict[str, Any], blob: bytes, source: Path) -> list[bytes]:
     buffers: list[bytes] = []
     for index, item in enumerate(document.get("buffers") or []):
@@ -188,7 +212,7 @@ def _load_buffers(document: dict[str, Any], blob: bytes, source: Path) -> list[b
             raise PipelineError(
                 f"{source.name} buffer {index} uses a data URI; write a GLB or an external .bin"
             )
-        path = (source.parent / str(uri)).resolve()
+        path = _buffer_path(str(uri), source)
         try:
             buffers.append(path.read_bytes())
         except OSError as exc:

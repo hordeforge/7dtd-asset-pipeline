@@ -56,6 +56,12 @@ class ReviewRequest:
     audios: tuple[AudioPayload, ...]
     model: str
     timeout_seconds: float
+    rubric_keys: tuple[str, ...] = ()
+    """The dimension keys the prompt asks the adapter to score, in order.
+
+    Carried so an adapter can answer the exact rubric it was handed without
+    either side importing the other's rubric definition.
+    """
 
 
 @dataclass(frozen=True)

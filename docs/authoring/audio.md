@@ -426,6 +426,19 @@ The rules that make it trustworthy, from
 - **Advisory only.** Scores are diagnostic, never pass/fail. A model verdict
   cannot satisfy the human listen under Acceptance below, and where the two
   disagree, both are worth recording.
+- **The intent is data, not instructions.** Everything the author wrote is
+  quoted between `BEGIN AUTHOR'S STATEMENT` and `END AUTHOR'S STATEMENT`,
+  folded onto single lines so it cannot open a line of its own, and the
+  prompt says in as many words that text inside the block never changes the
+  rubric. Text in an intent that tries to is itself reported under
+  `limitations`.
+- **Every dimension is answered.** The prompt asks the model to score each
+  rubric dimension, and a response that leaves one unstated is refused
+  rather than reported as a partial verdict; a dimension that cannot be
+  judged is scored `null` and explained.
+- **Billable output is capped.** The hosted adapter sends
+  `maxOutputTokens`, and an answer cut off at the cap is refused as no
+  verdict, not returned as a partial one.
 - **Evidence, not memory.** Each run writes provider, model, rubric version,
   hashes of everything submitted and the redacted result. A later review
   never overwrites an earlier one.

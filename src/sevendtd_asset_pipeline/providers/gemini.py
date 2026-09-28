@@ -34,6 +34,13 @@ _MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 # published per-request budget for inline data.
 SUPPORTED_SUFFIXES = (".wav", ".mp3", ".aiff", ".aac", ".ogg", ".flac")
 MAX_REQUEST_BYTES = 20 * 1024 * 1024
+# Every billable token of a generation is bounded by this one number. The
+# rubric answer is roughly a thousand tokens; the rest is headroom, and on a
+# 2.5 model the cap also bounds the reasoning tokens the model spends before
+# it answers. Without it a model that loops or rambles is billed for as long
+# as it keeps emitting, and nothing in this tool would notice until the
+# invoice.
+MAX_OUTPUT_TOKENS = 8192
 
 
 class GeminiProvider:
@@ -96,7 +103,10 @@ class GeminiProvider:
             )
         body = {
             "contents": [{"role": "user", "parts": parts}],
-            "generationConfig": {"response_mime_type": "application/json"},
+            "generationConfig": {
+                "response_mime_type": "application/json",
+                "maxOutputTokens": MAX_OUTPUT_TOKENS,
+            },
         }
         # Both audited statements carry the same justification: the URL is
         # this module's fixed https constant plus the requested model name;
@@ -167,7 +177,16 @@ class GeminiProvider:
             if isinstance(part, dict)
         )
         finish = candidates[0].get("finishReason")
-        if finish and finish not in ("STOP", "MAX_TOKENS"):
+        if finish == "MAX_TOKENS":
+            # The answer was cut off mid-JSON. Reporting that as a model
+            # refusal would hide the real cause, and accepting it would leave
+            # the caller parsing a truncated object as if it were complete.
+            raise PipelineError(
+                f"provider 'gemini' stopped at the {MAX_OUTPUT_TOKENS}-token output cap "
+                f"with the answer unfinished (finishReason {finish}); no verdict was "
+                "produced"
+            )
+        if finish and finish != "STOP":
             raise PipelineError(
                 f"provider 'gemini' ended the response early (finishReason {finish}); "
                 "no verdict was produced"

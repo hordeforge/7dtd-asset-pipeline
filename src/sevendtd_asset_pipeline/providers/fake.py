@@ -68,7 +68,7 @@ class FakeProvider:
             "recommended_changes": [
                 "rerun against a configured real provider for an actual audition"
             ],
-            "rubric_scores": {"semantic_fit": None, "harshness_risk": None},
+            "rubric_scores": dict.fromkeys(request.rubric_keys),
             "confidence": 0.42,
             "limitations": [
                 "the fake adapter received bytes and prompt but cannot hear",

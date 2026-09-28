@@ -201,10 +201,15 @@ def validate_result(data: dict[str, Any], origin: str = "gateway response") -> d
     if not isinstance(raw_issues, list):
         problems.append("issues must be an array")
     else:
-        for index, entry in enumerate(raw_issues):
-            if not isinstance(entry, dict) or "description" not in entry:
+        for index, raw_entry in enumerate(raw_issues):
+            if not isinstance(raw_entry, dict) or "description" not in raw_entry:
                 problems.append(f"issue #{index + 1} must be an object with 'description'")
                 continue
+            # Normalized into a copy: the gateway envelope is evidence, and a
+            # normalization that rewrote the moment keys of the response this
+            # run received would leave `gateway` in the document describing
+            # something the gateway never sent.
+            entry = dict(raw_entry)
             # Live models name a moment with the singular aliases `frame` /
             # `seconds` as often as `at_frame` / `at_seconds`; normalize them
             # before the shape check (canonical wins when both are present).
@@ -386,13 +391,22 @@ def _adopted_clip_record(clip: Path, capture_root: Path) -> dict[str, Any] | Non
     default capture root is relative while the clip a caller names is usually
     absolute, and comparing those lexically would refuse a clip this tool
     itself adopted.
+
+    The record must be a clip, not a single adopted frame that happens to sit
+    under the same directory name: a screenshot record carries one file, and
+    reviewing it as motion evidence would be exactly the "a still instead of
+    a clip" substitution this lane refuses to make.
     """
     root = capture_root.resolve()
     if not clip.resolve().is_relative_to(root):
         return None
     for entry in read_manifest(root):
-        if entry.get("directory") == clip.name:
+        if entry.get("directory") != clip.name:
+            continue
+        files = entry.get("files")
+        if isinstance(files, list) and files:
             return entry
+        return None
     return None
 
 
@@ -629,6 +643,7 @@ def _evidence(
 ) -> dict[str, Any]:
     """The hash-addressed record that makes one review citable later."""
     media = envelope.get("media") or []
+    adopted = record.get("files")
     return {
         "kind": "shamway-video-review-evidence",
         "schema_version": EVIDENCE_SCHEMA_VERSION,
@@ -642,6 +657,11 @@ def _evidence(
                 "observable": record.get("observable"),
                 "captured_at": record.get("captured_at"),
                 "backend": record.get("backend"),
+                # The capture's own hashes, recorded at adoption. The gateway's
+                # `media` below is what it chose to submit after sampling, so
+                # keeping both is what makes a reviewer able to tell a clip
+                # that was sampled down from a clip that was submitted whole.
+                "files": adopted if isinstance(adopted, list) else [],
             },
             "files": media,
         },

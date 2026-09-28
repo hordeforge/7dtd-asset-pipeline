@@ -1682,6 +1682,21 @@ def _capture(args: argparse.Namespace) -> int:
     if not args.label.strip():
         raise PipelineError("capture needs a LABEL, or --list to print the manifest")
 
+    supplied = [name for name, value in (("--file", args.file), ("--clip", args.clip)) if value]
+    if len(supplied) > 1:
+        raise PipelineError(
+            f"capture takes {supplied[0]} or {supplied[1]}, never both: one is a single "
+            "frame somebody already took, the other is a captured clip directory"
+        )
+    if args.wait and supplied:
+        # A wait frames a shutter this command is about to press. With --file or
+        # --clip nothing is captured, so a silent wait is a pause the caller
+        # asked for and never got.
+        raise PipelineError(
+            f"--wait only applies to a frame this command takes itself; {supplied[0]} "
+            "records something already captured"
+        )
+
     entry: Capture | ClipCapture
     if args.clip is not None:
         entry = record_existing_clip(args.clip, args.label, args.observable, root)

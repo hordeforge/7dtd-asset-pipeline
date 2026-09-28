@@ -71,7 +71,10 @@ capture directory is left behind, `client.log` above all: the log carries the
 host's absolute paths and every mod the session loaded, the evidence tree
 deploys with the modlet, and `review-video` hands it to an external gateway.
 It records; it never re-captures, muxes, or reviews. Re-adopting a label
-replaces its earlier entry, exactly like a re-captured single frame.
+replaces its earlier entry, exactly like a re-captured single frame. `--clip`
+and `--file` are one choice, not two, and neither takes a `--wait`: both
+record something somebody else already took, so a wait would be a pause this
+command never serves.
 
 ## The review
 
@@ -84,9 +87,11 @@ shamway review-video thing --clip .local/acceptance/thing \
 `review-video` only ever runs against a recorded, hash-addressed capture: the
 clip must have been adopted by `client capture --clip`, or the command refuses
 — the same boundary `client capture --file` already draws between taking a
-screenshot and recording one somebody else took. `--clip` may be absolute; it
-is resolved against the capture root (`.local/acceptance` beside the mod), not
-compared to it as a string.
+screenshot and recording one somebody else took. A record that is a single
+adopted frame is refused too, whatever directory it sits in: this lane reviews
+motion, and a still is the substitution it exists not to make. `--clip` may be
+absolute; it is resolved against the capture root (`.local/acceptance` beside
+the mod), not compared to it as a string.
 
 The text form of a verdict names where each issue sits, in seconds and in
 frames when the model gave both: `issue: clips at the shoulder [2-3 s, frame
@@ -147,6 +152,12 @@ review kinds reads one shape.
   later review never overwrites an earlier document. Concurrent reviews use an
   atomic create at that output path: one publishes, and the other refuses
   without replacing the first document.
+- Two file lists sit under `clip`, because they answer different questions.
+  `clip.adopted.files` is the clip directory as `client capture --clip`
+  hashed it at adoption, and `clip.files` is what the gateway actually sent
+  after its own sampling. A clip sampled down from 48 frames to 12 shows 48 in
+  the first list and 12 in the second; reading only the second would call a
+  trimmed review a whole one.
 
 ### The provider capability
 

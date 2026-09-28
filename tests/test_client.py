@@ -1492,5 +1492,30 @@ class LocalizationRequirementTests(unittest.TestCase):
         self.assertFalse(client.ships_localization(Path("/nonexistent"), None))
 
 
+class CaptureArgumentTests(unittest.TestCase):
+    """`client capture` refuses argument combinations it would silently resolve.
+
+    Each of these records something somebody else already captured, so nothing
+    on this path presses a shutter: a `--file` quietly beating a `--clip`, or a
+    `--wait` that never waits, both leave the caller believing a capture
+    happened the way they asked for.
+    """
+
+    def _run(self, *extra: str) -> int:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            code = client.main(["capture", "thing", "--allow-no-client", *extra])
+        self.assertEqual(1, code)
+        self.assertIn("ERROR:", stderr.getvalue())
+        return code
+
+    def test_a_frame_and_a_clip_cannot_both_be_supplied(self) -> None:
+        self._run("--file", "frame.png", "--clip", "clip-dir")
+
+    def test_a_wait_on_an_already_captured_thing_is_refused(self) -> None:
+        self._run("--clip", "clip-dir", "--wait", "2")
+        self._run("--file", "frame.png", "--wait", "2")
+
+
 if __name__ == "__main__":
     unittest.main()

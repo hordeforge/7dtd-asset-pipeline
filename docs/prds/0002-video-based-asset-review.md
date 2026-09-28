@@ -336,6 +336,7 @@ in-repo provider adapter (the gateway owns that surface).
 | `--allow-network` absent | Refuse before reading credentials or contacting a provider |
 | intent lacks `purpose` | Refuse locally with the missing field |
 | `--clip` points at a directory `client capture` never adopted | Refuse; review only ever runs against a recorded, hash-addressed capture |
+| `--clip` names a record that is a single adopted frame | Refuse; a still is not motion evidence, whatever directory it sits in |
 | provider/model not configured | Report the capability state and configuration route |
 | clip exceeds provider's frame/size limit | Sample down (even spacing, always first/last frame), record the sampling in evidence |
 | provider cannot ingest actual frames/video | Refuse the adapter; a stills-incapable transcription is not a substitute |

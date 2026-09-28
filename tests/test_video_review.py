@@ -21,7 +21,7 @@ from typing import Any, cast
 from unittest import mock
 
 from sevendtd_asset_pipeline import PipelineError, video_review
-from sevendtd_asset_pipeline.capture import record_existing_clip
+from sevendtd_asset_pipeline.capture import record_existing, record_existing_clip
 from sevendtd_asset_pipeline.cli import main
 from sevendtd_asset_pipeline.config import load_config, render_config
 from sevendtd_asset_pipeline.video_review import (
@@ -267,6 +267,18 @@ class ResultTests(unittest.TestCase):
         result = validate_result(data)
         self.assertEqual([9.0, 9.0], result["issues"][0]["at_frame"])
 
+    def test_normalizing_leaves_the_gateway_payload_as_it_arrived(self) -> None:
+        """The envelope is evidence: rewriting it would record a response nobody sent."""
+        issue = {"description": "pops", "frame": 9, "start_seconds": 1, "end_seconds": 2}
+        data = dict(cast("dict[str, Any]", _gateway_envelope()["result"]))
+        data["issues"] = [issue]
+        result = validate_result(data)
+        self.assertEqual([9.0, 9.0], result["issues"][0]["at_frame"])
+        self.assertEqual([1.0, 2.0], result["issues"][0]["at_seconds"])
+        self.assertEqual(
+            {"description": "pops", "frame": 9, "start_seconds": 1, "end_seconds": 2}, issue
+        )
+
     def test_a_null_score_is_allowed_but_a_non_number_is_not(self) -> None:
         data = _valid_result()
         data["rubric_scores"] = {"semantic_fit": None, "timing": True}
@@ -303,6 +315,14 @@ class RunReviewTests(_ReviewHarness):
         (stray / "frame-0000.png").write_bytes(b"x")
         with self.assertRaisesRegex(PipelineError, "never adopted"):
             self._run(clip=stray)
+
+    def test_an_adopted_screenshot_is_not_a_clip(self) -> None:
+        """One recorded frame under the clip's name is a still, not motion evidence."""
+        still = self.root / "still.png"
+        still.write_bytes(b"\x89PNG\r\n\x1a\n still")
+        record_existing(still, "thing", "one frame", self.capture_root)
+        with self.assertRaisesRegex(PipelineError, "never adopted"):
+            self._run()
 
     def test_the_gateway_receives_the_adopted_clip_and_intent(self) -> None:
         self._run()
@@ -447,6 +467,16 @@ class RunReviewTests(_ReviewHarness):
         self.assertEqual(document["result"], report["review"])
         self.assertTrue(document["disclosure"]["network_consent"])
         self.assertNotIn("GEMINI_API_KEY", output.read_text(encoding="utf-8"))
+
+    def test_the_evidence_names_both_the_adopted_hashes_and_what_was_submitted(self) -> None:
+        """The clip as captured and the frames the gateway sent are different lists."""
+        output = self.root / "evidence" / "review.json"
+        self._run(output=output)
+        document = json.loads(output.read_text(encoding="utf-8"))
+        adopted = document["clip"]["adopted"]["files"]
+        self.assertEqual(10, len(adopted))
+        self.assertTrue(all(len(item["sha256"]) == 64 for item in adopted))
+        self.assertEqual(8, len(document["clip"]["files"]))
 
     def test_the_report_names_the_written_evidence_document(self) -> None:
         """`evidence` in the report is the record the CLI prints and JSON-serializes."""

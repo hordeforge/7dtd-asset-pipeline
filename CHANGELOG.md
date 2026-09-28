@@ -12,6 +12,23 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Changed
+
+- `texture2ddecoder` moved from the `writer`, `inspect` and `all` extras to
+  the `dev` dependency group. Only the block-compression cross-check in
+  `tests/test_block_compress.py` imports it, so a consumer installing
+  `7dtd-asset-pipeline[writer]` no longer pays to install a decoder the
+  shipped code never calls. The suite still gets it: `uv sync` installs the
+  dev group, which is where the cross-check runs.
+- `setuptools` pinned to `84.0.0` in the `dev` group, beside the `ruff` and
+  `mypy` pins. `setup.py` subclasses `build_py` and mypy type-checks it, so a
+  silent setuptools major is as much a gate change as an analyzer release.
+
+### Removed
+
+- `hypothesis` from the `dev` dependency group. Nothing in the tree imports
+  it; the suite is `unittest`. Its transitive `sortedcontainers` goes with it.
+
 ## [0.7.0] - 2026-09-21
 
 ### Removed

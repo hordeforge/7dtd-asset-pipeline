@@ -433,10 +433,18 @@ class DispatchTests(unittest.TestCase):
         self.assertIn("Asset type:", stateless["prompt"])
 
     def test_client_where_resolves_paths_from_an_explicit_game_dir(self) -> None:
+        import os
         import tempfile as tempdir
+        from unittest import mock
 
         with tempdir.TemporaryDirectory() as game:
-            data = call_json(None, "client_where", {"game_dir": str(Path(game) / "7 Days To Die")})
+            # `client_where` falls back to SEVEN_DAYS_TO_DIE_MODS_DIR, so a host
+            # that exports it would make this assert against the developer's
+            # machine rather than against the explicit game dir under test.
+            with mock.patch.dict(os.environ, {}, clear=True):
+                data = call_json(
+                    None, "client_where", {"game_dir": str(Path(game) / "7 Days To Die")}
+                )
             self.assertIsNone(data["mods_dir"])  # not a Steam library layout
             self.assertEqual(["steam", "-applaunch", "251570"], data["launch"][:3])
 

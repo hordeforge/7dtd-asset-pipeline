@@ -109,7 +109,21 @@ class ClassifyTests(BundleCase):
             self.write_log("VERIFY-ASSET: k -> TextAsset named 'k'\n"),
             0,
         )
-        self.assertEqual(report.as_dict(), json.loads(json.dumps(report.as_dict())))
+        # Round-tripping a dict through JSON is true of anything serializable,
+        # so the assertion that matters is the shape the CLI publishes: these
+        # five keys, and an asset row a consumer can read without the report
+        # object it came from.
+        payload = report.as_dict()
+        self.assertEqual({"bundle", "log", "ok", "assets", "problems"}, set(payload))
+        self.assertEqual(
+            payload, json.loads(json.dumps(payload)), "the report must survive a JSON hop"
+        )
+        self.assertEqual(
+            {"key": "k", "type": "TextAsset", "name": "k", "detail": ""},
+            payload["assets"][0],
+        )
+        self.assertEqual("b.unity3d", payload["bundle"])
+        self.assertTrue(payload["ok"], payload["problems"])
 
 
 class EditorRefusalTests(BundleCase):

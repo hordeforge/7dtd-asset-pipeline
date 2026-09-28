@@ -13,19 +13,12 @@ underneath.
 from __future__ import annotations
 
 import ast
-import importlib
 import unittest
 from pathlib import Path
 
 import sevendtd_asset_pipeline as package
-from sevendtd_asset_pipeline import sound_check
 
 SOURCE = Path(package.__file__).parent
-
-# The package re-exports the `capabilities()` function under this module's own
-# name, so `from sevendtd_asset_pipeline import capabilities` binds the
-# function. Reach the module itself through sys.modules.
-capability_registry = importlib.import_module("sevendtd_asset_pipeline.capabilities")
 
 # Root modules that name a feature on purpose: the published surface stack,
 # whose whole job is to reach every leaf.
@@ -98,13 +91,23 @@ def _graph() -> dict[str, set[str]]:
 
 
 class DependencyDirectionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.graph = _graph()
+        # Every rule below is a statement about modules that exist. A renamed
+        # source root, a packaging change or a swallowed walk error would
+        # return an empty graph, and an empty graph has no cycle, no offender
+        # and no base module: all three would pass having checked nothing.
+        self.assertGreater(
+            len(self.graph), 50, f"the module walk found {len(self.graph)} modules to check"
+        )
+
     def test_the_import_graph_has_no_cycle(self) -> None:
         """Settle what imports nothing, then what that leaves nothing.
 
         Whatever cannot be settled this way sits in a cycle, and its members
         are reported by name so the cycle is readable from the failure.
         """
-        graph = _graph()
+        graph = self.graph
         settled: set[str] = set()
         while True:
             free = {
@@ -123,7 +126,7 @@ class DependencyDirectionTests(unittest.TestCase):
         """
         offenders = {
             name: sorted(dep for dep in deps if dep.split(".")[0] == "generators")
-            for name, deps in _graph().items()
+            for name, deps in self.graph.items()
             if name not in SURFACE and "." not in name
         }
         self.assertEqual({name: deps for name, deps in offenders.items() if deps}, {})
@@ -134,7 +137,7 @@ class DependencyDirectionTests(unittest.TestCase):
         `capabilities` answering a library question once pulled the whole
         shader compiler in behind it; the probe belongs in the registry.
         """
-        graph = _graph()
+        graph = self.graph
         allowed = {name for name in graph if name.rsplit(".", 1)[-1] in BASE_MODULES}
         allowed |= BASE_ALLOWED_EXTRAS
         for name in sorted(allowed & set(graph)):
@@ -142,10 +145,14 @@ class DependencyDirectionTests(unittest.TestCase):
 
     def test_the_two_edges_repaired_here_stay_repaired(self) -> None:
         """The clip gate owns the WAV reader, and the registry owns the zmol-v probe."""
-        graph = _graph()
+        graph = self.graph
         self.assertEqual(graph["sound_check"], {"errors"})
-        self.assertTrue(callable(sound_check.read_wav))
-        self.assertTrue(callable(capability_registry.smolv_library))
+        self.assertNotIn("shader_blob", graph["capabilities"])
+        # The probe the shader compiler uses is reached through the registry,
+        # not by a base module reaching up for the compiler itself. Asserting
+        # the edge, not that the name resolves: `callable(...)` holds for any
+        # function body and would survive the edge being reversed.
+        self.assertIn("capabilities", graph["shader_blob"])
         self.assertNotIn("shader_blob", graph["capabilities"])
         # The arrow points down: the generator converts through the gate's
         # reader, and the gate never reaches back up for it.

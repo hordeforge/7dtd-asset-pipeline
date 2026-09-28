@@ -60,8 +60,13 @@ class ScaffoldRerunTests(unittest.TestCase):
         for source in BUNDLE_SOURCES:
             with self.subTest(bundle_source=source):
                 self.setUp()
-                self._init(source)
+                published = self._init(source)
                 after_first = self._tree()
+                # An `initialize` that published nothing would make both trees
+                # identical and the comparison below true for the wrong reason.
+                self.assertIn(".shamway.toml", after_first)
+                self.assertTrue(published, f"init({source}) reported no written files")
+                self.assertGreater(len(after_first), 3, f"init({source}) scaffolded almost nothing")
                 self._init(source)
                 self.assertEqual(after_first, self._tree())
 

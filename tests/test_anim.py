@@ -29,6 +29,7 @@ from sevendtd_asset_pipeline.bundle_writer import (
     build_bundle,
 )
 from sevendtd_asset_pipeline.capabilities import has_capability
+from sevendtd_asset_pipeline.gltf_scene import parse_gltf
 
 REVISION = "2022.3.62f2"
 needs_unityz = unittest.skipUnless(
@@ -708,8 +709,18 @@ class BoneColliderTests(unittest.TestCase):
         bundle = self.root / "bones.unity3d"
         bundle.write_bytes(build_bundle(objects, REVISION, "bones.unity3d"))
         trees = read_objects(bundle)
-        # Box/Capsule/Sphere colliders on the creature's bone GameObjects.
+        # Box/Capsule/Sphere colliders on the creature's bone GameObjects. One
+        # collider anywhere in the bundle would satisfy `assertIn(65, trees)`,
+        # so count them: bindCollider looks each bone up, and the 18 bones it
+        # does not find become PhysicsBodyNullColliders and float.
+        joints = parse_gltf(out).skins[0].joints
+        self.assertGreater(len(joints), 1, "the rig must have bones for this to mean anything")
         self.assertIn(65, trees, "no BoxCollider components: bindCollider makes null colliders")
+        self.assertEqual(
+            len(joints),
+            len(trees[65]),
+            f"{len(trees[65])} colliders for {len(joints)} bones: a bone without one floats",
+        )
 
     def setUp(self) -> None:
         import tempfile

@@ -64,6 +64,10 @@ class StagingRerunTests(unittest.TestCase):
         config, bundle = self._external_mod()
         stage_bundle(config, bundle)
         first = self._modlet(config)
+        # Two equal trees also describe a stage that published nothing, so
+        # name the artifacts the comparison is supposed to be about.
+        self.assertIn("Resources/example.unity3d", first)
+        self.assertIn("tools/shamway/manifests/example.unity3d.manifest", first)
         stage_bundle(config, bundle)
         self.assertEqual(first, self._modlet(config))
         # A temporary name that outlived its run would be a third artifact the

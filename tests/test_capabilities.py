@@ -100,8 +100,17 @@ class CapabilityTests(unittest.TestCase):
     def test_report_is_json_serializable(self) -> None:
         import json
 
-        payload = json.dumps([capability.as_dict() for capability in capabilities()])
-        self.assertEqual(len(REGISTRY), len(json.loads(payload)))
+        reported = [capability.as_dict() for capability in capabilities()]
+        payload = json.dumps(reported)
+        # A round trip, not a length: an `as_dict` that dropped `unlocks`,
+        # `install` or `unusable_reason` keeps the count and starves every
+        # consumer of the fields `doctor` and `status` publish.
+        self.assertEqual(reported, json.loads(payload))
+        for entry in reported:
+            with self.subTest(capability=entry.get("name")):
+                self.assertLessEqual(
+                    {"name", "kind", "available", "unlocks", "install"}, set(entry)
+                )
 
     def test_require_names_the_capability_and_its_install_command(self) -> None:
         with (

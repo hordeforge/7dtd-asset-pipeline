@@ -118,10 +118,13 @@ class ScriptRegistryTests(unittest.TestCase):
         commit = re.search(r'^UNITYZ_PINNED_COMMIT="([^"]+)"', installer, re.M)
         assert pinned and commit, "install-unityz.sh declares no pinned version and commit"
         pages = (*sorted((root / "docs").rglob("*.md")), root / "README.md")
+        versioned: set[str] = set()
+        committed: set[str] = set()
         for page in pages:
             text = page.read_text(encoding="utf-8")
             with self.subTest(page=page.name):
                 for match in re.finditer(r"pinned unityz (\d+\.\d+\.\d+)", text):
+                    versioned.add(match.group(1))
                     self.assertEqual(
                         match.group(1),
                         pinned.group(1),
@@ -129,11 +132,25 @@ class ScriptRegistryTests(unittest.TestCase):
                         f"install-unityz.sh pins {pinned.group(1)}",
                     )
                 for match in re.finditer(r"pinned commit \(`([0-9a-f]{40})`\)", text):
+                    committed.add(match.group(1))
                     self.assertEqual(
                         match.group(1),
                         commit.group(1),
                         f"{page.name} names a pinned commit the installer no longer pins",
                     )
+        # A phrase that stops appearing everywhere leaves the loops above with
+        # nothing to iterate, and a doc drift test that checks nothing is worse
+        # than no test: the next pin moves and the pages stay stale.
+        self.assertEqual(
+            {pinned.group(1)},
+            versioned,
+            "no documentation page states the pinned unityz version the installer pins",
+        )
+        self.assertEqual(
+            {commit.group(1)},
+            committed,
+            "no documentation page states the pinned commit the installer pins",
+        )
 
     def test_playtest_acceptance_refuses_mixed_visual_suites(self) -> None:
         """Load, prefab-look, and block-place must not share one PLAYTEST_SUITE."""

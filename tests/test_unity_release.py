@@ -107,6 +107,12 @@ class UnityReleaseTests(unittest.TestCase):
         entry["downloads"].insert(0, "https://example.invalid/not-an-object")
         release = parse_release(payload, "2022.3.62f2")
         self.assertEqual("7670c08855a9", release.changeset)
+        # Skipping the bad entry must not skip the good one after it: assert
+        # the surviving data, not only that a release came back.
+        self.assertEqual("7dffabdd28d7f2e5d5f2f1f8f2323d21", release.editor.md5)
+        self.assertIsNotNone(release.windows_mono)
+        assert release.windows_mono is not None
+        self.assertEqual("b5adce741fb7633c039e216348110332", release.windows_mono.md5)
 
     def test_non_dict_module_entries_are_skipped_not_crashed(self) -> None:
         payload = json.loads(json.dumps(PAYLOAD))
@@ -115,6 +121,10 @@ class UnityReleaseTests(unittest.TestCase):
         linux["modules"].insert(0, "windows-mono")
         release = parse_release(payload, "2022.3.62f2")
         self.assertIsNotNone(release.windows_mono)
+        # A module carried past the bad entry with an absent digest is a
+        # download that silently fails its integrity check at install time.
+        assert release.windows_mono is not None
+        self.assertEqual("b5adce741fb7633c039e216348110332", release.windows_mono.md5)
 
     def test_a_non_unity_cdn_url_is_refused(self) -> None:
         payload: dict[str, object] = {

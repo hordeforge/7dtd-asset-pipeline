@@ -98,6 +98,11 @@ class PackagingMetadataTests(ReleaseContractCase):
         build = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
             "build-system"
         ]
+        # The repository pins the backend exactly, so an `==` pin is the form
+        # this actually ships. Read the lowest version either spelling admits:
+        # `==84.0.0` and `>=84` both floor the build at 84, and either may be
+        # too low for the PEP 639 metadata below. Matching only `>=` read the
+        # deliberate pin as "no floor declared" and failed the release gate.
         floors: list[int] = []
         for requirement in build["requires"]:
             # An exact pin is a floor: it admits nothing below that version.

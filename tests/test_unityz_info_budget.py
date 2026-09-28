@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import json
 import os
-import resource
 import shutil
+import subprocess
 import time
 import unittest
 from pathlib import Path
 
-from sevendtd_asset_pipeline.unityz import invoke
+from sevendtd_asset_pipeline.unityz import executable, invoke
 
 # Measured 0.006 s / 13768 kB on the installed trees bundle (unityz 0.1.6).
 INFO_BUDGET_SECONDS = 0.2
@@ -31,6 +31,24 @@ def _trees_bundle() -> Path | None:
     return path if path.is_file() else None
 
 
+def _peak_rss_kb(argv: list[str]) -> int:
+    """The peak RSS of one specific child, in kB.
+
+    `getrusage(RUSAGE_CHILDREN)` is a high-water mark over *every* child the
+    test process has ever reaped, so reading it after one run reports whichever
+    earlier test spawned the ffmpeg or Blender that used the most memory, not
+    this process, and the budget then fails for a caller that is not under
+    measurement. `os.wait4` reports the rusage of the one pid it reaped.
+    """
+    with subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as probe:
+        _, status, usage = os.wait4(probe.pid, 0)
+        # Reaped above, so the context manager's own wait() has nothing to do.
+        probe.returncode = os.waitstatus_to_exitcode(status)
+    if probe.returncode != 0:
+        raise AssertionError(f"{argv[0]} exited {probe.returncode} while being measured")
+    return int(usage.ru_maxrss)
+
+
 class UnityzInfoBudgetTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("unityz"), "needs unityz")
     def test_trees_fallback_info_stays_inside_the_metadata_budget(self) -> None:
@@ -40,11 +58,9 @@ class UnityzInfoBudgetTests(unittest.TestCase):
                 "SEVEN_DAYS_TO_DIE_DIR is unset or has no Data/Bundles/Standalone/Entities/trees"
             )
 
-        _ = resource.getrusage(resource.RUSAGE_CHILDREN)
         started = time.perf_counter()
         result = invoke("info", str(trees), "--json", subject=str(trees))
         elapsed = time.perf_counter() - started
-        rss_kb = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
 
         self.assertEqual(result.returncode, 0, result.stderr)
         report = json.loads(result.stdout)
@@ -63,6 +79,8 @@ class UnityzInfoBudgetTests(unittest.TestCase):
             f"unityz info --json on {trees} took {elapsed:.3f}s "
             f"(budget {INFO_BUDGET_SECONDS}s; whole-container was 1.22s)",
         )
+
+        rss_kb = _peak_rss_kb([executable(), "info", str(trees), "--json"])
         self.assertLess(
             rss_kb,
             INFO_BUDGET_RSS_KB,

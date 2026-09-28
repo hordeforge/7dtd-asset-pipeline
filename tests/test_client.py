@@ -1248,9 +1248,13 @@ class CliTests(unittest.TestCase):
         import contextlib
         import io
         import json
+        from unittest import mock
 
         out = io.StringIO()
-        with contextlib.redirect_stdout(out):
+        # `game_dir_from_env` reads the environment, so a host that exports
+        # SEVEN_DAYS_TO_DIE_DIR would answer with a real install and this test
+        # would fail for a reason of the developer's shell, not of the code.
+        with mock.patch.dict(os.environ, {}, clear=True), contextlib.redirect_stdout(out):
             code = client.main(["where", "--json"])
         self.assertEqual(code, 0)
         data = json.loads(out.getvalue())

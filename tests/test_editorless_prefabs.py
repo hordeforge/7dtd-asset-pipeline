@@ -702,9 +702,14 @@ class BoneHashTests(unittest.TestCase):
 
     def test_origin_hips_crc_is_the_harvested_nomad_value(self) -> None:
         self.assertEqual(1722913273, bone_name_hash("Origin/Hips"))
-        self.assertNotEqual(1722913273, bone_name_hash("Hips"))
-        self.assertNotEqual(1722913273, bone_name_hash("hips"))
-        self.assertNotEqual(1722913273, bone_name_hash("gearFemaleNomadPrefab/Origin/Hips"))
+        # The other paths must hash to different digests, checked against each
+        # other rather than against the constant: `assertNotEqual(1722913273, ...)`
+        # is satisfied by a function that returns one value for every string.
+        self.assertNotEqual(bone_name_hash("Hips"), bone_name_hash("hips"))
+        self.assertNotEqual(bone_name_hash("Origin/Hips"), bone_name_hash("Hips"))
+        self.assertNotEqual(
+            bone_name_hash("Origin/Hips"), bone_name_hash("gearFemaleNomadPrefab/Origin/Hips")
+        )
 
     def test_origin_hips_path_is_the_hashed_string(self) -> None:
         source = write_skinned_glb(self.root / "gear.glb", origin=True)

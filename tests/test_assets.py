@@ -75,7 +75,10 @@ def write_png(
         + chunk(b"IDAT", zlib.compress(raw))
         + chunk(b"IEND", b"")
     )
-    assert channels  # the pixel table above must stay in step with colour_type
+    # The pixel table is keyed by colour_type and the scanline it produces has
+    # to be `channels` bytes per pixel, or the image is a corrupt fixture and
+    # every check that reads it is testing nothing.
+    assert all(len(row) - 1 == width * channels for row in rows), (colour_type, channels)
 
 
 def write_clip(

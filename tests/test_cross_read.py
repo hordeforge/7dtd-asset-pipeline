@@ -76,7 +76,9 @@ class CrossReadTests(unittest.TestCase):
         unityz = shutil.which("unityz")
         assert unityz is not None
         info = json.loads(
-            subprocess.check_output([unityz, "info", str(BUNDLE), "--json", "--objects"], text=True)
+            subprocess.check_output(
+                [unityz, "info", str(BUNDLE), "--json", "--objects"], text=True, timeout=120
+            )
         )
         serialized = info["nodes_list"][0]["serialized"]
         self.assertEqual(seen["revision"], serialized["unity"])
@@ -89,6 +91,6 @@ class CrossReadTests(unittest.TestCase):
         self.assertEqual(ours, theirs)
 
         container = json.loads(
-            subprocess.check_output([unityz, "show", str(BUNDLE), "1"], text=True)
+            subprocess.check_output([unityz, "show", str(BUNDLE), "1"], text=True, timeout=120)
         )
         self.assertEqual(seen["container"], [name for name, _entry in container["m_Container"]])

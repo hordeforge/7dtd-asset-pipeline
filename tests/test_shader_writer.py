@@ -561,12 +561,28 @@ class GLCoreRecordTailTests(unittest.TestCase):
         """
         for half in ("VERTEX", "FRAGMENT"):
             body = shader_blob.UNLIT_GLSL.split(f"#ifdef {half}", 1)[1].split("#endif", 1)[0]
-            if "layout(location" not in body:
-                continue
+            # Both halves declare the pragma whether or not they currently use
+            # it, so this holds even if every `layout(location=...)` is removed
+            # and the conditional below stops checking anything.
             self.assertIn(
                 "#extension GL_ARB_explicit_attrib_location : require",
                 body,
-                f"the {half} half uses layout(location=...) under #version 150 without enabling it",
+                f"the {half} half compiles under #version 150 without enabling the extension",
+            )
+            if "layout(location" not in body:
+                continue
+            # GLSL reads the pragma top to bottom, so declaring the extension
+            # after the first use is the same failure as not declaring it.
+            # The halves explain the pragma in a comment, so the comparison
+            # reads the code with `//` lines removed: a comment mentioning
+            # `layout(location = ...)` is not a use.
+            code = "\n".join(
+                line for line in body.splitlines() if not line.lstrip().startswith("//")
+            )
+            self.assertLess(
+                code.index("#extension GL_ARB_explicit_attrib_location"),
+                code.index("layout(location"),
+                f"the {half} half uses layout(location=...) before enabling the extension",
             )
 
 
@@ -607,6 +623,10 @@ class GLSLCompilesTests(unittest.TestCase):
                     capture_output=True,
                     text=True,
                     check=False,
+                    # A wedged compiler must fail this test, not hang the suite
+                    # with no output: every other external process here is
+                    # bounded, and a read is milliseconds of work.
+                    timeout=60,
                 )
                 self.assertEqual(
                     finished.returncode,

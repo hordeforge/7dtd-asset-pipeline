@@ -327,14 +327,24 @@ class AnimalRigTests(unittest.TestCase):
             load_rig(path)
 
     def test_a_spec_scale_must_be_positive(self) -> None:
-        for value in (0, -1, "big"):
-            with self.subTest(value):
+        # Two branches, two messages: "must be a" matches both, so a validator
+        # that accepted a negative scale while still rejecting a string would
+        # pass every subtest here.
+        for value, message in ((0, "must be a positive number"), (-1, "must be a positive number")):
+            with self.subTest(value=value):
                 path = write_spec(
                     self.tmp / "bad.json",
                     {"name": "bad", "scale": value, "bones": [{"name": "A", "parent": None}]},
                 )
-                with self.assertRaisesRegex(PipelineError, "must be a"):
+                with self.assertRaisesRegex(PipelineError, message):
                     load_rig(path)
+        with self.subTest(value="big"):
+            path = write_spec(
+                self.tmp / "bad.json",
+                {"name": "bad", "scale": "big", "bones": [{"name": "A", "parent": None}]},
+            )
+            with self.assertRaisesRegex(PipelineError, r'"scale" must be a number'):
+                load_rig(path)
 
     def test_scaled_resizes_positions_and_scale_together(self) -> None:
         rig = load_rig("quadruped")

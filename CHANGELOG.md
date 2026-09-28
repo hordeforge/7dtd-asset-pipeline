@@ -97,6 +97,19 @@ tag has no changelog section.
 
 ### Fixed
 
+- `PLAYTEST_LOCK_STALE_SEC` is refused when it is shorter than two heartbeat
+  beats. A hold rewrites its heartbeat every 30 s, so a window of 20 s (or 30)
+  expired a live holder's own claim between its beats: `lock_holder` read the
+  session free while it was still writing to the lock, and the next caller
+  acquired over a run in progress, which is the overwrite the lock exists to
+  prevent. A non-numeric or non-positive value was already refused; a
+  plausible-looking small one now is too.
+- `read_manifest` returns captures in `captured_at` order, as its docstring
+  said, instead of the order the file happens to hold. Adoption stamps the
+  instant a frame was taken, so a clip captured yesterday and adopted today
+  sorted behind one captured an hour ago, and `client capture --list` printed
+  a timeline that contradicted the stamp beside each entry. A record whose
+  stamp cannot be read keeps its position rather than being sorted on a guess.
 - A hold that borrowed a lock the same session already held no longer clears
   it on the way out. An orchestrator exports `PLAYTEST_SESSION_ID` for the
   whole run, so every command it ran inherited the id, took a borrow, and

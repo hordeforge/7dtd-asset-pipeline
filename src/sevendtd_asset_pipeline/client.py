@@ -185,6 +185,13 @@ LOCK_STALE_ENV = "PLAYTEST_LOCK_STALE_SEC"
 DEFAULT_LOCK_RELATIVE = Path(".cache") / "7dtd-playtest" / "playtest_running"
 DEFAULT_LOCK_STALE_SECONDS = 120.0
 LOCK_HEARTBEAT_SECONDS = 30.0
+# A staleness window has to outlast the beat that keeps it fresh. A hold
+# rewrites its heartbeat every LOCK_HEARTBEAT_SECONDS, so a window at or below
+# one beat expires a live holder between its own beats: the next `lock_holder`
+# reads that session free and a second session takes the lock over the top of
+# it, which is the overwrite the lock exists to prevent. Two beats leaves a
+# whole missed beat of slack.
+MIN_STALE_HEARTBEATS = 2
 
 
 def lock_path(env: Mapping[str, str] | None = None) -> Path:
@@ -216,6 +223,11 @@ def _stale_seconds(env: Mapping[str, str] | None = None) -> float:
     free — which is the path that overwrites another session's live lock and
     deploys into their run. An unusable value is a configuration error and is
     named as one.
+
+    Short of a full heartbeat interval is unusable in the same way, and less
+    visibly: `PLAYTEST_LOCK_STALE_SEC=20` on a host that beats every 30 s
+    expires the holder's own claim before its next beat lands, so the lock
+    reads free while the session is provably still writing to it.
     """
     environment = os.environ if env is None else env
     raw = environment.get(LOCK_STALE_ENV, "").strip()
@@ -232,6 +244,15 @@ def _stale_seconds(env: Mapping[str, str] | None = None) -> float:
         raise PipelineError(
             f"{LOCK_STALE_ENV}={raw!r} must be a positive number of seconds; a window of "
             "zero or less reads every claim as free and takes over a live session's lock"
+        )
+    shortest = MIN_STALE_HEARTBEATS * LOCK_HEARTBEAT_SECONDS
+    if seconds < shortest:
+        raise PipelineError(
+            f"{LOCK_STALE_ENV}={raw!r} is shorter than the {shortest:g}s a holder needs to "
+            f"stay live: a hold beats every {LOCK_HEARTBEAT_SECONDS:g}s, so a window under "
+            f"{MIN_STALE_HEARTBEATS} beats expires a running session's own claim and hands "
+            f"its lock to the next caller. Use {shortest:g} or more, or unset it for the "
+            f"default of {DEFAULT_LOCK_STALE_SECONDS:g}"
         )
     return seconds
 

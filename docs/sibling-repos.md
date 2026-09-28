@@ -78,7 +78,9 @@ that same file rather than defining a second one:
 
 `PLAYTEST_LOCK_FILE` overrides the path and `PLAYTEST_SESSION_ID` names the
 holder; `PLAYTEST_LOCK_STALE_SEC` (default 120) is how old a heartbeat may get
-before the hold counts as abandoned. Override the path only if everything
+before the hold counts as abandoned, and a window under two 30 s beats is
+refused: it would expire a live hold between its own beats, and the next caller
+would take the lock over a run in progress. Override the path only if everything
 sharing that client overrides it together. A second path is not a second lock,
 it is a holder nobody else can see, which is the failure the lock exists to
 prevent.

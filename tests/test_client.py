@@ -711,6 +711,34 @@ class LockTests(unittest.TestCase):
                 "other-20260823-120000-abc",
             )
 
+    def test_a_window_shorter_than_the_heartbeat_is_refused(self) -> None:
+        """`PLAYTEST_LOCK_STALE_SEC=20` with a 30 s beat expires a live hold.
+
+        Between two beats the holder's own claim ages past the window, so
+        `lock_holder` reads the session free while it is still writing to the
+        lock, and the next caller acquires over a run in progress. Refused at
+        the same place as a non-numeric window: it is a configuration error
+        with the same consequence.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._lock(
+                Path(tmp),
+                running="yes",
+                session="other-20260823-120000-abc",
+                heartbeat=self._stamp(5),
+            )
+            for value in ("1", "29", str(client.LOCK_HEARTBEAT_SECONDS)):
+                with (
+                    self.subTest(value=value),
+                    self.assertRaisesRegex(PipelineError, client.LOCK_STALE_ENV),
+                ):
+                    client.lock_holder(path, env={client.LOCK_STALE_ENV: value})
+            shortest = client.MIN_STALE_HEARTBEATS * client.LOCK_HEARTBEAT_SECONDS
+            self.assertEqual(
+                client.lock_holder(path, env={client.LOCK_STALE_ENV: str(shortest)}),
+                "other-20260823-120000-abc",
+            )
+
     def test_deploy_and_launch_refuse_while_another_session_holds_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._lock(

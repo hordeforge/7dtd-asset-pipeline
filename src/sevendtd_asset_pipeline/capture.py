@@ -39,7 +39,7 @@ import secrets
 import shutil
 import subprocess
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -167,8 +167,36 @@ def _utc_mtime(mtime: float) -> str:
     return datetime.fromtimestamp(mtime, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _captured_instant(record: Mapping[str, object]) -> datetime | None:
+    """A record's `captured_at` as an aware datetime, or None when unreadable.
+
+    The stamp is a wall-clock-independent UTC instant (`_utc_mtime`), so it
+    orders captures across a host that changed timezone or a machine whose
+    clock moved. An offset-less stamp is UTC, as everywhere else in this
+    repository's protocol; anything else is not ordered rather than guessed.
+    """
+    value = record.get("captured_at")
+    if not isinstance(value, str) or not value:
+        return None
+    stamp = f"{value[:-1]}+00:00" if value.endswith("Z") else value
+    try:
+        moment = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    return moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment
+
+
 def read_manifest(root: Path) -> list[dict[str, object]]:
-    """Every capture recorded under `root`, oldest first. Missing is empty."""
+    """Every capture recorded under `root`, oldest first. Missing is empty.
+
+    Oldest first is the `captured_at` order, not the order the file happens to
+    hold: adoption records the instant the frame was taken, so a clip captured
+    yesterday and adopted today belongs ahead of one captured an hour ago, and
+    a manifest that listed it last would contradict the stamp printed beside
+    it. Entries sharing a second (the stamp's resolution) keep their recorded
+    order, and a record whose stamp cannot be read is left where it is rather
+    than sorted on a guess.
+    """
     path = Path(root) / MANIFEST_NAME
     if not path.is_file():
         return []
@@ -178,7 +206,15 @@ def read_manifest(root: Path) -> list[dict[str, object]]:
         raise PipelineError(f"cannot read the capture manifest {path}: {exc}") from exc
     if not isinstance(data, list):
         raise PipelineError(f"{path} is not a list of captures; move it aside")
-    return data
+    ordered: list[tuple[datetime, dict[str, object]]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            return data
+        moment = _captured_instant(item)
+        if moment is None:
+            return data
+        ordered.append((moment, item))
+    return [item for _, item in sorted(ordered, key=lambda pair: pair[0])]
 
 
 def _write_manifest(root: Path, entries: list[dict[str, object]]) -> Path:

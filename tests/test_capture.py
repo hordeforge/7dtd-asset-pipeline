@@ -257,6 +257,40 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "not a list"):
             read_manifest(self.evidence)
 
+    def test_the_manifest_reads_in_capture_order_not_file_order(self) -> None:
+        """Adoption stamps the instant the frame was taken, not when it was filed.
+
+        A clip captured yesterday and adopted today must sort ahead of one
+        captured an hour ago, or `client capture --list` contradicts the
+        `captured_at` printed beside every entry. Offsets are compared as
+        instants, so 14:00+02:00 is the same row as 12:00Z.
+        """
+        self.evidence.mkdir(parents=True)
+        rows = [
+            {"label": "adopted-yesterday", "captured_at": "2024-07-04T14:00:00+02:00"},
+            {"label": "filed-first", "captured_at": "2024-07-05T12:00:00Z"},
+            {"label": "same-second", "captured_at": "2024-07-05T12:00:00Z"},
+        ]
+        (self.evidence / MANIFEST_NAME).write_text(json.dumps(rows), encoding="utf-8")
+        self.assertEqual(
+            ["adopted-yesterday", "filed-first", "same-second"],
+            [entry["label"] for entry in read_manifest(self.evidence)],
+        )
+
+    def test_an_unreadable_stamp_keeps_the_recorded_order(self) -> None:
+        """A hand-edited manifest is not re-ordered on a stamp nothing can read."""
+        self.evidence.mkdir(parents=True)
+        rows = [
+            {"label": "first"},
+            {"label": "second", "captured_at": "not a timestamp"},
+            {"label": "third"},
+        ]
+        (self.evidence / MANIFEST_NAME).write_text(json.dumps(rows), encoding="utf-8")
+        self.assertEqual(
+            ["first", "second", "third"],
+            [entry["label"] for entry in read_manifest(self.evidence)],
+        )
+
     def test_recording_a_missing_image_fails(self) -> None:
         with self.assertRaises(PipelineError):
             record_existing(self.root / "absent.png", "x", "", self.evidence)

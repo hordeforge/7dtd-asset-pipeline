@@ -42,15 +42,25 @@ def _candidates(game_dir: Path) -> Iterator[Path]:
 def game_unity_version(game_dir: Path) -> tuple[str, Path]:
     validate_game_dir(game_dir)
     seen: set[Path] = set()
+    last: str | None = None
     for candidate in _candidates(game_dir):
         if candidate in seen or not candidate.is_file():
             continue
         seen.add(candidate)
         try:
             return inspect_bundle(candidate).unity_version, candidate
-        except PipelineError:
-            continue
-    raise PipelineError(f"no readable UnityFS bundle found below {game_dir / 'Data' / 'Bundles'}")
+        except PipelineError as exc:
+            # Every candidate failing produces one identical message naming
+            # only a directory. An unreadable install, a missing reader, and a
+            # genuinely corrupt bundle then read the same, and doctor/status/
+            # validate all inherit that. Keep the preferred candidate's own
+            # reason: it is the one an operator can act on.
+            if last is None:
+                last = f"{candidate}: {exc}"
+    detail = f"; first failure was {last}" if last else ""
+    raise PipelineError(
+        f"no readable UnityFS bundle found below {game_dir / 'Data' / 'Bundles'}{detail}"
+    )
 
 
 def project_unity_version(project: Path) -> str:

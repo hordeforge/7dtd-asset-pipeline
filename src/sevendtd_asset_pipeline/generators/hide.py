@@ -463,14 +463,26 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.atlas:
-        manifest = json.loads(Path(args.atlas).read_text(encoding="utf-8"))
+        try:
+            manifest = json.loads(Path(args.atlas).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise SystemExit(
+                f"ERROR: cannot read the atlas manifest {args.atlas}: {error}"
+            ) from error
         cells = manifest.get("parts")
         roles = manifest.get("roles")
         grid = manifest.get("grid")
         if not isinstance(cells, dict) or not cells:
             raise SystemExit(f"ERROR: {args.atlas} has no per-part cells")
         if not isinstance(roles, dict):
-            roles = {}
+            # The whole point of an atlas manifest is the per-part roles, and
+            # a misspelled key would otherwise paint every part in the body
+            # colour: a plausible image that is not the one that was asked for.
+            raise SystemExit(
+                f"ERROR: {args.atlas} has no 'roles' mapping; without it every part is "
+                "painted the body colour. Re-run `shamway generate entity --atlas` to "
+                "write one."
+            )
         if not isinstance(grid, int) or grid < 1:
             grid = math.ceil(math.sqrt(len(cells)))
         paw = (

@@ -232,18 +232,20 @@ def validate_mod(
     elif config.game_dir:
         expected_version = game_unity_version(config.game_dir)[0]
     else:
-        # Without a game directory the `[unity] version` the mod's own config
-        # records is the next best answer, and it is the same revision
-        # Without a game directory the `[unity] version` the mod's own config
-        # records is the next best answer, and it is the same revision
-        # `build` stamps (see `expected_revision`). That fallback gates the
-        # bundle against the revision it was written at, which is not the same
-        # gate: nothing here was checked against an installed game, and holding
-        # the bundle's revision against the mod's own configuration is not
-        # holding it against the installed game, which is what this gate is for
-        # and what nothing else here does. The repository's own rule is that an
-        # unrun gate must never read like a passed one, and the line below is
-        # emitted whether or not the config recorded a version.
+        # The gate is off in this branch whatever else is true: with no game
+        # directory there is no installed revision to hold the bundle's
+        # against. Without one, the `[unity] version` the mod's own config
+        # records is the next best answer, and it is the same revision `build`
+        # stamps (see `expected_revision`), so a bundle built for something
+        # else still fails here. That fallback gates the bundle against the
+        # revision it was written at, which is not the same gate: nothing here
+        # was checked against an installed game, and holding the bundle's
+        # revision against the mod's own configuration is not holding it
+        # against the installed game, which is what this gate is for and what
+        # nothing else here does. It is not evidence the installed game
+        # accepts it, and the repository's own rule is that an unrun gate must
+        # never read like a passed one, so the line below is emitted whether
+        # or not the config recorded a version.
         expected_version = expected_revision(config)
         not_run.append(
             NOT_RUN_PREFIX + "the game-revision gate: no game directory is configured, so the "

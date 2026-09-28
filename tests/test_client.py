@@ -713,6 +713,22 @@ class LockTests(unittest.TestCase):
             self.assertIsNone(client.lock_holder(self._lock(Path(tmp), running="no")))
             self.assertIsNone(client.lock_holder(Path(tmp) / "absent"))
 
+    def test_a_lock_that_cannot_be_read_is_refused_not_read_free(self) -> None:
+        """An unreadable record is a live claim this caller cannot see.
+
+        EACCES, a read error, a directory where the lock belongs: every one of
+        them returns no fields, so a reader that treats that as free writes
+        into another session's run. Missing is free; unreadable is a refusal.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            unreadable = Path(tmp) / "not-a-lock"
+            unreadable.mkdir()
+            with self.assertRaises(PipelineError) as raised:
+                client.lock_holder(unreadable)
+            self.assertIn(str(unreadable), str(raised.exception))
+            with self.assertRaises(PipelineError):
+                client.read_lock(unreadable)
+
     def test_an_unusable_stale_window_is_refused_not_defaulted(self) -> None:
         """A window that silently became the default, or became zero, is the
         overwrite path: every claim reads free and this session takes over a

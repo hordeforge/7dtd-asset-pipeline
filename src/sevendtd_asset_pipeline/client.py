@@ -209,11 +209,24 @@ def lock_path(env: Mapping[str, str] | None = None) -> Path:
 
 
 def read_lock(path: Path) -> dict[str, str]:
-    """The lock's `key=value` fields. A missing or unreadable file reads free."""
+    """The lock's `key=value` fields. A missing file reads free.
+
+    A file that exists and cannot be read does not: `EACCES` on a lock owned
+    by another account, a read error mid-write, a directory where the file
+    should be. Every one of those is a live claim this caller cannot see, and
+    a caller that reads it as free writes into another session's run, which is
+    the one thing the lock exists to prevent. Refusing is recoverable; taking
+    over a live lock is not.
+    """
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+    except FileNotFoundError:
         return {}
+    except OSError as exc:
+        raise PipelineError(
+            f"cannot read the shared client lock {path}: {exc}; refusing to treat a "
+            "lock this process cannot read as free"
+        ) from exc
     fields: dict[str, str] = {}
     for line in text.splitlines():
         key, separator, value = line.partition("=")
@@ -428,6 +441,7 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
             },
         )
     stop = threading.Event()
+    reported: set[str] = set()
 
     def beat() -> None:
         while not stop.wait(LOCK_HEARTBEAT_SECONDS):
@@ -443,8 +457,19 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
                                 "heartbeat": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                             },
                         )
-            except OSError:
-                continue
+            except (OSError, PipelineError) as exc:
+                # Retried, not fatal: dying here would stale the record while
+                # the client it guards is still running. But a failure that
+                # repeats is a lock nobody is refreshing, so the hold says so
+                # once per distinct cause rather than spinning silently until
+                # another session reclaims a client that is still up.
+                message = str(exc)
+                if message not in reported:
+                    reported.add(message)
+                    print(
+                        f"note: the client-lock heartbeat could not refresh {target}: {message}",
+                        file=sys.stderr,
+                    )
 
     thread = threading.Thread(target=beat, name="playtest-lock-heartbeat", daemon=True)
     thread.start()
@@ -464,8 +489,16 @@ def held_lock(session: str, path: Path | None = None) -> Iterator[Path]:
             with _flocked(target):
                 if not borrowed and lock_holder(target) == session:
                     _write_lock(target, {"running": "no"})
-        except OSError:
-            pass
+        except (OSError, PipelineError) as exc:
+            # The record keeps reading `running=yes` for a session that is
+            # gone, so the next command here refuses until the window expires.
+            # That is the safe direction, but it is a surprise without a word
+            # about where it came from.
+            print(
+                f"note: the client lock {target} was not released: {exc}; it reads held "
+                f"for up to {_stale_seconds():g}s",
+                file=sys.stderr,
+            )
 
 
 @contextmanager

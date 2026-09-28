@@ -443,9 +443,18 @@ def record_existing_clip(
             shutil.rmtree(staged, ignore_errors=True)
             raise
 
-    captured_at = _utc_mtime(
-        max(source.stat().st_mtime, destination.stat().st_mtime if in_place else 0)
-    )
+    # Hash the tree that is about to become the destination, and take its
+    # stamp, before the lock and before the earlier recording is removed. Read
+    # them afterwards and a single unreadable frame would destroy the previous
+    # sign-off, leave the new tree on disk, and put a traceback on the terminal
+    # in place of the ERROR line every other failure here produces.
+    files = _clip_files(staged if staged is not None else destination)
+    try:
+        captured_at = _utc_mtime(
+            max(source.stat().st_mtime, destination.stat().st_mtime if in_place else 0)
+        )
+    except OSError as exc:
+        raise PipelineError(f"cannot read the timestamps of the clip being adopted: {exc}") from exc
     try:
         with _manifest_lock(directory):
             if not in_place:
@@ -459,11 +468,6 @@ def record_existing_clip(
                 if staged is None:  # unreachable: staged is set whenever not in_place
                     raise PipelineError("internal error: no staged copy for the adopted clip")
                 staged.replace(destination)
-            files = [
-                _clip_file(entry, destination)
-                for entry in sorted(destination.rglob("*"))
-                if entry.is_file()
-            ]
             entry = ClipCapture(
                 label=label.strip(),
                 observable=observable.strip(),
@@ -512,6 +516,25 @@ def _skip_non_media(directory: str, names: list[str]) -> set[str]:
         for name in names
         if not (base / name).is_dir() and (base / name).suffix.lower() not in _CLIP_SUFFIXES
     }
+
+
+def _clip_files(root: Path) -> list[ClipFile]:
+    """Every file in an adopted clip, digested, in a stable order.
+
+    A read error names the file it was reading: without one, a frame that
+    cannot be hashed is a bare `OSError` escaping to a traceback, and the
+    operator is left guessing which of several thousand frames failed.
+    """
+    entries = sorted(root.rglob("*"))
+    files: list[ClipFile] = []
+    for entry in entries:
+        if not entry.is_file():
+            continue
+        try:
+            files.append(_clip_file(entry, root))
+        except OSError as exc:
+            raise PipelineError(f"cannot read the adopted clip file {entry}: {exc}") from exc
+    return files
 
 
 def _clip_file(path: Path, root: Path) -> ClipFile:

@@ -536,7 +536,9 @@ overrides it. Without the encoder the bundle still builds, carries no
 platform 18, and the synthesize prints a degraded-lane caveat — a
 `-force-vulkan` client then draws the shader magenta ("not supported on this
 GPU"), which is the failure that motivated both the pinned install and the
-printed caveat.
+printed caveat. A successful load is cached and its absence is not, so a
+`shamway serve` session that starts before the encoder is installed picks it up
+on the next build rather than packing bare shaders for the rest of its life.
 The eliminations that got there are measured in
 [Improvements](../status/improvements.md); the decisive one was the parameter
 record's entry encoding — `(stage << 24) | (kind << 16) | slot`, see

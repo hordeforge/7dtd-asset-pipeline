@@ -224,8 +224,7 @@ def _library_candidates() -> list[Path]:
 
 
 @functools.lru_cache(maxsize=1)
-def smolv_library() -> ctypes.CDLL | None:
-    """The zmol-v shared library, or None when it is not installed."""
+def _loaded_smolv_library() -> ctypes.CDLL | None:
     for candidate in _library_candidates():
         if not candidate.is_file():
             continue
@@ -244,6 +243,25 @@ def smolv_library() -> ctypes.CDLL | None:
         library.zmolv_free.restype = None
         return library
     return None
+
+
+def smolv_library() -> ctypes.CDLL | None:
+    """The zmol-v shared library, or None when it is not installed.
+
+    A load is cached: it is an open handle to a mapped object, and re-probing
+    it per shader would reopen the same file each time. Absence is not cached.
+    The other probes in this module are deliberately recomputed on every ask
+    (`_availability`), because a `shamway serve` session outlives the install
+    its own error message calls for, and a frozen `None` would leave that
+    session reporting the Vulkan lane unavailable and packing every later
+    shader without its Vulkan sub-program. A miss drops the cached answer so
+    the next ask re-probes, which costs the handful of `Path.is_file()` calls
+    an uncached probe already paid.
+    """
+    library = _loaded_smolv_library()
+    if library is None:
+        _loaded_smolv_library.cache_clear()
+    return library
 
 
 def _zmolv_present(_probe: str) -> str | None:

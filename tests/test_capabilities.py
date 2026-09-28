@@ -45,6 +45,48 @@ class CapabilityTests(unittest.TestCase):
             self.assertIn("GEMINI_API_KEY", message)
             self.assertIn("review-audio", message)
 
+    def test_a_missing_smolv_library_is_re_probed_not_remembered_absent(self) -> None:
+        """A session that starts before the library is installed must see it later.
+
+        `shamway serve` outlives an install. A cached `None` would leave that
+        session reporting the Vulkan lane unavailable and packing every later
+        shader without its Vulkan sub-program, silently, for the rest of its
+        life. A successful load stays cached: it is an open handle.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from sevendtd_asset_pipeline.capabilities import _loaded_smolv_library, smolv_library
+
+        _loaded_smolv_library.cache_clear()
+        self.addCleanup(_loaded_smolv_library.cache_clear)
+        library = mock.MagicMock()
+        probes: list[bool] = []
+        installed: list[Path] = []
+
+        def candidates() -> list[Path]:
+            probes.append(bool(installed))
+            return list(installed)
+
+        with (
+            tempfile.TemporaryDirectory() as scratch,
+            mock.patch("sevendtd_asset_pipeline.capabilities._library_candidates", candidates),
+            mock.patch("sevendtd_asset_pipeline.capabilities.ctypes.CDLL", return_value=library),
+        ):
+            self.assertIsNone(smolv_library())
+            self.assertIsNone(smolv_library())
+            self.assertEqual(len(probes), 2, "a miss must be re-probed, not remembered")
+
+            staged = Path(scratch) / "libzmolv.so"
+            staged.write_bytes(b"")
+            installed.append(staged)
+            self.assertIs(smolv_library(), library, "the install must become visible")
+
+            # A load is not re-probed: the handle is already open.
+            installed.clear()
+            self.assertIs(smolv_library(), library)
+            self.assertEqual(len(probes), 3)
+
     def test_extras_tools_are_probed_without_being_required(self) -> None:
         names = {spec.name for spec in REGISTRY}
         self.assertIn("compressonatorcli", names)

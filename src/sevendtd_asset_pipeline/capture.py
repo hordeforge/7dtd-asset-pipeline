@@ -453,7 +453,9 @@ def record_existing_clip(
                     raise PipelineError("internal error: no staged copy for the adopted clip")
                 staged.replace(destination)
             files = [
-                _clip_file(entry) for entry in sorted(destination.rglob("*")) if entry.is_file()
+                _clip_file(entry, destination)
+                for entry in sorted(destination.rglob("*"))
+                if entry.is_file()
             ]
             entry = ClipCapture(
                 label=label.strip(),
@@ -505,8 +507,20 @@ def _skip_non_media(directory: str, names: list[str]) -> set[str]:
     }
 
 
-def _clip_file(path: Path) -> ClipFile:
-    return ClipFile(name=path.name, sha256=evidence.sha256_file(path)[0], bytes=path.stat().st_size)
+def _clip_file(path: Path, root: Path) -> ClipFile:
+    """One adopted file, addressed by its path inside the clip directory.
+
+    A bare basename is not an address: `_skip_non_media` descends into
+    subdirectories because a clip nests its frames one level down in some
+    harnesses, and two harnesses can both contribute `frame-0001.png`. The
+    relative POSIX path is what locates the file in the adopted tree, and it is
+    what a later `review-video` reads back.
+    """
+    return ClipFile(
+        name=path.relative_to(root).as_posix(),
+        sha256=evidence.sha256_file(path)[0],
+        bytes=path.stat().st_size,
+    )
 
 
 def record_existing(

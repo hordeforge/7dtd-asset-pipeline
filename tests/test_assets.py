@@ -377,6 +377,31 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(44_100, len(first))
 
+    def test_a_non_positive_duration_is_refused_rather_than_written_empty(self) -> None:
+        """`--seconds 0` divides by itself only in a loop that never runs.
+
+        Every per-sample `time / duration` sits behind a `for` over the time
+        axis, so a zero duration raises nothing, returns no samples, and the
+        command wrote a zero-frame WAV and printed a success line. bomb-whistle
+        already refuses; the other two duration voices must say the same.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from sevendtd_asset_pipeline.generators import sound
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for voice in ("whoosh", "hum"):
+                with self.subTest(voice=voice):
+                    with self.assertRaises(SystemExit) as raised:
+                        sound.main([voice, str(root / f"{voice}.wav"), "--seconds", "0"])
+                    self.assertIn("must be positive", str(raised.exception))
+                    self.assertFalse(
+                        (root / f"{voice}.wav").exists(),
+                        "the refusal still left a clip behind",
+                    )
+
     def test_a_fade_reaches_silence_instead_of_stopping_at_1_over_count(self) -> None:
         """A fade that divides by its own sample count never reaches its end.
 

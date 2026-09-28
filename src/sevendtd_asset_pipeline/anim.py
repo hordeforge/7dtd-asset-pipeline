@@ -841,10 +841,14 @@ def clip_fields(
             elif clip.kind == "pose":
                 rotations += rescaled(pose_curves(clip.bone, clip.amplitude, clip.seconds), 1.0)
             else:  # walk — rotation curves on the legs, a position curve on the body
+                # Pair by index, never by zip: `lower_bones` is optional and a
+                # short list (a rig whose last locomotor upper has no child)
+                # truncates zip to the shorter side, and the dropped leg is
+                # then animated by nothing at all — a Walk clip that loads,
+                # packs and plays over a creature that does not move.
                 legs = [
-                    (upper, lower)
-                    for upper, lower in zip(clip.bones, clip.lower_bones, strict=False)
-                    if lower
+                    (upper, clip.lower_bones[index] if index < len(clip.lower_bones) else "")
+                    for index, upper in enumerate(clip.bones)
                 ]
                 cycles = max(1, round(spin_s / clip.seconds)) if spin_s else 1
                 for curve in walk_curves(

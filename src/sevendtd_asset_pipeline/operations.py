@@ -487,7 +487,19 @@ _DEFINITIONS: tuple[Operation, ...] = (
         summary="Load a bundle in a real Unity runtime and report every asset it returns. "
         "The one offline check this pipeline does not also author: it is the engine's own "
         "loader. Needs an editor; proves construction, never acceptance.",
-        parameters=_schema({"bundle": PATH_PARAM}),
+        parameters=_schema(
+            {
+                "bundle": PATH_PARAM,
+                "draw": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "also photograph each prefab and report how much of the "
+                    "frame it filled: the only offline answer to whether it rasterizes. "
+                    "Drops -nographics, so it needs a real graphics device"
+                    " (xvfb-run -a on a headless host)",
+                },
+            }
+        ),
         returns="VerifyReport: bundle, log, ok, assets[{key, type, name, detail}], problems[]",
         cost=MINUTES,
         writes=False,

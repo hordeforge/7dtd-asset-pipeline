@@ -773,6 +773,11 @@ def main(argv: list[str] | None = None) -> int:
         else:
             samples = one
     elif args.command == "whoosh":
+        # A non-positive duration samples no frames, so every divide by it sits
+        # in a loop that never runs and the command writes a zero-frame WAV and
+        # reports success. bomb-whistle already refuses; this is its twin.
+        if args.seconds <= 0:
+            raise SystemExit("ERROR: --seconds must be positive")
         samples = whoosh(args.seconds, generator)
     elif args.command == "bomb-whistle":
         if args.seconds <= 0 or args.start_hz <= 0 or args.end_hz <= 0:
@@ -781,6 +786,8 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("ERROR: --end-hz must be lower than --start-hz")
         samples = bomb_whistle(args.seconds, generator, args.start_hz, args.end_hz)
     elif args.command == "hum":
+        if args.seconds <= 0:
+            raise SystemExit("ERROR: --seconds must be positive")
         samples = hum(args.seconds, generator, args.hz, args.loop)
     elif args.command == "beep":
         samples = beep(args.hz, args.beeps)

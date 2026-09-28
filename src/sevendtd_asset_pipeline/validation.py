@@ -28,6 +28,21 @@ from .unityfs import BundleInfo, inspect_bundle
 NOT_RUN_PREFIX = "not run: "
 
 
+def expected_revision(config: PipelineConfig) -> str | None:
+    """The Unity revision a bundle is gated against, or None if none is known.
+
+    The installed game decides it. Without a game directory the revision
+    recorded as `[unity] version` is the next best answer, and it is the same
+    one `build` stamps the bundle with (`build.expected_unity_version`), so
+    `validate` gates on what `build` produced. Answering None to both left
+    every validate route accepting a bundle at a revision the build would
+    never have written.
+    """
+    if config.game_dir:
+        return game_unity_version(config.game_dir)[0]
+    return config.unity_version or None
+
+
 @dataclass(frozen=True)
 class ValidationReport:
     messages: tuple[str, ...]
@@ -217,15 +232,19 @@ def validate_mod(
     elif config.game_dir:
         expected_version = game_unity_version(config.game_dir)[0]
     else:
-        expected_version = None
-        # The repository's own rule: an unrun gate must never read like a
-        # passed one. `stage` already carries this in its own `skipped` list;
-        # the gate is the same one, and it is not run here either.
-        not_run.append(
-            NOT_RUN_PREFIX + "the game-revision gate: no game directory is configured, so the "
-            "bundle's Unity revision was not held against the installed game's. Set "
-            "SEVEN_DAYS_TO_DIE_DIR."
-        )
+        # Without a game directory the `[unity] version` the mod's own config
+        # records is the next best answer, and it is the same revision
+        # `build` stamps (see `expected_revision`).
+        expected_version = config.unity_version or None
+        if expected_version is None:
+            # The repository's own rule: an unrun gate must never read like a
+            # passed one. `stage` already carries this in its own `skipped`
+            # list; the gate is the same one, and it is not run here either.
+            not_run.append(
+                NOT_RUN_PREFIX + "the game-revision gate: no game directory is configured, so the "
+                "bundle's Unity revision was not held against the installed game's. Set "
+                "SEVEN_DAYS_TO_DIE_DIR."
+            )
     validate_bundle(config.bundle_output, expected_version, bundle_info)
     if assets is None:
         assets = manifest_assets(config.tracked_manifest)

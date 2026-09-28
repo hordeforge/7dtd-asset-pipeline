@@ -141,6 +141,43 @@ def write_hierarchy_glb(path: Path) -> Path:
     return write_glb(path, document, blob)
 
 
+def write_two_mesh_glb(path: Path, root_name: str) -> Path:
+    """One root node that itself carries a mesh, plus a child with a second.
+
+    The single-root, multi-mesh shape is where a predictor that substitutes the
+    file stem for the root's own name disagrees with the writer, which never
+    does.
+    """
+    blob, views, accessors = triangle_blob()
+    document = {
+        "asset": {"version": "2.0"},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [
+            {"name": root_name, "mesh": 0, "children": [1]},
+            {"name": "Lamp", "mesh": 1, "translation": [0.1, 0.2, 0.3]},
+        ],
+        "meshes": [
+            {
+                "name": "base",
+                "primitives": [
+                    {"attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2}, "indices": 3}
+                ],
+            },
+            {
+                "name": "bulb",
+                "primitives": [
+                    {"attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2}, "indices": 3}
+                ],
+            },
+        ],
+        "buffers": [{"byteLength": len(blob)}],
+        "bufferViews": views,
+        "accessors": accessors,
+    }
+    return write_glb(path, document, blob)
+
+
 def write_skinned_glb(
     path: Path,
     *,
@@ -883,6 +920,65 @@ class BackwardCompatTests(unittest.TestCase):
             self.assertTrue(any(obj.class_id == MESH_RENDERER for obj in objects))
             self.assertFalse(any(obj.class_id == SKINNED_MESH_RENDERER for obj in objects))
             self.assertFalse(any(obj.class_id == PARTICLE_SYSTEM for obj in objects))
+
+
+class SynthesizedMembersTests(unittest.TestCase):
+    """The predictor and the writer must agree on every name.
+
+    `acceptance-provider` builds its `LoadAsset` cases from the prediction, so
+    a name the writer never writes is a case that loads null from a bundle
+    that is perfectly good.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_a_named_hierarchy_predicts_the_writers_own_names(self) -> None:
+        from unittest.mock import patch
+
+        from sevendtd_asset_pipeline import bundle_writer
+        from sevendtd_asset_pipeline.bundle_writer import hierarchy_prefab_objects
+
+        source = write_two_mesh_glb(self.root / "prop.glb", "Cube")
+        with patch.object(bundle_writer, "has_capability", lambda name: True):
+            predicted = dict(synthesized_members(self.root))
+            written = {
+                obj.name for obj in hierarchy_prefab_objects("prop", parse_gltf(source), set())
+            }
+        self.assertIn("prop_Cube_mesh", written)
+        self.assertEqual(
+            {name for name, kind in predicted.items() if kind == "Mesh"} & written,
+            {name for name, kind in predicted.items() if kind == "Mesh"},
+            "the predictor named a mesh the writer does not emit",
+        )
+        self.assertNotIn("prop_prop_mesh", predicted)
+
+    def test_a_meshless_hierarchy_predicts_no_mesh(self) -> None:
+        from unittest.mock import patch
+
+        from sevendtd_asset_pipeline import bundle_writer
+
+        blob, views, accessors = triangle_blob()
+        write_glb(
+            self.root / "rig.glb",
+            {
+                "asset": {"version": "2.0"},
+                "scene": 0,
+                "scenes": [{"nodes": [0]}],
+                "nodes": [{"name": "Root", "children": [1]}, {"name": "Socket"}],
+                "buffers": [{"byteLength": len(blob)}],
+                "bufferViews": views,
+                "accessors": accessors,
+            },
+            blob,
+        )
+        with patch.object(bundle_writer, "has_capability", lambda name: True):
+            predicted = synthesized_members(self.root)
+        self.assertEqual(predicted, [("rig", "GameObject")])
 
 
 @needs_unityz

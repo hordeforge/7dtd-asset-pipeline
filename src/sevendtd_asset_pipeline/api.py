@@ -183,9 +183,13 @@ class Pipeline:
         return validate_mod(self.config)
 
     def expected_unity_version(self) -> str | None:
-        """The revision the installed game requires, when a game dir is configured."""
+        """The revision a bundle is gated against, or None if none is known.
+
+        The installed game answers it; without a game directory the revision
+        the mod recorded is the next best answer, and the one `build` writes.
+        """
         if not self.config.game_dir:
-            return None
+            return self.config.unity_version or None
         return game_unity_version(self.config.game_dir)[0]
 
     def acceptance_provider(
@@ -217,17 +221,20 @@ class Pipeline:
                 install_dir,
             )
 
-    def verify_bundle(self, bundle: Path | str | None = None) -> VerifyReport:
+    def verify_bundle(self, bundle: Path | str | None = None, draw: bool = False) -> VerifyReport:
         """Load a bundle in a real Unity runtime and report what came back.
 
         Needs an editor, and needs nothing else to have used one: this is how a
         synthesized bundle gets a check that this repository did not write.
+        `draw` additionally photographs each prefab, which is the only offline
+        answer to whether it rasterizes rather than merely loads.
         """
         return verify_with_editor(
             Path(bundle) if bundle else self.config.bundle_output,
             self.config.unity_editor,
             expected_unity_version(self.config),
             self.config.build_dir / "verify",
+            draw=draw,
         )
 
     def check_log(self, log: Path | str) -> None:
@@ -593,6 +600,26 @@ def _typed(operation: Operation, name: str, prop: dict[str, Any], value: Any) ->
         )
 
 
+def _check_arity(operation: Operation, name: str, prop: dict[str, Any], value: Any) -> None:
+    """Enforce the published `minItems`/`maxItems` at the boundary.
+
+    The schema is the contract every out-of-process caller reads, so an
+    arity the schema forbids has to be refused here with a message naming it.
+    Left unchecked, a short `matches` reaches numpy and dies in a broadcast
+    `ValueError` instead.
+    """
+    bounds = (prop.get("minItems"), prop.get("maxItems"))
+    low, high = bounds
+    if (low is not None and len(value) < low) or (high is not None and len(value) > high):
+        wanted = (
+            str(low) if low == high else f"{low}..{high}" if high is not None else f"at least {low}"
+        )
+        raise PipelineError(
+            f"operation {operation.name!r} got {name} with {len(value)} item(s); "
+            f"the schema requires {wanted}"
+        )
+
+
 def _coerced(operation: Operation, arguments: dict[str, Any]) -> dict[str, Any]:
     """Coerce JSON-shaped params to the Python types the facade methods take.
 
@@ -609,7 +636,12 @@ def _coerced(operation: Operation, arguments: dict[str, Any]) -> dict[str, Any]:
         if PATH_PARAM.items() <= prop.items() and isinstance(value, str):
             coerced[name] = Path(value)
         elif prop.get("type") == "array":
-            if prop.get("items", {}).get("type") == "number":
+            # `default: None` is a legal published default, so the arity
+            # coercion must not run on it; the callee's own default applies.
+            if value is None:
+                coerced[name] = None
+            elif prop.get("items", {}).get("type") == "number":
+                _check_arity(operation, name, prop, value)
                 coerced[name] = tuple(float(item) for item in value)
             else:
                 coerced[name] = tuple(value)
@@ -683,7 +715,7 @@ _DISPATCH: dict[str, Callable[[Pipeline, dict[str, Any]], Any]] = {
     "unity_release": lambda self, p: self.unity_release(p.get("version"), p["platform"]),
     "build": lambda self, p: {"bundle": str(self.build(p["probe"]))},
     "pack": lambda self, p: _pack(p, self.config.game_dir),
-    "verify_bundle": lambda self, p: self.verify_bundle(p.get("bundle")),
+    "verify_bundle": lambda self, p: self.verify_bundle(p.get("bundle"), p["draw"]),
     "acceptance_provider": lambda self, p: self.acceptance_provider(
         p.get("harness_dll"), p.get("install", False), p.get("mods_dir")
     ),
@@ -819,7 +851,16 @@ _STATELESS: dict[str, Callable[[dict[str, Any]], Any]] = {
         output=p.get("output"),
         force=p["force"],
     ),
-    "check_texture": lambda p: check_texture(**p),
+    # The published parameter is `texture`; check_texture names it `path`.
+    # Passing the schema keys straight through raised TypeError for every
+    # out-of-process caller of this operation.
+    "check_texture": lambda p: check_texture(
+        p["texture"],
+        matches=p.get("matches"),
+        tolerance=p["tolerance"],
+        tileable=p["tileable"],
+        max_tile_ratio=p["max_tile_ratio"],
+    ),
     "unity_release": lambda p: fetch_release(
         p["version"] if p.get("version") else _needs_version(), p["platform"]
     ),

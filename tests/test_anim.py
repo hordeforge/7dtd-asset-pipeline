@@ -395,6 +395,55 @@ class LimbAnimTests(unittest.TestCase):
         self.assertLess(min(ys), -0.01)
         self.assertAlmostEqual(ys[0], 0.0, places=6)
 
+    def test_a_walk_animates_every_upper_bone_even_without_a_lower(self) -> None:
+        """`lower_bones` is optional, and a short list must not eat a leg.
+
+        Pairing by zip truncated the gait to the shorter list, so a rig whose
+        last locomotor upper has no child produced a Walk clip with no rotation
+        curve for that leg: it loads, packs and plays over a creature that does
+        not move, and nothing reports it.
+        """
+        from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
+
+        path = self.root / "partial.anim.json"
+        path.write_text(
+            '{"clips": [{"name": "Walk", "kind": "walk",'
+            ' "bones": ["Root/Pelvis/LeftRearUpper", "Root/Pelvis/RightRearUpper"],'
+            ' "lower_bones": ["Root/Pelvis/LeftRearLower"], "stride": 0.5, "seconds": 1.2}]}',
+            encoding="utf-8",
+        )
+        fields = clip_fields(parse_anim(path))[0]
+        paths = {
+            curve["path"]
+            for group in ("m_RotationCurves", "m_PositionCurves")
+            for curve in fields[group]
+        }
+        self.assertIn("Root/Pelvis/LeftRearUpper", paths)
+        self.assertIn("Root/Pelvis/LeftRearLower", paths)
+        self.assertIn(
+            "Root/Pelvis/RightRearUpper",
+            paths,
+            "the unpaired upper leg got no curve, so the walk is a body bob only",
+        )
+
+    def test_a_walk_without_lower_bones_still_swings_its_uppers(self) -> None:
+        from sevendtd_asset_pipeline.anim import clip_fields, parse_anim
+
+        path = self.root / "nolower.anim.json"
+        path.write_text(
+            '{"clips": [{"name": "Walk", "kind": "walk",'
+            ' "bones": ["Root/Pelvis/LeftRearUpper", "Root/Pelvis/RightRearUpper"],'
+            ' "stride": 0.5, "seconds": 1.2}]}',
+            encoding="utf-8",
+        )
+        rotations = {
+            curve["path"] for curve in clip_fields(parse_anim(path))[0]["m_RotationCurves"]
+        }
+        self.assertEqual(
+            rotations,
+            {"Root/Pelvis/LeftRearUpper", "Root/Pelvis/RightRearUpper"},
+        )
+
     def test_walk_curves_tile_across_a_spin(self) -> None:
         from sevendtd_asset_pipeline.anim import walk_curves
 

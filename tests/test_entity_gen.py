@@ -308,6 +308,29 @@ class EntityGeneratorTests(unittest.TestCase):
         parts = default_parts_for(rig)
         self.assertAlmostEqual(parts["Head"]["radius"], 0.075 * 0.5)
 
+    def test_a_scaled_bone_keeps_its_scale_in_the_joint_node(self) -> None:
+        """The inverse-bind matrices include bone.scale, so the node must too.
+
+        Dropping it binds the mesh to the inverse of a scale the node never
+        carries: the skinning matrix at the bind pose stops being identity and
+        the whole entity renders at the wrong size, offset, with no error.
+        """
+        from sevendtd_asset_pipeline.generators.entity import build_entity_glb
+        from sevendtd_asset_pipeline.rigs import Rig, RigBone
+
+        rig = Rig(
+            name="scaled",
+            bones=(
+                RigBone("Root", None, (0.0, 1.0, 0.0)),
+                RigBone("Body", "Root", (0.0, 0.0, 0.0), scale=3.0),
+            ),
+        )
+        parts = {"Body": {"shape": "sphere", "radius": 0.1}}
+        out = self.root / "scaled.glb"
+        out.write_bytes(build_entity_glb(rig, parts, "scaled"))
+        body = next(node for node in parse_gltf(out).nodes if node.name == "Body")
+        self.assertEqual(body.scale, (3.0, 3.0, 3.0))
+
     def test_a_rig_without_default_parts_asks_for_a_parts_file(self) -> None:
         spec = self.root / "tree.json"
         spec.write_text(

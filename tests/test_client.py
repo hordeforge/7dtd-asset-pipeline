@@ -974,16 +974,20 @@ class LockTests(unittest.TestCase):
     def test_a_borrow_keeps_the_run_acquired_stamp(self) -> None:
         """A borrowed hold refreshes the heartbeat and dates nothing else."""
         with tempfile.TemporaryDirectory() as tmp:
+            # One stamp, taken once: _stamp is relative to now, so recomputing it
+            # at the assertion compares against a different second whenever the
+            # clock ticks during the hold.
+            acquired = self._stamp(300)
             path = self._lock(
                 Path(tmp),
                 running="yes",
                 session="mine-1",
-                acquired=self._stamp(300),
+                acquired=acquired,
                 heartbeat=self._stamp(5),
             )
             with client.held_lock("mine-1", path):
                 fields = client.read_lock(path)
-            self.assertEqual(fields.get("acquired"), self._stamp(300))
+            self.assertEqual(fields.get("acquired"), acquired)
             self.assertEqual(fields.get("running"), "yes")
 
     def test_nested_holds_in_one_process_release_once(self) -> None:

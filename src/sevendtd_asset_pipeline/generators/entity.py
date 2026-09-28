@@ -927,6 +927,13 @@ def build_entity_glb(
             node["translation"] = list(bone.pos)
         if bone.rot != (0.0, 0.0, 0.0, 1.0):
             node["rotation"] = list(bone.rot)
+        # The inverse-bind matrices below come from world_matrices, which
+        # includes bone.scale, so a scaled joint dropped here binds the whole
+        # mesh to the inverse of a scale it never gets: the entity renders at a
+        # third size, offset. rig_to_glb writes the same field for the same
+        # reason.
+        if bone.scale != 1.0:
+            node["scale"] = [bone.scale, bone.scale, bone.scale]
         children = [
             index_by_name[candidate.name]
             for candidate in rig.bones

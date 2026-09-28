@@ -2639,16 +2639,23 @@ def synthesized_members(source_dir: Path) -> list[tuple[str, str]]:
             members.append((path.stem, "GameObject"))
             if scene is not None and scene.needs_hierarchy() and not scene.has_skin():
                 mesh_nodes = scene.mesh_nodes()
+                if not mesh_nodes:
+                    # A hierarchy of empty nodes carries no mesh and no
+                    # material; predicting one would put a LoadAsset case for
+                    # an object the writer never emits.
+                    continue
                 if len(mesh_nodes) == 1:
                     members.append((f"{path.stem}{MESH_SUFFIX}", "Mesh"))
                     members.append((f"{path.stem}{MATERIAL_SUFFIX}", "Material"))
                 else:
-                    names = {}
-                    root_index = scene.roots[0] if len(scene.roots) == 1 else None
-                    for node in scene.nodes:
-                        names[node.index] = path.stem if node.index == root_index else node.name
+                    # The writer labels a per-node mesh by the authored node
+                    # name alone (hierarchy_prefab_objects, which refuses an
+                    # unnamed node and never substitutes the file stem), so
+                    # substituting `path.stem` for a sole root here predicted
+                    # `prop_prop_mesh` for a `prop_Cube_mesh` and every
+                    # LoadAsset case the provider generated came back null.
                     for node in mesh_nodes:
-                        label = names.get(node.index) or f"node{node.index}"
+                        label = node.name or f"node{node.index}"
                         members.append((f"{path.stem}_{label}{MESH_SUFFIX}", "Mesh"))
                         members.append((f"{path.stem}_{label}{MATERIAL_SUFFIX}", "Material"))
             else:

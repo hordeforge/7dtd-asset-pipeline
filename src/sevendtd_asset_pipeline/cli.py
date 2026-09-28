@@ -56,7 +56,7 @@ from .sound_check import DEFAULT_MAX_SECONDS, check_sound
 from .status import collect_status
 from .unity_release import DEFAULT_PLATFORM, fetch_release
 from .unityfs import inspect_bundle
-from .validation import validate_bundle, validate_mod
+from .validation import expected_revision, validate_bundle, validate_mod
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -945,7 +945,7 @@ def run(args: argparse.Namespace) -> int:
         print("Offline gates passed. A fresh-client load is still required for acceptance.")
         return 0
     if args.command == "validate":
-        expected = game_unity_version(config.game_dir)[0] if config.game_dir else None
+        expected = expected_revision(config)
         if args.bundle:
             info = validate_bundle(args.bundle, expected)
             print(f"OK: {info.path} Unity {info.unity_version}; class-142 present")

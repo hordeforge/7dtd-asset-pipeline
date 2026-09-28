@@ -422,6 +422,31 @@ class ClipAdoptionTests(unittest.TestCase):
         self.assertEqual(1, len(manifest))
         self.assertEqual("thing", manifest[0]["directory"])
 
+    def test_a_nested_frame_is_addressable_and_does_not_collide(self) -> None:
+        """A harness that nests its frames must not record two identical names.
+
+        `_skip_non_media` descends into subdirectories on purpose, so the
+        relative path is the only thing that locates a file in the adopted
+        tree. A bare basename records two indistinguishable `frame-0001.png`
+        entries and neither frame is citable.
+        """
+        from sevendtd_asset_pipeline.capture import record_existing_clip
+
+        (self.source / "cam").mkdir()
+        (self.source / "cam" / "frame-0000.png").write_bytes(b"camera")
+        (self.source / "clip").mkdir()
+        (self.source / "clip" / "frame-0000.png").write_bytes(b"muxed")
+        entry = record_existing_clip(self.source, "thing", "reads right", self.capture_root)
+        recorded = {item.name: item.sha256 for item in entry.files}
+        self.assertIn("cam/frame-0000.png", recorded)
+        self.assertIn("clip/frame-0000.png", recorded)
+        self.assertEqual(len(recorded), len(entry.files), "two files share one recorded name")
+        for name, digest in recorded.items():
+            self.assertEqual(
+                hashlib.sha256((self.capture_root / "thing" / name).read_bytes()).hexdigest(),
+                digest,
+            )
+
     def test_adoption_leaves_the_capture_log_and_its_hosts_paths_behind(self) -> None:
         """Only media is adopted: the log names the operator's account and the install."""
         from sevendtd_asset_pipeline.capture import record_existing_clip

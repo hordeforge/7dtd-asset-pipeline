@@ -107,6 +107,11 @@ TOPICS: dict[str, tuple[str, str]] = {
     "troubleshooting": ("runbooks/troubleshooting.md", "failure messages and their root causes"),
     "configuration": ("configuration.md", "every .shamway.toml key"),
     "architecture": ("architecture.md", "design, boundaries, and the trust model"),
+    "threat-model": (
+        "THREAT_MODEL.md",
+        "the attack surface, trust boundaries, ranked risks, and the gaps between"
+        " the controls and the claims",
+    ),
     "blockers": ("status/blockers.md", "what still needs a human, a licence, or a client"),
     "research-provenance": (
         "research/research-provenance.md",

@@ -233,3 +233,9 @@ download without a published checksum is refused.
 - downloaded editor archives and modules are MD5-verified against Unity's own
   published digests, and an unpublished digest is a hard failure;
 - `init` refuses to overwrite any file it would generate.
+
+Those are the editor downloads. Four other tools `scripts/install-tools.sh`
+installs as executables — `gltf_validator`, `gltfpack`,
+`compressonatorcli`, and AssetRipper — are fetched from a moving
+`releases/latest` URL and installed with no digest compared; [the threat
+model](THREAT_MODEL.md) carries that as R1.

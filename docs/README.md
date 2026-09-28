@@ -28,7 +28,9 @@ writes the `.unity3d` itself, and the other two editorless sources.
 build path, for a bundle whose shading the writer does not author.
 
 The rest of the reference sits at the top level: the design and trust
-boundaries ([architecture.md](architecture.md)), every configuration key
+boundaries ([architecture.md](architecture.md)), the attack surface, ranked
+risks, and the gaps between the controls and the claims
+([THREAT_MODEL.md](THREAT_MODEL.md)), every configuration key
 ([configuration.md](configuration.md)), the machine-facing interfaces
 ([consumer-api.md](consumer-api.md)), each gate and its proof boundary
 ([validation.md](validation.md)), the engine-side integration rules

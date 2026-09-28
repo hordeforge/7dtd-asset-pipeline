@@ -1131,6 +1131,60 @@ class DocumentationTests(unittest.TestCase):
             with self.subTest(directory.name):
                 self.assertIn(f"{directory.name}/", index)
 
+    def test_the_threat_model_is_served_and_its_references_resolve(self) -> None:
+        """Every `path:line` in the model must name a line that still exists.
+
+        The model is only worth reading while it is true. Its whole drift check
+        is these references: a moved function would otherwise leave a claim
+        pointing at unrelated code, which reads as a verified control.
+        """
+        repo = Path(__file__).resolve().parents[1]
+        model = repo / "docs" / "THREAT_MODEL.md"
+        if not model.is_file():
+            self.skipTest("running from a packaged install without the repo docs/")
+        from sevendtd_asset_pipeline.docs import TOPICS
+
+        self.assertIn("threat-model", TOPICS, "the threat model is not served by `shamway docs`")
+        text = model.read_text(encoding="utf-8")
+        searched = ("src/", "scripts/", "docs/", "tests/", "examples/")
+        # The package ships a second copy of the host scripts and of docs/; a
+        # bare name resolves to the tree copy, never the packaged duplicate.
+        duplicated = (
+            "src/sevendtd_asset_pipeline/scripts/",
+            "src/sevendtd_asset_pipeline/docs/",
+            "src/sevendtd_asset_pipeline/templates/",
+        )
+        for name, line in sorted(set(re.findall(r"((?:[\w./-]+/)?[\w-]+\.(?:py|sh)):(\d+)", text))):
+            with self.subTest(f"{name}:{line}"):
+                path = repo / name
+                if not path.is_file():
+                    # A bare module or script name resolves to the tree copy, never
+                    # the packaged duplicate of the same file.
+                    found = [
+                        candidate
+                        for candidate in repo.rglob(name.split("/")[-1])
+                        if candidate.is_file()
+                        and str(candidate.relative_to(repo)).startswith(searched)
+                        and str(candidate.relative_to(repo)).endswith(name)
+                        and not str(candidate.relative_to(repo)).startswith(duplicated)
+                    ]
+                    self.assertEqual(
+                        len(found),
+                        1,
+                        f"{name} does not resolve to one file in this tree",
+                    )
+                    path = found[0]
+                self.assertLessEqual(
+                    int(line),
+                    sum(1 for _ in path.read_text(encoding="utf-8").splitlines()),
+                    f"{name}:{line} is past the end of {path.relative_to(repo)}",
+                )
+        self.assertGreaterEqual(
+            len(re.findall(r":\d+", text)),
+            40,
+            "the model cites almost nothing",
+        )
+
     def test_one_concern_per_run_is_stated(self) -> None:
         agents = Path(__file__).resolve().parents[1] / "AGENTS.md"
         text = agents.read_text(encoding="utf-8")

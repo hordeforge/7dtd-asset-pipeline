@@ -114,15 +114,19 @@ def release_table(unity_version: str) -> TreesTable:
 
 
 @functools.lru_cache(maxsize=4)
-def _class_ids(unity_version: str) -> dict[int, str]:
+def _class_ids(unity_version: str, backend: str) -> dict[int, str]:
     """`__class_ids__` inverted, so `class_name` is a lookup and not a table scan.
 
     Unity's table holds an entry per class, and `class_trees` and `release_tree`
     both ask for one name per class id, so scanning it per id was quadratic in
     the number of classes a bundle carries. Where two names share an id the
     first in the export wins, which is what the old scan returned.
+
+    The reader is part of the key for the same reason it is one for
+    `_release_table`: this is that table's own content, and an id it no longer
+    carries, or a name it has renamed, must not be served across a reinstall.
     """
-    ids = release_table(unity_version)["__class_ids__"]
+    ids = _release_table(unity_version, backend)["__class_ids__"]
     if not isinstance(ids, dict):
         raise PipelineError(f"unityz trees returned a malformed __class_ids__ for {unity_version}")
     return {found: str(name) for name, found in ids.items()}
@@ -130,7 +134,7 @@ def _class_ids(unity_version: str) -> dict[int, str]:
 
 def class_name(class_id: int, unity_version: str) -> str:
     try:
-        return _class_ids(unity_version)[class_id]
+        return _class_ids(unity_version, backend_identity())[class_id]
     except KeyError as exc:
         raise PipelineError(
             f"no type tree for class {class_id} at Unity {unity_version}: the built-in "
@@ -150,15 +154,27 @@ def class_trees(class_ids: set[int], unity_version: str) -> TreesTable:
 
 
 @functools.lru_cache(maxsize=32)
-def release_tree(class_id: int, unity_version: str) -> TreeNode:
+def _release_tree(class_id: int, unity_version: str, backend: str) -> TreeNode:
     """The tree for one class, nested for the default walkers.
 
     Cached and shared, because rebuilding the whole `TreeNode` forest from the
     flat node list cost the same on every call and `typetree_default` only ever
     reads it. A caller that needs to change a node must copy it first.
+
+    The reader is part of the key because this tree is that reader's own field
+    layout: a session outliving `shamway script install-unityz` would otherwise
+    keep embedding the replaced reader's layout while `release_table` beside it
+    had already reloaded.
     """
-    name = class_name(class_id, unity_version)
-    flat = release_table(unity_version)[name]
+    try:
+        name = _class_ids(unity_version, backend)[class_id]
+    except KeyError as exc:
+        raise PipelineError(
+            f"no type tree for class {class_id} at Unity {unity_version}: the built-in "
+            "database has no such class. The type tree is the engine's own field "
+            "layout; without it this backend will not guess one."
+        ) from exc
+    flat = _release_table(unity_version, backend)[name]
     if not isinstance(flat, list):
         raise PipelineError(f"unityz trees returned a malformed {name} tree for {unity_version}")
     stack: list[TreeNode] = []
@@ -186,6 +202,11 @@ def release_tree(class_id: int, unity_version: str) -> TreeNode:
     if root is None:
         raise PipelineError(f"the built-in tree for class {class_id} at {unity_version} is empty")
     return root
+
+
+def release_tree(class_id: int, unity_version: str) -> TreeNode:
+    """`_release_tree` under the reader on PATH now, which is half its key."""
+    return _release_tree(class_id, unity_version, backend_identity())
 
 
 def typetree_default(node: TreeNode) -> Any:

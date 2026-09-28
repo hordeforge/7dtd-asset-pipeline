@@ -343,7 +343,7 @@ def _multi_mode_parameter(value: float) -> dict[str, Any]:
     }
 
 
-_DEFAULTS: dict[int, dict[str, Any]] = {}
+_DEFAULTS: dict[tuple[int, str], dict[str, Any]] = {}
 
 
 def _release_node(class_id: int) -> typetrees.TreeNode:
@@ -351,11 +351,21 @@ def _release_node(class_id: int) -> typetrees.TreeNode:
 
 
 def _class_default(class_id: int) -> dict[str, Any]:
-    cached = _DEFAULTS.get(class_id)
+    # The reader identity is half the key for the reason it is one in
+    # `typetrees`: these defaults are that reader's field layout, and a session
+    # outliving `shamway script install-unityz` must not keep writing the
+    # replaced reader's module graph into every packed ParticleSystem.
+    backend = typetrees.backend_identity()
+    cached = _DEFAULTS.get((class_id, backend))
     if cached is None:
         cached = typetrees.typetree_default(_release_node(class_id))
         _fix_curves_and_gradients(cached)
-        _DEFAULTS[class_id] = cached
+        # One entry per class, not one per (class, reader): a session that
+        # reinstalls unityz repeatedly would otherwise accumulate a walked
+        # defaults tree per reader, each the largest object in the database.
+        for stale in [key for key in _DEFAULTS if key[0] == class_id]:
+            del _DEFAULTS[stale]
+        _DEFAULTS[(class_id, backend)] = cached
     return deepcopy(cached)
 
 

@@ -77,14 +77,20 @@ def _curve(keyframes: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 @functools.lru_cache(maxsize=1)
-def _clip_defaults_template() -> dict[str, Any]:
+def _clip_defaults_template(backend: str) -> dict[str, Any]:
     """The `AnimationClip` type-tree defaults, walked once.
 
     The tree is the largest class in the database and `--anim idle,head,walk,
     attack,death,jump` builds a clip per entry, so rebuilding and re-walking it
     per clip was the dominant cost of writing an entity's animations. Callers
     get a deep copy, because a clip merges its curves into this dict.
+
+    The reader identity is the key for the reason `typetrees` carries one: the
+    walk is a cache of one reader's field layout, and a session that outlives
+    `shamway script install-unityz` would keep writing the previous reader's
+    layout into every clip.
     """
+    del backend
     defaults: dict[str, Any] = typetrees.typetree_default(
         typetrees.release_tree(ANIMATION_CLIP, typetrees.DEFAULT_UNITY_REVISION)
     )
@@ -92,7 +98,7 @@ def _clip_defaults_template() -> dict[str, Any]:
 
 
 def _clip_defaults() -> dict[str, Any]:
-    return copy.deepcopy(_clip_defaults_template())
+    return copy.deepcopy(_clip_defaults_template(typetrees.backend_identity()))
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

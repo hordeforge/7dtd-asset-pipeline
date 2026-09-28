@@ -81,6 +81,94 @@ class TreesTableCacheTests(unittest.TestCase):
         self.assertIn("Texture2D", _ids(recovered))
 
 
+class DerivedCacheKeyTests(unittest.TestCase):
+    """The caches derived from the table carry the reader too, not just the revision.
+
+    `release_table` was keyed on the reader, and the id map and the nested
+    trees on top of it were not. A `shamway serve` session outliving
+    `shamway script install-unityz` therefore reloaded the table and kept
+    serving class names and field layouts from the reader it had replaced,
+    which is the stale type tree embedded in a bundle the module refuses to
+    guess at.
+    """
+
+    def setUp(self) -> None:
+        for cached in (
+            typetrees._release_table,
+            typetrees._class_ids,
+            typetrees._release_tree,
+        ):
+            cached.cache_clear()
+            self.addCleanup(cached.cache_clear)
+
+    def test_a_replaced_reader_renames_nothing_the_derived_caches_still_serve(self) -> None:
+        before = typetrees.TreesTable(
+            {
+                "__class_ids__": {"Texture2D": 28, "Removed": 99},
+                "Texture2D": [
+                    {
+                        "m_Type": "Texture2D",
+                        "m_Name": "m_Width",
+                        "m_Level": 0,
+                        "m_Version": 1,
+                    }
+                ],
+                "Removed": [{"m_Type": "Gone", "m_Name": "m_Old", "m_Level": 0, "m_Version": 1}],
+            }
+        )
+        after = typetrees.TreesTable(
+            {
+                "__class_ids__": {"Texture2D": 28, "Replacement": 99},
+                "Texture2D": [
+                    {
+                        "m_Type": "Texture2D",
+                        "m_Name": "m_Width",
+                        "m_Level": 0,
+                        "m_Version": 1,
+                    }
+                ],
+                "Replacement": [{"m_Type": "New", "m_Name": "m_New", "m_Level": 0, "m_Version": 1}],
+            }
+        )
+        # The reader is swapped for the second reader, once, rather than per
+        # call: each public entry point probes it, and a per-call list would
+        # model a host flapping rather than a reinstall.
+        replaced = False
+
+        def identity() -> str:
+            nonlocal replaced
+            if replaced:
+                return "unityz:/bin/unityz:9:9"
+            return "unityz:/bin/unityz:1:2"
+
+        with (
+            mock.patch.object(typetrees, "backend_identity", side_effect=identity),
+            mock.patch.object(
+                unityz, "invoke", side_effect=[_completed(before), _completed(after)]
+            ),
+        ):
+            self.assertEqual(typetrees.class_name(99, "2022.3.62f2"), "Removed")
+            self.assertEqual(typetrees.release_tree(99, "2022.3.62f2").kind, "Gone")
+            replaced = True
+            self.assertEqual(typetrees.class_name(99, "2022.3.62f2"), "Replacement")
+            self.assertEqual(typetrees.release_tree(99, "2022.3.62f2").kind, "New")
+
+    def test_an_absent_reader_raises_rather_than_serving_the_replaced_table(self) -> None:
+        with (
+            mock.patch.object(
+                typetrees,
+                "backend_identity",
+                side_effect=["unityz:/bin/unityz:1:2", "unityz:absent"],
+            ),
+            mock.patch.object(
+                unityz, "invoke", side_effect=[_completed(TABLE), RuntimeError("no reader")]
+            ),
+        ):
+            self.assertEqual(typetrees.class_name(28, "2022.3.62f2"), "Texture2D")
+            with self.assertRaises(RuntimeError):
+                typetrees.class_name(28, "2022.3.62f2")
+
+
 class BackendIdentityTests(unittest.TestCase):
     def test_the_identity_names_the_executable_and_what_a_replacement_changes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

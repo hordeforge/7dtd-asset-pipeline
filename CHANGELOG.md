@@ -147,6 +147,12 @@ tag has no changelog section.
   a live-client run could report one mod's suite under another's. The
   identifier now carries a short digest of the name the author typed, as the
   bundle stem already did.
+- The pull-request Python matrix cancels its sibling legs on the first red
+  (`fail-fast` defaults to true), so one version-specific break reported as
+  three unknowns. The legs now run to completion.
+- `.github/workflows/release.yml` had no concurrency group, so two runs of
+  the same tag could race two non-idempotent `gh release create` calls. Runs
+  for a tag are now queued rather than run at once.
 - The DXBC readers in `shader_blob` bound-check every field they address
   before using it as an offset or a length: the chunk count, the chunk table,
   a chunk offset, a chunk size, the SHDR dword count, and the RDEF and ISGN

@@ -8,6 +8,15 @@ on:
   push:
     tags: ["v*"]
 
+# One publish per tag, queued rather than cancelled. A re-run of a failed
+# publish is the ordinary recovery path, and two runs racing the same tag
+# interleave `gh release create` calls that are not idempotent: the loser sees
+# an existing release and the winner's upload may be the one that half
+# finished. Serializing the tag is the deployment lock this release has.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 

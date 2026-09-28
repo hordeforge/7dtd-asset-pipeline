@@ -28,6 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
+      # A version-specific break is exactly what the matrix exists to find, and
+      # the default fail-fast cancels the other two the moment one goes red:
+      # one failure then reads as three unknowns instead of one known bad
+      # version. Each leg finishes so a fix targets the versions that broke.
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:

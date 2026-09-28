@@ -98,16 +98,21 @@ class PackagingMetadataTests(ReleaseContractCase):
         build = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
             "build-system"
         ]
-        floor: int | None = None
+        floors: list[int] = []
         for requirement in build["requires"]:
             # An exact pin is a floor: it admits nothing below that version.
-            match = re.fullmatch(r"setuptools(?:>=|==)(\d+)(?:\.\d+)*", requirement)
+            match = re.fullmatch(r"setuptools(?:==|>=)(\d+)(?:\.\d+)*", requirement)
             if match:
-                floor = int(match.group(1))
-        self.assertIsNotNone(floor, "build-system.requires must constrain the setuptools version")
-        assert floor is not None
+                floors.append(int(match.group(1)))
+        self.assertEqual(
+            len(floors),
+            1,
+            "build-system.requires must name setuptools exactly once, so a "
+            "consumer's isolated build cannot resolve a backend older than the "
+            f"metadata this sdist ships (PEP 639 needs >= {PEP_639_SETUPTOOLS_FLOOR})",
+        )
         self.assertGreaterEqual(
-            floor,
+            floors[0],
             PEP_639_SETUPTOOLS_FLOOR,
             "build-system.requires must floor setuptools at the PEP 639 release",
         )

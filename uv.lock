@@ -29,9 +29,6 @@ authoring = [
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pillow" },
 ]
-inspect = [
-    { name = "lz4" },
-]
 mesh = [
     { name = "trimesh" },
 ]
@@ -59,7 +56,6 @@ requires-dist = [
     { name = "lxml", marker = "extra == 'all'", specifier = ">=5" },
     { name = "lxml", marker = "extra == 'patch'", specifier = ">=5" },
     { name = "lz4", marker = "extra == 'all'", specifier = ">=1" },
-    { name = "lz4", marker = "extra == 'inspect'", specifier = ">=1" },
     { name = "lz4", marker = "extra == 'writer'", specifier = ">=1" },
     { name = "numpy", marker = "extra == 'all'", specifier = ">=1.24" },
     { name = "numpy", marker = "extra == 'authoring'", specifier = ">=1.24" },
@@ -68,7 +64,7 @@ requires-dist = [
     { name = "trimesh", marker = "extra == 'all'", specifier = ">=4" },
     { name = "trimesh", marker = "extra == 'mesh'", specifier = ">=4" },
 ]
-provides-extras = ["writer", "inspect", "authoring", "mesh", "audio", "patch", "all"]
+provides-extras = ["writer", "authoring", "mesh", "audio", "patch", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -77,7 +73,7 @@ dev = [
     { name = "mypy", specifier = "==2.3.1" },
     { name = "ruff", specifier = "==0.16.6" },
     { name = "setuptools", specifier = "==84.0.0" },
-    { name = "texture2ddecoder", specifier = ">=1" },
+    { name = "texture2ddecoder", specifier = "==1.0.6" },
 ]
 
 [[package]]

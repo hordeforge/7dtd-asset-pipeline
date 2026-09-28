@@ -50,9 +50,6 @@ classifiers = [
 # the suite's block-compression cross-check imports it, so it is a dev
 # dependency and a consumer installing the writer pays no install for it.
 writer = ["lz4>=1"]
-# Compatibility for callers that installed the old deep-reader extra. Deep
-# inspection itself uses the separately installed unityz command.
-inspect = ["lz4>=1"]
 # The Python authoring lanes in src/sevendtd_asset_pipeline/generators/.
 authoring = ["pillow>=10", "numpy>=1.24"]
 # Pre-Unity mesh checks for the Blender/OpenSCAD lane.
@@ -79,7 +76,10 @@ all = [
 # setuptools is pinned beside them because setup.py subclasses build_py and
 # mypy type-checks it, so a silent setuptools major is a gate change too.
 # texture2ddecoder is the suite's independent block-compression decoder; the
-# suite is unittest, so this is where a test-only decoder belongs.
+# suite is unittest, so this is where a test-only decoder belongs. It is
+# pinned for the same reason ruff and mypy are: a decoder that changes its
+# BC7/BCn output moves the cross-check's verdict, so a checkout, a CI job and
+# a local run must all resolve one version.
 # coverage is pinned for the same reason ruff and mypy are: it produces the
 # number the README badge publishes, and the run that computes it used to
 # resolve it per invocation with `uv run --with coverage`, outside the lock,
@@ -97,7 +97,7 @@ dev = [
     "ruff==0.16.6",
     "mypy==2.3.1",
     "setuptools==84.0.0",
-    "texture2ddecoder>=1",
+    "texture2ddecoder==1.0.6",
     "coverage==7.10.7",
     "hypothesis==6.168.2",
 ]

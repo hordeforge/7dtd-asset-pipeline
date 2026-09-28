@@ -349,9 +349,9 @@ any other release is refused by name. Pipeline-authored bundles and the
 measured game `Entities`/`trees` bundles embed their trees and never need it.
 
 Python package consumers that synthesize bundles install the `writer` extra
-(lz4 for shader blobs). The old `inspect` extra remains as a compatibility
-alias for the same LZ4 and independent texture-decoder dependencies, but it
-does not unlock deep inspection; the `unityz` command does.
+(lz4 for shader blobs). There is no extra for deep inspection: the `unityz`
+command is what provides it, and an extra could not have, because the
+type trees ship inside that command.
 
 Install everything at once:
 

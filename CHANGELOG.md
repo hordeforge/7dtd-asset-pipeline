@@ -72,6 +72,12 @@ tag has no changelog section.
 
 ### Changed
 
+- `texture2ddecoder` is pinned to `1.0.6` in the dev group, beside ruff, mypy,
+  setuptools, coverage and hypothesis. It is the suite's independent
+  block-compression decoder, so a new major that changes its BCn output moves
+  the cross-check's verdict, and a `>=1` range let each checkout resolve
+  whichever release was newest. The lock already recorded 1.0.6; the
+  requirement now says so.
 - `review-audio` and `review-video` bound what a submission may carry before
   it costs anything: an intent document over 64 KB or an assembled prompt over
   32,000 characters is refused locally, and `--timeout` must be a positive
@@ -142,6 +148,13 @@ tag has no changelog section.
 
 ### Removed
 
+- The `inspect` extra, which listed the same `lz4>=1` the `writer` extra
+  already does and unlocked nothing: deep inspection reads type trees that
+  ship inside the `unityz` command, so no extra could ever provide it. The
+  package is installed from its git URL and is not registered on PyPI, so
+  there is no published release whose `[inspect]` request would now fail.
+  `pip install '7dtd-asset-pipeline[inspect]'` resolves to an unknown extra
+  and installs nothing rather than silently pulling a package it never used.
 - `audio_review` and `video_review` re-exported the shared `evidence` helpers
   (`redact`, `sha256_bytes`, `sha256_file`, `SENSITIVE_KEY_PARTS`,
   `USAGE_SENSITIVE_KEY_PARTS`) and an `__all__` that named them, for callers

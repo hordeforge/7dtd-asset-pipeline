@@ -1,4 +1,4 @@
-.PHONY: help check lint typecheck locked test coverage stage all dist reproducible clean-dist
+.PHONY: help check lint typecheck locked test smoke coverage stage all dist reproducible clean-dist
 
 # bash is the shell this repository's scripts and CI both run, and `-o pipefail`
 # is the difference between a failing command on the left of a pipe and a green
@@ -26,7 +26,7 @@ PYTHON := $(shell \
 # Where `dist` writes. Overridden by `reproducible`, which builds twice.
 DIST_DIR ?= dist
 
-all: check test
+all: check smoke test
 
 # The whole task list, in the order a contributor meets it. `make` alone used
 # to run `all` silently, and the Makefile's comments explain each gate to
@@ -36,7 +36,8 @@ help:
 	@echo "Gate:     make check           compile, shellcheck, ruff, mypy, lockfile"
 	@echo "Suite:    make test            the unit suite, as CI runs it"
 	@echo "One test: make test TESTS=tests.test_fuzz"
-	@echo "Both:     make all             check + test, the pre-push pair"
+	@echo "Entry:    make smoke            the console entry point, as CI runs it"
+	@echo "Both:     make all             check + smoke + test, the pre-push triple"
 	@echo "Coverage: make coverage         line coverage of src/"
 	@echo "Stage:    make stage            re-copy docs/ and scripts/ into the package"
 
@@ -124,6 +125,17 @@ ifeq ($(strip $(TESTS)),)
 else
 	PYTHONPATH=src:tests $(PYTHON) -m unittest -v $(TESTS)
 endif
+
+# CI's test, macos and capabilities jobs each run `shamway --help` and
+# `shamway schema` before the suite, against the *installed* console script, so
+# a broken entry point or missing package data fails there rather than in a
+# consumer's install. Nothing local reproduced those two lines, so that class
+# of break was visible only after a push. This runs the same module through
+# $(PYTHON): it is the same code path minus the packaging step, and the packaging
+# step itself is what `make stage` and the release contract cover.
+smoke:
+	PYTHONPATH=src $(PYTHON) -m sevendtd_asset_pipeline.cli --help > /dev/null
+	PYTHONPATH=src $(PYTHON) -m sevendtd_asset_pipeline.cli schema > /dev/null
 
 # Line coverage of src/ under the unit suite. Writes .coverage in the repo
 # root; CI renders it into the README badge with scripts/coverage_badge.py.

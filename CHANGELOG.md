@@ -14,6 +14,11 @@ tag has no changelog section.
 
 ### Added
 
+- `make smoke`, the two lines the `test`, `macos` and `capabilities` CI jobs
+  each run before the suite (`shamway --help` and `shamway schema`). A
+  dispatcher that raised on `--help` failed only after a push, because no
+  local command reproduced them. `make all` now runs it alongside `check` and
+  `test`.
 - `tests/test_fuzz.py`, Hypothesis harnesses over the untrusted-input
   parsers: the `unityz info --json` report mapping in `unityfs.bundle_info`,
   the mod-supplied bundle URI, manifest and `ModInfo.xml` parsing in
@@ -112,6 +117,12 @@ tag has no changelog section.
 
 ### Fixed
 
+- `tests/test_release_contract.py` read the PEP 639 setuptools floor with a
+  `setuptools>=N` pattern, so the exact `build-system.requires` pin
+  (`setuptools==84.0.0`) read as no constraint at all and the test failed on
+  a correct checkout with `None != 77`. It now reads both forms and treats an
+  exact pin as the floor it is, and still fails a pin below 77 or an
+  unconstrained requirement.
 - The DXBC readers in `shader_blob` bound-check every field they address
   before using it as an offset or a length: the chunk count, the chunk table,
   a chunk offset, a chunk size, the SHDR dword count, and the RDEF and ISGN

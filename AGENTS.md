@@ -184,11 +184,12 @@ will rebuild from scratch, and an undocumented gate is one it will delete.
 ```bash
 scripts/bootstrap          # uv sync from the committed lockfile, with extras
 make check test            # compile, shellcheck, lint, types, and the unit suite
+make smoke                 # the console entry point, the two lines CI runs first
 make reproducible          # two builds of this tree, compared byte for byte
 ```
 
-`make check test` must pass before you hand work back. It needs no network,
-no Unity, and no game install.
+`make check test` must pass before you hand work back; `make all` is that pair
+plus `smoke`. None of them needs network, no Unity, and no game install.
 
 `make dist` is the only command that builds the sdist and wheel, and the
 release workflow runs it. It pins `SOURCE_DATE_EPOCH` to the last commit's own

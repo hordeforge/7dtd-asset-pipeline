@@ -8,9 +8,18 @@ scripts/bootstrap
 make check test
 ```
 
-`make help` lists every target. `make stage` re-runs the copy half of the
+`make all` is that pair plus `make smoke`, the console entry point check, and
+is the closest local run of what a push triggers. `make help` lists every
+target. `make stage` re-runs the copy half of the
 package build, which is what the packaged-docs and packaged-scripts tests ask
 for after a change to `docs/` or to a shipped script.
+
+`make smoke` runs `shamway --help` and `shamway schema`, the two lines the
+`test`, `macos` and `capabilities` CI jobs each run before the suite. A
+dispatcher that raises on `--help`, or a schema built from an operation table
+that disagrees with `api._DISPATCH`, failed only after a push until this
+target existed. It runs the module rather than the installed console script,
+so the packaging step is what `make stage` and the release contract cover.
 
 Every Python step goes through uv, **in this checkout**. `scripts/bootstrap`
 creates `.venv` from `uv.lock`; then `uv run --project . shamway` or

@@ -90,17 +90,24 @@ class PackagingMetadataTests(ReleaseContractCase):
         names the LICENSE, both PEP 639 metadata that landed in setuptools
         77.0.0. The build failed on the host, with the sdist's own
         pyproject.toml as the error, and the dev-group pin that keeps CI green
-        does not reach a consumer's isolated build environment."""
+        does not reach a consumer's isolated build environment.
+
+        The requirement may be a floor or an exact pin, since the pin is what
+        makes two builds of one commit serialize identically. Both are read, and
+        the exact version is the floor: an exact pin admits nothing below it."""
         build = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
             "build-system"
         ]
-        floors = {}
+        floor: int | None = None
         for requirement in build["requires"]:
-            match = re.fullmatch(r"setuptools>=(\d+)", requirement)
+            # An exact pin is a floor: it admits nothing below that version.
+            match = re.fullmatch(r"setuptools(?:>=|==)(\d+)(?:\.\d+)*", requirement)
             if match:
-                floors["setuptools"] = int(match.group(1))
-        self.assertEqual(
-            floors.get("setuptools"),
+                floor = int(match.group(1))
+        self.assertIsNotNone(floor, "build-system.requires must constrain the setuptools version")
+        assert floor is not None
+        self.assertGreaterEqual(
+            floor,
             PEP_639_SETUPTOOLS_FLOOR,
             "build-system.requires must floor setuptools at the PEP 639 release",
         )

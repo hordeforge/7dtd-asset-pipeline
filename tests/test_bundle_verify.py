@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from typing import cast
 from unittest import mock
 
 from sevendtd_asset_pipeline.bundle_verify import (
@@ -118,9 +119,14 @@ class ClassifyTests(BundleCase):
         self.assertEqual(
             payload, json.loads(json.dumps(payload)), "the report must survive a JSON hop"
         )
+        assets = cast("list[dict[str, object]]", payload["assets"])
         self.assertEqual(
             [{"key": "k", "type": "TextAsset", "name": "k", "detail": ""}],
             payload["assets"],
+        )
+        self.assertEqual(
+            {"key": "k", "type": "TextAsset", "name": "k", "detail": ""},
+            assets[0],
         )
         self.assertEqual("b.unity3d", payload["bundle"])
         self.assertTrue(payload["ok"], payload["problems"])

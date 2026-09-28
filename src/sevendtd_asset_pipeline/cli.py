@@ -8,10 +8,11 @@ import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from . import atomic, audio_review
 from . import video_review as video_review_mod
+from ._version import __version__
 from .api import Pipeline, call_json
 from .build import (
     expected_unity_version,
@@ -65,10 +66,28 @@ def _parser() -> argparse.ArgumentParser:
         description="Build and validate Unity asset bundles for 7 Days to Die mods.",
     )
     parser.add_argument("--config", type=Path, help="path to .shamway.toml")
+    parser.add_argument("--version", action="version", version=f"shamway {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    init = commands.add_parser("init", help="scaffold a pipeline into a modlet")
-    init.add_argument("mod_root", type=Path)
+    # `--config` is accepted on either side of the subcommand. argparse takes a
+    # main-parser option only before the subcommand, so `shamway status --config
+    # mod/.shamway.toml` used to be an unrecognized-argument error next to a
+    # working `shamway --config mod/.shamway.toml status`. SUPPRESS keeps the
+    # subcommand's copy from clearing a value the main parser already set.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--config",
+        type=Path,
+        default=argparse.SUPPRESS,
+        metavar="CONFIG",
+        help="path to .shamway.toml",
+    )
+
+    def subcommand(name: str, **kwargs: Any) -> argparse.ArgumentParser:
+        return commands.add_parser(name, parents=[common], **kwargs)
+
+    init = subcommand("init", help="scaffold a pipeline into a modlet")
+    init.add_argument("mod_root", type=Path, help="the modlet directory to scaffold into")
     init.add_argument("--mod-name")
     init.add_argument("--bundle-name")
     init.add_argument("--unity-version", help="required when no game directory is supplied")
@@ -105,11 +124,11 @@ def _parser() -> argparse.ArgumentParser:
         "(default tools/shamway/manifests)",
     )
 
-    doctor = commands.add_parser("doctor", help="check configuration and required tooling")
+    doctor = subcommand("doctor", help="check configuration and required tooling")
     doctor.add_argument("--json", action="store_true", help="emit machine-readable checks")
-    build = commands.add_parser("build", help="build, gate, and stage the configured bundle")
+    build = subcommand("build", help="build, gate, and stage the configured bundle")
     build.add_argument("--probe", action="store_true", help="build a throwaway cube bundle only")
-    pack = commands.add_parser(
+    pack = subcommand(
         "pack",
         help="write a .unity3d from textures, clips, text, meshes, glTF skins/hierarchies and .vfx,"
         " with no Unity",
@@ -139,7 +158,7 @@ def _parser() -> argparse.ArgumentParser:
         "needs FFmpeg and the 'fsb5' capability",
     )
 
-    verify = commands.add_parser(
+    verify = subcommand(
         "verify-bundle",
         help="load a bundle in a real Unity runtime and report every asset it returns",
     )
@@ -151,9 +170,9 @@ def _parser() -> argparse.ArgumentParser:
         "graphics device — run under 'xvfb-run -a' on a headless host",
     )
     verify.add_argument("bundle", type=Path, nargs="?", help="default: the mod's staged bundle")
-    verify.add_argument("--json", action="store_true")
+    verify.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    stage = commands.add_parser(
+    stage = subcommand(
         "stage", help="gate and stage a bundle an editor elsewhere built (no local Unity)"
     )
     stage.add_argument("bundle", type=Path, help="the built .unity3d to gate and stage")
@@ -165,19 +184,17 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="the Unity log that built it; without one the disabled-module gate cannot run",
     )
-    validate = commands.add_parser(
-        "validate", help="validate the staged bundle and all XML references"
-    )
+    validate = subcommand("validate", help="validate the staged bundle and all XML references")
     validate.add_argument("--bundle", type=Path, help="inspect one bundle instead of the mod")
-    inspect = commands.add_parser("inspect", help="print UnityFS metadata for one bundle")
-    inspect.add_argument("bundle", type=Path)
-    inspect.add_argument("--json", action="store_true")
+    inspect = subcommand("inspect", help="print UnityFS metadata for one bundle")
+    inspect.add_argument("bundle", type=Path, help="the .unity3d to read")
+    inspect.add_argument("--json", action="store_true", help="emit machine-readable output")
     inspect.add_argument(
         "--deep",
         action="store_true",
         help="list every serialized object and per-prefab components (uses unityz)",
     )
-    release = commands.add_parser(
+    release = subcommand(
         "unity-release", help="resolve the official Unity editor download for a revision"
     )
     release.add_argument(
@@ -186,17 +203,15 @@ def _parser() -> argparse.ArgumentParser:
     release.add_argument(
         "--platform", default=DEFAULT_PLATFORM, help="editor host platform (default LINUX)"
     )
-    release.add_argument("--json", action="store_true")
+    release.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    status = commands.add_parser(
-        "status", help="report the mod's whole pipeline state without failing"
-    )
-    status.add_argument("--json", action="store_true")
+    status = subcommand("status", help="report the mod's whole pipeline state without failing")
+    status.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    mesh = commands.add_parser(
+    mesh = subcommand(
         "check-mesh", help="check an authored mesh before Unity import (trimesh, glTF validator)"
     )
-    mesh.add_argument("mesh", type=Path)
+    mesh.add_argument("mesh", type=Path, help="the authored mesh (glTF, glb, OBJ, ...)")
     mesh.add_argument(
         "--max-extent",
         type=float,
@@ -204,13 +219,13 @@ def _parser() -> argparse.ArgumentParser:
         help="largest allowed size in metres",
     )
     mesh.add_argument("--strict", action="store_true", help="treat glTF warnings as failures")
-    mesh.add_argument("--json", action="store_true")
+    mesh.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    texture = commands.add_parser(
+    texture = subcommand(
         "check-texture",
         help="check a generated texture's colour space and tiling",
     )
-    texture.add_argument("texture", type=Path)
+    texture.add_argument("texture", type=Path, help="the image to measure")
     texture.add_argument(
         "--matches",
         metavar="R,G,B",
@@ -228,12 +243,10 @@ def _parser() -> argparse.ArgumentParser:
         "--tileable", action="store_true", help="assert the image still wraps at its edges"
     )
     texture.add_argument("--max-tile-ratio", type=float, default=DEFAULT_TILE_RATIO)
-    texture.add_argument("--json", action="store_true")
+    texture.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    sound = commands.add_parser(
-        "check-sound", help="measure a WAV clip and reject unshippable formats"
-    )
-    sound.add_argument("clip", type=Path)
+    sound = subcommand("check-sound", help="measure a WAV clip and reject unshippable formats")
+    sound.add_argument("clip", type=Path, help="the WAV clip to measure")
     sound.add_argument("--max-seconds", type=float, default=DEFAULT_MAX_SECONDS)
     sound.add_argument(
         "--allow-stereo",
@@ -241,14 +254,14 @@ def _parser() -> argparse.ArgumentParser:
         action="store_false",
         help="permit a multi-channel clip (a deliberate 2D UI or music cue)",
     )
-    sound.add_argument("--json", action="store_true")
+    sound.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    review = commands.add_parser(
+    review = subcommand(
         "review-audio",
         help="advisory semantic review of a clip by a configured audio model "
         "(explicit network consent required)",
     )
-    review.add_argument("clip", type=Path)
+    review.add_argument("clip", type=Path, help="the clip to review")
     review.add_argument(
         "--intent",
         type=Path,
@@ -287,9 +300,9 @@ def _parser() -> argparse.ArgumentParser:
         default=audio_review.DEFAULT_TIMEOUT_SECONDS,
         help=f"seconds to wait for the provider (default {audio_review.DEFAULT_TIMEOUT_SECONDS:g})",
     )
-    review.add_argument("--json", action="store_true")
+    review.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    video_review = commands.add_parser(
+    video_review = subcommand(
         "review-video",
         help="advisory semantic review of an adopted clip by a configured vision "
         "model via the deadeye gateway (explicit network consent required)",
@@ -340,18 +353,18 @@ def _parser() -> argparse.ArgumentParser:
         help="seconds to wait for the gateway (default "
         f"{video_review_mod.DEFAULT_TIMEOUT_SECONDS:g})",
     )
-    video_review.add_argument("--json", action="store_true")
+    video_review.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    icons = commands.add_parser(
+    icons = subcommand(
         "check-icons", help="check UIAtlases PNGs and every CustomIcon key under Config/"
     )
     icons.add_argument("--atlas-root", default=DEFAULT_ATLAS_ROOT)
     icons.add_argument(
         "--cell", type=int, default=DEFAULT_CELL, help="expected atlas cell size in pixels"
     )
-    icons.add_argument("--json", action="store_true")
+    icons.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    loc = commands.add_parser(
+    loc = subcommand(
         "check-localization",
         help="reconcile every Config/ localization key with the mod's Localization.csv "
         "(and the game's, so vanilla keys are allowed)",
@@ -370,16 +383,16 @@ def _parser() -> argparse.ArgumentParser:
         action="store_false",
         help="fail vanilla keys too",
     )
-    loc.add_argument("--json", action="store_true")
+    loc.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    patches = commands.add_parser(
+    patches = subcommand(
         "check-patches",
         help="replay Config/ patch XPaths against the game's stock configs and fail "
         "the ones that select zero nodes (the engine silently no-ops those)",
     )
-    patches.add_argument("--json", action="store_true")
+    patches.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    render = commands.add_parser(
+    render = subcommand(
         "render-icon", help="render a bundle prefab into an atlas icon with the editor"
     )
     render.add_argument("prefab", help="bundle stem, or a project-relative Assets/... path")
@@ -393,16 +406,16 @@ def _parser() -> argparse.ArgumentParser:
     render.add_argument(
         "--padding", type=float, default=DEFAULT_PADDING, help="framing headroom factor"
     )
-    render.add_argument("--json", action="store_true")
+    render.add_argument("--json", action="store_true", help="emit machine-readable output")
 
-    capability = commands.add_parser(
+    capability = subcommand(
         "capabilities", help="list optional capabilities, what they unlock, and how to install them"
     )
-    capability.add_argument("--json", action="store_true")
+    capability.add_argument("--json", action="store_true", help="emit machine-readable output")
     capability.add_argument("--versions", action="store_true", help="also probe installed versions")
     capability.add_argument("--missing", action="store_true", help="list only unavailable ones")
 
-    generate = commands.add_parser(
+    generate = subcommand(
         "generate",
         help="run a packaged asset generator (no checkout of this repo needed)",
     )
@@ -416,7 +429,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     generate.add_argument("--list", action="store_true", help="list the generators and exit")
 
-    prompt_parser = commands.add_parser(
+    prompt_parser = subcommand(
         "prompt",
         help="render a house-style image-generation prompt and the lane that follows it",
         add_help=False,
@@ -427,7 +440,7 @@ def _parser() -> argparse.ArgumentParser:
         help='KIND --subject "..."; `shamway prompt --list` names the kinds',
     )
 
-    script_parser = commands.add_parser(
+    script_parser = subcommand(
         "script",
         help="run a packaged host script: install-tools, install-unity-editor, "
         "compile-editor-scripts, playtest-acceptance, playtest-synthesized, playtest-capture",
@@ -436,7 +449,7 @@ def _parser() -> argparse.ArgumentParser:
         "arguments", nargs=argparse.REMAINDER, help="`shamway script --list` names them"
     )
 
-    client_parser = commands.add_parser(
+    client_parser = subcommand(
         "client",
         help="fresh-client acceptance: where, deploy, launch, log, capture, mute, unmute,"
         " disable-discord",
@@ -451,7 +464,7 @@ def _parser() -> argparse.ArgumentParser:
     # Registered for `--help` only; `main` intercepts it before parsing, the
     # same way it does prompt, script and client. Without this row the command
     # exists, works, and is documented everywhere except where someone looks.
-    acceptance_parser = commands.add_parser(
+    acceptance_parser = subcommand(
         "acceptance-provider",
         help="generate the 7dtd-playtest provider that loads every bundle member in a live client",
         add_help=False,
@@ -462,30 +475,39 @@ def _parser() -> argparse.ArgumentParser:
         help="passed through; `shamway acceptance-provider --help` lists them",
     )
 
-    documentation = commands.add_parser(
+    documentation = subcommand(
         "docs", help="print this pipeline's documentation, from the installed package"
     )
     documentation.add_argument("topic", nargs="?", help="omit to list the topics")
     documentation.add_argument("--json", action="store_true", help="machine-readable topic list")
 
-    schema = commands.add_parser("schema", help="print the machine-readable operation contract")
+    schema = subcommand("schema", help="print the machine-readable operation contract")
     schema.add_argument("--json", action="store_true", default=True, help=argparse.SUPPRESS)
 
-    call = commands.add_parser("call", help="run one operation by name with JSON parameters")
+    call = subcommand("call", help="run one operation by name with JSON parameters")
     call.add_argument("operation")
     call.add_argument("--params", default="{}", help="JSON object of parameters")
 
-    server = commands.add_parser(
-        "serve", help="line-delimited JSON requests on stdin, responses on stdout"
-    )
+    server = subcommand("serve", help="line-delimited JSON requests on stdin, responses on stdout")
     server.add_argument(
         "--allow-writes", action="store_true", help="permit operations that write files"
     )
 
-    commands.add_parser("refs", help="list bundle references discovered recursively in Config/")
-    check_log = commands.add_parser("check-log", help="fail on Unity disabled-module warnings")
-    check_log.add_argument("log", type=Path)
+    subcommand("refs", help="list bundle references discovered recursively in Config/")
+    check_log = subcommand("check-log", help="fail on Unity disabled-module warnings")
+    check_log.add_argument("log", type=Path, help="the Unity log to scan")
     return parser
+
+
+def subcommands() -> dict[str, argparse.ArgumentParser]:
+    """Every subcommand parser, keyed by the name that selects it.
+
+    argparse exposes the group only as a private attribute, so the cast is
+    the one place this module reaches past the public surface; the tests read
+    the same parsers `--help` renders rather than a second, drifting copy.
+    """
+    group = cast(Any, _parser()._subparsers)
+    return {name: sub for action in group._group_actions for name, sub in action.choices.items()}
 
 
 def _init_next_step(bundle_source: str) -> str:

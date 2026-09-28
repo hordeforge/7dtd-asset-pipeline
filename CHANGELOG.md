@@ -14,6 +14,11 @@ tag has no changelog section.
 
 ### Added
 
+- `shamway --version`, which printed a usage error instead.
+- `--config` on every subcommand, not only before the command name.
+  `shamway status --config mod/.shamway.toml` was an unrecognized-argument
+  error next to a working `shamway --config mod/.shamway.toml status`, and
+  every subcommand's `--help` now shows the flag.
 - `make smoke`, the two lines the `test`, `macos` and `capabilities` CI jobs
   each run before the suite (`shamway --help` and `shamway schema`). A
   dispatcher that raised on `--help` failed only after a push, because no

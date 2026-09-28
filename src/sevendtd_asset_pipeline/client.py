@@ -1508,12 +1508,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     where = sub.add_parser("where", help="print the per-user Mods/ and logs/ paths the client uses")
-    where.add_argument("--json", action="store_true")
+    where.add_argument("--json", action="store_true", help="emit machine-readable output")
 
     deploy = sub.add_parser(
         "deploy", help="copy the deployable modlet into the client's Mods/ folder"
     )
-    deploy.add_argument("mod_root", type=Path)
+    deploy.add_argument("mod_root", type=Path, help="the modlet directory to deploy")
     deploy.add_argument(
         "--name", default=None, help="folder name; defaults to the ModInfo.xml Name"
     )
@@ -1532,7 +1532,7 @@ def main(argv: list[str] | None = None) -> int:
     launch.add_argument("--mod-name", default=None, help="require 'Loaded Mod: NAME' in the log")
     launch.add_argument("--steam-bin", default="steam")
     launch.add_argument("--log-dir", type=Path, default=None)
-    launch.add_argument("--json", action="store_true")
+    launch.add_argument("--json", action="store_true", help="emit machine-readable output")
     launch.add_argument("extra", nargs="*", help="additional client arguments")
 
     hold = sub.add_parser(
@@ -1553,7 +1553,7 @@ def main(argv: list[str] | None = None) -> int:
     log.add_argument("--path", type=Path, default=None, help="a specific log instead of the newest")
     log.add_argument("--mod-name", default=None)
     log.add_argument("--log-dir", type=Path, default=None)
-    log.add_argument("--json", action="store_true")
+    log.add_argument("--json", action="store_true", help="emit machine-readable output")
 
     mute = sub.add_parser("mute", help="mute the running client's audio stream")
     mute.add_argument("--wait", type=int, default=60)
@@ -1593,7 +1593,7 @@ def main(argv: list[str] | None = None) -> int:
         help="capture even though no client is running;"
         " a frame of a menu proves nothing about an asset",
     )
-    shot.add_argument("--json", action="store_true")
+    shot.add_argument("--json", action="store_true", help="emit machine-readable output")
 
     discord = sub.add_parser("disable-discord", help="set DiscordDisabled in the Proton user.reg")
     discord.add_argument("--user-reg", type=Path, default=None)

@@ -120,16 +120,29 @@ class IconReport:
 
 
 def read_png_header(path: Path) -> tuple[int, int, int, int]:
-    """Return (width, height, bit_depth, colour_type) from a PNG's IHDR chunk."""
+    """Return (width, height, bit_depth, colour_type) from a PNG's IHDR chunk.
+
+    A PNG in a mod's atlas directory is untrusted input, so the two fixed-size
+    reads are length-checked: `struct.unpack` raises `struct.error`, not
+    `OSError`, on a short buffer, and a file truncated inside its own IHDR
+    would leave the caller with a traceback from the gate instead of the
+    report naming the file.
+    """
     try:
         with path.open("rb") as handle:
             signature = handle.read(8)
             if signature != PNG_SIGNATURE:
                 raise PipelineError(f"{path} is not a PNG (bad signature)")
-            length, chunk = struct.unpack(">I4s", handle.read(8))
+            header = handle.read(8)
+            if len(header) < 8:
+                raise PipelineError(f"{path} ends before its first chunk; it is truncated")
+            length, chunk = struct.unpack(">I4s", header)
             if chunk != b"IHDR" or length < 13:
                 raise PipelineError(f"{path} has no IHDR chunk; it is not a usable PNG")
-            width, height, depth, colour = struct.unpack(">IIBB", handle.read(10))
+            body = handle.read(10)
+            if len(body) < 10:
+                raise PipelineError(f"{path} ends inside its IHDR chunk; it is truncated")
+            width, height, depth, colour = struct.unpack(">IIBB", body)
     except OSError as exc:
         raise PipelineError(f"cannot read {path}: {exc}") from exc
     except struct.error as exc:
@@ -137,6 +150,8 @@ def read_png_header(path: Path) -> tuple[int, int, int, int]:
         # is a PipelineError, and a traceback out of an atlas scan loses the
         # report on every other icon in it.
         raise PipelineError(f"{path} is a truncated PNG: {exc}") from exc
+    if width == 0 or height == 0:
+        raise PipelineError(f"{path} declares a {width}x{height} image; a PNG has no zero side")
     return width, height, depth, colour
 
 

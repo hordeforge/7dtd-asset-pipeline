@@ -6,11 +6,15 @@ helpers below are that one copy: intent documents are decoded and read by the
 per-lane `parse_intent` these modules own, so only the decode, read, hashing,
 and redaction halves live here.
 
-Redaction also abbreviates the host's home directory. An evidence document is
-written to be read by somebody else, and an absolute path carries the account
-name of whoever ran the review: `/home/<user>/...` names a person in every
-document that cites a clip, an intent file, or an asset source. The path stays
-citeable as `~/...`, which is all a reader ever used it for.
+Redaction also abbreviates the host's home directory, and scrubs this host's
+own credentials out of free text. An evidence document is written to be read
+by somebody else, and an absolute path carries the account name of whoever ran
+the review: `/home/<user>/...` names a person in every document that cites a
+clip, an intent file, or an asset source. The path stays citeable as
+`~/...`, which is all a reader ever used it for. A credential reaches the same
+document the same way when the gateway inherits this environment and an error
+envelope quotes the request that carried the key, and that one has no citeable
+part worth keeping.
 """
 
 from __future__ import annotations
@@ -18,7 +22,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -82,11 +87,69 @@ def abbreviate_home(text: str) -> str:
     return text
 
 
+REDACTED = "[redacted]"
+# A secret shorter than this is not worth replacing every occurrence of: the
+# shortest credential a provider issues is far longer, and a two-character
+# "secret" in the environment would otherwise rewrite half the document.
+MIN_SECRET_VALUE_LENGTH = 8
+# A credential named in free text rather than under a key the drop rule can
+# see: an HTTP layer quoting the request that carried it, a gateway envelope
+# echoing an Authorization header, a traceback with the URL it was refused
+# for. The two markers such a leak carries are the field name it was sent
+# under and the scheme that introduces it; the named form is tried first
+# because `Authorization: Bearer <key>` is one match, not two.
+INLINE_CREDENTIAL = re.compile(
+    r"(?i)(?:x-goog-api-key|x-api-key|api[-_]?key|apikey|access[-_]?token"
+    r"|auth[-_]?token|authorization|password|secret)[\"']?\s*[:=]\s*[\"']?"
+    r"(?:bearer\s+|basic\s+)?[A-Za-z0-9._~+/=-]{8,}"
+    r"|\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"
+)
+
+
+def environment_secrets(env: Mapping[str, str] | None = None) -> tuple[str, ...]:
+    """The credential-bearing values in this process's environment.
+
+    A provider key is never an argument and never under a key this module can
+    drop, so the only place it can reach a stored document is inside a string
+    somebody else wrote: the gateway inherits the whole environment, and an
+    error envelope from it can quote the request that carried the key. The
+    value is known here, so free text can be compared against it.
+    """
+    environment = os.environ if env is None else env
+    return tuple(
+        value
+        for name, value in environment.items()
+        if len(value) >= MIN_SECRET_VALUE_LENGTH
+        and _is_sensitive_key(name)
+        # A variable named for a token can hold a path instead of a token
+        # (`*_FREETOKEN_PATH` names a directory), and a path is already
+        # abbreviated to `~/...` where it appears. Replacing one would strip
+        # the citation an evidence document exists to keep.
+        and not os.path.exists(value)
+    )
+
+
+def scrub(value: str, secrets: tuple[str, ...] | None = None) -> str:
+    """Replace this host's credentials, and inline credential syntax, in one string.
+
+    Two passes, because the two leaks have different shapes: a known secret
+    has no marker to look for, and an unknown one has no value to compare
+    against. Longest first, so a secret that contains another is replaced
+    whole rather than leaving a tail behind.
+    """
+    known = secrets if secrets is not None else environment_secrets()
+    for secret in sorted(known, key=len, reverse=True):
+        if secret in value:
+            value = value.replace(secret, REDACTED)
+    return INLINE_CREDENTIAL.sub(REDACTED, value)
+
+
 def redact(value: Any, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> Any:
     """Deep-copy a JSON-shaped value, dropping credential-bearing mapping keys.
 
-    Every string is passed through `abbreviate_home`, so a stored document
-    never names the account that produced it.
+    Every string is passed through `abbreviate_home` and `scrub`, so a stored
+    document never names the account that produced it and never carries a
+    credential the key-drop rule cannot see.
     """
     if isinstance(value, dict):
         return {
@@ -97,7 +160,7 @@ def redact(value: Any, parts: tuple[str, ...] = SENSITIVE_KEY_PARTS) -> Any:
     if isinstance(value, list):
         return [redact(item, parts) for item in value]
     if isinstance(value, str):
-        return abbreviate_home(value)
+        return scrub(abbreviate_home(value))
     return value
 
 

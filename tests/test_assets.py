@@ -135,6 +135,19 @@ class IconTests(unittest.TestCase):
         write_png(self.atlas / "myModThing.png", 160, 160)
         self.assertEqual((160, 160, 8, 6), read_png_header(self.atlas / "myModThing.png"))
 
+    def test_a_png_truncated_inside_its_header_is_a_named_failure(self) -> None:
+        """A mod's atlas PNG is untrusted, so a short read must not be a traceback."""
+        write_png(self.atlas / "myModThing.png", 160, 160)
+        truncated = self.atlas / "myModTruncated.png"
+        truncated.write_bytes((self.atlas / "myModThing.png").read_bytes()[:14])
+        with self.assertRaisesRegex(PipelineError, "myModTruncated.png ends before"):
+            read_png_header(truncated)
+
+    def test_a_png_declaring_a_zero_side_is_refused(self) -> None:
+        write_png(self.atlas / "myModThing.png", 0, 160)
+        with self.assertRaisesRegex(PipelineError, "0x160"):
+            read_png_header(self.atlas / "myModThing.png")
+
     def test_accepts_a_correct_cell_and_resolves_its_key(self) -> None:
         write_png(self.atlas / "myModThing.png", 160, 160)
         config = self._config(

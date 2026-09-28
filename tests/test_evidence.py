@@ -193,6 +193,51 @@ class RedactionTests(unittest.TestCase):
             '{"parameters": {"seed": 3}}', json.dumps(evidence.redact(document), sort_keys=True)
         )
 
+    def test_a_credential_in_free_text_is_scrubbed_under_any_key_name(self) -> None:
+        """The gateway inherits the environment, so its envelope can quote the key.
+
+        The drop rule above only sees mapping keys. A gateway error that
+        echoes the request that carried the key puts it inside an ordinary
+        string under a name like `error`, which is what a stored evidence
+        document written to be read by somebody else must not carry.
+        """
+        document = {"gateway": {"error": "401 for x-goog-api-key: AIzaSyD9xQ2mVb7Kt3Rp"}}
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "AIzaSyD9xQ2mVb7Kt3Rp"}):
+            scrubbed = evidence.redact(document)
+        self.assertEqual({"gateway": {"error": "401 for x-goog-api-key: [redacted]"}}, scrubbed)
+
+    def test_a_credential_from_the_environment_is_scrubbed_wherever_it_appears(self) -> None:
+        with mock.patch.dict(os.environ, {"SOME_VENDOR_TOKEN": "tok-abcdef123456"}):
+            scrubbed = evidence.redact({"note": "gateway echoed tok-abcdef123456 in prose"})
+        self.assertEqual({"note": "gateway echoed [redacted] in prose"}, scrubbed)
+
+    def test_inline_credential_syntax_is_scrubbed_without_knowing_the_value(self) -> None:
+        """A credential this process never held is still not evidence."""
+        self.assertEqual(
+            {"error": "[redacted]"},
+            evidence.redact({"error": "Authorization: Bearer sk-live-0123456789"}),
+        )
+
+    def test_a_short_environment_value_is_not_used_as_a_pattern(self) -> None:
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "abc"}):
+            self.assertEqual("abc", evidence.scrub("abc"))
+            self.assertNotIn("abc", evidence.environment_secrets())
+
+    def test_a_sensitive_name_holding_a_path_is_not_treated_as_a_credential(self) -> None:
+        """`*_TOKEN_PATH` names a directory; a citation is not a secret."""
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.dict(os.environ, {"VENDOR_TOKEN_PATH": tmp}),
+        ):
+            self.assertNotIn(tmp, evidence.environment_secrets())
+
+    def test_ordinary_prose_survives_redaction(self) -> None:
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "AIzaSyD9xQ2mVb7Kt3Rp"}):
+            self.assertEqual(
+                "the ring was centred and the beeps were clean",
+                evidence.redact("the ring was centred and the beeps were clean"),
+            )
+
 
 class HomeAbbreviationTests(unittest.TestCase):
     """A stored document must not carry the account name of whoever ran the run."""

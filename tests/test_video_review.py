@@ -374,6 +374,55 @@ class RunReviewTests(_ReviewHarness):
                 time.sleep(0.05)
             self.fail(f"worker {pid} survived its timed-out process group")
 
+    @unittest.skipUnless(os.name == "posix", "process groups are POSIX")
+    def test_an_interrupted_gateway_reaps_its_worker_group(self) -> None:
+        """A read that ends early kills the group the deadline would have.
+
+        The gateway runs in its own session, so nothing outside this process
+        signals it: a run stopped part-way (an OSError off the pipe, or the
+        person pressing Ctrl-C) has to take the workers down itself.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            pid_file = Path(directory) / "worker.pid"
+            program = (
+                "import pathlib, subprocess, sys, time; "
+                "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+                "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(60)"
+            )
+            real_communicate = subprocess.Popen.communicate
+            interrupted: list[bool] = []
+
+            def interrupt_once(
+                child: subprocess.Popen[str],
+                timeout: float | None = None,
+            ) -> tuple[object, object]:
+                if not interrupted:
+                    # Let the gateway start its worker first, or the kill is
+                    # measured against a group that never had two members.
+                    deadline = time.monotonic() + 5
+                    while time.monotonic() < deadline and not pid_file.is_file():
+                        time.sleep(0.05)
+                    interrupted.append(True)
+                    raise KeyboardInterrupt
+                return real_communicate(child, timeout=timeout)
+
+            with (
+                mock.patch.object(subprocess.Popen, "communicate", interrupt_once),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                video_review._default_runner([sys.executable, "-c", program, str(pid_file)], 60)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if pid_file.is_file():
+                    pid = int(pid_file.read_text())
+                    try:
+                        os.kill(pid, 0)
+                    except ProcessLookupError:
+                        break
+                time.sleep(0.05)
+            else:
+                self.fail("the gateway worker survived the interrupted process group")
+
     def test_evidence_names_the_source_hash_and_gateway_envelope(self) -> None:
         output = self.root / "evidence" / "review.json"
         report = self._run(output=output)

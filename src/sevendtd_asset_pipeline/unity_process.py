@@ -145,7 +145,13 @@ def _run(command: Sequence[str], timeout: float | None) -> subprocess.CompletedP
     )
     try:
         returncode = process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except BaseException:
+        # Every exit that is not a clean return ends the editor the same way,
+        # the deadline and the person pressing Ctrl-C alike. A new session
+        # takes the child out of the terminal's process group, so the signal
+        # that raised here never reached it: an interrupted build would leave
+        # a headless editor and its AssetImportWorker children running against
+        # Library/, which is exactly the orphan this module exists to prevent.
         _kill_group(process)
         raise
     return subprocess.CompletedProcess(list(command), returncode)

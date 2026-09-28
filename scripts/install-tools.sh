@@ -26,6 +26,25 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$TMPDIR"
 export TMPDIR
 
+# Every temporary below is registered here and removed by one EXIT trap. A
+# cleanup line at the end of each install function is not a guarantee: `set -e`
+# aborts the whole script on a failed extract or install, and these payloads run
+# to hundreds of megabytes, so one stranded Blender or vkd3d archive per failed
+# run is megabytes per run nobody chose to keep. Functions still remove their
+# own temporaries on the way out, so a long install run does not hold the
+# previous tool's staging directory until it finishes.
+TEMPORARIES=()
+register_temporary() {
+	TEMPORARIES+=("$1")
+}
+discard_temporaries() {
+	local path
+	for path in "${TEMPORARIES[@]+"${TEMPORARIES[@]}"}"; do
+		[[ -n "$path" ]] && rm -rf -- "$path"
+	done
+}
+trap discard_temporaries EXIT
+
 WITH_AUTHORING=0
 WITH_UNITY_PREREQS=0
 WITH_RESEARCH=0
@@ -543,6 +562,8 @@ install_uv() {
 
 	archive="$(mktemp)"
 	staging="$(mktemp -d)"
+	register_temporary "$archive"
+	register_temporary "$staging"
 	echo "Installing official uv from $url"
 	if ! curl --fail --location --silent --show-error --max-time 300 "$url" -o "$archive"; then
 		echo "note: uv download failed; skipped"
@@ -622,6 +643,7 @@ build_vkd3d_from_source() {
 		return 1
 	fi
 	workspace="$(mktemp -d)"
+	register_temporary "$workspace"
 	# Removed on every exit, including a failed configure: a half-built tree
 	# under /tmp is the kind of thing a later run silently reuses.
 	trap 'rm -rf "$workspace"' RETURN
@@ -724,6 +746,8 @@ install_blender() {
 
 	archive="$(mktemp)"
 	staging="$(mktemp -d)"
+	register_temporary "$archive"
+	register_temporary "$staging"
 	echo "Installing official Blender $version (about 400 MB)"
 	if ! curl --fail --location --silent --show-error --max-time 900 "$url" -o "$archive"; then
 		echo "note: Blender download failed; skipped"
@@ -772,6 +796,8 @@ install_gltf_validator() {
 	fi
 	archive="$(mktemp)"
 	staging="$(mktemp -d)"
+	register_temporary "$archive"
+	register_temporary "$staging"
 	echo "Installing gltf_validator from $url"
 	if curl --fail --location --silent --show-error --max-time 120 "$url" -o "$archive" &&
 		tar -xJf "$archive" -C "$staging" 2>/dev/null &&
@@ -815,6 +841,8 @@ install_binary_release() {
 	fi
 	archive="$(mktemp)"
 	staging="$(mktemp -d)"
+	register_temporary "$archive"
+	register_temporary "$staging"
 	echo "Installing $tool from $url"
 	if curl --fail --location --silent --show-error --max-time 180 "$url" -o "$archive"; then
 		case "$suffix" in
@@ -864,6 +892,8 @@ install_assetripper() {
 	fi
 	archive="$(mktemp)"
 	staging="$(mktemp -d)"
+	register_temporary "$archive"
+	register_temporary "$staging"
 	echo "Installing AssetRipper from $url"
 	if curl --fail --location --silent --show-error --max-time 180 "$url" -o "$archive" &&
 		tar -xJf "$archive" -C "$staging" &&
@@ -972,6 +1002,7 @@ install_zmolv() {
 		return
 	fi
 	clone="$(mktemp -d)"
+	register_temporary "$clone"
 	echo "Building zmol-v ($ZMOLV_PINNED_COMMIT) for the Vulkan shader lane"
 	if git clone --quiet "$ZMOLV_REPO" "$clone/zmol-v" &&
 		git -C "$clone/zmol-v" checkout --quiet "$ZMOLV_PINNED_COMMIT" &&

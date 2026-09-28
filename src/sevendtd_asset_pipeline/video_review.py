@@ -399,18 +399,40 @@ def _default_runner(argv: Sequence[str], timeout: float) -> subprocess.Completed
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired as exc:
-            if os.name == "posix":
-                with suppress(ProcessLookupError):
-                    os.killpg(process.pid, signal.SIGKILL)
-            else:  # pragma: no cover - exercised on Windows
-                process.kill()
-            process.communicate()
+            _kill_gateway_group(process)
             raise PipelineError(
                 f"the {GATEWAY} gateway did not answer within {timeout:g}s; no verdict was produced"
             ) from exc
+        except BaseException:
+            # A read that fails part-way, and the person pressing Ctrl-C, end
+            # the gateway the way the deadline does. A fresh session puts it
+            # outside this terminal's process group, so nothing else signals
+            # it, and its upload and model-worker children would outlive the
+            # request that started them.
+            _kill_gateway_group(process)
+            raise
     except OSError as exc:
         raise PipelineError(f"could not run the {GATEWAY} gateway: {exc}") from exc
     return subprocess.CompletedProcess(list(argv), process.returncode, stdout, stderr)
+
+
+def _kill_gateway_group(process: subprocess.Popen[str]) -> None:
+    """SIGKILL the gateway's whole process group, then reap it.
+
+    Reaping matters as much as the signal: without it the gateway stays a
+    zombie of this process for as long as the interpreter lives, and the
+    pipes it was writing to stay open.
+    """
+    if os.name == "posix":
+        with suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+    else:  # pragma: no cover - exercised on Windows
+        process.kill()
+    # The reaping read can itself fail on a process that just died; the kill
+    # above is what this function exists to deliver, so its failure is not
+    # allowed to replace the error the caller is already raising.
+    with suppress(OSError, ValueError):
+        process.communicate()
 
 
 def _adopted_clip_record(clip: Path, capture_root: Path) -> dict[str, Any] | None:

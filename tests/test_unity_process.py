@@ -148,6 +148,44 @@ class BoundedKillTests(unittest.TestCase):
             for pid in pids:
                 self.assertFalse(_alive(pid), f"pid {pid} survived the timeout")
 
+    def test_an_interrupted_build_leaves_no_orphan_behind(self) -> None:
+        """The way a person actually stops a build is Ctrl-C, not the deadline.
+
+        A new session puts the editor outside this terminal's process group, so
+        the interrupt that ends the wait never reaches it: without the group
+        kill the editor and its import workers survive the run that started
+        them and hold Library/ against the next launch.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            pids_file = Path(directory) / "pids"
+            script = f"echo $$ > {pids_file}; sleep 30 & echo $! >> {pids_file}; wait"
+            real_wait = subprocess.Popen.wait
+            interrupted: list[bool] = []
+
+            def interrupt_once(child: subprocess.Popen[bytes], timeout: float | None = None) -> int:
+                if not interrupted:
+                    # Let the shell reach its workers first: an interrupt
+                    # delivered before the group has two members proves
+                    # nothing about what the kill reaches.
+                    deadline = time.monotonic() + self.GRACE_SECONDS
+                    while time.monotonic() < deadline and not pids_file.is_file():
+                        time.sleep(0.05)
+                    interrupted.append(True)
+                    raise KeyboardInterrupt
+                return real_wait(child)
+
+            with (
+                mock.patch.object(subprocess.Popen, "wait", interrupt_once),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                run_unity(["bash", "-c", script], timeout=30)
+            pids = [int(value) for value in pids_file.read_text(encoding="utf-8").split()]
+            deadline = time.monotonic() + self.GRACE_SECONDS
+            while time.monotonic() < deadline and any(_alive(pid) for pid in pids):
+                time.sleep(0.05)
+            for pid in pids:
+                self.assertFalse(_alive(pid), f"pid {pid} survived the interrupt")
+
 
 class EditorDataDirTests(unittest.TestCase):
     """UNITY_EDITOR's assembly root is probed from the binary, not the OS name.

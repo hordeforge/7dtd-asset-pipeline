@@ -25,6 +25,23 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$TMPDIR"
 export TMPDIR
 
+# One EXIT trap owns every temporary this script makes. A `trap ... RETURN`
+# only fires when a function returns, and the editor and Windows-module
+# installs exit the whole script on an unverified checksum or an archive that
+# does not contain the editor: that path strands the several-gigabyte archive
+# and its staging tree, which is the largest thing this script ever writes.
+TEMPORARIES=()
+register_temporary() {
+	TEMPORARIES+=("$1")
+}
+discard_temporaries() {
+	local path
+	for path in "${TEMPORARIES[@]+"${TEMPORARIES[@]}"}"; do
+		[[ -n "$path" ]] && rm -rf -- "$path"
+	done
+}
+trap discard_temporaries EXIT
+
 HUB_APP_ID="com.unity.UnityHub"
 VERSION=""
 PROJECT=""
@@ -167,6 +184,7 @@ activate_license_in_hub() {
 	fi
 	local hub_log
 	hub_log="$(mktemp)"
+	register_temporary "$hub_log"
 	echo "Opening Unity Hub"
 	flatpak run "$HUB_APP_ID" >"$hub_log" 2>&1 &
 	cat <<'PROMPT'
@@ -218,6 +236,8 @@ install_editor() {
 	fi
 	archive="$(mktemp)"
 	staging="$(mktemp -d)"
+	register_temporary "$archive"
+	register_temporary "$staging"
 	trap 'rm -f "$archive"; rm -rf "$staging"' RETURN
 	download_verified "$EDITOR_URL" "$EDITOR_MD5" "$archive"
 	echo "Unpacking Unity $VERSION (this takes a while)"
@@ -288,6 +308,8 @@ ensure_windows_build_support() {
 	done
 	archive="$(mktemp)"
 	staging="$(mktemp -d)"
+	register_temporary "$archive"
+	register_temporary "$staging"
 	trap 'rm -f "$archive"; rm -rf "$staging"' RETURN
 	package_dir="$staging/package"
 	extracted_dir="$staging/extracted"
@@ -316,6 +338,7 @@ verify_license() {
 		return
 	fi
 	log="$(mktemp)"
+	register_temporary "$log"
 	if "$editor" -batchmode -nographics -quit -projectPath "$PROJECT" -logFile "$log"; then
 		rm -f "$log"
 		echo "OK: Unity batch-mode license is active"

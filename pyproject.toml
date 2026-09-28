@@ -13,14 +13,23 @@ dynamic = ["version"]
 description = "Write, gate and validate Unity asset bundles for 7 Days to Die mods, with no Unity editor"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+# SPDX expression, not the `{ text = ... }` table. Setuptools deprecated the
+# table and the matching `License ::` classifier, and both reach removal on
+# 2027-02-18. The classifiers below carry no license line for the same reason:
+# setuptools refuses an SPDX expression and a license classifier together.
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "ywy50" }]
 keywords = ["7-days-to-die", "7dtd", "unity", "assetbundle", "modding"]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
+  # The minors ci.yml's matrix actually tests, so the published wheel claims
+  # exactly the interpreters the suite runs against.
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Games/Entertainment",
 ]
 
@@ -82,8 +91,10 @@ dev = [
 shamway = "sevendtd_asset_pipeline.cli:main"
 
 [project.urls]
+Homepage = "https://github.com/hordeforge/7dtd-asset-pipeline"
 Repository = "https://github.com/hordeforge/7dtd-asset-pipeline"
 Issues = "https://github.com/hordeforge/7dtd-asset-pipeline/issues"
+Documentation = "https://github.com/hordeforge/7dtd-asset-pipeline#readme"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -1,20 +1,22 @@
-"""The release contract: one version, a changelog the release reads, and a
-public surface that only moves deliberately.
+"""The release contract: one version, one set of published metadata, a changelog
+the release reads, and a public surface that only moves deliberately.
 
 Releases are tag-driven (docs/runbooks/release-checklist.md and
 CONTRIBUTING.md): a `vX.Y.Z` tag must carry an artifact whose version equals
 the tag, and since the release workflow publishes the tag's own CHANGELOG.md
 section as its notes, a version without a section cannot ship. These tests pin
 the wiring that makes that honest: the version is declared once, pyproject.toml
-reads it instead of holding a second copy that can drift, the changelog keeps
-the sections the release workflow greps, and a name leaving the supported
-`__all__` surface is declared in the changelog rather than discovered by a
-consumer's ImportError.
+reads it instead of holding a second copy that can drift, the license is an
+SPDX expression whose file exists and whose classifiers match the interpreters
+ci.yml tests, the changelog keeps the sections the release workflow greps, and a
+name leaving the supported `__all__` surface is declared in the changelog
+rather than discovered by a consumer's ImportError.
 """
 
 from __future__ import annotations
 
 import re
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -58,6 +60,75 @@ class VersionDeclarationTests(ReleaseContractCase):
             r"^\d+\.\d+\.\d+$",
             "the release gate compares __version__ to vX.Y.Z tags verbatim",
         )
+
+
+class PackagingMetadataTests(ReleaseContractCase):
+    """The published wheel's own metadata, checked against what ships with it.
+
+    Nothing in the suite saw a deprecation from the build log before this:
+    `project.license` as a TOML table and the `License ::` classifier beside it
+    were both deprecated by setuptools with a 2027-02-18 removal, so a build
+    that still works today would stop working with a setuptools upgrade and the
+    only signal would be a warning scrollback nobody reads. These assertions
+    are the warning.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+            "project"
+        ]
+
+    def test_license_is_an_spdx_expression_not_a_table(self) -> None:
+        self.assertEqual(
+            self.project["license"],
+            "MIT",
+            "setuptools deprecated the `license = { text = ... }` table form and "
+            "removes it on 2027-02-18; an SPDX string is the supported form",
+        )
+
+    def test_the_license_file_is_named_and_present(self) -> None:
+        """An unnamed license ships no license text inside the wheel."""
+        declared = self.project["license-files"]
+        self.assertTrue(declared, "license-files must name the file to install")
+        for name in declared:
+            with self.subTest(name):
+                self.assertTrue(
+                    (REPO_ROOT / name).is_file(),
+                    f"pyproject.toml declares license file {name!r}, which is not in the tree",
+                )
+
+    def test_no_license_classifier_survives_the_spdx_expression(self) -> None:
+        """Setuptools refuses an SPDX expression and a license classifier together."""
+        stale = [c for c in self.project["classifiers"] if c.startswith("License ::")]
+        self.assertEqual(
+            stale, [], "the SPDX expression above replaced these; both at once is an error"
+        )
+
+    def test_the_homepage_names_the_repository(self) -> None:
+        """The wheel's front page has a Homepage field, not only a Repository URL."""
+        repository = self.project["urls"]["Repository"]
+        self.assertEqual(self.project["urls"]["Homepage"], repository)
+
+    def test_python_classifiers_match_the_untested_interpreters(self) -> None:
+        """The wheel claims exactly the minors ci.yml runs the suite against.
+
+        A claimed minor nobody tested is an untested support promise; a tested
+        minor with no classifier is support the metadata hides.
+        """
+        matrix = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        found = re.search(r"python-version:\s*\[([^\]]+)\]", matrix)
+        if found is None:
+            self.fail("ci.yml no longer declares a python-version matrix")
+        tested = set(re.findall(r'"(\d+\.\d+)"', found.group(1)))
+        self.assertTrue(tested, "parsed an empty python-version matrix out of ci.yml")
+        claimed = {
+            c.rsplit(" ", 1)[1]
+            for c in self.project["classifiers"]
+            if c.startswith("Programming Language :: Python :: ")
+            and re.fullmatch(r"\d+\.\d+", c.rsplit(" ", 1)[1])
+        }
+        self.assertEqual(claimed, tested, "classifiers and ci.yml's matrix disagree")
 
 
 class ChangelogTests(ReleaseContractCase):

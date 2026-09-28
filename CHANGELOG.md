@@ -44,6 +44,19 @@ tag has no changelog section.
   with nothing recorded in the repository. `make coverage` and the
   `coverage-badge` CI job now take it from the same locked dev group as
   `ruff` and `mypy`.
+- The published wheel's license metadata moved to the SPDX form.
+  `project.license` is the string `MIT` and `license-files` names the
+  `LICENSE` the wheel already installed, replacing the `{ text = "MIT" }`
+  table and the `License :: OSI Approved :: MIT License` classifier. Both
+  were deprecated by setuptools with a 2027-02-18 removal, and a build that
+  still succeeds today stops building on a setuptools upgrade. The wheel's
+  core metadata carries `License-Expression: MIT` in place of `License: MIT`,
+  and `tests/test_release_contract.py` fails if either deprecated form returns.
+- The wheel declares a `Homepage` and a `Documentation` project URL, and
+  `Programming Language :: Python :: 3.11/3.12/3.13` classifiers matching the
+  matrix `ci.yml` tests. A gate in `tests/test_release_contract.py` reads that
+  matrix, so the published metadata cannot claim an interpreter the suite does
+  not run, or omit one it does.
 - `texture2ddecoder` moved from the `writer`, `inspect` and `all` extras to
   the `dev` dependency group. Only the block-compression cross-check in
   `tests/test_block_compress.py` imports it, so a consumer installing

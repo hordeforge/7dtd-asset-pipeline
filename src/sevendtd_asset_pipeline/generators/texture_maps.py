@@ -71,6 +71,8 @@ MISSING = None
 try:
     import numpy as np
     from PIL import Image, ImageFilter
+
+    from .noise import tileable_noise
 except ImportError as error:  # pragma: no cover - depends on host packages
     # Deferred, not fatal: --help must work on a bare host, so someone can read
     # what this needs before installing anything.
@@ -206,26 +208,6 @@ def mask_map(
         np.clip(smoothness, 0.0, 1.0),
     ]
     return np.stack([np.clip(c * 255.0, 0, 255).astype(np.uint8) for c in channels], axis=-1)
-
-
-def tileable_noise(
-    size: int, rng: np.random.Generator, exponent: float, anisotropy: float
-) -> np.ndarray:
-    """Periodic noise: white noise shaped in the frequency domain.
-
-    Filtering an FFT and transforming back yields a field that wraps exactly.
-    `exponent` is the spectral slope (more negative = smoother, larger
-    features); `anisotropy` > 1 stretches the surviving frequencies along V.
-    """
-    field = rng.standard_normal((size, size))
-    fy = np.fft.fftfreq(size)[:, None]
-    fx = np.fft.fftfreq(size)[None, :]
-    radius = np.sqrt((fx * anisotropy) ** 2 + (fy / anisotropy) ** 2)
-    radius[0, 0] = 1e-6
-    shaped = np.fft.ifft2(np.fft.fft2(field) * radius**exponent).real
-    shaped -= shaped.mean()
-    peak = np.abs(shaped).max()
-    return shaped / peak if peak > 1e-9 else shaped
 
 
 # ---------------------------------------------------------------------- CLI

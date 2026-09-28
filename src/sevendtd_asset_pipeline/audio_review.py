@@ -99,14 +99,6 @@ ADVISORY_NOTE = (
 
 
 @dataclass(frozen=True)
-class ReferenceClip:
-    """A comparison clip the author supplies, and why it is worth hearing."""
-
-    path: Path
-    purpose: str
-
-
-@dataclass(frozen=True)
 class AudioReviewIntent:
     """The recorded intended use a reviewer needs besides the waveform."""
 
@@ -121,7 +113,7 @@ class AudioReviewIntent:
     desired_qualities: str
     avoid: tuple[str, ...]
     questions: tuple[str, ...]
-    references: tuple[ReferenceClip, ...]
+    references: tuple[evidence.ReferenceAsset, ...]
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -216,25 +208,6 @@ def parse_intent(data: Any, origin: str) -> AudioReviewIntent:
             raise PipelineError(f"{origin}: playback.{key} must be a positive number")
         return float(value)
 
-    references: list[ReferenceClip] = []
-    raw_references = data.get("references")
-    if raw_references is not None:
-        if not isinstance(raw_references, list):
-            raise PipelineError(f"{origin}: 'references' must be a list")
-        for index, entry in enumerate(raw_references):
-            label = f"{origin}: reference #{index + 1}"
-            if not isinstance(entry, dict) or set(entry) != {"path", "purpose"}:
-                raise PipelineError(f"{label}: each reference needs exactly 'path' and 'purpose'")
-            reference_path = entry["path"]
-            reference_purpose = entry["purpose"]
-            if not isinstance(reference_path, str) or not reference_path:
-                raise PipelineError(f"{label}: 'path' must be a non-empty string")
-            if not isinstance(reference_purpose, str) or not reference_purpose.strip():
-                raise PipelineError(f"{label}: 'purpose' must state what the comparison is for")
-            references.append(
-                ReferenceClip(path=Path(reference_path), purpose=reference_purpose.strip())
-            )
-
     return AudioReviewIntent(
         purpose=purpose,
         playback_mode=mode,
@@ -247,7 +220,7 @@ def parse_intent(data: Any, origin: str) -> AudioReviewIntent:
         desired_qualities=evidence.string_field(data, "desired_qualities", origin),
         avoid=evidence.string_list(data, "avoid", origin),
         questions=evidence.string_list(data, "questions", origin),
-        references=tuple(references),
+        references=evidence.parse_references(data, origin),
     )
 
 
@@ -290,17 +263,6 @@ def rubric_for(intent: AudioReviewIntent) -> tuple[RubricDimension, ...]:
     if intent.playback_mode == LOOP:
         dimensions.extend(LOOP_RUBRIC)
     return tuple(dimensions)
-
-
-RESULT_KEYS = (
-    "summary",
-    "strengths",
-    "issues",
-    "recommended_changes",
-    "rubric_scores",
-    "confidence",
-    "limitations",
-)
 
 
 def fold_author_text(value: str) -> str:
@@ -445,25 +407,11 @@ def validate_result(
     enforce that.
     """
     problems: list[str] = []
-    missing = [key for key in RESULT_KEYS if key not in data]
-    if missing:
-        problems.append(f"missing key(s): {', '.join(missing)}")
-    extra = sorted(set(data) - set(RESULT_KEYS))
-    if extra:
-        problems.append(f"unexpected key(s): {', '.join(extra)}")
-    if problems:
-        raise PipelineError(f"{origin} returned an invalid structure: {'; '.join(problems)}")
+    evidence.check_result_keys(data, origin)
 
-    def strings(key: str) -> list[str]:
-        value = data[key]
-        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-            problems.append(f"{key} must be an array of strings")
-            return []
-        return [item for item in value if item.strip()]
-
-    summary = data["summary"]
-    if not isinstance(summary, str) or not summary.strip():
-        problems.append("summary must be a non-empty string")
+    summary, summary_problem = evidence.read_summary(data["summary"])
+    if summary_problem is not None:
+        problems.append(summary_problem)
 
     issues: list[dict[str, Any]] = []
     raw_issues = data["issues"]
@@ -502,58 +450,36 @@ def validate_result(
                 issue["at_seconds"] = [float(moment[0]), float(moment[1])]
             issues.append(issue)
 
-    known = {item.key for item in dimensions}
-    scores: dict[str, float | None] = {}
-    raw_scores = data["rubric_scores"]
-    if not isinstance(raw_scores, dict):
-        problems.append("rubric_scores must be an object keyed by rubric dimension")
-    else:
-        unscored = sorted(known - set(raw_scores))
-        if unscored:
-            # The prompt asks for every dimension, and a verdict that silently
-            # omits one reads to a reviewer as a dimension that was scored and
-            # found fine. An unjudgeable dimension is spelled null instead.
-            problems.append(
-                "rubric_scores leaves dimension(s) unstated: "
-                + ", ".join(unscored)
-                + " (score each one, or use null)"
-            )
-        for key, value in raw_scores.items():
-            if key not in known:
-                problems.append(
-                    f"rubric_scores names unknown dimension {key!r}; expected: "
-                    + ", ".join(sorted(known))
-                )
-                continue
-            if value is None:
-                scores[key] = None
-            elif isinstance(value, bool) or not isinstance(value, (int, float)):
-                problems.append(f"rubric_scores[{key!r}] must be a number or null")
-            elif not 0 <= value <= 5:
-                problems.append(f"rubric_scores[{key!r}] must be within 0-5")
-            else:
-                scores[key] = float(value)
+    scores, score_problems = evidence.read_scores(
+        data["rubric_scores"], frozenset(item.key for item in dimensions)
+    )
+    problems.extend(score_problems)
 
-    confidence = data["confidence"]
-    if (
-        isinstance(confidence, bool)
-        or not isinstance(confidence, (int, float))
-        or not 0 <= confidence <= 1
-    ):
-        problems.append("confidence must be a number between 0 and 1")
+    confidence, confidence_problem = evidence.read_confidence(data["confidence"])
+    if confidence_problem is not None:
+        problems.append(confidence_problem)
+
+    strengths, strengths_problem = evidence.read_string_list(data["strengths"], "strengths")
+    changes, changes_problem = evidence.read_string_list(
+        data["recommended_changes"], "recommended_changes"
+    )
+    limitations, limitations_problem = evidence.read_string_list(data["limitations"], "limitations")
+    for key_problem in (strengths_problem, changes_problem, limitations_problem):
+        if key_problem is not None:
+            problems.append(key_problem)
 
     if problems:
         raise PipelineError(
             f"{origin} returned an invalid structure (schema mismatch): " + "; ".join(problems)
         )
     return {
-        "summary": summary.strip(),
-        "strengths": strings("strengths"),
+        "summary": summary,
+        "strengths": strengths,
         "issues": issues,
-        "recommended_changes": strings("recommended_changes"),
+        "recommended_changes": changes,
         "rubric_scores": scores,
-        "confidence": round(float(confidence), 4),
-        "limitations": strings("limitations"),
+        "confidence": round(confidence, 4),
+        "limitations": limitations,
     }
 
 

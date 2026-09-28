@@ -113,8 +113,11 @@ def parse_reference(source: Path, uri: str) -> AssetReference:
 def config_xml_texts(config_dir: Path) -> list[tuple[Path, str]]:
     """Every `Config/**/*.xml` with its text, in a stable order.
 
-    `utf-8-sig` because the engine reads these files with a byte-order mark
-    stripped, and a mod authored on Windows routinely has one.
+    The several gates that read a mod's XML all need the same walk, and
+    `utf-8-sig` on every file because the engine reads these files with a
+    byte-order mark stripped and a mod authored on Windows routinely has one.
+    An absent directory is empty rather than an error: a mod that ships no
+    Config has nothing to check.
     """
     if not config_dir.is_dir():
         return []

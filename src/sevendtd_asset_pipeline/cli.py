@@ -526,11 +526,13 @@ def _issue_moment(issue: dict[str, Any]) -> str:
     return f" [{', '.join(parts)}]" if parts else ""
 
 
-def _print_review(report: dict[str, Any]) -> None:
+def _print_review(report: dict[str, Any], *, usage: dict[str, Any] | None = None) -> None:
     """The human-readable form of a model review, the same for sound and for motion.
 
     Both lanes normalize into one result shape, so a reader compares a clip
-    critique and an audio critique line for line.
+    critique and an audio critique line for line. `usage` is passed by the
+    lane whose provider bills; the other omits it rather than printing a line
+    it has no data for.
     """
     verdict = report["review"]
     print(f"summary: {verdict['summary']}")
@@ -541,11 +543,12 @@ def _print_review(report: dict[str, Any]) -> None:
     for change in verdict["recommended_changes"]:
         print(f"change: {change}")
     for key, value in sorted(verdict["rubric_scores"].items()):
-        print(f"score: {key} = {'unjudgeable' if value is None else f'{value:g}'}")
+        score = "unjudgeable" if value is None else f"{value:g}"
+        print(f"score: {key} = {score}")
     print(f"confidence: {verdict['confidence']:g}")
     for limitation in verdict["limitations"]:
         print(f"limitation: {limitation}")
-    if not report["usage"].get("reported_by_provider", False):
+    if usage is not None and not usage.get("reported_by_provider", False):
         print("usage: unavailable (the provider reported none; nothing estimated)")
     if report["evidence"]["path"]:
         print(f"evidence: {report['evidence']['path']}")
@@ -741,7 +744,7 @@ def run(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(report, indent=2, sort_keys=True))
         else:
-            _print_review(report)
+            _print_review(report, usage=report["usage"])
         return 0
     if args.command == "pack":
         version = _resolve_version(

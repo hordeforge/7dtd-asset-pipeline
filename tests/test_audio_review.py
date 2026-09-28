@@ -26,7 +26,6 @@ from sevendtd_asset_pipeline.audio_review import (
     BASE_RUBRIC,
     INTENT_SCHEMA_VERSION,
     LOOP_RUBRIC,
-    RESULT_KEYS,
     build_prompt,
     parse_intent,
     parse_intent_text,
@@ -36,6 +35,7 @@ from sevendtd_asset_pipeline.audio_review import (
     validate_result,
 )
 from sevendtd_asset_pipeline.cli import main
+from sevendtd_asset_pipeline.evidence import RESULT_KEYS
 from sevendtd_asset_pipeline.providers import (
     PROVIDERS,
     configuration_state,

@@ -67,6 +67,8 @@ MISSING = None
 try:
     import numpy as np
     from PIL import Image
+
+    from .noise import tileable_noise
 except ImportError as error:  # pragma: no cover - depends on host packages
     # Deferred, not fatal: --help must work on a bare host, so someone can read
     # what this needs before installing anything.

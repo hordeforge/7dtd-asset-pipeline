@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -155,3 +156,146 @@ def parse_intent_text(text: str, parse: Callable[[Any, str], Any]) -> tuple[Any,
     """Validate an inline intent document with the lane's `parse`; return both."""
     raw = text.encode("utf-8")
     return parse(decode_json(raw, "--intent-text"), "--intent-text"), raw
+
+
+@dataclass(frozen=True)
+class ReferenceAsset:
+    """A comparison asset the author supplies, and what it is being compared for.
+
+    Audio names one a clip and video names one a medium; the intent document
+    carries the same two fields either way, so this is the one shape both
+    lanes read.
+    """
+
+    path: Path
+    purpose: str
+
+
+def parse_references(data: dict[str, Any], origin: str) -> tuple[ReferenceAsset, ...]:
+    """Read an intent document's `references` array, or nothing when it is absent.
+
+    An absent array is an empty tuple; a present one must be a list whose every
+    entry names exactly a `path` and a `purpose`, because a reference with no
+    stated purpose gives a reviewer nothing to compare against.
+    """
+    raw_references = data.get("references")
+    if raw_references is None:
+        return ()
+    if not isinstance(raw_references, list):
+        raise PipelineError(f"{origin}: 'references' must be a list")
+    references: list[ReferenceAsset] = []
+    for index, entry in enumerate(raw_references):
+        label = f"{origin}: reference #{index + 1}"
+        if not isinstance(entry, dict) or set(entry) != {"path", "purpose"}:
+            raise PipelineError(f"{label}: each reference needs exactly 'path' and 'purpose'")
+        reference_path = entry["path"]
+        reference_purpose = entry["purpose"]
+        if not isinstance(reference_path, str) or not reference_path:
+            raise PipelineError(f"{label}: 'path' must be a non-empty string")
+        if not isinstance(reference_purpose, str) or not reference_purpose.strip():
+            raise PipelineError(f"{label}: 'purpose' must state what the comparison is for")
+        references.append(
+            ReferenceAsset(path=Path(reference_path), purpose=reference_purpose.strip())
+        )
+    return tuple(references)
+
+
+# A review's own confidence, in 0-1, and every rubric dimension's score, in
+# 0-5. Both ranges are the seven-key result shape the deadeye gateway and the
+# audio lane agree on, so they are named once rather than repeated as literals.
+CONFIDENCE_RANGE = (0.0, 1.0)
+SCORE_RANGE = (0.0, 5.0)
+
+
+def read_scores(
+    raw_scores: Any, known: frozenset[str] | None = None
+) -> tuple[dict[str, float | None], list[str]]:
+    """Read a `rubric_scores` object, returning the scores and every problem.
+
+    A value is a score inside `SCORE_RANGE`, or an explicit null for a
+    dimension the reviewer could not judge. `known` pins the dimension names
+    when the lane owns its rubric: a lane that defers the names to the
+    gateway passes None and has only the values checked.
+    """
+    if not isinstance(raw_scores, dict):
+        return {}, ["rubric_scores must be an object keyed by rubric dimension"]
+    problems: list[str] = []
+    scores: dict[str, float | None] = {}
+    if known is not None:
+        unscored = sorted(known - set(raw_scores))
+        if unscored:
+            # The prompt asks for every dimension, and a verdict that silently
+            # omits one reads to a reviewer as a dimension that was scored and
+            # found fine. An unjudgeable dimension is spelled null instead.
+            problems.append(
+                "rubric_scores leaves dimension(s) unstated: "
+                + ", ".join(unscored)
+                + " (score each one, or use null)"
+            )
+    for key, value in raw_scores.items():
+        if known is not None and key not in known:
+            problems.append(
+                f"rubric_scores names unknown dimension {key!r}; expected: "
+                + ", ".join(sorted(known))
+            )
+            continue
+        if value is None:
+            scores[key] = None
+        elif isinstance(value, bool) or not isinstance(value, (int, float)):
+            problems.append(f"rubric_scores[{key!r}] must be a number or null")
+        elif not SCORE_RANGE[0] <= value <= SCORE_RANGE[1]:
+            problems.append(
+                f"rubric_scores[{key!r}] must be within {SCORE_RANGE[0]:g}-{SCORE_RANGE[1]:g}"
+            )
+        else:
+            scores[key] = float(value)
+    return scores, problems
+
+
+def read_confidence(value: Any) -> tuple[float, str | None]:
+    """Read a `confidence` inside `CONFIDENCE_RANGE`, returning it or the problem."""
+    low, high = CONFIDENCE_RANGE
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+        return 0.0, f"confidence must be a number between {low:g} and {high:g}"
+    return float(value), None
+
+
+# The seven keys every review answer carries, whatever produced it. The audio
+# lane sends this shape to a model and the video lane reads it back from the
+# deadeye gateway; both refuse a deviation rather than coercing one.
+RESULT_KEYS = (
+    "summary",
+    "strengths",
+    "issues",
+    "recommended_changes",
+    "rubric_scores",
+    "confidence",
+    "limitations",
+)
+
+
+def check_result_keys(data: dict[str, Any], origin: str) -> None:
+    """Raise unless `data` carries exactly `RESULT_KEYS`, naming every deviation."""
+    problems: list[str] = []
+    missing = [key for key in RESULT_KEYS if key not in data]
+    if missing:
+        problems.append(f"missing key(s): {', '.join(missing)}")
+    extra = sorted(set(data) - set(RESULT_KEYS))
+    if extra:
+        problems.append(f"unexpected key(s): {', '.join(extra)}")
+    if problems:
+        raise PipelineError(f"{origin} returned an invalid structure: {'; '.join(problems)}")
+
+
+def read_string_list(value: Any, key: str) -> tuple[list[str], str | None]:
+    """Read one of the result's string arrays, returning it or the problem."""
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        return [], f"{key} must be an array of strings"
+    return [item for item in value if item.strip()], None
+
+
+def read_summary(value: Any) -> tuple[str, str | None]:
+    """Read the result's one-sentence verdict, returning it or the problem."""
+    if not isinstance(value, str) or not value.strip():
+        return "", "summary must be a non-empty string"
+    return value.strip(), None

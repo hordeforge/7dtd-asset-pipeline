@@ -192,6 +192,14 @@ SkinnedMeshRenderer and `.vfx` ParticleSystem graphs are synthesized
 without an editor (2026-08-30); see
 [research-provenance.md](../research/research-provenance.md).
 
+**Update, 2026-08-25: the pass is not d3d11-only.** Each shader carries a
+d3d11 sub-program (the API the game runs) and an OpenGLCore one (so a Linux
+editor has something `verify-bundle` can create), plus a Vulkan sub-program
+when the host has `glslangValidator` and `libzmolv`, which is additive rather
+than required. What is still one pass, and still an editor's job, is lit,
+cut-out, normal-mapped, instanced and multi-pass shading; see
+[no-unity.md](../bundles/no-unity.md) for the per-platform detail.
+
 **The borrowing finding above stands and was not re-tested.** Both borrowing
 routes remain closed; what changed is that a mod no longer needs to borrow
 one, because it can author its own.

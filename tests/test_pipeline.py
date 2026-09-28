@@ -185,6 +185,18 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(report.skipped, report.messages[: len(report.skipped)])
         self.assertTrue(all(line.startswith("not run: ") for line in report.skipped))
 
+    def test_a_bundle_at_another_revision_than_the_mod_declares_fails(self) -> None:
+        """With no game, `[unity] version` is the authority the gate still uses.
+
+        A bundle at some other revision is what that fallback exists to catch,
+        and the unrun line survives it: the game itself was never consulted,
+        so the note must not disappear just because a weaker check ran.
+        """
+        self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")
+        self.config.bundle_output.write_bytes(unityfs_bundle([1, 142], unity_version="2019.4.40f1"))
+        with self.assertRaisesRegex(PipelineError, "2019.4.40f1"):
+            validate_mod(self.config)
+
     def test_a_modinfo_name_disagreement_fails(self) -> None:
         """The configuration and the modlet must describe the same mod."""
         self._stage_mod("#@modfolder:Resources/example.unity3d?exampleThing.prefab")

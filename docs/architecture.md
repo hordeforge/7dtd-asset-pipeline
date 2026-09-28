@@ -41,7 +41,7 @@
 | `scripts/compile-editor-scripts.sh` | compiles the vendored editor C# against a real editor's assemblies, without starting one |
 | `scripts/install-tools.sh` | host packages, including `vkd3d-compiler` for the writer's shader lane |
 | `scripts/install-unity-editor.sh` | *(opt-in)* the checksum-verified game-matched editor |
-| `generators/` (in the package) | reproducible sound, audio, cutout, particle-card, icon, texture-maps, mesh, mesh-optimize, mesh-icon and bind generation, as `shamway generate` |
+| `generators/` (in the package) | reproducible sound, audio, cutout, particle-card, icon, texture-maps, hide, mesh, mesh-optimize, mesh-icon, rig, entity, creature and bind generation, as `shamway generate` |
 | consumer `AGENTS.md` | the agent contract, written into the mod by `init` |
 | `unityz.py` + pinned `unityz` | bounded process/JSON boundary, UnityFS decompression, revision and serialized class table |
 | tracked `.manifest` | complete build membership for offline exact-stem validation |
@@ -163,16 +163,21 @@ impossible. It can: `vkd3d-compiler` compiles the pass to `DXBC` and the blob
 container was decoded from a shipped bundle, so the writer emits one.
 
 What the writer has not reached is narrower than that sentence was: one unlit
-opaque d3d11 pass, no keyword variants, no other graphics API.
+textured pass (opaque, alpha or additive, and vertex colour for particle
+cards), no keyword variants, and no lit, shadowed, normal-mapped or
+multi-pass shading. It does cover d3d11 and OpenGLCore, plus a Vulkan
+sub-program when the host has `glslangValidator` and `libzmolv`.
 [ADR 0001](adrs/0001-synthesize-bundles-without-an-editor.md) records the
 research and what is not attempted; [no-unity.md](bundles/no-unity.md) states
 what a synthesized bundle owes instead.
 
-The shader lane is the only part of the writer with a host dependency:
+The shader lane is the only part of the writer with a required host dependency:
 `vkd3d-compiler`. It degrades rather than refusing — a mesh becomes a bare
 `Mesh` instead of a prefab — because a mod that packed yesterday should not
 stop packing today. That makes it the one place a missing capability is not a
-refusal, so `build` prints a caveat naming what was packed instead.
+refusal, so `build` prints a caveat naming what was packed instead. The Vulkan
+half is additive on top of that: without its two tools the bundle carries the
+two platforms it always did, which is all a default client reaches for.
 
 The mesh lane is also where an optional capability becomes structural rather
 than additive: `trimesh` reads the interchange file, so without it the writer

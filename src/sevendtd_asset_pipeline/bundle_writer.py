@@ -2506,9 +2506,21 @@ def object_for(
             f"{path.name} is a VFX declaration; it is packed as a prefab, not a TextAsset"
         )
     try:
-        return text_asset(stem, path.read_text(encoding="utf-8"))
+        return text_asset(stem, _text_asset_source(path))
     except (OSError, UnicodeDecodeError) as exc:
         raise PipelineError(f"cannot read text asset {path}: {exc}") from exc
+
+
+def _text_asset_source(path: Path) -> str:
+    """The file's text, as the engine will read it back out of the bundle.
+
+    Decoded from the bytes rather than through `read_text`, because text mode
+    rewrites what is in the file: it turns CRLF into LF, so a `.txt` authored on
+    Windows ships different content than it has on disk. `utf-8-sig` drops a
+    leading BOM, which would otherwise become a U+FEFF at the head of every
+    string the mod reads, the first character of a JSON parse or a CSV header.
+    """
+    return path.read_bytes().decode("utf-8-sig")
 
 
 def _has_uv(geometry: BundleObject) -> bool:

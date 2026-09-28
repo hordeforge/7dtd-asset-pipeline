@@ -409,6 +409,15 @@ display name silently degrades to its id. The diagnostic is one log line:
 `[MODS] Loading localization from mod: <name>` appears whenever the file was
 found. Its absence means the file is in the wrong place.
 
+Spell a key in the composed form (NFC), and spell it the same way in
+`Config/` and in the table. `café` typed as one code point and `cafe` plus a
+combining acute are one word and two strings, and every comparison on this
+path is a string comparison, so the two do not answer for each other. A name
+copied out of a filename on macOS arrives decomposed while the row an author
+typed is composed. `shamway check-localization` reports such a pair by name
+rather than folding the two together: a pass it invented on its own would be a
+pass the game does not reproduce.
+
 `shamway client log` requires that line **only when the deployed mod actually
 carries `Config/Localization.csv`**. A mod that ships none cannot produce it,
 and requiring it would fail a correct mod - which it did to

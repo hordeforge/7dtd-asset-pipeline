@@ -35,6 +35,8 @@ from __future__ import annotations
 import csv
 import io
 import re
+import unicodedata
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -83,6 +85,34 @@ class LocalizationReport:
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self) | {"ok": self.ok}
+
+
+def _nfc(text: str) -> str:
+    """The composed (NFC) spelling of a key, as ICU's `uconv -x Any-NFC` writes it."""
+    return unicodedata.normalize("NFC", text)
+
+
+def spelling_mismatches(referenced: Iterable[str], provided: set[str]) -> list[tuple[str, str]]:
+    """Referenced keys that only a table row with a different spelling would answer.
+
+    Two spellings of one word are different strings, and every comparison on
+    this path is a string comparison: a name copied out of a filename on macOS
+    arrives decomposed (`cafe` + U+0301) while the row an author typed is
+    composed, so the two sides can be the same word and still miss. The engine
+    resolves a key against the table it loaded rather than by any folded
+    comparison, so a pair like this is reported by name rather than folded
+    together here: silently treating them as equal would turn this gate into a
+    pass the game does not reproduce.
+    """
+    by_form: dict[str, set[str]] = {}
+    for key in provided:
+        by_form.setdefault(_nfc(key), set()).add(key)
+    mismatches: list[tuple[str, str]] = []
+    for key in referenced:
+        for candidate in sorted(by_form.get(_nfc(key), set())):
+            if candidate != key:
+                mismatches.append((key, candidate))
+    return mismatches
 
 
 def read_csv_keys(path: Path) -> set[str]:
@@ -192,6 +222,13 @@ def check_localization(
     if not csv_path.is_file():
         notes.append(
             "this mod ships no Config/Localization.csv; its defined names are untranslated"
+        )
+    for key, candidate in spelling_mismatches(referenced, provided | game_keys):
+        notes.append(
+            f"{key!r} and the row {candidate!r} are the same word in different Unicode "
+            "normalization forms, one composed and one decomposed. They are different "
+            "strings, so a lookup that compares them does not match; spell the key in "
+            "Config/ exactly as the table spells it, composed (NFC)."
         )
     if (
         game_dir is not None

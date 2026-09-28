@@ -505,6 +505,26 @@ class ProcessAndAudioTests(unittest.TestCase):
             reg.write_text("nothing\n")
             self.assertFalse(client.disable_discord_integration(reg))
 
+    def test_the_discord_edit_leaves_every_other_byte_of_the_hive_alone(self) -> None:
+        """The hive is Proton's, not this repository's.
+
+        A byte that is not valid UTF-8 and a CRLF line end both survive a
+        read-modify-write done on decoded text only as U+FFFD and LF, so a
+        pref edit would quietly rewrite the player's whole registry.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            reg = Path(temp) / "user.reg"
+            original = (
+                b"[Software\\\\Win]\r\n"
+                b'"Legacy"=dword:000000ff\r\n'
+                b'"DiscordDisabled_h123"=dword:00000000\r\n'
+                b'"Owner"="caf\xe9 \x81\x9f"\r\n'
+            )
+            reg.write_bytes(original)
+            self.assertTrue(client.disable_discord_integration(reg))
+            rewritten = reg.read_bytes()
+        self.assertEqual(original.replace(b"dword:00000000", b"dword:00000001"), rewritten)
+
 
 class LockTests(unittest.TestCase):
     """The shared-client lock this repository reads but does not own.

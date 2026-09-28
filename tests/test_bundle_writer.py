@@ -28,6 +28,7 @@ from sevendtd_asset_pipeline.bundle_writer import (
     collect_sources,
     mesh,
     mesh_prefab,
+    object_for,
     pack_directory,
     render_manifest,
     text_asset,
@@ -320,6 +321,24 @@ class SourceDirectoryTests(unittest.TestCase):
         (self.sources / "myModNote.txt").write_text("hello", encoding="utf-8")
         (self.sources / "myModNote.txt.meta").write_text("guid: 1", encoding="utf-8")
         self.assertEqual(["myModNote.txt"], [path.name for path in collect_sources(self.sources)])
+
+    def test_a_text_asset_reaches_the_bundle_exactly_as_the_file_holds_it(self) -> None:
+        # A UTF-8 BOM and a CRLF pair are both ordinary in a file a mod author
+        # made on Windows; reading it as text would put a U+FEFF at the head of
+        # every string the game reads back and rewrite the line ends.
+        (self.sources / "note.txt").write_bytes(b"\xef\xbb\xbffirst\r\nsecond\r\n")
+        packed = object_for(self.sources / "note.txt")
+        self.assertEqual("first\r\nsecond\r\n", packed.fields["m_Script"])
+
+    def test_a_text_asset_keeps_non_ascii_text_intact(self) -> None:
+        (self.sources / "names.txt").write_text("café 🐔 ok", encoding="utf-8")
+        packed = object_for(self.sources / "names.txt")
+        self.assertEqual("café 🐔 ok", packed.fields["m_Script"])
+
+    def test_a_text_asset_that_is_not_utf8_is_refused_not_mangled(self) -> None:
+        (self.sources / "latin.txt").write_bytes(b"caf\xe9\n")
+        with self.assertRaisesRegex(PipelineError, "cannot read text asset"):
+            object_for(self.sources / "latin.txt")
 
     def test_an_empty_source_directory_is_refused(self) -> None:
         with self.assertRaisesRegex(PipelineError, "no assets"):

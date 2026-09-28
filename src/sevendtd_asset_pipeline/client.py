@@ -633,17 +633,27 @@ def disable_discord_integration(user_reg: Path) -> bool:
     whether an entry was found and rewritten.
     """
     try:
-        text = user_reg.read_text(encoding="utf-8", errors="replace")
+        data = user_reg.read_bytes()
     except OSError as exc:
         raise PipelineError(f"cannot read {user_reg}: {exc}") from exc
-    pattern = re.compile(r'^("DiscordDisabled_h\d+"=dword:)[0-9a-fA-F]+$', re.MULTILINE)
-    rewritten, count = pattern.subn(r"\g<1>00000001", text)
+    # On the bytes, not on decoded text: the hive belongs to Proton and to the
+    # player behind it, and decoding it would rewrite the whole file on the way
+    # back out, turning every byte that is not valid UTF-8 into U+FFFD and its
+    # CRLF line ends into LF. Only the one pref this asks for should differ
+    # afterwards; the value is also written whole, so a truncated edit cannot
+    # leave a half-written dword behind. The carriage return is part of what
+    # the pattern has to step over rather than something to drop: Wine writes
+    # this file in the Windows line-ending convention, and the text form only
+    # ever matched the pref because reading the file normalized the line ends
+    # away first.
+    pattern = re.compile(rb'^("DiscordDisabled_h\d+"=dword:)[0-9a-fA-F]+(?=\r?$)', re.MULTILINE)
+    rewritten, count = pattern.subn(rb"\g<1>00000001", data)
     if count:
         # Published through a rename, never truncated in place: `user.reg` is
         # the whole Proton registry hive, and a write that dies midway would
         # corrupt every setting in the prefix, not just this one pref.
         with atomic.staged_write(user_reg) as staged:
-            staged.write_text(rewritten, encoding="utf-8")
+            staged.write_bytes(rewritten)
     return bool(count)
 
 

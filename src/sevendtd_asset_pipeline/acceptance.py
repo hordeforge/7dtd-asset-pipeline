@@ -144,11 +144,27 @@ def _comment_text(text: str) -> str:
     return " ".join(text.split()).replace("--", "—")
 
 
+_XML_ATTR_ESCAPES = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}
+# Tab, newline and carriage return reach an attribute value only as a character
+# reference: written literally, an XML parser folds every one of them into a
+# space, so the `ModInfo.xml` written here would come back naming a different
+# mod than the one read out of the mod's own file.
+_XML_ATTR_REFERENCES = {"\t": "&#9;", "\n": "&#10;", "\r": "&#13;"}
+
+
 def _xml_attr(text: str) -> str:
-    """Escape a value for a double-quoted XML attribute."""
-    return (
-        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-    )
+    """Escape a value for a double-quoted XML attribute, losslessly.
+
+    A mod's `DisplayName` is free text read out of `ModInfo.xml` on another
+    machine, so it can hold anything a person typed. Escaping only the markup
+    characters would quietly rewrite a value containing a line break; writing
+    the whitespace as references keeps the round trip exact, so the generated
+    file parses back to the name that went in.
+    """
+    escaped = "".join(_XML_ATTR_ESCAPES.get(character, character) for character in text)
+    for character, reference in _XML_ATTR_REFERENCES.items():
+        escaped = escaped.replace(character, reference)
+    return escaped
 
 
 @dataclass(frozen=True)

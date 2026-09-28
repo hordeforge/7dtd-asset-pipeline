@@ -35,6 +35,23 @@ tag has no changelog section.
   `../../.ssh/id_rsa` or a bare `/etc/passwd` was joined onto the source
   directory and read as vertex data, so an untrusted glTF read any file the
   build process could read.
+- A `TextAsset` source file reached the bundle through text mode, so a UTF-8
+  BOM became a leading U+FEFF in `m_Script` and every CRLF line end was shipped
+  as LF. The source is now decoded from its bytes, which keeps the file's own
+  text and drops the BOM.
+- `client disable-discord` rewrote the Proton `user.reg` hive from text it had
+  decoded with `errors="replace"`, turning any byte that is not valid UTF-8
+  into U+FFFD and its CRLF line ends into LF. The edit is now a byte
+  substitution that leaves the rest of the hive untouched, and it matches the
+  pref on the CRLF file Wine actually writes (the text form only matched it
+  because reading the file normalized the line ends away first).
+- The generated provider's `ModInfo.xml` wrote a line break in a mod name
+  literally, which an XML parser folds to a space, so the file named a
+  different mod than the one it was generated from. Tab, newline and carriage
+  return are now written as character references.
+- `check-localization` names a referenced key whose `Localization.csv` row is
+  the same word in a different Unicode normalization form, instead of counting
+  it resolved or missing with nothing said about the two spellings.
 
 ## [0.7.0] - 2026-09-21
 

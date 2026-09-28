@@ -221,6 +221,13 @@ converter is missing is **refused by name with the install line**, never
 skipped and never silently downgraded. Conversion always goes to a temporary
 file, so the lossy original a person signed off on is never overwritten.
 
+A `TextAsset` source is decoded as UTF-8 from its bytes and reaches the bundle
+with the text it holds: a leading BOM is dropped, and CRLF line ends stay
+CRLF. The game reads `m_Script` back as UTF-8, so a BOM that survived would put
+a U+FEFF in front of every string the mod reads, and a `.csv` or `.json` whose
+line ends were rewritten would not be the file the author wrote. A source that
+is not UTF-8 is refused by name, not decoded with replacement characters.
+
 An SVG rasterizes at its own pixel size × `density / 96` — 4x at the default
 384 — because SVG's user unit is 1/96 inch. Author the size you want, or
 scale it in the icon lane afterwards.

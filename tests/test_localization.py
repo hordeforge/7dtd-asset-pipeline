@@ -13,6 +13,7 @@ ships no CSV reports (it is deliberately untranslated).
 from __future__ import annotations
 
 import tempfile
+import unicodedata
 import unittest
 from pathlib import Path
 
@@ -93,6 +94,32 @@ class LocalizationTests(unittest.TestCase):
         # Disabling vanilla allowance makes it a miss.
         strict = check_localization(self.root, self.config, self.game, allow_vanilla_keys=False)
         self.assertEqual(("vanillaBlock",), strict.missing)
+
+    def test_a_key_and_its_row_in_different_normalization_forms_are_named(self) -> None:
+        """`café` typed as one code point and `cafe` + U+0301 are one word and
+        two strings, and every comparison on this path is a string comparison.
+
+        A name copied out of a macOS filename arrives decomposed while the row
+        an author typed is composed, so the pair has to be reported rather than
+        folded together here: a pass this gate invented is a pass the game does
+        not reproduce.
+        """
+        decomposed = unicodedata.normalize("NFD", "café")
+        self.assertNotEqual(decomposed, "café")
+        self._write("blocks.xml", f'<configs><block name="{decomposed}" /></configs>')
+        write_csv(self.config / "Localization.csv", ["café"])
+        report = check_localization(self.root, self.config, self.game, allow_vanilla_keys=True)
+        self.assertEqual((), report.resolved)
+        self.assertEqual((decomposed,), report.missing)
+        self.assertTrue(any("normalization" in note for note in report.notes), report.notes)
+
+    def test_a_key_spelled_as_its_own_row_is_not_reported(self) -> None:
+        decomposed = unicodedata.normalize("NFD", "café")
+        self._write("blocks.xml", f'<configs><block name="{decomposed}" /></configs>')
+        write_csv(self.config / "Localization.csv", [decomposed])
+        report = check_localization(self.root, self.config, self.game, allow_vanilla_keys=True)
+        self.assertEqual((decomposed,), report.resolved)
+        self.assertFalse([note for note in report.notes if "normalization" in note])
 
 
 if __name__ == "__main__":

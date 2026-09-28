@@ -473,7 +473,10 @@ What each of those knows:
   client logs `SteamAPI_Init() failed` and sits on a menu backdrop that looks
   like a display fault. `disable-discord` flips the persisted
   `DiscordDisabled` pref in the Proton `user.reg` so an unattended run does
-  not negotiate rich presence.
+  not negotiate rich presence. That edit is a byte substitution in the hive,
+  never a rewrite of it: the file belongs to Proton and to the player behind
+  it, so every other byte, including a CRLF line end and anything that is not
+  valid UTF-8, has to come back exactly as it went in.
 - **Audio.** `--mute` mutes the client's PipeWire/Pulse sink input at the OS
   layer (never a game setting) and unmutes it again before returning. A
   listening run is never muted; see [audio.md](authoring/audio.md), which also covers

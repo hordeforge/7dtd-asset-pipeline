@@ -16,17 +16,13 @@ sub-programs the game carries. No Unity is involved in producing it.
 from __future__ import annotations
 
 import ctypes
-import ctypes.util
-import functools
-import os
 import shutil
 import struct
 import subprocess
-import sys
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from pathlib import Path
 
+from .capabilities import smolv_library
 from .errors import PipelineError
 from .workdir import scratch_dir
 
@@ -706,84 +702,6 @@ def compress_smolv(spirv: bytes) -> bytes:
     if struct.unpack_from("<I", encoded, 0)[0] != SMOLV_MAGIC:
         raise PipelineError("zmolv returned bytes that do not start with the SMOL-V magic")
     return encoded
-
-
-def _shared_library_filenames() -> tuple[str, ...]:
-    """The names a zmol-v build lands as, this host first.
-
-    Zig emits `libzmolv.so` on Linux, `libzmolv.dylib` on macOS, and
-    `zmolv.dll` / `libzmolv.dll` on Windows. Search this host's names first so
-    a checkout `.local/lib` build is found, then the others so a copied
-    artifact is not invisible.
-    """
-    if sys.platform == "darwin":
-        preferred = ("libzmolv.dylib",)
-    elif sys.platform == "win32":
-        preferred = ("zmolv.dll", "libzmolv.dll")
-    else:
-        preferred = ("libzmolv.so",)
-    all_names = ("libzmolv.so", "libzmolv.dylib", "zmolv.dll", "libzmolv.dll")
-    rest = tuple(name for name in all_names if name not in preferred)
-    return preferred + rest
-
-
-def _library_candidates() -> list[Path]:
-    """Where to look for the zmol-v shared library, most explicit first.
-
-    `ZMOLV_LIBRARY` wins, then the platform's own library search
-    (`ctypes.util.find_library`, which resolves `libzmolv.so`, `libzmolv.dylib`
-    and `zmolv.dll` per host), then this checkout's own gitignored
-    `.local/lib` — where `scripts/install-tools.sh` builds the pinned zmol-v —
-    then the directories a plain `zig build -p /usr/local` install lands in,
-    plus Homebrew's `/opt/homebrew/lib` when that directory exists. The
-    explicit legs are fallbacks rather than the only route because
-    find_library reads the linker cache, which a freshly copied library is
-    absent from. A session-local build under /tmp is deliberately not a
-    candidate: it evaporates on reboot, and a default that sometimes exists
-    is how the Vulkan lane silently degraded on 2026-08-25. The checkout leg
-    resolves from this file (src layout), so it exists only when the pipeline
-    runs from a checkout; a wheel install relies on the other legs.
-    """
-    candidates: list[Path] = []
-    override = os.environ.get("ZMOLV_LIBRARY")
-    if override:
-        candidates.append(Path(override))
-    found = ctypes.util.find_library("zmolv")
-    if found:
-        candidates.append(Path(found))
-    names = _shared_library_filenames()
-    checkout_lib = Path(__file__).resolve().parents[2] / ".local" / "lib"
-    candidates.extend(checkout_lib / name for name in names)
-    search_dirs = [Path("/usr/local/lib"), Path("/usr/lib")]
-    homebrew = Path("/opt/homebrew/lib")
-    if homebrew.is_dir():
-        search_dirs.append(homebrew)
-    for directory in search_dirs:
-        candidates.extend(directory / name for name in names)
-    return candidates
-
-
-@functools.lru_cache(maxsize=1)
-def smolv_library() -> ctypes.CDLL | None:
-    """The zmol-v shared library, or None when it is not installed."""
-    for candidate in _library_candidates():
-        if not candidate.is_file():
-            continue
-        try:
-            library = ctypes.CDLL(str(candidate))
-        except OSError:
-            continue
-        library.zmolv_encode.argtypes = [
-            ctypes.c_char_p,
-            ctypes.c_size_t,
-            ctypes.POINTER(ctypes.POINTER(ctypes.c_ubyte)),
-            ctypes.POINTER(ctypes.c_size_t),
-        ]
-        library.zmolv_encode.restype = ctypes.c_int
-        library.zmolv_free.argtypes = [ctypes.POINTER(ctypes.c_ubyte), ctypes.c_size_t]
-        library.zmolv_free.restype = None
-        return library
-    return None
 
 
 # SPIR-V storage classes, and Unity's descriptor-set convention for them.

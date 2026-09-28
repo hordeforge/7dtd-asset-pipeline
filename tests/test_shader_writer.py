@@ -20,6 +20,7 @@ import shutil
 import struct
 import subprocess
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,18 @@ from sevendtd_asset_pipeline.bundle_writer import (
 )
 from sevendtd_asset_pipeline.capabilities import has_capability
 from sevendtd_asset_pipeline.errors import PipelineError
+
+# The package re-exports the `capabilities()` function under the module's own
+# name, so `from sevendtd_asset_pipeline import capabilities` binds the
+# function, not the module. Reach the module itself through sys.modules.
+capability_registry = importlib.import_module("sevendtd_asset_pipeline.capabilities")
+
+
+def _module_path(module: types.ModuleType) -> Path:
+    if module.__file__ is None:
+        raise AssertionError(f"{module.__name__} is not a file-backed module")
+    return Path(module.__file__).resolve()
+
 
 REVISION = "2022.3.62f2"
 needs_unityz = unittest.skipUnless(
@@ -843,7 +856,7 @@ class VulkanSubProgramTests(unittest.TestCase):
         device lost, no log line) with every other dimension of the record
         stock-shaped. The module's own descriptor binding stays 0; the runtime
         derives the binding from the module, not this index."""
-        if shader_blob.smolv_library() is None:
+        if capability_registry.smolv_library() is None:
             self.skipTest("the SMOL-V encoder is not loadable")
         compiled = shader_blob.unlit_textured()
         vulkan = next(p for p in compiled.platforms if p.platform == 18)
@@ -869,7 +882,7 @@ class VulkanSubProgramTests(unittest.TestCase):
         array size 1, and the Vulkan draw faulted (AMD RADV, device lost, no
         log line) while every other dimension of the record was stock-shaped.
         """
-        if shader_blob.smolv_library() is None:
+        if capability_registry.smolv_library() is None:
             self.skipTest("the SMOL-V encoder is not loadable")
         compiled = shader_blob.unlit_textured()
         vulkan = next(p for p in compiled.platforms if p.platform == 18)
@@ -903,7 +916,7 @@ class LibraryDiscoveryTests(unittest.TestCase):
             mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": "/opt/zmolv/libzmolv.so"}),
             mock.patch.object(ctypes.util, "find_library", return_value=None),
         ):
-            candidates = shader_blob._library_candidates()
+            candidates = capability_registry._library_candidates()
         self.assertEqual(candidates[0], Path("/opt/zmolv/libzmolv.so"))
 
     def test_the_platform_library_search_is_consulted(self) -> None:
@@ -911,7 +924,7 @@ class LibraryDiscoveryTests(unittest.TestCase):
             mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),
             mock.patch.object(ctypes.util, "find_library", return_value="/usr/lib/libzmolv.dylib"),
         ):
-            candidates = shader_blob._library_candidates()
+            candidates = capability_registry._library_candidates()
         self.assertIn(Path("/usr/lib/libzmolv.dylib"), candidates)
         self.assertEqual(candidates.index(Path("/usr/lib/libzmolv.dylib")), 0)
 
@@ -923,9 +936,9 @@ class LibraryDiscoveryTests(unittest.TestCase):
             mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),
             mock.patch.object(ctypes.util, "find_library", return_value=None),
         ):
-            candidates = shader_blob._library_candidates()
-        checkout = Path(shader_blob.__file__).resolve().parents[2]
-        native = shader_blob._shared_library_filenames()[0]
+            candidates = capability_registry._library_candidates()
+        checkout = _module_path(capability_registry).parents[2]
+        native = capability_registry._shared_library_filenames()[0]
         self.assertEqual(candidates[0], checkout / ".local" / "lib" / native)
 
     def test_the_system_directories_include_this_host_library_name(self) -> None:
@@ -933,9 +946,9 @@ class LibraryDiscoveryTests(unittest.TestCase):
             mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),
             mock.patch.object(ctypes.util, "find_library", return_value=None),
         ):
-            candidates = shader_blob._library_candidates()
-        native = shader_blob._shared_library_filenames()[0]
-        checkout = Path(shader_blob.__file__).resolve().parents[2] / ".local" / "lib" / native
+            candidates = capability_registry._library_candidates()
+        native = capability_registry._shared_library_filenames()[0]
+        checkout = _module_path(capability_registry).parents[2] / ".local" / "lib" / native
         system = Path("/usr/local/lib") / native
         self.assertIn(system, candidates)
         self.assertIn(Path("/usr/lib") / native, candidates)
@@ -948,7 +961,7 @@ class LibraryDiscoveryTests(unittest.TestCase):
             mock.patch.dict("os.environ", {"ZMOLV_LIBRARY": ""}),
             mock.patch.object(ctypes.util, "find_library", return_value=None),
         ):
-            candidates = shader_blob._library_candidates()
+            candidates = capability_registry._library_candidates()
         names = {path.name for path in candidates}
         self.assertIn("libzmolv.so", names)
         self.assertIn("libzmolv.dylib", names)

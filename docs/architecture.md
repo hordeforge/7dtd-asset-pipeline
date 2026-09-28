@@ -25,7 +25,7 @@
 | `operations.py` | the operation registry: one machine-readable contract for every surface |
 | `api.py` | the `Pipeline` facade, and the dispatch `call`/`serve` share |
 | `serve.py` | line-delimited JSON request/response over stdio |
-| `capabilities.py` | which optional tools are usable, what they unlock, how to install them |
+| `capabilities.py` | which optional tools are usable, what they unlock, how to install them; owns the zmol-v shared-library probe, because "is this host capability present" is its whole job |
 | Unity project template | *(opt-in)* editor revision, package modules, source membership boundary |
 | `BundleBuilder.cs` | *(opt-in)* editor-side serialization, graphics APIs, options, collision rejection, probe |
 | `build.stage_bundle` | the same gates and staging for a bundle a *different* editor built, so no editor is needed here |
@@ -35,7 +35,7 @@
 | `GeneratedAsset.cs` | asset-as-code prefab/material/import/particle/audio helpers that encode the batch-mode traps |
 | `IconRenderer.cs` | renders a bundle prefab into an atlas cell, so an icon cannot drift from its mesh |
 | `icon_check.py` | the atlas gate: cell geometry, alpha, and every `CustomIcon` key |
-| `sound_check.py` | the clip gate: channels, rate, level, clipping, DC offset |
+| `sound_check.py` | the clip gate: channels, rate, level, clipping, DC offset, and the one WAV reader the audio generator converts through |
 | `assets_src.py` | the editable-source tree and the provenance contract written into the mod |
 | `client.py` | fresh-client acceptance: the client's per-user paths, allow-listed deployment (real files only; a symlink is refused), Steam launch, OS-layer mute, and log classification |
 | `scripts/compile-editor-scripts.sh` | compiles the vendored editor C# against a real editor's assemblies, without starting one |
@@ -47,6 +47,28 @@
 | tracked `.manifest` | complete build membership for offline exact-stem validation |
 | installed game | authoritative expected bundle revision, read-only |
 | fresh client | final runtime/render/audio acceptance |
+
+## Dependency direction
+
+The package is one flat layer of leaf modules, two feature subpackages
+(`generators/`, `providers/`), and a thin surface stack on top of it. Three
+rules keep that flat layer flat:
+
+- A root module never imports from `generators/` or `providers/`. The
+  subpackages are features; the gates and writers they would otherwise reach
+  into are the base. `sound_check.py` owns the WAV reader that
+  `generators/audio.py` converts through, rather than the other way round.
+- A module every other module imports (`errors`, `atomic`, `capabilities`,
+  `workdir`) imports nothing feature-shaped. `capabilities.py` is imported by
+  eighteen modules, so the zmol-v library probe lives there; `shader_blob.py`
+  asks it for the library rather than making the registry import a 1500-line
+  shader compiler to answer a one-line question.
+- The surface stack only points down. `cli` → `api` → `operations` → the
+  leaves. `operations.py` is where a leaf is named for a published contract,
+  because the registry is what `shamway schema` publishes.
+
+`tests/test_module_graph.py` checks the first two: it walks the import graph and
+fails on a cycle or on a root module reaching into a subpackage.
 
 ## Trust boundaries
 

@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import array
 import math
+import sys
 import wave
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .errors import PipelineError
-from .generators.audio import read_wav
 
 FULL_SCALE = 32768.0
 # Shared with the published schema (operations.py) and the CLI (--max-seconds).
@@ -62,13 +62,41 @@ class SoundReport:
         return data
 
 
-def _read(path: Path) -> tuple[array.array[int], int, int, int]:
-    """Read a clip through the audio lane's one WAV reader.
+def read_wav(path: Path) -> tuple[array.array[int], int, int]:
+    """The pipeline's one WAV reader, for the gate and the audio generator alike.
 
-    `read_wav` validates the same things (16-bit PCM, a sane header) and
-    reports them as the generator's `SystemExit` contract; this gate is an API
-    operation, so its failures must be `PipelineError` and get converted here.
-    `read_wav` only ever returns 16-bit PCM, hence the fixed bit width.
+    A clip is validated at a trust boundary, so the header is checked here
+    rather than at each call site: 16-bit PCM only, and a channel count and
+    sample rate the resampling and duration arithmetic can divide by. A
+    damaged header can declare either field zero.
+    """
+    with wave.open(str(path), "rb") as handle:
+        if handle.getsampwidth() != 2:
+            raise SystemExit(f"ERROR: {path} is not 16-bit PCM; convert it first")
+        channels = handle.getnchannels()
+        rate = handle.getframerate()
+        if channels < 1 or rate < 1:
+            raise SystemExit(
+                f"ERROR: {path} declares {channels} channel(s) at {rate} Hz; "
+                "the WAV header is damaged beyond conversion"
+            )
+        frames = handle.readframes(handle.getnframes())
+        samples = array.array("h")
+        samples.frombytes(frames)
+        # WAV holds little-endian samples; 'h' is native order, so a big-endian
+        # host would convert byte-swapped values without this.
+        if sys.byteorder == "big":
+            samples.byteswap()
+        return samples, channels, rate
+
+
+def _read(path: Path) -> tuple[array.array[int], int, int, int]:
+    """Read a clip, turning the reader's `SystemExit` into this gate's contract.
+
+    `read_wav` reports a bad header the way the audio lane's command line
+    does; this gate is an API operation, so its failures must be
+    `PipelineError` and get converted here. `read_wav` only ever returns
+    16-bit PCM, hence the fixed bit width.
     """
     try:
         samples, channels, rate = read_wav(path)

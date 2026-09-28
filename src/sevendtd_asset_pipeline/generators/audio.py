@@ -26,35 +26,13 @@ import wave
 from pathlib import Path
 
 from .. import atomic
+from ..sound_check import read_wav
 from ..unityz import Unityz
 
 # The largest magnitude a 16-bit sample can hold, so clamped writes never
 # overflow 'h'. Not the dBFS full-scale reference `check-sound` divides by
 # (32768.0); the two differ by one LSB on purpose and must not be unified.
 PCM_PEAK = 32767
-
-
-def read_wav(path: Path) -> tuple[array.array[int], int, int]:
-    with wave.open(str(path), "rb") as handle:
-        if handle.getsampwidth() != 2:
-            raise SystemExit(f"ERROR: {path} is not 16-bit PCM; convert it first")
-        # A damaged header can declare either field zero; resampling and the
-        # duration report below divide by both.
-        channels = handle.getnchannels()
-        rate = handle.getframerate()
-        if channels < 1 or rate < 1:
-            raise SystemExit(
-                f"ERROR: {path} declares {channels} channel(s) at {rate} Hz; "
-                "the WAV header is damaged beyond conversion"
-            )
-        frames = handle.readframes(handle.getnframes())
-        samples = array.array("h")
-        samples.frombytes(frames)
-        # WAV holds little-endian samples; 'h' is native order, so a big-endian
-        # host would convert byte-swapped values without this.
-        if sys.byteorder == "big":
-            samples.byteswap()
-        return samples, channels, rate
 
 
 def write_wav(path: Path, samples: array.array[int], rate: int, channels: int = 1) -> None:

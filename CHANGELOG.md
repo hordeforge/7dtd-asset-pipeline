@@ -123,6 +123,28 @@ tag has no changelog section.
   it, and no longer imports `texture_maps` at all. The re-export it called it
   through was neither used nor exported under `--strict`, so ruff and mypy
   both refused the tree.
+- `Config/**/*.xml` is decoded as the encoding its own XML declaration names.
+  The read was hardcoded to UTF-8, so a mod authored on a non-English Windows
+  locale and saved as `encoding="windows-1251"` failed every gate that walks
+  `Config/` with "cannot read" on the whole file, and `check-localization`
+  reported no key at all for a mod whose names are all non-ASCII.
+- The playtest host scripts no longer read the host's locale where a wrong
+  answer follows. `playtest-capture.sh` ranks client logs with `LC_ALL=C sort
+  -rn` (a numeric sort parses the timestamp's decimal point through
+  `LC_NUMERIC`, so a comma-decimal locale ranked every log as `0` and the loop
+  photographed whichever session wrote last) and compares uptime as bash
+  integers instead of through `awk`.
+- `shamway script playtest-synthesized --look STEM` folds the suite id with an
+  ASCII lower rather than bash's `${var,,}`, which follows `LC_CTYPE`: a
+  Turkish host turned the `I` in a stem into a dotless `ı` and named a suite
+  the orchestrator never runs.
+- `json_field.py` and `github_asset_url.py` pin stdio and argv to UTF-8. Under
+  a non-UTF-8 locale a mod path or an asset name arrives as lone surrogates,
+  and a producer that is not writing UTF-8 is now named instead of producing a
+  path the shell cannot open.
+- Two mod names written in a script with no ASCII in them derive distinct
+  bundle stems. They all folded to the same `mod-assets.unity3d`, and a
+  file-stem collision is what makes a mod's assets unreachable.
 - `make check test` runs the bootstrapped checkout's own `.venv` when there is
   one. It preferred `uv run --no-project`, which ignores that `.venv` by
   design, so the suite ran without the `dev` group and the Hypothesis

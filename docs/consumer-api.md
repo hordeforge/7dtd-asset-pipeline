@@ -199,6 +199,18 @@ capsule, collider and physics-hit evidence to the spawned-entity run.
 mod. `acceptance-provider` emits **one look suite per prefab** and
 `CaseDef.RegisterStaged` on each camera-staged instance. Mix of `*_look`
 and `*_block_*` is refused.
+
+Those scripts, and the packaged helpers they call, read no locale of their own:
+a suite id is folded with `ascii_lower` rather than bash's `${var,,}` (which
+follows `LC_CTYPE`, so a Turkish host would turn the `I` in a stem into a
+dotless `ı` and name a suite the orchestrator never runs), `playtest-capture`
+ranks client logs with `LC_ALL=C sort -rn` and compares uptime as bash
+integers (a numeric sort and `awk` both read the decimal point through
+`LC_NUMERIC`, so a comma-decimal locale would rank every log as `0` and
+photograph whichever session wrote last), and `json_field.py` /
+`github_asset_url.py` pin stdio and argv to UTF-8 so a mod path containing a
+non-ASCII character arrives as characters rather than as whatever the host
+locale decoded it into.
 | `client where\|deploy\|hold\|launch\|log\|mute\|unmute\|capture\|disable-discord` | no | no | **deploy/launch** write outside the modlet; **capture** writes `.local/acceptance/` inside it; `hold` runs another command under the deploy lock | fresh-client acceptance plumbing |
 | `schema` / `call NAME` / `serve` | no | no | per operation | the machine-readable surface |
 | `unity-release [--json]` | **yes** | no | no | official editor URL/changeset/MD5 |

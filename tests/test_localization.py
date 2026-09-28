@@ -113,6 +113,24 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual((decomposed,), report.missing)
         self.assertTrue(any("normalization" in note for note in report.notes), report.notes)
 
+    def test_a_name_in_a_config_declaring_a_legacy_code_page_is_still_a_key(self) -> None:
+        """A Russian-locale author's editor writes windows-1251, not UTF-8.
+
+        The gate reconciles keys, so a Config file it cannot decode reports no
+        key at all: a mod whose every name is non-ASCII passes a localization
+        check that never saw it. The XML declaration says how the bytes are
+        encoded and is read before the decoder is chosen.
+        """
+        body = (
+            '<?xml version="1.0" encoding="windows-1251"?>\n'
+            '<configs><block name="Кирка" /></configs>'
+        )
+        (self.config / "blocks.xml").write_bytes(body.encode("windows-1251"))
+        write_csv(self.config / "Localization.csv", ["Кирка"])
+        report = check_localization(self.root, self.config)
+        self.assertEqual(("Кирка",), report.resolved)
+        self.assertEqual((), report.missing)
+
     def test_a_key_spelled_as_its_own_row_is_not_reported(self) -> None:
         decomposed = unicodedata.normalize("NFD", "café")
         self._write("blocks.xml", f'<configs><block name="{decomposed}" /></configs>')

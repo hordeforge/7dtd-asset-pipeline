@@ -87,17 +87,24 @@ run_ended="${LOGDIR:-$HOME/.cache/7dtd-playtest}/run-ended"
 # already made once, reading numbers off a stale log and believing them.
 newest_log() {
     local candidate
+    # LC_ALL=C: the sort key is a %T@ timestamp, and a numeric sort reads the
+    # decimal point through LC_NUMERIC. Under a comma-decimal locale every line
+    # sorts as 0, the "newest" log becomes an arbitrary one, and this loop
+    # photographs whichever session happened to write last.
     candidate="$(find "$logs" -maxdepth 1 -name 'output_log_client_*.txt' -printf '%T@ %p\n' 2>/dev/null |
-        sort -rn | head -n 1 | cut -d' ' -f2-)" || return 1
+        LC_ALL=C sort -rn | head -n 1 | cut -d' ' -f2-)" || return 1
     [[ -n "$candidate" ]] || return 1
     [[ "$(stat -c %Y "$candidate")" -ge "$started" ]] || return 1
     printf '%s\n' "$candidate"
 }
 
 elapsed_over_timeout() {
-    if [[ -n "$timeout_start" && -r /proc/uptime ]]; then
-        awk -v now="$(cut -d' ' -f1 /proc/uptime)" -v start="$timeout_start" -v t="$TIMEOUT" \
-            'BEGIN { exit !(now - start > t) }'
+    # Whole seconds, compared as integers: bash arithmetic is locale-independent
+    # and awk's is not, so a host whose LC_NUMERIC puts a comma in the decimal
+    # point reads /proc/uptime as two fields and times out on the first poll.
+    if [[ -n "$timeout_start" ]]; then
+        local now="${timeout_start%%.*}"
+        ((now - timeout_start > TIMEOUT))
     else
         local now
         now="$(date +%s)"

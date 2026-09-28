@@ -12,8 +12,14 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
+import os
+import shutil
+import subprocess
+import sys
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 import sevendtd_asset_pipeline
 from sevendtd_asset_pipeline.errors import PipelineError
@@ -126,6 +132,94 @@ class ScriptRegistryTests(unittest.TestCase):
             self.assertIn(name, text)
             self.assertIn(summary, text)
         self.assertIn("--path", text)
+
+
+class HostLocaleTests(unittest.TestCase):
+    """The host scripts under a locale that is not US English.
+
+    A helper that reads a path out of JSON and hands it to the shell has to
+    produce the same text whatever `LC_ALL` says, and the suite-id fold in
+    `playtest-synthesized.sh` has to be the ASCII one the orchestrator applies.
+    Both run here with a C locale forced, which is the environment in which
+    CPython hands a script ASCII stdio.
+    """
+
+    SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
+    C_LOCALE: ClassVar[dict[str, str]] = {
+        "LC_ALL": "C",
+        "LANG": "C",
+        "PYTHONUTF8": "0",
+        "PYTHONCOERCECLOCALE": "0",
+    }
+    BASH = shutil.which("bash") or "/bin/bash"
+
+    def _run(
+        self, script: str, *arguments: str, stdin: bytes = b""
+    ) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            [sys.executable, str(self.SCRIPTS_DIR / script), *arguments],
+            input=stdin,
+            capture_output=True,
+            env={**os.environ, **self.C_LOCALE},
+            check=False,
+        )
+
+    def test_json_field_round_trips_a_non_ascii_path(self) -> None:
+        path = "/home/josé/Meine Mod/Mods"
+        payload = json.dumps({"log_dir": path}).encode("utf-8")
+        done = self._run("json_field.py", "log_dir", stdin=payload)
+        self.assertEqual(0, done.returncode, done.stderr.decode("utf-8", "replace"))
+        self.assertEqual(f"{path}\n", done.stdout.decode("utf-8"))
+
+    def test_json_field_names_a_producer_that_is_not_writing_utf8(self) -> None:
+        """A cp1252 console piping into the script used to yield a mangled path
+        with no diagnostic, and the shell then wrote to whatever that was."""
+        done = self._run("json_field.py", "log_dir", stdin=b'{"log_dir":"caf\xe9"}')
+        self.assertEqual(1, done.returncode)
+        self.assertIn("not UTF-8", done.stderr.decode("utf-8", "replace"))
+
+    def test_a_release_asset_name_with_non_ascii_matches_its_selector(self) -> None:
+        name = "blender-café.tar.xz"
+        payload = json.dumps(
+            {
+                "assets": [
+                    {
+                        "name": name,
+                        "browser_download_url": "https://github.com/o/r/releases/download/v1/x",
+                    }
+                ]
+            }
+        ).encode("utf-8")
+        done = self._run("github_asset_url.py", "--name", name, stdin=payload)
+        self.assertEqual(0, done.returncode, done.stderr.decode("utf-8", "replace"))
+        self.assertIn(b"download/v1/x", done.stdout)
+
+    def test_suite_ids_fold_to_ascii_case_whatever_the_locale_says(self) -> None:
+        """`${var,,}` lowercases through LC_CTYPE, and a Turkish host turns the
+        I in `IStem` into a dotless i, naming a suite the orchestrator never
+        runs. The helper is extracted from the script and called under a C
+        locale, which is the ASCII fold a suite id is made of; the letters
+        outside ASCII are left alone rather than mangled by whichever locale
+        the host happens to run."""
+        source = (self.SCRIPTS_DIR / "playtest-synthesized.sh").read_text(encoding="utf-8")
+        body = source[source.index("ascii_lower()") :]
+        body = body[: body.index("\n}\n") + 2]
+        done = subprocess.run(
+            [self.BASH, "-c", f'{body}\nascii_lower "ShamwayISTem_ÄÖÜ"'],
+            capture_output=True,
+            env={**os.environ, **self.C_LOCALE},
+            check=True,
+        )
+        self.assertEqual("shamwayistem_ÄÖÜ", done.stdout.decode("utf-8"))
+
+    def test_the_capture_loop_does_not_sort_timestamps_through_the_locale(self) -> None:
+        """`sort -rn` parses its key with LC_NUMERIC, so a comma-decimal locale
+        ranks every log as 0 and the loop photographs whichever session wrote
+        last. The uptime comparison that replaced the awk is integer bash
+        arithmetic, which no locale touches."""
+        source = (self.SCRIPTS_DIR / "playtest-capture.sh").read_text(encoding="utf-8")
+        self.assertIn("LC_ALL=C sort -rn", source)
+        self.assertNotIn("awk -v now=", source)
 
 
 if __name__ == "__main__":

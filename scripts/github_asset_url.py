@@ -25,6 +25,8 @@ import sys
 import urllib.parse
 from collections.abc import Iterator
 
+import utf8_stdio
+
 _GITHUB_DOWNLOAD_HOSTS = frozenset(
     {
         "github.com",
@@ -64,6 +66,11 @@ def _assets(payload: object) -> Iterator[tuple[str, str]]:
 
 
 def main() -> int:
+    # An asset name carrying a non-ASCII character decodes to lone surrogates
+    # under a non-UTF-8 locale, and a selector that matches nothing silently
+    # skips the install it was written to resolve. The selector arrives through
+    # argv and the name through stdin, so both sides are restored to UTF-8.
+    utf8_stdio.configure()
     parser = argparse.ArgumentParser(description="resolve one GitHub release asset URL")
     selector = parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--name", help="the exact asset file name to find")

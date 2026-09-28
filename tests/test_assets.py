@@ -1562,8 +1562,13 @@ class SelfTestFixtureTests(unittest.TestCase):
         # `--look STEM` picks that prefab's per-prefab look suite, so every
         # generated rig can be looked at on its own run. The stem is
         # lowercased with the mod name: the orchestrator lowercases suite
-        # tokens, and the provider compares case-sensitively.
-        self.assertIn('SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_look")', text)
+        # tokens, and the provider compares case-sensitively. The fold is
+        # `ascii_lower`, because bash's own `${var,,}` follows the host's
+        # LC_CTYPE and a Turkish one turns I into a dotless i.
+        self.assertIn(
+            'SUITE_ARGS=(--suite "$(ascii_lower "$MOD_NAME")_$(ascii_lower "$LOOK_STEM")_look")',
+            text,
+        )
         self.assertNotIn("stage_editorless_lineup", text)
         agents = (self.FIXTURE / "tools/shamway/AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("shamwayselftest_burst_look", agents)

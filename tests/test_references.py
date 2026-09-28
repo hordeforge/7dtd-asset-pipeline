@@ -130,6 +130,43 @@ class ReferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "cannot read.*blocks.xml"):
             discover_references(nested)
 
+    def test_config_xml_is_decoded_as_the_encoding_its_declaration_names(self) -> None:
+        """A mod authored on a non-English Windows locale ships a legacy code page.
+
+        The XML declaration is the only statement of how the bytes are encoded,
+        and reading it as UTF-8 anyway fails the whole file: every reference in
+        it goes unreported, and the localization gate reports nothing missing
+        for a mod whose names are all non-ASCII.
+        """
+        nested = self.root / "Config"
+        nested.mkdir()
+        body = (
+            '<?xml version="1.0" encoding="windows-1251"?>\n'
+            '<config><append xpath="/items"><item name="Кирка" '
+            'Description="#@modfolder(MyMod):Resources/my.unity3d?pic.png"/></item></append></config>'
+        )
+        (nested / "items.xml").write_bytes(body.encode("windows-1251"))
+        refs = discover_references(nested)
+        self.assertEqual(["pic"], [ref.asset_stem for ref in refs])
+
+    def test_a_declared_encoding_python_has_no_codec_for_names_the_file(self) -> None:
+        nested = self.root / "Config"
+        nested.mkdir()
+        (nested / "items.xml").write_bytes(
+            b'<?xml version="1.0" encoding="x-nonsense-enc"?>\n<config/>'
+        )
+        with self.assertRaisesRegex(PipelineError, "no codec for"):
+            discover_references(nested)
+
+    def test_a_byte_order_mark_in_front_of_a_legacy_declaration_is_stripped(self) -> None:
+        nested = self.root / "Config"
+        nested.mkdir()
+        body = '<?xml version="1.0" encoding="iso-8859-1"?><config name="café"/>'
+        (nested / "items.xml").write_bytes(b"\xef\xbb\xbf" + body.encode("iso-8859-1"))
+        self.assertEqual([], discover_references(nested))
+        (nested / "items.xml").write_bytes(b"\xef\xbb\xbf" + body.encode("utf-8"))
+        self.assertEqual([], discover_references(nested))
+
     def test_a_manifest_with_an_invalid_byte_is_an_error_not_a_traceback(self) -> None:
         """`shamway stage` gates manifests built on other machines; one saved
         in a non-UTF-8 encoding must fail as a gate, not crash status."""

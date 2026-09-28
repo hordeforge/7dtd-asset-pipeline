@@ -19,7 +19,7 @@ from pathlib import Path
 from unittest import mock
 
 from sevendtd_asset_pipeline.errors import PipelineError
-from sevendtd_asset_pipeline.scaffold import initialize
+from sevendtd_asset_pipeline.scaffold import default_bundle_name, initialize
 
 BUNDLE_SOURCES = ("synthesized", "none", "unity")
 
@@ -162,6 +162,30 @@ class ScaffoldRerunTests(unittest.TestCase):
                 if path.is_file()
             ),
         )
+
+
+class BundleNameTests(unittest.TestCase):
+    """The bundle stem 7DTD looks an asset up by.
+
+    A file-stem collision is what makes one mod's assets unreachable, so two
+    mod names must not derive one bundle name. A name written in a script with
+    no ASCII in it used to fold to the single fallback every other such mod
+    also took.
+    """
+
+    def test_ascii_and_accented_names_are_unchanged(self) -> None:
+        self.assertEqual("mymod.unity3d", default_bundle_name("MyMod"))
+        self.assertEqual("caf-mod.unity3d", default_bundle_name("Café Mod"))
+
+    def test_two_non_latin_mod_names_do_not_share_a_stem(self) -> None:
+        first = default_bundle_name("Кирка")
+        second = default_bundle_name("Пикада")
+        self.assertNotEqual(first, second)
+        for name in (first, second):
+            self.assertRegex(name, r"^mod-[0-9a-f]{8}\.unity3d$")
+
+    def test_a_non_latin_name_still_names_its_latin_part(self) -> None:
+        self.assertEqual("mod.unity3d", default_bundle_name("日本語Mod"))
 
 
 if __name__ == "__main__":

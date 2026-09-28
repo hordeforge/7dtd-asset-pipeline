@@ -418,6 +418,16 @@ typed is composed. `shamway check-localization` reports such a pair by name
 rather than folding the two together: a pass it invented on its own would be a
 pass the game does not reproduce.
 
+A `Config/**/*.xml` file is decoded as the encoding its own XML declaration
+names, so a mod authored on a non-English Windows locale and saved as
+`<?xml version="1.0" encoding="windows-1251"?>` is read as the code page it
+says it is instead of failing to decode. That covers every gate that walks
+`Config/` (`refs`, `validate`, `check-localization`): the alternative is a hard
+"cannot read" on the whole file, which for a mod whose names are all non-ASCII
+means no key is reported at all and `check-localization` passes a mod it never
+read. With no declaration the file is read as UTF-8 with a byte-order mark
+stripped, which is what a mod authored on Windows normally carries.
+
 `shamway client log` requires that line **only when the deployed mod actually
 carries `Config/Localization.csv`**. A mod that ships none cannot produce it,
 and requiring it would fail a correct mod - which it did to

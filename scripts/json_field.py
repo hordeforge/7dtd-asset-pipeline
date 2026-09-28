@@ -21,15 +21,24 @@ import argparse
 import json
 import sys
 
+import utf8_stdio
+
 
 def main() -> int:
+    # The value this prints is substituted into a path a later command writes
+    # to, so it has to be decoded as the UTF-8 the producer wrote rather than
+    # as whatever the host locale implies.
+    utf8_stdio.configure()
     parser = argparse.ArgumentParser(description="print one field of a JSON object")
     parser.add_argument("field", help="the top-level key to print")
     arguments = parser.parse_args()
 
     try:
         payload: object = json.load(sys.stdin)
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+    except UnicodeDecodeError as exc:
+        print(f"ERROR: stdin is not UTF-8: {exc}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as exc:
         print(f"ERROR: stdin is not JSON: {exc}", file=sys.stderr)
         return 1
     if not isinstance(payload, dict):

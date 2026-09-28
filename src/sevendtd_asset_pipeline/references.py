@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -123,21 +124,58 @@ def parse_reference(source: Path, uri: str) -> AssetReference:
 def config_xml_texts(config_dir: Path) -> list[tuple[Path, str]]:
     """Every `Config/**/*.xml` with its text, in a stable order.
 
-    The several gates that read a mod's XML all need the same walk, and
-    `utf-8-sig` on every file because the engine reads these files with a
-    byte-order mark stripped and a mod authored on Windows routinely has one.
-    An absent directory is empty rather than an error: a mod that ships no
-    Config has nothing to check.
+    The several gates that read a mod's XML all need the same walk, and every
+    file is decoded as its own XML declaration says, because a mod authored on
+    a non-English Windows locale can carry a legacy code page rather than
+    UTF-8. An absent directory is empty rather than an error: a mod that ships
+    no Config has nothing to check.
     """
     if not config_dir.is_dir():
         return []
     texts: list[tuple[Path, str]] = []
     for xml_file in sorted(config_dir.rglob("*.xml")):
-        try:
-            texts.append((xml_file, xml_file.read_text(encoding="utf-8-sig")))
-        except (OSError, UnicodeDecodeError) as exc:
-            raise PipelineError(f"cannot read {xml_file}: {exc}") from exc
+        texts.append((xml_file, _read_config_xml(xml_file)))
     return texts
+
+
+# The XML declaration is what says how a file's bytes are encoded, and it may
+# only appear at the very start of the document. Read as bytes, not as text:
+# decoding first is the problem.
+_XML_DECLARATION = re.compile(rb"""\A\s*<\?xml\s[^>]*?encoding\s*=\s*["']([\w.-]+)["']""")
+# `UTF-8` and `utf8` name the same codec, and a BOM in front of either is
+# stripped rather than decoded into a leading U+FEFF the regexes would carry.
+_UTF8_ALIASES = frozenset({"utf-8", "utf8"})
+
+
+def _read_config_xml(path: Path) -> str:
+    """One Config XML file, decoded as the encoding its own declaration names.
+
+    A hardcoded UTF-8 read fails on a mod whose editor wrote
+    `<?xml ... encoding="windows-1252"?>`, which is what an author on a
+    non-English Windows locale gets, and it fails on the whole file rather
+    than on the one name in it: `validate`, `refs` and `check-localization`
+    all stop with "cannot read" instead of reporting that mod's keys. The
+    declaration is read from the raw bytes because choosing the decoder is
+    what the declaration is for.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise PipelineError(f"cannot read {path}: {exc}") from exc
+    declaration = _XML_DECLARATION.match(raw.removeprefix(codecs.BOM_UTF8))
+    # No declaration leaves None, and the XML spec's default for that is
+    # UTF-8 with a BOM allowed; one that names a UTF-8 alias is the same codec.
+    declared = None if declaration is None else declaration.group(1).decode("ascii").lower()
+    encoding = "utf-8-sig" if declared is None or declared in _UTF8_ALIASES else declared
+    try:
+        return raw.decode(encoding)
+    except LookupError as exc:
+        raise PipelineError(
+            f"cannot read {path}: it declares encoding={declared!r}, "
+            "which this Python has no codec for"
+        ) from exc
+    except UnicodeDecodeError as exc:
+        raise PipelineError(f"cannot read {path}: {exc}") from exc
 
 
 def discover_references(config_dir: Path) -> list[AssetReference]:

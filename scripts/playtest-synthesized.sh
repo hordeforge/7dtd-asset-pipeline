@@ -32,6 +32,16 @@ die() {
 	exit 1
 }
 
+# The orchestrator lowercases the suite id and the generated provider compares
+# case-sensitively, so a stem has to arrive lowercase. Bash's ${var,,} folds
+# case through the current locale, and a Turkish host turns I into a dotless i,
+# which names a suite that does not exist. A C-locale subshell does the ASCII
+# fold and leaves this shell's locale alone.
+ascii_lower() (
+	export LC_ALL=C
+	printf '%s' "${1,,}"
+)
+
 STEM="shamwaySelfTestProp"
 MOD_NAME="ShamwaySelfTest"
 FIXTURE=""
@@ -180,9 +190,9 @@ if (( LOOK )); then
 		# splits `suite.lower()`), and the generated provider compares
 		# case-sensitively, so the stem must arrive lowercase too.
 		if (( PREFAB_LOOK )); then
-			SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_prefab_look")
+			SUITE_ARGS=(--suite "$(ascii_lower "$MOD_NAME")_$(ascii_lower "$LOOK_STEM")_prefab_look")
 		else
-			SUITE_ARGS=(--suite "${MOD_NAME,,}_${LOOK_STEM,,}_look")
+			SUITE_ARGS=(--suite "$(ascii_lower "$MOD_NAME")_$(ascii_lower "$LOOK_STEM")_look")
 		fi
 	else
 		SUITE_ARGS=(--suite "shamwayselftest_burst_look")

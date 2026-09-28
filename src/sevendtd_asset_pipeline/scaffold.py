@@ -10,6 +10,7 @@ every asset under a new GUID and silently breaks every prefab reference.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 from collections.abc import Iterator
@@ -81,8 +82,22 @@ assets-status:
 
 
 def default_bundle_name(mod_name: str) -> str:
+    """The bundle file name a mod name implies, from an ASCII stem.
+
+    The stem is what 7DTD looks an asset up by, and a file-stem collision is
+    what makes one mod's assets unreachable, so two mods must not derive one
+    name. Everything outside `[a-z0-9._-]` becomes a separator rather than
+    being folded away, which is what keeps `Café Mod` (`cafe-mod`) and
+    `Cafe Mod` (`cafemod` minus the space) apart. A name with no ASCII in it at
+    all (Cyrillic, CJK, Arabic) leaves nothing, and every such mod would then
+    take the same fallback stem, so a short digest of the name the author typed
+    is what keeps those apart.
+    """
     stem = re.sub(r"[^a-z0-9._-]+", "-", mod_name.lower()).strip("-._")
-    return f"{stem or 'mod-assets'}.unity3d"
+    if not stem:
+        digest = hashlib.sha256(mod_name.encode("utf-8")).hexdigest()[:8]
+        return f"mod-{digest}.unity3d"
+    return f"{stem}.unity3d"
 
 
 # The editor scripts this pipeline owns. On adoption these are copied into a

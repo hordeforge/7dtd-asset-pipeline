@@ -206,6 +206,13 @@ ignore = [
 "src/sevendtd_asset_pipeline/assets_src.py" = ["E501"]
 "src/sevendtd_asset_pipeline/consumer_docs.py" = ["E501"]
 "src/sevendtd_asset_pipeline/scaffold.py" = ["E501"]
+# scripts/ is a directory of stand-alone programs a shell runs by path, not a
+# package, and utf8_stdio.py is the one module among them: the others are
+# entry points, which is what tells ruff they are scripts. Adding
+# scripts/__init__.py would put a package marker in a directory the build
+# copies file by file, and would make `python3 scripts/foo.py` import through
+# it.
+"scripts/utf8_stdio.py" = ["INP001"]
 
 [tool.mypy]
 python_version = "3.11"

@@ -239,6 +239,12 @@ the gate and what would let it run (no game directory configured, for the
 game-revision gate). `shamway validate`'s `ValidationReport.skipped` carries
 the same lines.
 
+`config` is the configuration in effect, after every environment override, and
+`overridden_by` names the variable that replaced a committed value (see
+[configuration.md](configuration.md)). A host that sets `UNITY_EDITOR`,
+`SEVEN_DAYS_TO_DIE_DIR` or `SHAMWAY_BUNDLE_SOURCE` reads a different
+configuration from the one it checked out, and that field is what says so.
+
 ```json
 {
   "mod_name": "MyMod",
@@ -268,6 +274,28 @@ the same lines.
   "valid": true,
   "problems": [],
   "skipped": [],
+  "config": {
+    "file": "/path/to/MyMod/.shamway.toml",
+    "mod_name": "MyMod",
+    "mod_root": "/path/to/MyMod",
+    "bundle_name": "mymod.unity3d",
+    "bundle_source": "synthesized",
+    "unity_version": "2022.3.62f2",
+    "unity_editor": null,
+    "unity_project": "/path/to/MyMod/tools/shamway/UnityProject",
+    "source_root": "assets-src/bundle",
+    "build_dir": "/path/to/MyMod/.shamway/build",
+    "manifest_dir": "/path/to/MyMod/tools/shamway/manifests",
+    "resources_dir": "/path/to/MyMod/Resources",
+    "config_dir": "/path/to/MyMod/Config",
+    "target": "StandaloneWindows64",
+    "game_dir": "/path/to/7 Days To Die",
+    "compress_textures": false,
+    "compress_audio": false,
+    "code_references": [],
+    "motion_kinds": {"myModThing": "turntable"},
+    "overridden_by": {"SEVEN_DAYS_TO_DIE_DIR": "game.directory"}
+  },
   "capabilities": {"unityz": true, "trimesh": false,
                    "vkd3d-compiler": false,
                    "libzmolv": false, "glslangValidator": false, "fsb5": false,

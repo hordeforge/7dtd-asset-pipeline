@@ -24,11 +24,14 @@ from .errors import PipelineError
 
 TreesTable = dict[str, object]
 
-# The revision the author-side defaults are read from. unityz matches a tree
-# by exact revision with no nearest-version fallback, so a default read here
-# has to name the release the game's own assets carry (7DTD A21, 2022.3.62f2)
-# rather than the revision a caller happens to be building for.
-DEFAULT_TREE_UNITY_VERSION = "2022.3.62f2"
+# The revision this pipeline asks unityz for when nothing else names one. It is
+# the revision the author-side defaults are read from and the one 7DTD V ships:
+# unityz matches a tree by exact revision with no nearest-version fallback, so
+# a default read here has to name the release the game's own assets carry
+# (2022.3.62f2) rather than the revision a caller happens to be building for.
+# Named here rather than repeated at each call site, because a per-module copy
+# is how two of them end up disagreeing with the database and with each other.
+DEFAULT_UNITY_REVISION = "2022.3.62f2"
 
 
 @dataclass

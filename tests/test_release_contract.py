@@ -92,9 +92,13 @@ class PackagingMetadataTests(ReleaseContractCase):
         pyproject.toml as the error, and the dev-group pin that keeps CI green
         does not reach a consumer's isolated build environment.
 
-        The requirement may be a floor or an exact pin, since the pin is what
-        makes two builds of one commit serialize identically. Both are read, and
-        the exact version is the floor: an exact pin admits nothing below it."""
+        The requirement is a floor, not a spelling: this repository pins
+        `setuptools==84.0.0` so one commit builds the same bytes every time,
+        and a pin above the floor admits the same metadata a `>=` floor would.
+        Both are read here, so the check stays on the version rather than on
+        the form the version is written in: the exact version is the floor, and
+        an exact pin admits nothing below it.
+        """
         build = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
             "build-system"
         ]

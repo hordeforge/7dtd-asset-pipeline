@@ -86,7 +86,7 @@ def _clip_defaults_template() -> dict[str, Any]:
     get a deep copy, because a clip merges its curves into this dict.
     """
     defaults: dict[str, Any] = typetrees.typetree_default(
-        typetrees.release_tree(ANIMATION_CLIP, typetrees.DEFAULT_TREE_UNITY_VERSION)
+        typetrees.release_tree(ANIMATION_CLIP, typetrees.DEFAULT_UNITY_REVISION)
     )
     return defaults
 

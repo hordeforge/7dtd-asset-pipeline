@@ -61,9 +61,44 @@ class Status:
     reads exactly like a passed one.
     """
     capabilities: dict[str, bool] = field(default_factory=dict)
+    config: dict[str, object] = field(default_factory=dict)
+    """The configuration in effect, after every environment override.
+
+    The file is committed and the environment is not, so the resolved values
+    and the names of the variables that replaced them are the only way to tell
+    a mod that is misconfigured from a mod that is fine on a different
+    machine. Reported in full rather than a summary, because the keys an
+    author has to look up are exactly the ones a partial report leaves out.
+    """
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+def effective_config(config: PipelineConfig) -> dict[str, object]:
+    """The resolved configuration, as a value with no paths in it."""
+    return {
+        "file": str(config.config_file),
+        "mod_name": config.mod_name,
+        "mod_root": str(config.mod_root),
+        "bundle_name": config.bundle_name or None,
+        "bundle_source": config.bundle_source,
+        "unity_version": config.unity_version,
+        "unity_editor": str(config.unity_editor) if config.unity_editor else None,
+        "unity_project": str(config.unity_project),
+        "source_root": config.source_root,
+        "build_dir": str(config.build_dir),
+        "manifest_dir": str(config.manifest_dir),
+        "resources_dir": str(config.resources_dir),
+        "config_dir": str(config.config_dir),
+        "target": config.target,
+        "game_dir": str(config.game_dir) if config.game_dir else None,
+        "compress_textures": config.compress_textures,
+        "compress_audio": config.compress_audio,
+        "code_references": list(config.code_references),
+        "motion_kinds": dict(config.acceptance_motion_kinds),
+        "overridden_by": dict(config.overrides),
+    }
 
 
 _T = TypeVar("_T")
@@ -96,6 +131,7 @@ def collect_status(config: PipelineConfig) -> Status:
         source_root=config.source_root,
         game_dir=str(config.game_dir) if config.game_dir else None,
         unity_editor=str(config.unity_editor) if config.unity_editor else None,
+        config=effective_config(config),
     )
 
     status.capabilities = {item.name: item.available for item in capabilities()}

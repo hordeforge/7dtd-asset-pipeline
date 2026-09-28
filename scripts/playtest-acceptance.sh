@@ -41,6 +41,20 @@ die() {
 	exit 1
 }
 
+# A port or a budget is a number, and every value here reaches this script as a
+# string: an env var or an --option argument. `PLAYTEST_PORT=2690O` or
+# `--timeout 90s` would otherwise travel through the deploy, the harness
+# build and the orchestrator's own parser before something refused it, so the
+# failure named a file the author never configured. Refused here, by name.
+require_int() {
+	[[ "$2" =~ ^[0-9]+$ ]] || die "$1 must be a whole number, not '$2'"
+}
+
+require_port() {
+	require_int "$1" "$2"
+	((10#$2 >= 1 && 10#$2 <= 65535)) || die "$1 must be a port in 1-65535, not '$2'"
+}
+
 MOD_ROOT="${PWD}"
 PLAYTEST_ROOT="${PLAYTEST_ROOT:-$HOME/code/hordeforge/7dtd-playtest}"
 CONNECT_ROOT="${CONNECT_ROOT:-$HOME/code/hordeforge/7dtd-fastconnect}"
@@ -87,8 +101,26 @@ usage() {
 		ENVIRONMENT
 		  SEVEN_DAYS_TO_DIE_DIR         the client install (required)
 		  SEVEN_DAYS_TO_DIE_SERVER_DIR  the dedicated server install (required)
+		  PLAYTEST_ROOT                 7dtd-playtest checkout
+		  CONNECT_ROOT                  7dtd-fastconnect checkout
+		  PLAYTEST_PORT                 server port           (default: 26900)
+		  PLAYTEST_ADMIN_PORT           telnet port           (default: 8081)
+		  PLAYTEST_TIMEOUT              orchestrator budget   (default: 900)
+		  PLAYTEST_WORLD_NAME           stock GameWorld       (default: Navezgane)
+		  PLAYTEST_GAME_NAME            save name             (default: PlaytestNav)
+		  PLAYTEST_CLIENT_PLATFORM      local or steam        (default: local)
+		  PLAYTEST_CLIENT_LOG           the log to watch; default is the one
+		                                fastconnect's launcher writes
+		  PLAYTEST_CONCERN_SUITES       extra suites to run, comma separated
 		  PLAYTEST_SESSION_ID           lock holder id (generated when unset)
+		  MODS_DIR                      the client's Mods folder
+		  CLIENT_MUTE                   0 to leave the client audible (default: 1)
 		  SHAMWAY                       the shamway entry point (default: shamway)
+
+		Every one of these is the default of the matching --option, so an
+		option wins over the environment, and the environment over the
+		default. Ports, the budget and the two names are validated here, by
+		name, before anything is deployed.
 
 		The orchestrator always wipes the save before a run: fresh save is a hard
 		rule with no opt-out. There is no --reuse-save.
@@ -134,6 +166,15 @@ case "$CLIENT_PLATFORM" in
 	local|steam) ;;
 	*) die "--client-platform must be local or steam, not $CLIENT_PLATFORM" ;;
 esac
+require_port "the server port (--port, PLAYTEST_PORT)" "$PORT"
+require_port "the admin port (--admin-port, PLAYTEST_ADMIN_PORT)" "$ADMIN_PORT"
+require_int "the orchestrator budget in seconds (--timeout, PLAYTEST_TIMEOUT)" "$TIMEOUT"
+((TIMEOUT > 0)) || die "the orchestrator budget (--timeout, PLAYTEST_TIMEOUT) must be above 0"
+[[ -n "$WORLD_NAME" ]] || die "the world name (--world-name, PLAYTEST_WORLD_NAME) is empty"
+[[ -n "$GAME_NAME" ]] || die "the save name (--game-name, PLAYTEST_GAME_NAME) is empty"
+if ((10#$PORT == 10#$ADMIN_PORT)); then
+	die "the server and admin ports are both $PORT"
+fi
 
 GAME="$SEVEN_DAYS_TO_DIE_DIR"
 [[ "$GAME" == */steamapps/common/* ]] || die "cannot derive the Proton prefix from $GAME"

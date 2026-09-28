@@ -346,12 +346,14 @@ def _multi_mode_parameter(value: float) -> dict[str, Any]:
 _DEFAULTS: dict[int, dict[str, Any]] = {}
 
 
+def _release_node(class_id: int) -> typetrees.TreeNode:
+    return typetrees.release_tree(class_id, typetrees.DEFAULT_UNITY_REVISION)
+
+
 def _class_default(class_id: int) -> dict[str, Any]:
     cached = _DEFAULTS.get(class_id)
     if cached is None:
-        cached = typetrees.typetree_default(
-            typetrees.release_tree(class_id, typetrees.DEFAULT_TREE_UNITY_VERSION)
-        )
+        cached = typetrees.typetree_default(_release_node(class_id))
         _fix_curves_and_gradients(cached)
         _DEFAULTS[class_id] = cached
     return deepcopy(cached)

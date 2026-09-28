@@ -10,6 +10,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from . import typetrees
 from .errors import PipelineError
 from .unityz import Unityz
 
@@ -262,7 +263,8 @@ def deep_inspect(path: Path) -> DeepReport:
         raise PipelineError(
             f"shamway inspect --deep refuses {path}: its type trees were stripped and "
             f"the pinned unityz ships no built-in trees for {', '.join(sorted(stripped))}; "
-            "a stripped file decodes only for a release unityz packs (2022.3.62f2 today)"
+            f"a stripped file decodes only for a release unityz packs "
+            f"({typetrees.DEFAULT_UNITY_REVISION} today)"
         )
     failed = _verification_failures(verification, objects)
     by_key = {(item.node, item.path_id): item for item in objects}

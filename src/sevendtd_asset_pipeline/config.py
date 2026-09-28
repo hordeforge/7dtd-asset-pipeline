@@ -185,6 +185,15 @@ class PipelineConfig:
     drives it walking, so the ground contact is the game's own. Absent means
     today's behavior, byte for byte.
     """
+    overrides: dict[str, str] = field(default_factory=dict)
+    """Which environment variable supplied each value it overrode.
+
+    The file is committed and the environment is not, so on a machine where
+    the two disagree the file is the thing that was never going to be read
+    exactly as checked out. `shamway status --json` reports this, so "the
+    bundle is missing" can be answered with which host setting moved it
+    rather than by reading the shell.
+    """
 
     @property
     def has_bundle(self) -> bool:
@@ -300,9 +309,20 @@ def _reject_unknown(table: dict[str, object], known: frozenset[str], label: str)
     )
 
 
-def _optional_path(base: Path, value: object, env_name: str) -> Path | None:
-    raw = os.environ.get(env_name) or (value if isinstance(value, str) else "")
-    return _path(base, raw, env_name) if raw else None
+def _optional_path(base: Path, value: object, env_name: str) -> tuple[Path | None, bool]:
+    """A path from the environment if it says one, else from the file.
+
+    The second value is which of the two won. The environment is consulted
+    first so a machine can override a committed path, and a host that ends up
+    reading somewhere other than the file it checked out needs to be able to
+    say so: a wrong `game.directory` looks exactly like a wrong install until
+    you know the environment replaced it.
+    """
+    override = os.environ.get(env_name, "").strip()
+    if override:
+        return _path(base, override, env_name), True
+    raw = value if isinstance(value, str) else ""
+    return (_path(base, raw, env_name), False) if raw else (None, False)
 
 
 def _machine_bundle_source(configured: str) -> str:
@@ -373,7 +393,9 @@ def load_config(path: Path | None = None) -> PipelineConfig:
     if bundle_source not in BUNDLE_SOURCES:
         options = ", ".join(f"{name!r} ({why})" for name, why in BUNDLE_SOURCES.items())
         raise PipelineError(f"bundle_source must be one of: {options}")
+    source_overridden = bool(os.environ.get(BUNDLE_SOURCE_ENV, "").strip())
     bundle_source = _machine_bundle_source(bundle_source)
+    overrides: dict[str, str] = {BUNDLE_SOURCE_ENV: "bundle_source"} if source_overridden else {}
     if bundle_source == "none":
         # A name for a file the mod does not ship would be a lie every other
         # surface then has to reason about, so it is rejected rather than ignored.
@@ -426,6 +448,13 @@ def load_config(path: Path | None = None) -> PipelineConfig:
     source_root = _text(data.get("source_root", default_source_root(bundle_source)), "source_root")
     unity_version = _text(unity.get("version", ""), "[unity] version", allow_empty=True)
 
+    unity_editor, editor_overridden = _optional_path(base, unity.get("editor"), "UNITY_EDITOR")
+    game_dir, game_overridden = _optional_path(base, game.get("directory"), "SEVEN_DAYS_TO_DIE_DIR")
+    if editor_overridden:
+        overrides["UNITY_EDITOR"] = "unity.editor"
+    if game_overridden:
+        overrides["SEVEN_DAYS_TO_DIE_DIR"] = "game.directory"
+
     config = PipelineConfig(
         config_file=config_file,
         mod_root=mod_root,
@@ -444,12 +473,13 @@ def load_config(path: Path | None = None) -> PipelineConfig:
         target=_text(data.get("target", "StandaloneWindows64"), "target"),
         bundle_source=bundle_source,
         unity_version=unity_version or None,
-        unity_editor=_optional_path(base, unity.get("editor"), "UNITY_EDITOR"),
-        game_dir=_optional_path(base, game.get("directory"), "SEVEN_DAYS_TO_DIE_DIR"),
+        unity_editor=unity_editor,
+        game_dir=game_dir,
         compress_textures=_flag(data.get("compress_textures", False), "compress_textures"),
         compress_audio=_flag(data.get("compress_audio", False), "compress_audio"),
         code_references=tuple(item.strip() for item in code_references),
         acceptance_motion_kinds=dict(motion_kinds),
+        overrides=overrides,
     )
     # `source_root` means two different things per bundle source: a path inside
     # the Unity project for "unity", and a path in the mod for "synthesized".

@@ -93,6 +93,48 @@ Machine-local paths never go in the TOML. The pipeline reads these, and no
 | `PLAYTEST_SESSION_ID` | the session this run belongs to. An exclusive-client action is refused while *another* session holds the lock; set this to that id when this run is genuinely part of it |
 | `PLAYTEST_LOCK_STALE_SEC` | how long without a heartbeat a claim is still honoured, default `120`. Must be a positive number of seconds and at least `60` (two of the 30 s beats a hold writes): a shorter window expires a running session's own claim between its beats, so the lock reads free while it is still held. A value outside that is refused rather than defaulted |
 | `XDG_CACHE_HOME` | the base for the pipeline's scratch and cache directories (shader blobs, Blender renders, decoded audio). Defaults to `~/.cache` on Linux, `~/Library/Caches` on macOS, `%LOCALAPPDATA%` on Windows |
+| `XDG_STATE_HOME` | the base for state that outlives a run but is not a cache; today the WirePlumber mute state `client capture` reads before it disconnects the sink. Defaults to `~/.local/state` |
+| `XDG_SESSION_TYPE` | `wayland` or `x11`: which capture backend `shamway client capture` uses. Anything else is re-derived from `WAYLAND_DISPLAY` and `DISPLAY`; with neither set, a capture is refused rather than attempted without a display |
+| `DISPLAY`, `WAYLAND_DISPLAY` | the display probes above, read as presence only |
 | `ZMOLV_LIBRARY` | the exact zmol-v shared library to compile Vulkan sub-programs with, when the search order (`ctypes`, this checkout's `.local/lib`, the system library directories) is not what you want |
 | `GEMINI_API_KEY`, `GOOGLE_API_KEY` | the credential for `review-audio` / `review-video` with the Gemini provider. Never a CLI argument, never logged or written into evidence; `shamway review-audio --help` names the same variable. See [authoring/audio.md](authoring/audio.md) |
-| `SHAMWAY_SCRIPT_ROOT` | the directory a `shamway script` invocation passes to the script it runs. Set by the CLI; a caller need not set it |
+| `SHAMWAY_SCRIPT_ROOT` | the directory a `shamway script` invocation passes to the script it runs. Written by the CLI on every invocation, overwriting any inherited value: it is the script's own location, not a setting |
+
+### The playtest host scripts
+
+`shamway script playtest-acceptance` and `shamway script playtest-synthesized`
+have their own configuration, and it is configuration the shell reads rather
+than the pipeline. Every variable below is the default of the matching
+`--option`, so the option wins over the environment and the environment over the
+default. `playtest-acceptance.sh --help` prints the same list, and that is the
+copy to read when a run fails: ports, the budget and the two names are
+validated there by name, before anything is deployed.
+
+| Variable | Meaning |
+|---|---|
+| `SEVEN_DAYS_TO_DIE_SERVER_DIR` | the dedicated server install. Required: the orchestrator starts one, and a client that joins a server which never loaded the mod cannot see the mod's own blocks |
+| `PLAYTEST_ROOT` | the `hordeforge/7dtd-playtest` checkout, default `~/code/hordeforge/7dtd-playtest` |
+| `CONNECT_ROOT` | the `hordeforge/7dtd-fastconnect` checkout, default `~/code/hordeforge/7dtd-fastconnect` |
+| `PLAYTEST_PORT` | server port, default `26900`; must be `1`-`65535` and differ from the admin port |
+| `PLAYTEST_ADMIN_PORT` | telnet port, default `8081`; same range |
+| `PLAYTEST_TIMEOUT` | the orchestrator's budget in seconds, default `900`; must be a whole number above `0` |
+| `PLAYTEST_WORLD_NAME` | stock `GameWorld` name, default `Navezgane` |
+| `PLAYTEST_GAME_NAME` | save name under `userdata`, default `PlaytestNav` |
+| `PLAYTEST_CLIENT_PLATFORM` | `local` or `steam`, default `local`; anything else is refused by name. `local` swaps `platform.cfg` inside the install for the run, which is announced on every run |
+| `PLAYTEST_CLIENT_LOG` | the log to watch. Unset derives it from the launcher fastconnect ships, which is not the client's own dated log; pointing this at the wrong file waits out the whole budget on a client that started fine |
+| `PLAYTEST_CONCERN_SUITES` | extra suites to append, comma separated. One concern per run, so this is not a place to pile cases together |
+| `MODS_DIR` | the client's `Mods/` folder, derived from the Proton prefix when unset |
+| `CLIENT_MUTE` | `0` leaves the client audible for a sound sign-off; `--listen` forces it to `0` |
+| `SHAMWAY` | the `shamway` entry point to call, default `shamway`. A host script should pass the resolved path from this checkout's `.venv`, never a `python3 -m` wrapper |
+
+## Inspecting the configuration in effect
+
+`shamway status --json` reports the configuration the pipeline actually
+resolved, after every environment override, under `config`: which file it came
+from, the paths, the bundle source and its Unity revision, the compression
+flags, `code_references`, `motion_kinds`, and — for each of `unity.editor`,
+`game.directory` and `bundle_source` — whether the value came from the file or
+from `UNITY_EDITOR`, `SEVEN_DAYS_TO_DIE_DIR` and `SHAMWAY_BUNDLE_SOURCE`. That
+is the answer to "which of these two settings is in force", and it is the first
+thing to read when a machine behaves differently from the committed file.
+

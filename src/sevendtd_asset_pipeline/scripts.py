@@ -100,7 +100,11 @@ def run(name: str, argv: list[str]) -> int:
         print(script)
         return 0
     env = dict(os.environ)
-    env.setdefault("SHAMWAY_SCRIPT_ROOT", str(script.parent))
+    # The real location of the script being run, not a setting: a value left in
+    # a shell from an earlier `shamway script` invocation would send a script
+    # looking for its own sibling files in a directory this one is not in, and
+    # the failure would name a file that does not exist.
+    env["SHAMWAY_SCRIPT_ROOT"] = str(script.parent)
     # bash resolves over PATH by design; the scripts are shipped host tooling.
     try:
         result = subprocess.run(["bash", str(script), *argv], check=False, env=env)  # noqa: S607

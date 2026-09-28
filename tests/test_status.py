@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fixtures import unityfs_bundle
 
@@ -131,6 +133,43 @@ class StatusTests(unittest.TestCase):
         self.assertTrue(status.valid, status.problems)
         self.assertTrue(status.not_run, status.as_dict())
         self.assertTrue(any("patch" in note for note in status.not_run), status.not_run)
+
+    def test_the_configuration_in_effect_is_reported_with_its_provenance(self) -> None:
+        """`status --json` answers which of two settings is in force.
+
+        The file is committed and the environment is not, so a host that
+        overrides the game directory reads a different configuration from the
+        one it checked out. Reporting the resolved values without naming the
+        variable that replaced them leaves that indistinguishable from a mod
+        that is simply misconfigured.
+        """
+        status = collect_status(self.config)
+        self.assertEqual({}, status.config["overridden_by"])
+        self.assertEqual("synthesized", status.config["bundle_source"])
+        self.assertEqual("2022.3.62f2", status.config["unity_version"])
+        self.assertEqual(str(self.config.config_file), status.config["file"])
+
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key not in ("SEVEN_DAYS_TO_DIE_DIR", "SHAMWAY_BUNDLE_SOURCE")
+        }
+        with mock.patch.dict(
+            os.environ,
+            {**environment, "SEVEN_DAYS_TO_DIE_DIR": "/opt/7dtd", "SHAMWAY_BUNDLE_SOURCE": "unity"},
+        ):
+            overridden = load_config(self.root / CONFIG_NAME)
+        self.assertEqual({}, self.config.overrides)
+        self.assertEqual(
+            {"SEVEN_DAYS_TO_DIE_DIR": "game.directory", "SHAMWAY_BUNDLE_SOURCE": "bundle_source"},
+            overridden.overrides,
+        )
+        reported = collect_status(overridden).config
+        self.assertEqual("unity", reported["bundle_source"])
+        self.assertEqual(
+            {"SEVEN_DAYS_TO_DIE_DIR": "game.directory", "SHAMWAY_BUNDLE_SOURCE": "bundle_source"},
+            reported["overridden_by"],
+        )
 
     def test_scaffold_writes_a_consumer_agent_guide(self) -> None:
         guide = self.root / "tools" / "shamway" / "AGENTS.md"

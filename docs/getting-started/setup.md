@@ -89,6 +89,8 @@ drifted from the lock; re-lock deliberately with `uv lock`. Pass
 `--no-extras` for the dependency-free core alone. It never
 uses `sudo`, installs OS packages, or modifies shell startup files.
 
+On apt hosts, Zig is installed only when the configured repositories offer it. Otherwise the installer reports the missing optional compiler; install Zig separately to build libzmolv for the Vulkan shader lane.
+
 ## 2. Identify the game install and its engine revision
 
 The installed game is the authority. Point `--game-dir` or

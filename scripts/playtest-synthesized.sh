@@ -39,7 +39,7 @@ die() {
 # fold and leaves this shell's locale alone.
 ascii_lower() (
 	export LC_ALL=C
-	printf '%s' "${1,,}"
+	printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 )
 
 STEM="shamwaySelfTestProp"

@@ -91,6 +91,33 @@ class ScriptRegistryTests(unittest.TestCase):
         self.assertIn("install_binary_release compressonatorcli", extras)
         self.assertIn("install_assetripper", extras)
 
+    def test_apt_collection_keeps_missing_optional_zig_out_of_the_install(self) -> None:
+        source = Path(__file__).resolve().parents[1] / "scripts/install-tools.sh"
+        text = source.read_text(encoding="utf-8")
+        body = text[text.index("collect_apt()") : text.index("\ncollect_dnf()")]
+        bash = shutil.which("bash")
+        assert bash is not None
+        shell = (
+            """have() { [ "$1" != zig ]; }
+has_python_311() { return 0; }
+apt-cache() { [ "$ZIG_AVAILABLE" = 1 ]; }
+PACKAGES=()
+WITH_AUTHORING=0 WITH_UNITY_PREREQS=0 WITH_DESKTOP_CAPTURE=0 WITH_RESEARCH=0
+"""
+            + body
+            + '\ncollect_apt\nprintf "%s\\n" "${PACKAGES[@]}"'
+        )
+        for available in ("0", "1"):
+            with self.subTest(available=available):
+                done = subprocess.run(
+                    [bash, "-c", shell],
+                    env={**os.environ, "ZIG_AVAILABLE": available},
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertEqual(available == "1", "zig" in done.stdout.splitlines())
+
     def test_install_unityz_upgrades_an_older_than_pin_binary(self) -> None:
         """A host with 0.1.2+ already on PATH used to skip the pin forever."""
         source = Path(__file__).resolve().parents[1] / "scripts" / "install-unityz.sh"
@@ -197,10 +224,11 @@ class ScriptRegistryTests(unittest.TestCase):
                 [date, *args], env=env, capture_output=True, text=True, check=True
             ).stdout.strip()
 
-        local = [
-            render(["-d", f"@{stamp}", "+%H:%M"], "Europe/Warsaw") for stamp in (earlier, later)
-        ]
-        utc = [render(["-u", "-d", f"@{stamp}", "+%H:%M"]) for stamp in (earlier, later)]
+        def epoch(stamp: int) -> list[str]:
+            return ["-r", str(stamp)] if sys.platform == "darwin" else ["-d", f"@{stamp}"]
+
+        local = [render([*epoch(stamp), "+%H:%M"], "Europe/Warsaw") for stamp in (earlier, later)]
+        utc = [render(["-u", *epoch(stamp), "+%H:%M"]) for stamp in (earlier, later)]
         self.assertEqual(local[0], local[1], "the zone must really repeat that hour here")
         self.assertNotEqual(utc[0], utc[1], "UTC is what the message must render")
 

@@ -12,6 +12,8 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-01
+
 ### Added
 
 - `tests/test_analysis_posture.py`, which fails when the analysis itself stops:
@@ -199,6 +201,8 @@ tag has no changelog section.
   outside its own test.
 
 ### Fixed
+
+- Apt installation continues when its repositories have no optional Zig package and reports the Vulkan codec prerequisite. ASCII suite folding works with Bash 3.2, home redaction covers symlink aliases, and portable tests compare file identity and render epochs using the host date syntax.
 
 - The `macos` job ran the suite through `uv run --no-project`, which resolves
   an ambient interpreter and ignores the `.venv` the same job just synced from

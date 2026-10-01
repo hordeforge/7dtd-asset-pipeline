@@ -417,7 +417,13 @@ collect_apt() {
 	# Debian and Ubuntu ship glslangValidator in `glslang-tools`.
 	have glslangValidator || PACKAGES+=(glslang-tools)
 	# Zig builds the SMOL-V codec (zmol-v) the Vulkan shader lane loads.
-	have zig || PACKAGES+=(zig)
+	if ! have zig; then
+		if apt-cache show zig >/dev/null 2>&1; then
+			PACKAGES+=(zig)
+		else
+			echo "note: no Zig package in these apt repositories; install Zig separately for libzmolv" >&2
+		fi
+	fi
 	# Deliberately not installed here. Debian and Ubuntu package vkd3d 1.2
 	# (measured: Ubuntu noble ships vkd3d-compiler 1.2-15build1), which
 	# predates the HLSL support this writer needs, so `apt install

@@ -257,6 +257,15 @@ class HomeAbbreviationTests(unittest.TestCase):
             evidence.redact(document),
         )
 
+    def test_a_symlinked_home_redacts_both_path_spellings(self) -> None:
+        alias = Path(self.temporary.name) / "alias"
+        target = Path(self.temporary.name) / "actual-home"
+        target.mkdir()
+        alias.symlink_to(target, target_is_directory=True)
+        with mock.patch.dict(os.environ, {"HOME": str(alias)}):
+            for home in (alias, target):
+                self.assertEqual("~/mod", evidence.abbreviate_home(str(home / "mod")))
+
     def test_the_home_directory_alone_becomes_a_tilde(self) -> None:
         self.assertEqual("~", evidence.abbreviate_home(self.home))
 

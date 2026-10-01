@@ -141,7 +141,10 @@ class StemIdentityTests(unittest.TestCase):
         target = bundle / f"{DECOMPOSED}.unity3d"
         target.write_bytes(b"fixture")
         relative = f"Resources/{COMPOSED}/{COMPOSED}.unity3d"
-        self.assertEqual(resolve_case_insensitive(self.root, relative), target)
+        resolved = resolve_case_insensitive(self.root, relative)
+        self.assertIsNotNone(resolved)
+        assert resolved is not None
+        self.assertTrue(resolved.samefile(target))
 
     def test_a_reference_to_a_bundle_that_is_absent_is_still_absent(self) -> None:
         self.assertIsNone(resolve_case_insensitive(self.root, "Resources/absent.unity3d"))

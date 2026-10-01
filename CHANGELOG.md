@@ -202,6 +202,8 @@ tag has no changelog section.
 
 ### Fixed
 
+- Apt installation continues when its repositories have no optional Zig package and reports the Vulkan codec prerequisite. ASCII suite folding works with Bash 3.2, home redaction covers symlink aliases, and portable tests compare file identity and render epochs using the host date syntax.
+
 - The `macos` job ran the suite through `uv run --no-project`, which resolves
   an ambient interpreter and ignores the `.venv` the same job just synced from
   `uv.lock`. macOS evidence therefore covered no locked dependency at all, so a

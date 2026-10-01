@@ -81,11 +81,12 @@ def abbreviate_home(text: str) -> str:
     prefix = _home_prefix()
     if not prefix:
         return text
-    for home in (prefix, os.path.realpath(prefix) + os.sep):
-        if text == home.rstrip(os.sep):
-            return "~"
-        if text.startswith(home):
-            return "~/" + text[len(home) :]
+    for candidate in (text, os.path.realpath(text) if os.path.isabs(text) else text):
+        for home in (prefix, os.path.realpath(prefix) + os.sep):
+            if candidate == home.rstrip(os.sep):
+                return "~"
+            if candidate.startswith(home):
+                return "~/" + candidate[len(home) :]
     return text
 
 

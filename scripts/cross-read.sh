@@ -19,7 +19,7 @@ OUTPUT
    "typeTree": true, "objects": [{"pathId", "classId", "name"}, ...],
    "container": ["stem", ...]}
 
-Needs the .NET SDK (`dotnet`) and, the first time, network access for the
+Needs the .NET 10 SDK (`dotnet`) and, the first time, network access for the
 pinned AssetsTools.NET package. The reader project is generated under
 ${XDG_CACHE_HOME:-~/.cache}/shamway/cross-read and reused afterwards.
 HELP

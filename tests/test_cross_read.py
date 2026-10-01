@@ -10,6 +10,7 @@ fresh-client acceptance remains the gate for whether the engine accepts it.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import unittest
@@ -29,12 +30,27 @@ BUNDLE = (
 )
 
 
+# The framework cross-read.sh generates its reader project for, read from the
+# script so the two cannot drift.
+TARGET_FRAMEWORK = re.compile(r"<TargetFramework>net(\d+)\.\d+</TargetFramework>")
+# One `dotnet --list-sdks` line: "8.0.131 [/usr/share/dotnet/sdk]".
+SDK_LINE = re.compile(r"^(\d+)\.", re.MULTILINE)
+
+
+def _required_sdk_major() -> int:
+    match = TARGET_FRAMEWORK.search(script_path("cross-read").read_text(encoding="utf-8"))
+    if match is None:
+        raise AssertionError("cross-read.sh names no <TargetFramework>netN.M</TargetFramework>")
+    return int(match.group(1))
+
+
 def _has_dotnet_sdk() -> bool:
     """Whether cross-read.sh can actually build its reader on this host.
 
     `dotnet` on PATH is not enough: a runtime-only install answers every other
-    command with "No .NET SDKs were found", so the test would fail for a
-    missing tool rather than for a product defect.
+    command with "No .NET SDKs were found", and an SDK older than the reader's
+    target framework fails the build with NETSDK1045, so the test would fail
+    for a missing tool rather than for a product defect.
     """
     dotnet = shutil.which("dotnet")
     if dotnet is None:
@@ -45,7 +61,10 @@ def _has_dotnet_sdk() -> bool:
         text=True,
         check=False,
     )
-    return listed.returncode == 0 and bool(listed.stdout.strip())
+    if listed.returncode != 0:
+        return False
+    required = _required_sdk_major()
+    return any(int(major) >= required for major in SDK_LINE.findall(listed.stdout))
 
 
 class CrossReadTests(unittest.TestCase):
@@ -60,7 +79,7 @@ class CrossReadTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertTrue(result.stderr.startswith("ERROR: no bundle at "), result.stderr)
 
-    @unittest.skipUnless(_has_dotnet_sdk(), "needs the .NET SDK")
+    @unittest.skipUnless(_has_dotnet_sdk(), "needs a .NET SDK that targets the reader's framework")
     @unittest.skipUnless(has_capability("unityz"), "needs unityz")
     def test_assetstools_and_unityz_see_the_same_objects(self) -> None:
         result = subprocess.run(

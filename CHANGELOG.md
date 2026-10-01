@@ -12,6 +12,8 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-01
+
 ### Added
 
 - `tests/test_analysis_posture.py`, which fails when the analysis itself stops:

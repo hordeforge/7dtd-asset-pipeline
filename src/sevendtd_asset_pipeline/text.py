@@ -159,7 +159,7 @@ def spelling_differences(left: str, right: str) -> tuple[str, ...]:
     differences: list[str] = []
     if composed != other:
         differences.append(CASES)
-    if left != composed or other != composed:
+    if left != composed or right != other:
         differences.append(NORMALIZATION)
     return tuple(differences)
 

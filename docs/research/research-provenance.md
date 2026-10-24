@@ -7,7 +7,70 @@ This project generalizes a working pipeline from the `AtomicDoomsday` mod in
 
 The source project recorded these against 7 Days to Die V3.1.0 b14 by
 decompiling the installed `Assembly-CSharp.dll` with `ilspycmd` and/or
-`monodis`:
+`monodis`. The V3.3.0 b18 pass below re-checked the item-mesh path, the Unity
+revision and the shipped item/icon data; a fact that still names V3.1.0 b14 is
+that build's measurement, not a b18 claim.
+
+### V3.3.0 b18 re-verification (2026-10-24)
+
+| | |
+|---|---|
+| Installed build | `V 3.3.0 (b18)`; `VersionInformation` `(1, 3, 30, 18)` |
+| Assembly | client `7DaysToDie_Data/Managed/Assembly-CSharp.dll`, 11923968 B, sha256 `fceec27300ffd3a1f97b097e43b60f3b07597f441e7ecbc6e1b59eebb234c705`; dedicated 11697152 B, sha256 `e16ff9d539b8fbf64904c0bc090d502286a62464742a9396f0455936ad0beb87` |
+| Tools | `monodis` on both assemblies; engine IL read from `hordeforge/7dtd-engine-research/il/full-v3.3.0/` (Mono.Cecil dumps); `shamway inspect` on the game's bundles; the shipped `Data/Config` and `Data/ItemIcons` read directly |
+| Date | 2026-10-24 |
+| Result | Re-checked: Unity revision (2022.3.62f2, on the two bundles this patch changed), item-mesh resolution and lifetime, item icon cell contract, shipped item/icon delta, the new `toolbelt.xml`. Not re-checked: audio mixer and `SoundsFromXml`, weather/fog, localization, VFX, the XML patch chain's IL (the chain itself is unchanged; its gate still runs against the installed config). |
+
+**Unity revision stays 2022.3.62f2.** `shamway inspect` on the two b18 bundles
+that changed (`Data/Addressables/Standalone/shaders_assets_all.bundle` and
+`meshdescriptions_assets_all.bundle`) reports `unity_version: 2022.3.62f2` and
+`archive_format: 8`, so the editor pin and both tests that assert the literal
+stay.
+
+**Item mesh resolution and lifetime changed.** `ItemClass.GetMeshfilePath`
+(IL=35) resolves `DropMeshFile` for `MeshPurpose` 1, then `HandMeshfile` for 2,
+then `Meshfile`, and returns null when `ItemClass.CanHold()` is false.
+`ItemClass.GetModelHandle` (IL=30) acquires `AssetManagers.Items` for that path;
+`ItemClass.CloneModel(ItemValue, Transform, MeshPurpose)` (IL=35) creates one
+instance, **releases the asset handle**, initializes the model and returns an
+`InstanceHandle<GameObject>`. `AssetManagers.Initialize` (IL=11) creates
+`AssetManagerLifetimed(0, 5.0, int.MaxValue)`, whose `Update` releases an entry
+once its usage count is zero past the timeout: item meshes are ref-counted with
+a 5 s idle release. b10 cached a `GameObject ItemClass.renderGameObject`
+permanently through `DataLoader.LoadAsset`; that field is gone in b18. Anything
+that treated the item prefab as permanently resident, or held a `Transform`
+past its owner, is relying on b10 behavior; acquire per use instead.
+`ItemClass.InitializeModel` (IL=105) disables every collider on the held copy,
+adds `UpdateLightOnAllMaterials`, and calls `SetTintColorForItem` with
+`TintColor` or the default `255,255,255`;
+`ItemClass.GetDroppedCorrectionRotation` (IL=5) still returns `(-90, 0, 0)`.
+
+**`EntityItem.createMesh` (IL=245, was 249)** applies `DropScale` as a uniform
+`localScale` (overwriting), sets the dropped correction with
+`set_localEulerAngles`, then for each collider in the mesh: a collider on a
+kinematic `Rigidbody`, or a non-convex `MeshCollider`, is **disabled**; every
+other collider gets layer 13, is enabled, and has `RootTransformRefEntity`
+added. The earlier wording ("enables every collider") was imprecise; the guards
+exist in both builds.
+
+**Shipped item and icon delta (read from the b18 install).**
+`Data/Config/items.xml` adds `backpackMaster`, `backpackSmall`, `backpackMedium`,
+`backpackLarge`, `backpackSkillMagazine`, the four `armorKegBreaker*` pieces and
+the four `armorWraithWoodWitch*` pieces; `backpackMaster` introduces the new
+`DisplayType` value `armorBackpack`, which the three sizes inherit. `Data/ItemIcons`
+holds 5188 PNGs, and every one is 160 × 160 RGBA (IHDR read); 12 are new against
+b10's 5176 and none were removed: the eight DLC armour icons, `backpackSmall|Medium|Large`
+and `bookPackRat`. The 160 px atlas cell the icon gate enforces is therefore
+still the game's cell.
+
+**`Data/Config/toolbelt.xml` is new** and holds only `<editorconfig>` with
+`slots slot_per_bar="10" bar_per_page="2" page_count="1"`; the file states
+`gameconfig is currently unsupported`. `check-patches` derives the stock target
+from the mod's patch stem, so a mod patch named `toolbelt.xml` is now checked
+against a real stock file where b10 had none.
+
+
+### The b14 fact list (source project, 2026-08)
 
 - `ModManager.PatchModPathString` resolves `@modfolder(Name):` using the
   `ModInfo.xml` internal name;

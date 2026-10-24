@@ -133,7 +133,7 @@ say. Two ways out, and the choice is a real design decision:
   prefab does not impose a second, accidental attenuation curve; 40 m was
   human-rejected as far too faint in the source project, while 8 m preserves
   useful direction. Scale volume by real event distance. Pass the absolute
-  world coordinate to `Audio.Manager.Play`: the installed V3.1 method subtracts
+  world coordinate to `Audio.Manager.Play`: the V3.3.0 b18 `Audio.Manager.Play` subtracts
   `Origin.position` internally, so pre-rebasing it places the source wrongly.
   The direction stays honest, vanilla mixer routing and player volume options
   still apply, and no second prefab has to be maintained. It needs a C# hook,
@@ -323,7 +323,7 @@ on V 3.1.0 b14:
   position, string group, int entityId = -1, bool, float volumeScale)` keeps
   the game's own AudioSource prefab, mixer routing, and the player's volume
   options; nothing a mod writes should construct an `AudioSource`. Positions
-  are absolute world coordinates; the installed V3.1 manager subtracts
+  are absolute world coordinates; the V3.3.0 b18 manager subtracts
   `Origin.position` internally. Pre-rebasing applies the floating origin twice.
   When the clip is delayed, recompute the
   direction at arrival, not at firing: the player moves during a six-second
@@ -458,7 +458,7 @@ The rules that make it trustworthy, from
 
 `validate` proves the clip; nothing offline proves the *group name* a
 property references exists. These are the properties in the installed
-V 3.1.0 b14 `items.xml`, `blocks.xml`, and `entityclasses.xml` that take a
+V3.3.0 b18 `items.xml`, `blocks.xml`, and `entityclasses.xml` that take a
 sound group, by frequency: blocks `SoundPlace`, `SoundPickup`, `OpenSound`,
 `CloseSound`, `UpgradeSound`, `SoundDestroy`, `LockedSound`, `TriggerSound`,
 `ActivateSound`; items and actions `Sound_start`, `Sound_end`, `Sound_repeat`,

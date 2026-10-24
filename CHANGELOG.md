@@ -12,6 +12,41 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Changed
+
+- **Retargeted to 7 Days to Die V3.3.0 (b18).** The engine-resolution facts and
+  the item-mesh path were re-checked against the b18 assemblies and are
+  recorded in
+  [docs/research/research-provenance.md](docs/research/research-provenance.md);
+  facts still citing V3.1.0 b14 are that build's measurements. Unity
+  `2022.3.62f2` stays: the pipeline's own `shamway inspect` reads that revision
+  from the two b18 bundles this patch changed
+  (`shaders_assets_all.bundle`, `meshdescriptions_assets_all.bundle`).
+- **Item mesh loading is ref-counted on b18.** `ItemClass.CloneModel` now
+  acquires an `AssetHandle<GameObject>`, instantiates one copy, releases the
+  handle, and returns an `InstanceHandle`; `AssetManagers` destroys a released
+  asset after a 5 s idle window. b10's permanent `ItemClass.renderGameObject`
+  cache is gone. The bundle this pipeline writes is unaffected, but
+  [docs/game-integration.md](docs/game-integration.md) now says not to hold a
+  reference to the loaded item prefab across frames.
+- **Mesh resolution is documented on `ItemClass.GetMeshfilePath`** (the method
+  `CloneModel` calls) rather than on `CloneModel` alone, and the dropped-item
+  collider rule is now exact: a collider on a kinematic `Rigidbody` or a
+  non-convex `MeshCollider` is disabled, not enabled.
+
+### Added
+
+- **`tests/test_game_item_inventory.py`** pins the shipped b18 item set when
+  `SEVEN_DAYS_TO_DIE_DIR` is set: 5188 item icons, all 160 × 160 RGBA, the 12
+  icons b18 adds, the five backpack items with the new `armorBackpack`
+  display type, and `Data/Config/toolbelt.xml` as a live `check-patches`
+  target. A game update that moves the shipped set fails this test on purpose.
+- **`Data/Config/toolbelt.xml` is now a patch target.** It ships in b18 with
+  only `<editorconfig>` (10 slots per bar, 2 bars per page, 1 page) and says
+  `gameconfig` is unsupported. `check-patches` resolves stock targets by the
+  mod patch's file stem, so a mod patch named `toolbelt.xml` is checked instead
+  of being reported "not checked".
+
 ## [0.8.0] - 2026-10-01
 
 ### Added

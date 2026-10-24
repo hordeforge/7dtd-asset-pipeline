@@ -238,8 +238,9 @@ synthesizes and what still wants an editor.
 
 ## What the engine requires of the model
 
-Verified from `il/full-v3.1.0/_global/EntityClass.il.txt` and
-`EModelBase.il.txt` (7dtd-engine-research, decompiled with `monodis`):
+Verified from `il/full-v3.3.0/_global/EntityClass.il.txt` and
+`EModelBase.il.txt` (7dtd-engine-research, Mono.Cecil dumps; re-checked on
+V3.3.0 b18 2026-10-24):
 
 - **Every entity class needs a `Prefab` property.** Missing or empty, the
   class fails to load: `Mandatory property 'prefab' missing in entity_class

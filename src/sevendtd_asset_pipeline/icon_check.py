@@ -48,7 +48,8 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # transparency instead, which is handled where it is checked.
 ALPHA_COLOUR_TYPES = (4, 6)
 COLOUR_TYPE_NAMES = {0: "grayscale", 2: "rgb", 3: "palette", 4: "grayscale+alpha", 6: "rgba"}
-# The V3 item atlas cell measured from the game's own itemicons bundle.
+# The V3 item atlas cell measured from the game's own item icons. Re-measured on
+# V3.3.0 b18: all 5188 PNGs in the shipped Data/ItemIcons are 160 x 160 RGBA.
 DEFAULT_CELL = 160
 # The atlas directory every modlet keeps relative to its root; shared with the
 # published schema (operations.py) and the CLI (--atlas-root).

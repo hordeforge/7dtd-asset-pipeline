@@ -70,6 +70,26 @@ every item or block that sets no `CustomIcon`, because that is the engine's
 default sprite lookup. A key this mod does not provide is reported, never
 failed: referencing a vanilla key is normal.
 
+### Shipped-data pins for the installed build
+
+The offline gates validate a mod, not the game's own item table, so a new stock
+item or a new `DisplayType` value does not pass through an XML gate. V3.3.0 b18
+adds `backpackMaster`, `backpackSmall|Medium|Large` and
+`backpackSkillMagazine`, two four-piece DLC armour sets, the `armorBackpack`
+display type, and 12 item icons. `tests/test_game_item_inventory.py` pins that
+shipped set when `SEVEN_DAYS_TO_DIE_DIR` is set: the icon count and every
+icon's 160 px RGBA cell, the 12 added stems, the backpack items and their
+`armorBackpack` display type, and `Data/Config/toolbelt.xml` as a live patch
+target. A game update that moves any of them fails that test on purpose; change
+the pin and the pages that quote it in one commit.
+
+`check-patches` resolves the stock target from the mod patch's file stem, so a
+mod patch named `toolbelt.xml` is checked against the real file on b18. On b10
+the same patch was reported "not checked" because no stock `toolbelt.xml`
+existed. The file holds only `<editorconfig>` and says `gameconfig` is
+unsupported, so a mod may extend the editor lane but not a game lane through
+that patch.
+
 ### One spelling of a name, folded for the comparison and named in the error
 
 Bundle stems, atlas PNG stems, `CustomIcon` keys and `Localization.csv` rows

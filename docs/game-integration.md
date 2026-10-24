@@ -26,8 +26,8 @@ half of that behavior.
 
 ### How the engine resolves it
 
-The chain, decompiled from V 3.1.0 b14 with `ilspycmd` (see
-[research-provenance.md](research/research-provenance.md)):
+The chain, decompiled from V3.1.0 b14 and re-checked against V3.3.0 b18 on
+2026-10-24 (see [research-provenance.md](research/research-provenance.md)):
 
 1. `DataLoader.ParseDataPathIdentifier` runs `ModManager.PatchModPathString`
    **first**, which rewrites `@modfolder(Name):` to the loaded mod's real path.
@@ -186,28 +186,33 @@ Author axes, root scale, colliders, and named child transforms against the
 specific consuming game path. The engine applies its own corrections *after*
 loading, so the prefab root must stay at identity and let them apply:
 
-- `ItemClass.CloneModel` resolves the mesh in a fixed order: `DropMeshFile`
-  for the dropped form, then `HandMeshfile` for the held form, then `Meshfile`.
-  One authored mesh can serve all three; a variant that differs only when
-  dropped needs only `DropMeshFile`.
-- `ItemClass.GetDroppedCorrectionRotation` lays a dropped item flat — measured
-  as `(-90, 0, 0)` on V 3.1.0 b14, applied by `EntityItem.createMesh` as the
-  mesh's local rotation. Author the item standing along local +Y, the way a
-  held grenade does, and the engine puts it on its side when dropped.
+- `ItemClass.GetMeshfilePath` (reached from `CloneModel` via `GetModelHandle`)
+  resolves the mesh in a fixed order: `DropMeshFile` for the dropped form, then
+  `HandMeshfile` for the held form, then `Meshfile`, and returns null when the
+  item cannot be held. One authored mesh can serve all three; a variant that
+  differs only when dropped needs only `DropMeshFile`. This is IL-checked on
+  V3.3.0 b18 (`GetMeshfilePath` IL=35).
+- `ItemClass.GetDroppedCorrectionRotation` lays a dropped item flat, measured
+  as `(-90, 0, 0)` (still `IL=5` on V3.3.0 b18), applied by
+  `EntityItem.createMesh` as the mesh's local rotation. Author the item
+  standing along local +Y, the way a held grenade does, and the engine puts it
+  on its side when dropped.
 - `DropScale` is applied by `EntityItem.createMesh` as a uniform local scale,
   so the held and dropped readings of one mesh differ by that factor.
-- `EntityItem.createMesh` **enables every collider it finds in the mesh** on
-  layer 13 (adding `RootTransformRefEntity` to each) and disables the entity's
-  own root collider only when it found one; a mesh with no collider rides on
-  the entity's default collider. Vanilla's `GrenadePrefab` carries one root
-  `CapsuleCollider`. Ship one deliberate collider on the root, and no
-  accidental ones on children — each would become a physics body.
+- `EntityItem.createMesh` enables each collider it finds in the mesh on layer
+  13 (adding `RootTransformRefEntity` to each), except a collider on a
+  kinematic `Rigidbody` or a non-convex `MeshCollider`, which it disables; the
+  entity's own root collider is disabled only when a mesh collider was found.
+  A mesh with no collider rides on the entity's default collider. Vanilla's
+  `GrenadePrefab` carries one root `CapsuleCollider`. Ship one deliberate
+  collider on the root, and no accidental ones on children: each enabled child
+  collider would become a physics body.
 - `ItemClass.CloneModel` always adds `UpdateLightOnAllMaterials` and calls
   `SetTintColorForItem` with the item's `TintColor` or the default
   `255,255,255`; `Block.StringToVector3` divides by 255 and
   `UpdateLight.SetTintColor` writes the result into **every material's
   `_Color`**. White is a no-op, so omitting the property and setting white are
-  equivalent — the hazard is an *inherited* non-white tint multiplying an
+  equivalent. The hazard is an *inherited* non-white tint multiplying an
   authored palette. Omit `TintColor` on anything with its own paint, and
   exclude it from inheritance (below).
 - Vanilla's `GrenadePrefab` and `timedChargePrefab` are identity-transform
@@ -217,8 +222,20 @@ loading, so the prefab root must stay at identity and let them apply:
   item is therefore authored **at hand scale**, in world axes, local +Y up,
   and the installed game's own item prefabs are the calibration reference for
   "how big is held".
-- `ItemClass.CloneModel` **disables every collider on the held copy**, so the
-  root collider only ever matters for the dropped body, never for the hand.
+- `ItemClass.InitializeModel` (called by `CloneModel`) **disables every
+  collider on the held copy**, so the root collider only ever matters for the
+  dropped body, never for the hand.
+- The item mesh is ref-counted, not permanently cached. On V3.3.0 b18
+  `ItemClass.CloneModel` acquires an `AssetHandle<GameObject>` through
+  `ItemClass.GetModelHandle` and `AssetManagers.Items`, instantiates one copy,
+  releases the asset handle, and returns an `InstanceHandle<GameObject>`.
+  `AssetManagers.Initialize` builds an `AssetManagerLifetimed(0, 5.0,
+  int.MaxValue)`, so a released asset is destroyed after a 5 s idle window.
+  b10 instead kept a `GameObject ItemClass.renderGameObject` for the life of
+  the process. The instance is the caller's; the loaded prefab is not, so do
+  not hold a reference to it, or to a `Transform` read from it, across frames
+  and expect it to stay alive. This only affects code that reads or reuses the
+  engine's loaded item model; the bundle this pipeline writes is unaffected.
 - Choose `DropScale` so the dropped item is the **same size as its placed
   form** when one object has both: 0.42 m × `DropScale` 4 ≈ the 1.7 m placed
   model, so the thing a player drops and the thing they place read as one
@@ -324,8 +341,8 @@ The patcher's behaviour decides whether a correct URI ever reaches the game:
 
 Asset-bearing mods must be installed on every client; servers do not transfer
 bundles or icons as a substitute for client installation. The mechanism,
-confirmed against the V 3.1 assembly: a server sends its **patched XML** to a
-joining client through `NetPackageConfigFile`, but `ModManager` loads
+confirmed against the V3.3.0 b18 assembly: a server sends its **patched XML**
+to a joining client through `NetPackageConfigFile`, but `ModManager` loads
 assemblies only from the local mod folder and does not load UI atlases on a
 dedicated server at all. Nothing transfers a bundle, a DLL, or an atlas at
 join, so the identical package is the deployment unit on both sides.

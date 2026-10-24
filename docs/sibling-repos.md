@@ -27,7 +27,7 @@ vendored here, and this is where to look for it:
 |---|---|---|
 | [`7dtd-asset-pipeline`](https://github.com/hordeforge/7dtd-asset-pipeline) | shamway | this repository: editable source assets to a staged `Resources/*.unity3d`, written without a Unity editor by default, with the gates a successful build does not provide |
 | [`7dtd-playtest`](https://github.com/hordeforge/7dtd-playtest) | Vanguard | stock-client gameplay automation against the dedicated server, emitting structured scenario results; ships the live-client exclusivity lock |
-| [`7dtd-engine-research`](https://github.com/hordeforge/7dtd-engine-research) | Schematics | reverse-engineering of the V 3.1.0 (b14) dedicated server from the shipped `Assembly-CSharp.dll`: how it behaves, and its wire/file formats |
+| [`7dtd-engine-research`](https://github.com/hordeforge/7dtd-engine-research) | Schematics | reverse-engineering of the V3.3.0 (b18) dedicated server from the shipped `Assembly-CSharp.dll`: how it behaves, and its wire/file formats |
 | [`7dtd-fastconnect`](https://github.com/hordeforge/7dtd-fastconnect) | Hotwire | a client helper for joining local/dev servers without Steam `steam://connect`, plus hooks for automated join tests |
 | [`7dtd-server-optimizer`](https://github.com/hordeforge/7dtd-server-optimizer) | Crucible | an adaptive overload governor and Harmony optimization mod for dedicated servers; deliberately no profiler and no load generator |
 | [`7dtd-server-apm`](https://github.com/hordeforge/7dtd-server-apm) | Geiger | observability and performance analysis for Linux dedicated servers, with an optional managed method-timing bridge |

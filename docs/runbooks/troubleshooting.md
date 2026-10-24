@@ -295,8 +295,7 @@ log for `SteamAPI_Init` before suspecting anything else.
 
 Proton async-load starvation. The shipped build sets
 `Application.runInBackground` only inside `if (Application.isEditor)` and
-never assigns `Application.backgroundLoadingPriority` (both confirmed with
-`ilspycmd` on V 3.1.0 b14), so when the window loses focus Unity throttles the
+never assigns `Application.backgroundLoadingPriority` (both confirmed on the V3.3.0 b18 assembly with `monodis`, 2026-10-24), so when the window loses focus Unity throttles the
 process and the async `Resources.LoadAsync`/`LoadManager.LoadAsset` waits in
 world load can starve — the log ends after `AstarManager Init` and nothing
 follows. It is a race against focus, which is why it is non-deterministic.

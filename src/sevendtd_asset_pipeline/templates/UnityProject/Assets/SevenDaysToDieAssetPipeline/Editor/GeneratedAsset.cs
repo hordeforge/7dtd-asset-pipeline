@@ -64,10 +64,11 @@ namespace SevenDaysToDie.AssetPipeline
             part.transform.localEulerAngles = rotation;
             part.transform.localScale = scale;
             // CreatePrimitive attaches a collider to every part. EntityItem.createMesh
-            // (V 3.1.0 b14, ilspycmd) enables *every* collider it finds in a dropped
-            // item's mesh on layer 13, so each visual piece would become a physics
-            // body. Strip them here and add one root collider deliberately with
-            // RootCollider or RootCapsuleCollider.
+            // (V3.3.0 b18; unchanged from b14) enables each collider it finds in a
+            // dropped item's mesh on layer 13 unless it sits on a kinematic Rigidbody
+            // or is a non-convex MeshCollider, so each visual piece would become a
+            // physics body. Strip them here and add one root collider deliberately
+            // with RootCollider or RootCapsuleCollider.
             var collider = part.GetComponent<Collider>();
             if (collider != null) UnityEngine.Object.DestroyImmediate(collider);
             if (material != null) part.GetComponent<MeshRenderer>().sharedMaterial = material;
@@ -78,9 +79,9 @@ namespace SevenDaysToDie.AssetPipeline
         /// Create a prefab root with an identity transform.
         ///
         /// The root must stay at identity scale and rotation: the engine applies
-        /// its own transform after loading. EntityItem.createMesh (V 3.1.0 b14,
-        /// ilspycmd) *overwrites* the instantiated root's localScale with
-        /// DropScale and its localRotation with the dropped correction, so a
+        /// its own transform after loading. EntityItem.createMesh (V3.3.0 b18;
+        /// unchanged from b14) *overwrites* the instantiated root's localScale
+        /// with DropScale and its localRotation with the dropped correction, so a
         /// scale authored on the root is silently discarded rather than
         /// compounded. Author the real dimensions on the child parts, and size
         /// variants with ScaleChildren.

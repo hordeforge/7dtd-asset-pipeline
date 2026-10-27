@@ -8,7 +8,7 @@
 # above the 77 floor the PEP 639 `license`/`license-files` metadata below needs,
 # so a consumer building this sdist with build isolation never meets a backend
 # that rejects it.
-requires = ["setuptools==84.0.0"]
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -92,12 +92,12 @@ all = ["7dtd-asset-pipeline[writer,authoring,mesh,audio,patch]"]
 # verifies on every install.
 [dependency-groups]
 dev = [
-    "ruff==0.16.9",
-    "mypy==2.3.1",
-    "setuptools==84.0.0",
+    "ruff==0.17.2",
+    "mypy==2.4.0",
+    "setuptools==84.2.1",
     "texture2ddecoder==1.0.6",
-    "coverage==7.16.1",
-    "hypothesis==6.168.2",
+    "coverage==7.17.0",
+    "hypothesis==6.170.9",
 ]
 
 [project.scripts]

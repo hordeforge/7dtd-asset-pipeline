@@ -12,6 +12,8 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-05
+
 ### Changed
 
 - **Retargeted to 7 Days to Die V3.4.0 (b10).** Unity `2022.3.62f2` stays:

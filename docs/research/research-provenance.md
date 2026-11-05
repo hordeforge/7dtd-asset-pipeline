@@ -7,9 +7,48 @@ This project generalizes a working pipeline from the `AtomicDoomsday` mod in
 
 The source project recorded these against 7 Days to Die V3.1.0 b14 by
 decompiling the installed `Assembly-CSharp.dll` with `ilspycmd` and/or
-`monodis`. The V3.3.0 b18 pass below re-checked the item-mesh path, the Unity
-revision and the shipped item/icon data; a fact that still names V3.1.0 b14 is
-that build's measurement, not a b18 claim.
+`monodis`. The V3.4.0 b10 pass at the top re-checked the installed game version,
+the Unity revision and the shipped item/icon data; it is the current target. A
+fact that still names V3.3.0 b18 or V3.1.0 b14 is that build's measurement, not
+a V3.4.0 claim.
+
+### V3.4.0 b10 re-verification (2026-11-05)
+
+| | |
+|---|---|
+| Installed build | client `V 3.4.0 (b10)`; `VersionInformation` `(1, 3, 40, 10)` |
+| Assembly | client `7DaysToDie_Data/Managed/Assembly-CSharp.dll`, 11980288 B, sha256 `cb54022ccc862aa673e0ee55dafe67d842b364c80df6916958d171e959656c58`; dedicated 11752960 B, sha256 `00a962dbbb5ef1bb454368322221f9eb4148dc2d548ed2b77244f9bda5ecc167` |
+| Tools | `shamway inspect` on the game's bundles; the shipped `Data/Config` and `Data/ItemIcons` read directly. No decompiler pass in this build. |
+| Date | 2026-11-05 |
+| Result | Re-checked: installed game version, Unity revision, shipped item/icon delta, and the presence of every sound-group property name
+`docs/authoring/audio.md` lists on the installed config. Not re-checked: the item-mesh IL facts and the other V3.1.0/V3.3.0 measurements below, audio mixer and `SoundsFromXml`, weather/fog, localization, VFX, the XML patch chain's IL. |
+
+**Unity revision stays 2022.3.62f2.** `shamway inspect` on
+`Data/Addressables/Standalone/shaders_assets_all.bundle` and
+`meshdescriptions_assets_all.bundle` reports `unity_version: 2022.3.62f2` and
+`archive_format: 8`, and the preferred
+`Data/Bundles/Standalone/Entities/Entities` reports the same revision. The two
+changed bundles moved in size (shaders 32260225 to 33188379 B,
+meshdescriptions 36172424 to 36147496 B), so their content changed without a
+revision change; the editor pin and the tests that assert the literal stay.
+
+**Shipped item and icon delta (read from the V3.4.0 install).**
+`Data/ItemIcons` holds 5261 PNGs and every one is 160 x 160 RGBA (IHDR read);
+73 are new against b18's 5188 and none were removed. Eight are new items: the
+four `armorRedRidingRogue*` and four `armorScarletScoundrel*` pieces. The other
+65 are block art, 63 `banditMetal*` stems with no block definition in this
+build's `Data/Config/blocks.xml`, plus the `screenKeyPad_01` and `_02` block
+icons. `items.xml` adds the two DLC sets, each piece extending
+`armorDLCMaster` with `param1="CustomIcon"`, and gives the two helmet pieces
+the new `DisplayType` values `armorRedRidingRogueHelmet` and
+`armorScarletScoundrelHelmet`. It adds `onSelfChangedView` `AddPart`/`RemovePart`
+effects for `LeftKnuckles` to `meleeWpnKnucklesT0LeatherKnuckles`,
+`meleeWpnKnucklesT1IronKnuckles` and `meleeWpnKnucklesT3SteelKnuckles`, and
+moves the `dCarryCapacity` display value on `drugSteroids` and
+`foodChickenNuggets` to the flat value `96` (b18: 50 and 27). The b18 backpack
+items and the `armorBackpack` display type are unchanged. `blocks.xml` is
+identical to b18 after whitespace normalization, and `toolbelt.xml` is
+unchanged.
 
 ### V3.3.0 b18 re-verification (2026-10-24)
 

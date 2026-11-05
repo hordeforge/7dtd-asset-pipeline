@@ -12,6 +12,21 @@ tag has no changelog section.
 
 ## [Unreleased]
 
+### Changed
+
+- **Retargeted to 7 Days to Die V3.4.0 (b10).** Unity `2022.3.62f2` stays:
+  `shamway inspect` reads that revision and archive format 8 from the two
+  addressable bundles this build changed, and from the preferred entity
+  bundles. The shipped-data pin is re-derived: `Data/ItemIcons` now holds 5261
+  PNGs, all 160 x 160 RGBA (b18: 5188; 73 added, none removed), including the
+  eight `armorRedRidingRogue*` and `armorScarletScoundrel*` item icons and two
+  new per-set helmet `DisplayType` values. `drugSteroids` and
+  `foodChickenNuggets` now display the flat 96 carry capacity (b18: 50 and 27).
+  The game-install-gated inventory test pins the new set, and
+  [docs/research/research-provenance.md](docs/research/research-provenance.md)
+  records what this pass did and did not re-check: the engine-IL facts still
+  cite V3.3.0 b18.
+
 ## [0.9.0] - 2026-10-25
 
 ### Changed

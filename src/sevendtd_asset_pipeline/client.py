@@ -33,7 +33,7 @@ what was on screen, and then hands the verdict to a person.
 
 The facts it encodes come from hordeforge/7dtd-playtest's harness and its
 `docs/environment.md`, confirmed on a Proton client of V 3.1.0 b14. The target
-build is now V3.3.0 b18; the client path itself is unchanged, but a fresh b18
+build is now V3.4.0 b10; the client path itself is unchanged, but a fresh b10
 client run is what re-confirms the harness start to finish. See
 docs/validation.md and docs/research/research-provenance.md.
 """

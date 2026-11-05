@@ -73,20 +73,25 @@ failed: referencing a vanilla key is normal.
 ### Shipped-data pins for the installed build
 
 The offline gates validate a mod, not the game's own item table, so a new stock
-item or a new `DisplayType` value does not pass through an XML gate. V3.3.0 b18
-adds `backpackMaster`, `backpackSmall|Medium|Large` and
-`backpackSkillMagazine`, two four-piece DLC armour sets, the `armorBackpack`
-display type, and 12 item icons. `tests/test_game_item_inventory.py` pins that
-shipped set when `SEVEN_DAYS_TO_DIE_DIR` is set: the icon count and every
-icon's 160 px RGBA cell, the 12 added stems, the backpack items and their
-`armorBackpack` display type, and `Data/Config/toolbelt.xml` as a live patch
-target. A game update that moves any of them fails that test on purpose; change
-the pin and the pages that quote it in one commit.
+item or a new `DisplayType` value does not pass through an XML gate. V3.4.0 b10
+keeps the b18 backpack set (`backpackMaster`, `backpackSmall|Medium|Large`,
+`backpackSkillMagazine`, the `armorBackpack` display type) and adds two
+four-piece DLC armour sets, `armorRedRidingRogue*` and
+`armorScarletScoundrel*`, with the per-set `armorRedRidingRogueHelmet` and
+`armorScarletScoundrelHelmet` display types. It also reports the flat 96 carry
+capacity on `drugSteroids` and `foodChickenNuggets`, where b18 showed 50 and 27.
+`tests/test_game_item_inventory.py` pins that shipped set when
+`SEVEN_DAYS_TO_DIE_DIR` is set: the 5261-icon count and every icon's 160 px RGBA
+cell, the eight added stems, the four-piece armour sets, the backpack items and
+their `armorBackpack` display type, the two carry-capacity values, and
+`Data/Config/toolbelt.xml` as a live patch target. A game update that moves any
+of them fails that test on purpose; change the pin and the pages that quote it
+in one commit.
 
 `check-patches` resolves the stock target from the mod patch's file stem, so a
-mod patch named `toolbelt.xml` is checked against the real file on b18. On b10
-the same patch was reported "not checked" because no stock `toolbelt.xml`
-existed. The file holds only `<editorconfig>` and says `gameconfig` is
+mod patch named `toolbelt.xml` is checked against the real file on V3.4.0 b10,
+where the file is unchanged from b18. On V3.2.0 b10 the same patch was reported
+"not checked" because no stock `toolbelt.xml` existed. The file holds only `<editorconfig>` and says `gameconfig` is
 unsupported, so a mod may extend the editor lane but not a game lane through
 that patch.
 

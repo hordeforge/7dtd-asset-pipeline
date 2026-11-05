@@ -129,8 +129,8 @@ does not stop them being inherited. See
 
 The installed game is read-only evidence, and its icon atlas is the reference
 that settles arguments about treatment. Its item icons are **160 × 160** cells:
-the shipped `Data/ItemIcons` holds 5188 PNGs and every one is 160 × 160 RGBA
-on V3.3.0 b18 (IHDR read, 2026-10-24); the packed atlas is
+the shipped `Data/ItemIcons` holds 5261 PNGs and every one is 160 × 160 RGBA
+on V3.4.0 b10 (IHDR read, 2026-11-05); the packed atlas is
 `Data/Addressables/Standalone/automatic_assets_generic/itemicons.bundle`.
 
 Inside that bundle the cells are grouped into named `icons_mip0_N` textures

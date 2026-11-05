@@ -2,7 +2,7 @@
 
 These tests read the installed game read-only and are skipped unless
 ``SEVEN_DAYS_TO_DIE_DIR`` names an install. They pin the *shipped* content of
-V3.3.0 b18, not a pipeline behavior: when the game updates, the set below
+V3.4.0 b10, not a pipeline behavior: when the game updates, the set below
 changes on purpose and this file is where that is noticed. Update the expected
 values and the pages that quote them in the same change, deliberately, rather
 than letting a stale expectation silently describe the old build.
@@ -20,36 +20,45 @@ from sevendtd_asset_pipeline.game import validate_game_dir
 from sevendtd_asset_pipeline.icon_check import DEFAULT_CELL, read_png_header
 from sevendtd_asset_pipeline.patch_check import check_patches
 
-# Data/ItemIcons PNGs on V3.3.0 b18 (b10 shipped 5176).
-B18_ICON_COUNT = 5188
-# Added by V3.3.0 b18: backpack size art, the two DLC armour sets, bookPackRat.
-B18_ADDED_ICONS = (
-    "backpackSmall",
-    "backpackMedium",
-    "backpackLarge",
-    "bookPackRat",
-    "armorKegBreakerHelmet",
-    "armorKegBreakerOutfit",
-    "armorKegBreakerGloves",
-    "armorKegBreakerBoots",
-    "armorWraithWoodWitchHelmet",
-    "armorWraithWoodWitchOutfit",
-    "armorWraithWoodWitchGloves",
-    "armorWraithWoodWitchBoots",
+# Data/ItemIcons PNGs on V3.4.0 b10 (b18 shipped 5188: 73 were added, none
+# removed). The other 65 added PNGs are block art: 63 banditMetal* stems with no
+# block definition in this build's Data/Config, and screenKeyPad_01/_02.
+V340_ICON_COUNT = 5261
+# Added by V3.4.0 b10: the four pieces of each new DLC armour set.
+V340_ADDED_ICONS = (
+    "armorRedRidingRogueHelmet",
+    "armorRedRidingRogueOutfit",
+    "armorRedRidingRogueGloves",
+    "armorRedRidingRogueBoots",
+    "armorScarletScoundrelHelmet",
+    "armorScarletScoundrelOutfit",
+    "armorScarletScoundrelGloves",
+    "armorScarletScoundrelBoots",
 )
-B18_BACKPACK_ITEMS = (
+# Unchanged since b18.
+V340_BACKPACK_ITEMS = (
     "backpackMaster",
     "backpackSmall",
     "backpackMedium",
     "backpackLarge",
     "backpackSkillMagazine",
 )
-B18_ARMOR_SETS = ("armorKegBreaker", "armorWraithWoodWitch")
-B18_DISPLAY_TYPES = ("armorBackpack",)
+V340_ARMOR_SETS = (
+    "armorKegBreaker",
+    "armorWraithWoodWitch",
+    "armorRedRidingRogue",
+    "armorScarletScoundrel",
+)
+# The new helmet pieces introduce a per-set DisplayType; the other three pieces
+# of each set inherit it through Extends. Both are new against b18.
+V340_NEW_DISPLAY_TYPES = ("armorRedRidingRogueHelmet", "armorScarletScoundrelHelmet")
+# b18 showed 50 on drugSteroids and 27 on foodChickenNuggets; V3.4.0 reports the
+# flat capacity both items grant.
+V340_FLAT_CARRY_CAPACITY = "96"
 
 
 class ShippedItemSetTests(unittest.TestCase):
-    """Pin the b18 item icons and the backpack config against the install."""
+    """Pin the V3.4.0 item icons and the backpack config against the install."""
 
     def setUp(self) -> None:
         game = os.environ.get("SEVEN_DAYS_TO_DIE_DIR")
@@ -63,9 +72,9 @@ class ShippedItemSetTests(unittest.TestCase):
     def test_every_shipped_item_icon_is_the_atlas_cell(self) -> None:
         pngs = sorted(self.icons.glob("*.png"))
         self.assertEqual(
-            B18_ICON_COUNT,
+            V340_ICON_COUNT,
             len(pngs),
-            "the installed build's icon count is not the pinned V3.3.0 b18 set; "
+            "the installed build's icon count is not the pinned V3.4.0 b10 set; "
             "retarget the pin and docs/research/research-provenance.md deliberately",
         )
         for png in pngs:
@@ -78,7 +87,7 @@ class ShippedItemSetTests(unittest.TestCase):
             self.assertEqual(6, colour, f"{png.name} is not RGBA")
 
     def test_the_new_items_shipped_their_icons(self) -> None:
-        for stem in B18_ADDED_ICONS:
+        for stem in V340_ADDED_ICONS:
             path = self.icons / f"{stem}.png"
             self.assertTrue(path.is_file(), f"the pinned build has no {stem}.png")
             width, height, _depth, colour = read_png_header(path)
@@ -88,7 +97,7 @@ class ShippedItemSetTests(unittest.TestCase):
     def test_items_xml_defines_the_backpack_items_and_armor_backpack(self) -> None:
         root = ET.parse(self.config / "items.xml").getroot()  # noqa: S314 - local read-only install
         items = {node.get("name"): node for node in root.iter("item")}
-        for name in B18_BACKPACK_ITEMS:
+        for name in V340_BACKPACK_ITEMS:
             self.assertIn(name, items, f"items.xml no longer defines {name}")
         # backpackMaster introduces the DisplayType; the three sizes inherit it.
         master = {prop.get("name"): prop for prop in items["backpackMaster"].iter("property")}
@@ -97,9 +106,36 @@ class ShippedItemSetTests(unittest.TestCase):
             props = {prop.get("name"): prop for prop in items[name].iter("property")}
             self.assertEqual("backpackMaster", props["Extends"].get("value"))
             self.assertEqual("CustomIcon", props["Extends"].get("param1"))
-        for prefix in B18_ARMOR_SETS:
+        for prefix in V340_ARMOR_SETS:
             pieces = [name for name in items if name and name.startswith(prefix)]
             self.assertEqual(4, len(pieces), f"{prefix} is no longer a four-piece set")
+
+    def test_the_new_armor_sets_extend_the_dlc_master(self) -> None:
+        root = ET.parse(self.config / "items.xml").getroot()  # noqa: S314 - local read-only install
+        items = {node.get("name"): node for node in root.iter("item")}
+        new_sets = ("armorRedRidingRogue", "armorScarletScoundrel")
+        for prefix in new_sets:
+            pieces = [name for name in items if name and name.startswith(prefix)]
+            self.assertEqual(4, len(pieces), f"{prefix} is not a four-piece set")
+            for name in pieces:
+                props = {prop.get("name"): prop for prop in items[name].iter("property")}
+                extends = props["Extends"]
+                self.assertEqual("armorDLCMaster", extends.get("value"))
+                self.assertEqual("CustomIcon", extends.get("param1"))
+        for prefix, display in zip(new_sets, V340_NEW_DISPLAY_TYPES, strict=True):
+            helmet = {prop.get("name"): prop for prop in items[f"{prefix}Helmet"].iter("property")}
+            self.assertEqual(display, helmet["DisplayType"].get("value"))
+
+    def test_carry_capacity_display_values_are_the_flat_capacity(self) -> None:
+        root = ET.parse(self.config / "items.xml").getroot()  # noqa: S314 - local read-only install
+        items = {node.get("name"): node for node in root.iter("item")}
+        for name in ("drugSteroids", "foodChickenNuggets"):
+            values = [
+                value.get("value")
+                for value in items[name].iter("display_value")
+                if value.get("name") == "dCarryCapacity"
+            ]
+            self.assertEqual([V340_FLAT_CARRY_CAPACITY], values, f"{name} carry capacity moved")
 
     def test_toolbelt_xml_is_a_patch_target_and_holds_editorconfig_only(self) -> None:
         stock = self.config / "toolbelt.xml"
